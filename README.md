@@ -102,7 +102,7 @@ RustPixel also includes several tools:
     $ cargo pixel r tetris s -r
 ```
 
-![graphical mode](./tmp/tetris_graph.gif)
+![graphical mode](./tmp/tetris_sdl.gif)
 
 ```
     web mode
