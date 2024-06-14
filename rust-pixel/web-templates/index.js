@@ -1,7 +1,7 @@
 // document.getElementById('canvas').setAttribute('width', document.documentElement.clientWidth);
 // document.getElementById('canvas').setAttribute('height', document.documentElement.clientHeight);
 
-// 异步方式读取资源，rust中调用此函数
+// rust call this function...
 export const js_load_asset = (url) => {
     fetch(url)
         .then(data=>{
@@ -13,18 +13,17 @@ export const js_load_asset = (url) => {
     ;
 };
 
-// 初始化wasm
 import init, {PixelGame} from "./pkg/pixel.js";
 const wasm = await init();
 const sg = PixelGame.new();
 
-// 注册事件处理，把事件传递到rust中处理
+// send event to rust...
 window.onkeypress = (e) => { sg.key_event(0, e); };
 window.onmouseup = (e) => { sg.key_event(1, e); };
 window.onmousedown = (e) => { sg.key_event(2, e); };
 window.onmousemove = (e) => { sg.key_event(3, e); };
 
-// 创建pix对象及精灵数组
+// creat pix object and sprites...
 const pix = new Pix(document.getElementById("canvas"));
 const spriteSheet = new pix.Texture("assets/pix/c64.png");
 spriteSheet.bind();
@@ -52,7 +51,7 @@ pix.utils.loop(function(timeStep) {
     let wbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen * wclen);
     pix.bind();
     pix.clear();
-    // Draw sprites
+    // draw sprites...
     for (let i = 0; i < wbuflen; ++i) {
         const base = i * wclen;
         const r = wbuf[base + 0];
@@ -71,6 +70,7 @@ pix.utils.loop(function(timeStep) {
         transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
         drawCells[texidx].draw(transform, r / 255.0, g / 255.0, b / 255.0, 1.0);
     }
+    // only 1 draw call...
     pix.flush();
     return true;
 });
