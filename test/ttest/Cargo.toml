@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "ttest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+unicode-segmentation = "1.2"
+bevy_ecs = "0.10.1"
+rand = "0.8"
+itertools = "0.10.3"
+

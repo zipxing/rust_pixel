@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+
+# RustPixel cargo build tool...
+# copyright zhouxin@tuyoogame.com 2022~2024
+
+import os
+import re
+import sys
+import gzip
+import argparse
+import subprocess
+
+#remove 'pixel' command line argument by cargo pixel
+def clean_argv():
+    argv = []
+    for a in sys.argv:
+        if a != 'pixel':
+            argv.append(a)
+    sys.argv = argv
+
+
+def common_arg(parser):
+    parser.add_argument('-d', '--dir', default=os.path.abspath('.'))
+    parser.add_argument('-r', '--release', action='store_true')
+    parser.add_argument('-p', '--webport', type=int, default=8080)
+
+
+#parse args
+def make_parser():
+    parser = argparse.ArgumentParser(
+                    prog='cargo pixel',
+                    description='RustPixel cargo build tool...')
+
+    subpsr = parser.add_subparsers() 
+
+    pr = subpsr.add_parser('run', aliases=["r"])
+    pr.add_argument('mod_name')
+    pr.add_argument('build_type', choices=['t', 's', 'w', 'term', 'sdl', 'web'])
+    pr.add_argument('other', nargs='*')
+    common_arg(pr)
+    pr.set_defaults(func=pixel_run)
+
+    pb = subpsr.add_parser('build', aliases=["b"])
+    pb.add_argument('mod_name')
+    pb.add_argument('build_type', choices=['t', 's', 'w', 'term', 'sdl', 'web'])
+    common_arg(pb)
+    pb.set_defaults(func=pixel_build)
+
+    pc = subpsr.add_parser('creat', aliases=["c"])
+    pc.add_argument('mod_name')
+    common_arg(pc)
+    pc.set_defaults(func=pixel_creat)
+
+    pc = subpsr.add_parser('convert_gif', aliases=["cg"])
+    pc.add_argument('gif')
+    pc.add_argument('ssf')
+    pc.add_argument('width')
+    pc.add_argument('height')
+    common_arg(pc)
+    pc.set_defaults(func=pixel_convert_gif)
+
+    return parser.parse_args()
+
+
+def get_cmds(args, subcmd):
+    cmds = []
+    curdir = args.dir
+    mod = args.mod_name
+    # UPNAME = mod.upper()
+    LONAME = mod.lower()
+    CAPNAME = mod.capitalize()
+    bt = args.build_type
+    oas_str = ''
+    if subcmd == 'run':
+        oas = args.other
+        oas_str = ' '.join(oas)
+    rels = '--release' if args.release else ''
+    web_port = args.webport
+    if bt == 'term' or bt == 't':
+        cmds.append('cargo %s --bin %s %s %s'%(subcmd, mod, oas_str, rels))
+    if bt == 'sdl' or bt == 's':
+        cmds.append('cargo %s --bin %s --features sdl %s %s'%(subcmd, mod, oas_str, rels))
+    if bt == 'web' or bt == 'w':
+        cmds.append('wasm-pack build --target web games/%s %s %s'%(mod, oas_str, rels))
+        if subcmd == "run":
+            tmpwd = "tmp/web_%s/"%(mod)
+            cmds.append("rm -r %s/*"%(tmpwd))
+            cmds.append("mkdir -p %s"%(tmpwd))
+            cmds.append("cp -r assets %s"%(tmpwd))
+            cmds.append("cp rust-pixel/web-templates/* %s"%(tmpwd))
+            cmds.append("sed -i '' \"s/Pixel/%s/g\" %s/index.js"%(CAPNAME, tmpwd))
+            cmds.append("sed -i '' \"s/pixel/%s/g\" %s/index.js"%(LONAME, tmpwd))
+            cmds.append("cp -r games/%s/pkg %s"%(mod, tmpwd))
+            cmds.append("python3 -m http.server -d %s %d"%(tmpwd, web_port))
+
+    return cmds
+
+
+def pixel_run(args):
+    cmds = get_cmds(args, "run")
+    for c in cmds:
+        print("🍀 ", c)
+        os.system(c)
+
+
+def pixel_build(args):
+    cmds = get_cmds(args, "build")
+    for c in cmds:
+        print("🍀 ", c)
+        os.system(c)
+
+
+def pixel_creat(args):
+    curdir = args.dir
+    mod = args.mod_name
+    UPNAME = mod.upper()
+    LONAME = mod.lower()
+    CAPNAME = mod.capitalize()
+
+    print("🍀 creat assets folder...%s" % ("assets/" + mod + "/"))
+    os.system("cp -r %s/assets/snake/ %s/assets/%s/" % (curdir, curdir, mod))
+
+    print("🍀 creat games folder...%s" % ("games/" + mod +"/"))
+    os.chdir("%s/tmp" % curdir)
+    os.system("rm -fr pixel_game_template")
+    os.system("cp -r ../games/snake/ ./pixel_game_template")
+    for root, dirs, files in os.walk("pixel_game_template"):
+        for f in files:
+            fn = os.path.join(root, f)
+            fhr = open(fn, 'r')
+            try:
+                fcontent = fhr.read()
+            except:
+                fhr.close()
+                continue
+            fhr.close()
+            fcontent = fcontent.replace("Snake", CAPNAME)
+            fcontent = fcontent.replace("SNAKE", UPNAME)
+            fcontent = fcontent.replace("snake", LONAME)
+            fhw = open(fn, 'w')
+            fhw.write(fcontent)
+            fhw.close()
+    os.system("mv pixel_game_template ../games/%s"%mod)
+
+    print("🍀 compile & run: \n   cargo pixel r %s term\n   cargo pixel r %s sdl" % (mod, mod))
+
+
+def pixel_convert_gif(args):
+    # example: ./gen_sdl_seqs assets/sdq/fire.gif assets/sdq/2.ssf 40 25
+    GIF = args.gif
+    SSF = args.ssf
+    WIDTH = int(args.width)
+    HEIGHT = int(args.height)
+
+    print("🍀 extract pngs use ffmpeg...")
+    # 需要先安装ffmpeg: brew install ffmpeg
+    p = subprocess.Popen("ffmpeg -i " + GIF + " -vsync 0 tmp/t%d.png",
+                     shell=True, 
+                     stdout=subprocess.PIPE, 
+                     stderr=subprocess.STDOUT)
+    stdout, stderr = p.communicate()
+
+    rf = re.compile(r"(.*)frame=(.*?)(\d+)(.*)")
+    fg = rf.match(str(stdout))
+    FRAME_COUNT=int(fg.group(3))
+    print("    frame_count = %d"%(FRAME_COUNT))
+
+    print("🍀 tpetii convert png to pix...")
+    for x in range(FRAME_COUNT):
+        print("\r", x + 1, "  ", end='')
+        cmd = "cargo r --bin tpetii --release tmp/t%d.png  %d %d > tmp/t%d.pix" % (x + 1, WIDTH, HEIGHT, x + 1)
+        os.system(cmd)
+
+    fsdq = open(SSF, "wb+") 
+
+    # tpetii生成的pix文件，texture设置为255
+    # texture = 255 表示每个点拥有自己的texture
+    # 这种方式更灵活，但数据量会稍大
+    fsdq.write(b"width=%d,height=%d,texture=255,frame_count=%d\n"%(WIDTH, HEIGHT, FRAME_COUNT))
+
+    flens = []
+    rds = re.compile(r"(\d+),(\d+),(\d+)(.*?)")
+    datas = bytearray(b'')
+    for x in range(FRAME_COUNT):
+        count = 0
+        sdatas = bytearray(b'')
+        for l in open("tmp/t%d.pix"%(x+1), "r"):
+            if count != 0:
+                for ds in rds.findall(l[:-1]):
+                    sdatas.append(int(ds[0]))
+                    sdatas.append(int(ds[1]))
+                    sdatas.append(int(ds[2]))
+            count += 1
+        cs = gzip.compress(sdatas)
+        flens.append(len(cs))
+        datas += cs
+    for x in range(FRAME_COUNT):
+        fsdq.write(bytes(("%d,"%(flens[x])).encode()))
+    fsdq.write(b"\n")
+    fsdq.write(datas)
+    fsdq.close()
+    print("\n🍀 %s write ok!"%SSF)
+
+
+#main entry
+if __name__ == '__main__':
+    clean_argv()
+    args = make_parser()
+    args.func(args)

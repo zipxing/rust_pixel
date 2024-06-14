@@ -1,0 +1,17 @@
+[package]
+name = "poker_ffi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rust_pixel = { path = "../../../rust-pixel", default-features = false, features = ["base"] }
+poker_lib = { path = "../lib" }
+texas_lib = { path = "../../texas/lib" }
+gin_rummy_lib = { path = "../../gin_rummy/lib" }
+# serde_json = "1.0.81"
+# serde = "1.0.141"
+
+[lib]
+crate-type=["staticlib","cdylib"]

@@ -1,0 +1,19 @@
+[workspace]
+members = [
+    "rust-pixel",
+    "tools/*",
+    "games/*",
+]
+exclude = [
+    "games/poker/ffi",
+    "games/poker/wasm",
+]
+resolver = "2"
+
+[workspace.package]
+authors = ["zipxing@hotmail.com"]
+description = "A terminal based game engine & games..."
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"
