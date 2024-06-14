@@ -158,6 +158,7 @@ The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calli
     $ cargo pixel r tower w -r
     and visit http://localhost:8080/ in your browser
 ```
+ ![tower](./tmp/tower_sdl.gif)
 
 and so on ...
 
