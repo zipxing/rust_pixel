@@ -91,19 +91,23 @@ RustPixel also includes several tools:
     term mode
     $ cargo pixel r tetris t -r
 ```
-    ![Alt Text](https://https://github.com/zipxing/rust_pixel/blob/main/tertis_term.gif)
+
+ ![term mode](https://https://github.com/zipxing/rust_pixel/blob/main/tertis_term.gif)
 
 ```
     graphical mode
     $ cargo pixel r tetris s -r
 ```
-    ![Alt Text](https://https://github.com/zipxing/rust_pixel/blob/main/tertis_graph.gif)
+
+![graphical mode](https://https://github.com/zipxing/rust_pixel/blob/main/tertis_graph.gif)
+
 ```
     web mode
     $ cargo pixel r tetris w -r
     and visit http://localhost:8080/ in your browser
 ```
-    ![Alt Text](https://https://github.com/zipxing/rust_pixel/blob/main/tertis_web.gif)
+
+![web mode](https://https://github.com/zipxing/rust_pixel/blob/main/tertis_web.gif)
 
 2. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
 ``` 
