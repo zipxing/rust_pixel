@@ -75,6 +75,8 @@ RustPixel also includes several tools:
     graphical mode
     $ cargo pixel r tedit sdl assets/tmp/tedit.pix 
 ```
+ ![tedit_t](./tmp/tedit_term.png)
+ ![tedit_s](./tmp/tedit_sdl.png)
 
 2. tpetii: Used to convert regular images into PETSCII character art, example:
 ```
