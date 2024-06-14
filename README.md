@@ -95,7 +95,7 @@ RustPixel also includes several tools:
     $ cargo pixel r tetris t -r
 ```
 
- ![term mode](./tmp/tetris_term.gif =320x240)
+ ![term mode =320x240](./tmp/tetris_term.gif)
 
 ```
     graphical mode
