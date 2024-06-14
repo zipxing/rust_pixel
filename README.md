@@ -117,6 +117,8 @@ RustPixel also includes several tools:
     $ cargo pixel r gin_rummy t -r
     $ cargo pixel r red_black t -r
 ```
+ ![gin_rummy](./tmp/ginrummy.png)
+ ![red_black](./tmp/redblack.png)
 
 The poker/ffi directory demo how to wrap Rust algorithms into CFFI for use with other languages, showcasing C++ and Python calling poker_ffi
 ```
