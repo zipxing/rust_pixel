@@ -56,7 +56,7 @@ $ cd rust_pixel
 $ cargo pixel run snake term            #Run the snake game in terminal mode
 $ cargo pixel r snake t                 #Run the snake game in terminal mode - shorthand
 $ cargo pixel r tetris s                #Run the Tetris game in SDL window mode
-$ cargo pixel r tower w                 #Run the tower game in web mode, visit http://localhost:8080/ in your browser
+$ cargo pixel r tower w                 #Run tower in web,visit http://localhost:8080/ in your browser
 $ cargo pixel r tower w --webport 8081  #Change web server port
 $ cargo pixel r tower w -r              #Run with release mode
 ``` 
