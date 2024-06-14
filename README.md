@@ -95,14 +95,14 @@ RustPixel also includes several tools:
     $ cargo pixel r tetris t -r
 ```
 
- ![term mode](./tmp/tetris_term.gif)
+ ![term mode](./tmp/tetris_term.gif =320x240)
 
 ```
     graphical mode
     $ cargo pixel r tetris s -r
 ```
 
-![graphical mode](./tmp/tetris_sdl.gif)
+![graphical mode](./tmp/tetris_sdl.gif =320x240)
 
 ```
     web mode
@@ -110,15 +110,15 @@ RustPixel also includes several tools:
     and visit http://localhost:8080/ in your browser
 ```
 
-![web mode](./tmp/tetris_web.gif)
+![web mode](./tmp/tetris_web.gif =320x240)
 
 2. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
 ``` 
     $ cargo pixel r gin_rummy t -r
     $ cargo pixel r red_black t -r
 ```
- ![gin_rummy](./tmp/ginrummy.png)
- ![red_black](./tmp/redblack.png)
+ ![gin_rummy](./tmp/ginrummy.png =320x240)
+ ![red_black](./tmp/redblack.png =320x240)
 
 The poker/ffi directory demo how to wrap Rust algorithms into CFFI for use with other languages, showcasing C++ and Python calling poker_ffi
 ```
