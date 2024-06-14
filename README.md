@@ -52,7 +52,7 @@ $ cp tools/cargo-pixel ~/.cargo/bin
 #### Usage Instructions
 --- MacOS ---
 ``` 
-$ cd tge.rs
+$ cd rust_pixel
 $ cargo pixel run snake term     #Run the snake game in terminal mode
 $ cargo pixel r snake term       #Run the snake game in terminal mode - shorthand
 $ cargo pixel r tetris sdl       #Run the Tetris game in SDL window mode
