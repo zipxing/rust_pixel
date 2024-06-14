@@ -21,11 +21,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         1 => {
             #[cfg(not(feature = "sdl"))]
             {
-                escfile = "assets/tmp/tedit.out";
+                escfile = "assets/tmp/tedit.txt";
             }
             #[cfg(feature = "sdl")]
             {
-                escfile = "assets/tmp/tedit.sdl";
+                escfile = "assets/tmp/tedit.pix";
             }
         }
         _ => {
