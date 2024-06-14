@@ -88,8 +88,26 @@ RustPixel also includes several tools:
 ```
 
 #### Demo games
+1. snake: A snake game with a cool PETSCII animations
+```
+    graphical mode
+    $ cargo pixel r snake s -r
+```
 
-1. tetris: A Tetris game where you can play against AI
+![graphical mode](./tmp/snake_sdl.gif)
+
+``` 
+    term mode
+    $ cargo pixel r snake t -r
+```
+
+```
+    web mode
+    $ cargo pixel r snake w -r
+    and visit http://localhost:8080/ in your browser
+```
+
+2. tetris: A Tetris game where you can play against AI
 ``` 
     term mode
     $ cargo pixel r tetris t -r
@@ -112,7 +130,7 @@ RustPixel also includes several tools:
 
 ![web mode](./tmp/tetris_web.gif)
 
-2. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
+3. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
 ``` 
     $ cargo pixel r gin_rummy t -r
     $ cargo pixel r red_black t -r
@@ -131,7 +149,7 @@ The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calli
     $ make run
 ```
 
-3. tower: A tower defense game prototype demonstrating the use of objpool and pixel_sprite for pixel-perfect sprite movement
+4. tower: A tower defense game prototype demonstrating the use of objpool and pixel_sprite for pixel-perfect sprite movement
 ``` 
     graphical mode
     $ cargo pixel r tower s -r
