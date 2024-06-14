@@ -77,11 +77,11 @@ def get_cmds(args, subcmd):
     rels = '--release' if args.release else ''
     web_port = args.webport
     if bt == 'term' or bt == 't':
-        cmds.append('cargo %s --bin %s %s %s'%(subcmd, mod, oas_str, rels))
+        cmds.append('cargo %s --bin %s %s %s'%(subcmd, mod, rels, oas_str))
     if bt == 'sdl' or bt == 's':
-        cmds.append('cargo %s --bin %s --features sdl %s %s'%(subcmd, mod, oas_str, rels))
+        cmds.append('cargo %s --bin %s --features sdl %s %s'%(subcmd, mod, rels, oas_str))
     if bt == 'web' or bt == 'w':
-        cmds.append('wasm-pack build --target web games/%s %s %s'%(mod, oas_str, rels))
+        cmds.append('wasm-pack build --target web games/%s %s %s'%(mod, rels, oas_str))
         if subcmd == "run":
             tmpwd = "tmp/web_%s/"%(mod)
             cmds.append("rm -r %s/*"%(tmpwd))

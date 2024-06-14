@@ -78,7 +78,8 @@ RustPixel also includes several tools:
 
 2. tpetii: Used to convert regular images into PETSCII character art, example:
 ```
-    $ cargo r --bin tpetii assets/fire.png assets/fire.pix 40 25
+    $ cargo pixel r tpetii t assets/fire.png 40 40 -r > assets/fire.pix
+    -r : build tpetii in release mode for high performance
 ```
 
 3. Script to automatically convert gif images into PETSCII animations (ssf)
