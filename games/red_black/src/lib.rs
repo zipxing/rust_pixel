@@ -2,8 +2,7 @@ mod model;
 mod render;
 
 use crate::{model::RedBlackModel, render::RedBlackRender};
-use log::debug;
-use rust_pixel::{game::Game, log::init_log};
+use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
@@ -17,11 +16,9 @@ pub struct RedBlackGame {
 }
 
 pub fn init_game() -> RedBlackGame {
-    init_log(log::LevelFilter::Info, "log/redblack.log");
-    debug!("RedBlack(rust_pixel) start...");
     let m = RedBlackModel::new();
     let r = RedBlackRender::new();
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "red_black");
     g.init();
     RedBlackGame { g }
 }

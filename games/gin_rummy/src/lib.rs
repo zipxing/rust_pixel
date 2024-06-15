@@ -2,8 +2,7 @@ mod model;
 mod render;
 
 use crate::{model::GinRummyModel, render::GinRummyRender};
-use log::debug;
-use rust_pixel::{game::Game, log::init_log};
+use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
@@ -17,11 +16,9 @@ pub struct GinRummyGame {
 }
 
 pub fn init_game() -> GinRummyGame {
-    init_log(log::LevelFilter::Info, "log/ginrummy.log");
-    debug!("GinRummy(rust_pixel) start...");
     let m = GinRummyModel::new();
     let r = GinRummyRender::new();
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "gin_rummy");
     g.init();
     GinRummyGame { g }
 }

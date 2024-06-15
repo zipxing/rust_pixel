@@ -59,9 +59,9 @@ impl RedBlackRender {
                 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
                 let ext = "txt";
                 let cn = if bi == 0 {
-                    format!("assets/poker/back.{}", ext)
+                    format!("poker/back.{}", ext)
                 } else {
-                    format!("assets/poker/{}.{}", bi, ext)
+                    format!("poker/{}.{}", bi, ext)
                 };
                 asset2sprite!(l, ctx, &cn);
 
@@ -86,7 +86,7 @@ impl Render for RedBlackRender {
             .init(82, 20, 1.2, 1.2, "redblack".to_string());
         self.panel.init(context);
         let gb = self.sprites.get_by_tag("back");
-        asset2sprite!(gb, context, "assets/redblack/back.txt");
+        asset2sprite!(gb, context, "back.txt");
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {

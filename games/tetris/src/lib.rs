@@ -2,8 +2,7 @@ mod model;
 mod render;
 
 use crate::{model::TetrisModel, render::TetrisRender};
-use log::debug;
-use rust_pixel::{game::Game, log::init_log};
+use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
@@ -17,11 +16,9 @@ pub struct TetrisGame {
 }
 
 pub fn init_game() -> TetrisGame {
-    init_log(log::LevelFilter::Info, "log/tetris.log");
-    debug!("Tetris(rust_pixel) start...");
     let m = TetrisModel::new();
     let r = TetrisRender::new();
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "tetris");
     g.init();
     TetrisGame { g }
 }

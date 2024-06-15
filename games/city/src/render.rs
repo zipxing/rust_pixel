@@ -124,7 +124,7 @@ impl CityRender {
         let area = Rect::new(0, 0, 10, 5);
         l.content.resize(area);
         l.content.reset();
-        let cn = format!("assets/city/cc{}.txt", border_type);
+        let cn = format!("cc{}.txt", border_type);
         asset2sprite!(l, ctx, &cn);
         l.set_pos(x, y);
         //设置颜色
@@ -263,7 +263,7 @@ impl Render for CityRender {
         ctx.adapter.init(70, 40, 2.0, 1.0, "city".to_string());
         self.panel.init(ctx);
         let l = self.main_scene.get_by_tag("back");
-        asset2sprite!(l, ctx, &format!("assets/city/back.txt"));
+        asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
     fn handle_event<G: Model>(&mut self, ctx: &mut Context, data: &mut G, _dt: f32) {

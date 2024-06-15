@@ -2,8 +2,7 @@ mod model;
 mod render;
 
 use crate::{model::CityModel, render::CityRender};
-use log::debug;
-use rust_pixel::{game::Game, log::init_log};
+use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
@@ -17,11 +16,9 @@ pub struct CityGame {
 }
 
 pub fn init_game() -> CityGame {
-    init_log(log::LevelFilter::Info, "log/city.log");
-    debug!("City(rust_pixel) start...");
     let m = CityModel::new();
     let r = CityRender::new();
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "city");
     g.init();
     CityGame { g }
 }

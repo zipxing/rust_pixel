@@ -47,7 +47,7 @@ impl TowerRender {
         let w = BW as u16;
         let h = BH as u16;
         self.panel.create_sprites(&d.blocks, w, h, |bl| {
-            asset2sprite!(bl, ctx, "./assets/pix/block.pix");
+            asset2sprite!(bl, ctx, "pix/block.pix");
         });
         self.panel.create_sprites(&d.towers, w, h, |_bl| {});
         self.panel.create_sprites(&d.monsters, 1, 2, |pl| {
@@ -143,7 +143,7 @@ impl TowerRender {
         self.panel.draw_objs(
             &mut d.towers,
             |pl, m| {
-                asset2sprite!(pl, ctx, &format!("./assets/pix/tower{}.pix", m.obj.ttype + 1));
+                asset2sprite!(pl, ctx, &format!("pix/tower{}.pix", m.obj.ttype + 1));
                 pl.set_pos(
                     ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
                     ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,

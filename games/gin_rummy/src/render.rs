@@ -92,9 +92,9 @@ impl GinRummyRender {
             #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
             let ext = "txt";
             let cn = if bi == 0 {
-                format!("assets/poker/back.{}", ext)
+                format!("poker/back.{}", ext)
             } else {
-                format!("assets/poker/{}.{}", bi, ext)
+                format!("poker/{}.{}", bi, ext)
             };
             asset2sprite!(l, ctx, &cn);
             let x = ((i % 10) * (CARDW - 2)) as u16 + 1u16;

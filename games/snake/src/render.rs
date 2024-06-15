@@ -12,7 +12,6 @@ use rust_pixel::{
     render::sprite::{Sprite, Sprites},
     render::style::{Color, Style},
 };
-use std::path::MAIN_SEPARATOR;
 
 const COLORS: [Color; 14] = [
     Color::Red,

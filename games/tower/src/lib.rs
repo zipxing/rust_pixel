@@ -2,8 +2,8 @@ mod model;
 mod render;
 
 use crate::{model::TowerModel, render::TowerRender};
-use log::debug;
-use rust_pixel::{game::Game, log::init_log};
+// use log::debug;
+use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
@@ -17,11 +17,9 @@ pub struct TowerGame {
 }
 
 pub fn init_game() -> TowerGame {
-    init_log(log::LevelFilter::Info, "log/tower.log");
-    debug!("Tower(rust_pixel) start...");
     let m = TowerModel::new();
     let r = TowerRender::new();
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "tower");
     g.init();
     TowerGame { g }
 }

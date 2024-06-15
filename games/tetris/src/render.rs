@@ -280,9 +280,9 @@ impl Render for TetrisRender {
         self.panel.init(context);
         let l = self.main_scene.get_by_tag("back");
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        let bp = "assets/tetris/back.pix";
+        let bp = "back.pix";
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-        let bp = "assets/tetris/back.txt";
+        let bp = "back.txt";
         asset2sprite!(l, context, &bp);
     }
 
