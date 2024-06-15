@@ -41,7 +41,7 @@ pub fn get_project_root(flag_file: &str) -> io::Result<PathBuf> {
     }
     Err(io::Error::new(
         ErrorKind::NotFound,
-        "Ran out of places to find Cargo.toml",
+        "Ran out of places to find flag_file",
     ))
 }
 

@@ -21,7 +21,7 @@
 //!    Ok(())
 //! }
 
-use crate::{context::Context, event::timer_update, GAME_FRAME, LOGO_FRAME};
+use crate::{context::Context, event::timer_update, log::init_log, GAME_FRAME, LOGO_FRAME};
 use log::info;
 use std::{
     any::Any,
@@ -85,10 +85,11 @@ where
     M: Model,
     R: Render,
 {
-    pub fn new(m: M, r: R) -> Self {
-        info!("New game...");
+    pub fn new(m: M, r: R, name: &str) -> Self {
+        init_log(log::LevelFilter::Info, &format!("log/{}.log", name));
+        info!("{}(rust_pixel) start...", name);
         Self {
-            context: Context::new(),
+            context: Context::new(name),
             model: m,
             render: r,
         }

@@ -15,7 +15,8 @@ use crate::{
 use std::collections::HashMap;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-// use log::debug;
+#[cfg(not(target_arch = "wasm32"))]
+use log::info;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum AssetState {
@@ -129,6 +130,7 @@ impl AssetManager {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let fpstr = get_abs_path(loc);
+                    info!("asset load:{:?}", fpstr);
                     let fdata = std::fs::read(fpstr).expect("read file error");
                     self.set_data(loc, &fdata[..]);
                 }

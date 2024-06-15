@@ -27,8 +27,8 @@ use crossterm::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
 };
-use std::io::{self, Write};
 use std::any::Any;
+use std::io::{self, Write};
 use std::time::Duration;
 
 #[cfg(not(feature = "sdl"))]
@@ -40,11 +40,11 @@ pub struct CrosstermAdapter {
 
 #[cfg(not(feature = "sdl"))]
 impl CrosstermAdapter {
-    pub fn new() -> Self {
+    pub fn new(gn: &str) -> Self {
         let stdout = io::stdout();
         Self {
             writer: Box::new(stdout),
-            base: AdapterBase::new(),
+            base: AdapterBase::new(gn),
             rd: Rand::new(),
         }
     }
@@ -137,15 +137,28 @@ impl Adapter for CrosstermAdapter {
             let w = current_buffer.area().width as u16;
             let x = w - self.rd.rand() as u16 % w;
             let y = current_buffer.area().height as u16 / 2;
-            let cc = CColor::from((self.rd.rand() as u8, self.rd.rand() as u8, self.rd.rand() as u8));
+            let cc = CColor::from((
+                self.rd.rand() as u8,
+                self.rd.rand() as u8,
+                self.rd.rand() as u8,
+            ));
             to_error(queue!(self.writer, MoveTo(0, y)))?;
             to_error(queue!(self.writer, Print("                                                                                                                     ")))?;
             to_error(queue!(self.writer, MoveTo(x, y)))?;
             to_error(queue!(self.writer, SetForegroundColor(cc)))?;
             to_error(queue!(self.writer, Print("...RustPixel...")))?;
             if stage == LOGO_FRAME {
+                // clear screen
                 to_error(queue!(self.writer, MoveTo(x, y)))?;
-                to_error(queue!(self.writer, Print("                                 ")))?;
+                to_error(queue!(
+                    self.writer,
+                    Print("                                 ")
+                ))?;
+                // reset pen color
+                to_error(queue!(
+                    self.writer,
+                    SetForegroundColor(CColor::from((192, 192, 192)))
+                ))?;
             }
             return Ok(());
         }

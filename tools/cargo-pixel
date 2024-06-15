@@ -86,7 +86,7 @@ def get_cmds(args, subcmd):
             tmpwd = "tmp/web_%s/"%(mod)
             cmds.append("rm -r %s/*"%(tmpwd))
             cmds.append("mkdir -p %s"%(tmpwd))
-            cmds.append("cp -r assets %s"%(tmpwd))
+            cmds.append("cp -r games/%s/assets %s"%(mod, tmpwd))
             cmds.append("cp rust-pixel/web-templates/* %s"%(tmpwd))
             cmds.append("sed -i '' \"s/Pixel/%s/g\" %s/index.js"%(CAPNAME, tmpwd))
             cmds.append("sed -i '' \"s/pixel/%s/g\" %s/index.js"%(LONAME, tmpwd))
@@ -117,8 +117,8 @@ def pixel_creat(args):
     LONAME = mod.lower()
     CAPNAME = mod.capitalize()
 
-    print("🍀 creat assets folder...%s" % ("assets/" + mod + "/"))
-    os.system("cp -r %s/assets/snake/ %s/assets/%s/" % (curdir, curdir, mod))
+    #print("🍀 creat assets folder...%s" % ("assets/" + mod + "/"))
+    #os.system("cp -r %s/assets/snake/ %s/assets/%s/" % (curdir, curdir, mod))
 
     print("🍀 creat games folder...%s" % ("games/" + mod +"/"))
     os.chdir("%s/tmp" % curdir)

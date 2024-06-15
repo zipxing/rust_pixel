@@ -78,6 +78,7 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 ];
 
 pub struct AdapterBase {
+    pub game_name: String,
     pub title: String,
     pub cell_w: u16,
     pub cell_h: u16,
@@ -88,9 +89,10 @@ pub struct AdapterBase {
 }
 
 impl AdapterBase {
-    pub fn new() -> Self {
+    pub fn new(gn: &str) -> Self {
         Self {
-            title: "rust_pixel".to_string(),
+            game_name: gn.to_string(),
+            title: "".to_string(),
             cell_w: 0,
             cell_h: 0,
             pixel_w: 0,

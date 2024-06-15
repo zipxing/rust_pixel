@@ -48,7 +48,7 @@ pub enum BorderType {
     Thick,
 }
 
-/// Used to simplify the call to set_content_asset2sprite method
+/// Used to simplify the call to set_content_by_asset method
 #[macro_export]
 macro_rules! asset2sprite {
     ($spr:expr, $ctx:expr, $loc:expr $(, $arg:expr)* ) => {
@@ -74,18 +74,27 @@ macro_rules! asset2sprite {
             1 => {
                 frame_idx = va[0];
             },
-            3 => { 
-                frame_idx = va[0]; 
-                x = va[1] as u16;  
+            3 => {
+                frame_idx = va[0];
+                x = va[1] as u16;
                 y = va[2] as u16;
             },
             _ => {},
         }
-        // call spr.set_content_asset2sprite...
-        $spr.set_content_asset2sprite(
+        #[cfg(not(target_arch = "wasm32"))]
+        let nl = &format!("games{}{}{}assets{}{}",
+            MAIN_SEPARATOR,
+            $ctx.game_name,
+            MAIN_SEPARATOR,
+            MAIN_SEPARATOR,
+            $loc);
+        #[cfg(target_arch = "wasm32")]
+        let nl = &format!("assets{}{}", MAIN_SEPARATOR, $loc);
+        // call spr.set_content_by_asset...
+        $spr.set_content_by_asset(
             &mut $ctx.asset_manager,
             at,
-            $loc,
+            nl,
             frame_idx,
             x,
             y,
@@ -137,7 +146,7 @@ impl Sprite {
         );
     }
 
-    pub fn set_content_asset2sprite(
+    pub fn set_content_by_asset(
         &mut self,
         am: &mut AssetManager,
         atype: AssetType,

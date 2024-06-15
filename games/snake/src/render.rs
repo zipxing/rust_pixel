@@ -12,6 +12,7 @@ use rust_pixel::{
     render::sprite::{Sprite, Sprites},
     render::style::{Color, Style},
 };
+use std::path::MAIN_SEPARATOR;
 
 const COLORS: [Color; 14] = [
     Color::Red,
@@ -265,7 +266,7 @@ impl Render for SnakeRender {
         asset2sprite!(
             ss,
             context,
-            "./assets/sdq/2.ssf",
+            "sdq/dance.ssf",
             (context.stage / 3) as usize,
             1,
             1

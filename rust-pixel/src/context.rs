@@ -21,6 +21,7 @@ use crate::util::Rand;
 use crate::asset::AssetManager;
 
 pub struct Context {
+    pub game_name: String,
     pub stage: u32,
     pub state: u8,
     pub rand: Rand,
@@ -30,19 +31,20 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
+            game_name: name.to_string(),
             stage: 0,
             state: 0,
             rand: Rand::new(),
             asset_manager: AssetManager::new(),
             input_events: vec![],
             #[cfg(target_arch = "wasm32")]
-            adapter: Box::new(WebAdapter::new()),
+            adapter: Box::new(WebAdapter::new(name)),
             #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
-            adapter: Box::new(SdlAdapter::new()),
+            adapter: Box::new(SdlAdapter::new(name)),
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
-            adapter: Box::new(CrosstermAdapter::new()),
+            adapter: Box::new(CrosstermAdapter::new(name)),
         }
     }
 }

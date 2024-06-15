@@ -2,16 +2,13 @@ mod model;
 mod render;
 
 use crate::{model::SnakeModel, render::SnakeRender};
-use log::debug;
-use rust_pixel::{game::Game, log::init_log};
+use rust_pixel::game::Game;
+// use log::info;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
-// use rust_pixel::render::buffer::Buffer;
 use wasm_bindgen::prelude::*;
 
-// wasm不能绑定带有范型或生命周期的结构
-// 所以需要包装一下，拥有固定类型
 // wasm can not bind template or data structure with lifetime,
 // so encapsulating it as a fixed type
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -20,11 +17,9 @@ pub struct SnakeGame {
 }
 
 pub fn init_game() -> SnakeGame {
-    init_log(log::LevelFilter::Info, "log/snake.log");
-    debug!("Snake(rust_pixel) start...");
     let m = SnakeModel::new();
     let r = SnakeRender::new();
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "snake");
     g.init();
     SnakeGame { g }
 }
@@ -55,7 +50,7 @@ impl SnakeGame {
     }
 
     pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
-        debug!("asset({:?}): {:?}!!!", url, data);
+        info!("asset({:?}): {:?}!!!", url, data);
         self.g.context.asset_manager.set_data(url, data);
     }
 
@@ -86,7 +81,6 @@ impl SnakeGame {
         self.g.context.adapter.get_base().ratio_y
     }
 
-    // web渲染buffer指针, js可以用如下代码访问
     // web renders buffer, can be accessed in js using the following
     // const wbuflen = sg.web_buffer_len();
     // const wbufptr = sg.web_buffer();
