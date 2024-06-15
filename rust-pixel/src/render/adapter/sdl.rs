@@ -17,7 +17,7 @@ use crate::{
         buffer::Buffer,
         sprite::Sprites,
     },
-    util::{get_abs_path, Rand},
+    util::Rand,
     LOGO_FRAME,
 };
 use sdl2::{
@@ -234,7 +234,12 @@ impl Adapter for SdlAdapter {
             )
             .unwrap();
 
-        let surface = Surface::from_file(get_abs_path("assets/pix/cursor.png"))
+        let surface = Surface::from_file(format!(
+                        "games{}{}{}{}",
+                        std::path::MAIN_SEPARATOR,
+                        self.base.game_name,
+                        std::path::MAIN_SEPARATOR,
+                        "assets/pix/cursor.png"))
             .map_err(|err| format!("failed to load cursor image: {}", err))
             .unwrap();
         self.set_mouse_cursor(&surface);

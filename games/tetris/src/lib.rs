@@ -49,7 +49,7 @@ impl TetrisGame {
     }
 
     pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
-        debug!("asset({:?}): {:?}!!!", url, data);
+        // debug!("asset({:?}): {:?}!!!", url, data);
         self.g.context.asset_manager.set_data(url, data);
     }
 

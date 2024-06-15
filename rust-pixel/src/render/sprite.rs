@@ -89,7 +89,7 @@ macro_rules! asset2sprite {
             std::path::MAIN_SEPARATOR,
             $loc);
         #[cfg(target_arch = "wasm32")]
-        let nl = &format!("assets{}{}", MAIN_SEPARATOR, $loc);
+        let nl = &format!("assets{}{}", std::path::MAIN_SEPARATOR, $loc);
         // call spr.set_content_by_asset...
         $spr.set_content_by_asset(
             &mut $ctx.asset_manager,
