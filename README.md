@@ -1,5 +1,5 @@
-# RustPixel ![logo](./tmp/logo.png)
-
+# RustPixel 
+![logo](./tmp/logo.png)
 #### Introduction
 RustPixel is a 2D game engine written in the Rust language, supporting both text and graphical rendering modes. The text mode runs in the terminal, while the graphical mode supports both SDL standalone window mode and browser-based wasm web mode:
 
