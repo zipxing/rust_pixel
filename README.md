@@ -11,6 +11,8 @@ RustPixel implements game loops, a Model/Render common pattern, and a messaging 
 
 Overall, RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and especially for developing and debugging CPU-intensive core algorithm logic. It can be compiled into ffi for game front-end and back-end use, and also into wasm for web-based small games.
 
+ ![logo](./tmp/logo.png)
+
 #### Installation Guide
 --- MacOS ---
 
