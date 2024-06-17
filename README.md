@@ -1,4 +1,4 @@
-# RustPixel
+# RustPixel ![logo](./tmp/logo.png)
 
 #### Introduction
 RustPixel is a 2D game engine written in the Rust language, supporting both text and graphical rendering modes. The text mode runs in the terminal, while the graphical mode supports both SDL standalone window mode and browser-based wasm web mode:
@@ -10,8 +10,7 @@ RustPixel is a 2D game engine written in the Rust language, supporting both text
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into ffi and wasm.
 
 Overall, RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and especially for developing and debugging CPU-intensive core algorithm logic. It can be compiled into ffi for game front-end and back-end use, and also into wasm for web-based small games.
-
- ![logo](./tmp/logo.png)
+ 
 
 #### Installation Guide
 --- MacOS ---
