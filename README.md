@@ -42,10 +42,10 @@ $ brew install sdl2_ttf
 $ brew install sdl2_mixer
 ``` 
 
-Tips: Missing path in LIBRARY_PATH environment variable
-The Homebrew package manager symlinks library to the directory /usr/local/lib. 
-To use these libraries with Rust, you need to add it to the LIBRARY_PATH environment variable. 
-The command echo $LIBRARY_PATH will tell you if /usr/local/lib is added. 
+Tips: Missing path in LIBRARY_PATH environment variable<br>
+The Homebrew package manager symlinks library to the directory /usr/local/lib. <br>
+To use these libraries with Rust, you need to add it to the LIBRARY_PATH environment variable. <br>
+The command echo $LIBRARY_PATH will tell you if /usr/local/lib is added. <br>
 If it is missing, add the following to the ~/.bash_profile configuration file:
 ```
 export LIBRARY_PATH="$LIBRARY_PATH:/usr/local/lib"
