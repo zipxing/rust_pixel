@@ -42,6 +42,14 @@ $ brew install sdl2_ttf
 $ brew install sdl2_mixer
 ``` 
 
+TIPS: Missing path in LIBRARY_PATH environment variable
+The Homebrew package manager symlinks library to the directory /usr/local/lib. To use these libraries with Rust, you need to add it to the LIBRARY_PATH environment variable. The command echo $LIBRARY_PATH will tell you if /usr/local/lib is added. If it is missing, add the following to the ~/.bash_profile configuration file:
+```
+export LIBRARY_PATH="$LIBRARY_PATH:/usr/local/lib"
+```
+This will add the directory to the environment variable each time you start up a new Terminal window.
+
+
 Download RustPixel and deploy cargo-pixel
 ``` 
 $ git clone https://github.com/zipxing/rust_pixel
