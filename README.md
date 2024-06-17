@@ -14,25 +14,25 @@ Overall, RustPixel is suitable for creating 2D pixel-style games, rapid prototyp
 #### Installation Guide
 --- MacOS ---
 
-Install brew
+**Install brew**
 ``` 
 $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ``` 
 
-Install rust
+**Install rust**
 ``` 
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ . "$HOME/.cargo/env"            # For sh/bash/zsh/ash/dash/pdksh
 ``` 
 
-Install wasm-pack
+**Install wasm-pack**
 ```
 curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 ```
 
-Install Python3 (the latest macOS generally comes with it)
+**Install Python3** (the latest macOS generally comes with it)
 
-Install some dependent libraries and software
+**Install some dependent libraries and software**
 ``` 
 $ brew install ffmpeg            # Used to convert gif to ssf sequence frame files(.ssf)
 $ brew install sdl2
@@ -53,7 +53,7 @@ export LIBRARY_PATH="$LIBRARY_PATH:/usr/local/lib"
 This will add the directory to the environment variable each time you start up a new Terminal window.
 
 
-Download RustPixel and deploy cargo-pixel
+**Download RustPixel and deploy cargo-pixel**
 ``` 
 $ git clone https://github.com/zipxing/rust_pixel
 $ cd rust_pixel
