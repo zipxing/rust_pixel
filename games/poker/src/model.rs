@@ -10,20 +10,20 @@ pub const CARDH: usize = 7;
 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const CARDH: usize = 5;
 
-// enum RedBlackState {
+// enum PokerState {
 //     Normal,
 //     OverSelf,
 //     OverBorder,
 // }
 
-pub struct RedBlackModel {
+pub struct PokerModel {
     pub rand: Rand,
     pub texas_cards_red: TexasCards,
     pub texas_cards_black: TexasCards,
     pub pool: Vec<u16>,
 }
 
-impl RedBlackModel {
+impl PokerModel {
     pub fn new() -> Self {
         Self {
             rand: Rand::new(),
@@ -44,7 +44,7 @@ impl RedBlackModel {
     // pub fn act(&mut self, _d: Dir, _context: &mut Context) {}
 }
 
-impl Model for RedBlackModel {
+impl Model for PokerModel {
     fn init(&mut self, _context: &mut Context) {
         self.rand.srand_now();
         self.shuffle_tiles();
@@ -52,7 +52,7 @@ impl Model for RedBlackModel {
         self.texas_cards_black.assign(&self.pool[5..10]).unwrap();
         info!("red:{}", self.texas_cards_red);
         info!("black:{}", self.texas_cards_black);
-        event_emit("RedBlack.RedrawTile");
+        event_emit("Poker.RedrawTile");
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {

@@ -1,4 +1,4 @@
-use crate::model::{RedBlackModel, CARDH, CARDW};
+use crate::model::{PokerModel, CARDH, CARDW};
 // use log::info;
 use rust_pixel::{
     asset::AssetType,
@@ -11,12 +11,12 @@ use rust_pixel::{
     render::style::{Color, Style},
 };
 
-pub struct RedBlackRender {
+pub struct PokerRender {
     pub panel: Panel,
     pub sprites: Sprites,
 }
 
-impl RedBlackRender {
+impl PokerRender {
     pub fn new() -> Self {
         let t = Panel::new();
         let mut s = Sprites::new("main");
@@ -37,7 +37,7 @@ impl RedBlackRender {
         let msgblack = Sprite::new(40 + adj, 14, 40, 1);
         s.add_by_tag(msgblack, "msgblack");
 
-        event_register("RedBlack.RedrawTile", "draw_tile");
+        event_register("Poker.RedrawTile", "draw_tile");
 
         Self {
             panel: t,
@@ -46,7 +46,7 @@ impl RedBlackRender {
     }
 
     pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<RedBlackModel>().unwrap();
+        let d = model.as_any().downcast_mut::<PokerModel>().unwrap();
         let ts = [&d.texas_cards_red, &d.texas_cards_black];
         let msg = ["msgred", "msgblack"];
         for n in 0..2usize {
@@ -79,7 +79,7 @@ impl RedBlackRender {
     }
 }
 
-impl Render for RedBlackRender {
+impl Render for PokerRender {
     fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
         context
             .adapter
@@ -90,7 +90,7 @@ impl Render for RedBlackRender {
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
-        if event_check("RedBlack.RedrawTile", "draw_tile") {
+        if event_check("Poker.RedrawTile", "draw_tile") {
             self.draw_tile(context, data);
         }
     }

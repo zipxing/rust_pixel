@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 rust_pixel = { path = "../../../rust-pixel", default-features = false, features = ["web"] }
 poker_lib = { path = "../lib" }
-texas_lib = { path = "../../texas/lib" }
+texas_lib = { path = "../texas" }
 gin_rummy_lib = { path = "../../gin_rummy/lib" }
 wasm-bindgen = "0.2.92"
 web-sys = "0.3.4"
