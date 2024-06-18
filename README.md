@@ -144,8 +144,8 @@ RustPixel also includes several tools:
 
 3. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
 ``` 
+    $ cargo pixel r poker t -r
     $ cargo pixel r gin_rummy t -r
-    $ cargo pixel r red_black t -r
 ```
  ![gin_rummy](./tmp/ginrummy.png)
  ![red_black](./tmp/redblack.png)
