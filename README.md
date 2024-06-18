@@ -1,13 +1,12 @@
 ![logo](./tmp/logo.png)
     
 #### Introduction
-RustPixel is a **2D game engine** and **rapid prototyping tools**  written in Rust.<br>
-RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and especially for developing and debugging CPU-intensive core algorithm logic. It can be compiled into **ffi** for front-end and back-end use, and also into **wasm** for web-based small projects.<br>
-RustPixel supporting both text and graphical rendering modes. The text mode runs in the terminal, while the graphical mode supports both SDL standalone window mode and browser-based wasm web mode:
+RustPixel is a **2D game engine** and **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
+RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and especially for developing and debugging CPU-intensive core algorithm logic. It can be compiled into **FFI** for front-end and back-end use, and also into **WASM** for web-based projects.You can even use it to develop **terminal applications**.<br>
 
 1. Text Mode: <br>Built with the **crossterm** module, it runs in the terminal and uses **ASCII and Unicode Emoji** for drawing.<br>
-2. Graphical Mode (SDL Mode): <br>Built with **sdl2**, it runs in a standalone window and uses the **PETSCII** character set and **custom** graphical patterns for rendering.
-3. Graphical Mode (Web Mode): <br>Similar to the SDL mode, but the core logic is compiled into wasm and rendered using WebGL and JavaScript (refer to rust-pixel/web-template/pix.js).
+2. Graphical Mode (OS Windows): <br>Built with **sdl2**, it runs in a standalone os window and uses the **PETSCII** character set and **custom** graphical patterns for rendering.
+3. Graphical Mode (Web): <br>Similar to the SDL mode, but the core logic is compiled into wasm and rendered using WebGL and JavaScript (refer to rust-pixel/web-template/pix.js).
 
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into ffi and wasm.
 
