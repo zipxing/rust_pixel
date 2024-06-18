@@ -1,4 +1,4 @@
-use crate::model::{PokerModel, CARDH, CARDW};
+use crate::model::{TemplateModel, CARDH, CARDW};
 // use log::info;
 use rust_pixel::{
     asset::AssetType,
@@ -11,20 +11,20 @@ use rust_pixel::{
     render::style::{Color, Style},
 };
 
-pub struct PokerRender {
+pub struct TemplateRender {
     pub panel: Panel,
     pub sprites: Sprites,
 }
 
-impl PokerRender {
+impl TemplateRender {
     pub fn new() -> Self {
         let t = Panel::new();
         let mut s = Sprites::new("main");
 
         let gb = Sprite::new(0, 0, 80, 20);
         s.add_by_tag(gb, "back");
-        //red 5 cards, black 5 cards
-        for i in 0..10 {
+
+        for i in 0..1 {
             s.add_by_tag(
                 Sprite::new(0, 0, CARDW as u16, CARDH as u16),
                 &format!("t{}", i),
@@ -32,12 +32,14 @@ impl PokerRender {
         }
 
         let adj = 1u16;
-        let msgred = Sprite::new(0 + adj, 14, 40, 1);
-        s.add_by_tag(msgred, "msgred");
-        let msgblack = Sprite::new(40 + adj, 14, 40, 1);
-        s.add_by_tag(msgblack, "msgblack");
+        let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
+        msg1.content.set_str(0, 0, "press S shuffle cards, press N for next card", Style::default());
+        s.add_by_tag(msg1, "msg1");
+        let mut msg2 = Sprite::new(40 + adj, 14, 40, 1);
+        msg2.content.set_str(0, 0, "press S shuffle cards, press N for next card", Style::default());
+        s.add_by_tag(msg2, "msg2");
 
-        event_register("Poker.RedrawTile", "draw_tile");
+        event_register("Template.RedrawTile", "draw_tile");
 
         Self {
             panel: t,
@@ -46,40 +48,23 @@ impl PokerRender {
     }
 
     pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PokerModel>().unwrap();
-        let ts = [&d.texas_cards_red, &d.texas_cards_black];
-        let msg = ["msgred", "msgblack"];
-        for n in 0..2usize {
-            for i in 0..5 {
-                let l = self.sprites.get_by_tag(&format!("t{}", i + n * 5));
-                let bi = ts[n].best[i].to_u8() as usize;
+        let d = model.as_any().downcast_mut::<TemplateModel>().unwrap();
+        let bi = d.card;
+        let l = self.sprites.get_by_tag("t0");
+        let ext = "txt";
+        let cn = if bi == 0 {
+            format!("poker/back.{}", ext)
+        } else {
+            format!("poker/{}.{}", bi, ext)
+        };
+        asset2sprite!(l, ctx, &cn);
 
-                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-                let ext = "pix";
-                #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-                let ext = "txt";
-                let cn = if bi == 0 {
-                    format!("poker/back.{}", ext)
-                } else {
-                    format!("poker/{}.{}", bi, ext)
-                };
-                asset2sprite!(l, ctx, &cn);
-
-                let x = (i * CARDW) as u16 + 1u16 + n as u16 * 40u16;
-                l.set_pos(x, 7);
-            }
-            let m = self.sprites.get_by_tag(msg[n]);
-            m.content.set_str(
-                0,
-                0,
-                format!("{:?}", ts[n].texas),
-                Style::default().fg(Color::Indexed(222)),
-            );
-        }
+        let x = (0 * CARDW) as u16 + 1u16 + 0 as u16 * 40u16;
+        l.set_pos(x, 7);
     }
 }
 
-impl Render for PokerRender {
+impl Render for TemplateRender {
     fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
         context
             .adapter
@@ -90,7 +75,7 @@ impl Render for PokerRender {
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
-        if event_check("Poker.RedrawTile", "draw_tile") {
+        if event_check("Template.RedrawTile", "draw_tile") {
             self.draw_tile(context, data);
         }
     }

@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "poker_ffi.h"
+#include "template_ffi.h"
 
 void test_poker_card() {
     rs_PokerCards *a = rs_PokerCards_new();

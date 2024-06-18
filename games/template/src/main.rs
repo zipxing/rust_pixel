@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use poker::run;
+use template::run;
 
 fn main() -> Result<(), JsValue> {
     run()

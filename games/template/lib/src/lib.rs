@@ -1,38 +1,39 @@
 #![allow(dead_code)]
 
-use std::fmt::{self, Display, Formatter};
+use rust_pixel::util::Rand;
 
-#[repr(C)]
-#[derive(Ord, PartialOrd, Eq, Copy, Clone, PartialEq)]
 pub struct TemplateData {
-    pub number: u8,
+    pub rand: Rand,
+    pub pool: Vec<u8>,
+    pub index: usize,
 }
 
 impl TemplateData {
-    pub fn new(v: u8) -> Result<Self, String> {
-        match v {
-            1..=52 => {
-                number = (v - 1) % 13 + 1;
-            }
-            _ => return Err(String::from(format!("invaild number:{:?}", v))),
+    pub fn new() -> Self {
+        Self {
+            rand: Rand::new(),
+            pool: vec![],
+            index: 0,
         }
-        Ok(TemplateData { number })
     }
 
-    pub fn add_one(&mut self) {
-        self.number.wrapping_add(1);
+    pub fn shuffle(&mut self) {
+        self.pool.clear();
+        for i in 1..=52u8 {
+            self.pool.push(i);
+        }
+        self.rand.shuffle(&mut self.pool);
     }
-}
 
-impl Display for TemplateData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "template_data: number is {}", self.number)
-    }
-}
-
-impl fmt::Debug for TemplateData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(self, f)
+    pub fn next(&mut self) -> u8 {
+        let ret;
+        if self.pool.len() > 0 {
+            ret = self.pool[self.index];
+            self.index = (self.index + 1) % 52;
+        } else {
+            ret = 0;
+        }
+        ret
     }
 }
 
@@ -41,8 +42,6 @@ mod tests {
     use super::*;
     #[test]
     fn it_works() {
-        let result = TemplateData::new(2 + 2).unwrap();
-        result.add_one();
-        assert_eq!(result.number, 5);
+        let result = TemplateData::new().unwrap();
     }
 }

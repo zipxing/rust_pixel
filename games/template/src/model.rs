@@ -1,8 +1,8 @@
-use rust_pixel::event::Event;
-use log::info;
+use rust_pixel::event::{Event, KeyCode};
+// use log::info;
 use std::any::Any;
-use texas_lib::*;
-use rust_pixel::{context::Context, event::event_emit, game::Model, util::Rand};
+use rust_pixel::{context::Context, event::event_emit, game::Model};
+use template_lib::TemplateData;
 
 pub const CARDW: usize = 7;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -10,56 +10,49 @@ pub const CARDH: usize = 7;
 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const CARDH: usize = 5;
 
-// enum PokerState {
-//     Normal,
-//     OverSelf,
-//     OverBorder,
-// }
-
-pub struct PokerModel {
-    pub rand: Rand,
-    pub texas_cards_red: TexasCards,
-    pub texas_cards_black: TexasCards,
-    pub pool: Vec<u16>,
+enum TemplateState {
+    Normal,
 }
 
-impl PokerModel {
+pub struct TemplateModel {
+    pub data: TemplateData,
+    pub card: u8,
+}
+
+impl TemplateModel {
     pub fn new() -> Self {
         Self {
-            rand: Rand::new(),
-            texas_cards_red: TexasCards::new(),
-            texas_cards_black: TexasCards::new(),
-            pool: vec![],
+            data: TemplateData::new(),
+            card: 0,
         }
     }
-
-    pub fn shuffle_tiles(&mut self) {
-        self.pool.clear();
-        for i in 1..=52u16 {
-            self.pool.push(i);
-        }
-        self.rand.shuffle(&mut self.pool);
-    }
-
-    // pub fn act(&mut self, _d: Dir, _context: &mut Context) {}
 }
 
-impl Model for PokerModel {
+impl Model for TemplateModel {
     fn init(&mut self, _context: &mut Context) {
-        self.rand.srand_now();
-        self.shuffle_tiles();
-        self.texas_cards_red.assign(&self.pool[0..5]).unwrap();
-        self.texas_cards_black.assign(&self.pool[5..10]).unwrap();
-        info!("red:{}", self.texas_cards_red);
-        info!("black:{}", self.texas_cards_black);
-        event_emit("Poker.RedrawTile");
+        self.data.shuffle();
+        self.card = self.data.next();
+        event_emit("Template.RedrawTile");
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
         let es = context.input_events.clone();
         for e in &es {
             match e {
-                Event::Key(_key) => {}
+                Event::Key(key) => {
+                    match key.code {
+                        KeyCode::Char('s') => {
+                            self.data.shuffle();
+                            self.card = self.data.next();
+                            event_emit("Template.RedrawTile");
+                        }
+                        KeyCode::Char('n') => {
+                            self.card = self.data.next();
+                            event_emit("Template.RedrawTile");
+                        }
+                        _ => {},
+                    }
+                }
                 _ => {}
             }
         }

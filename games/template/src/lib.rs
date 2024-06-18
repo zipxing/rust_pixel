@@ -1,7 +1,7 @@
 mod model;
 mod render;
 
-use crate::{model::PokerModel, render::PokerRender};
+use crate::{model::TemplateModel, render::TemplateRender};
 use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
@@ -11,21 +11,21 @@ use wasm_bindgen::prelude::*;
 // wasm can not bind struct with generics or lifetime,
 // so encapsulating it as a fixed type
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub struct PokerGame {
-    g: Game<PokerModel, PokerRender>,
+pub struct TemplateGame {
+    g: Game<TemplateModel, TemplateRender>,
 }
 
-pub fn init_game() -> PokerGame {
-    let m = PokerModel::new();
-    let r = PokerRender::new();
-    let mut g = Game::new(m, r, "poker");
+pub fn init_game() -> TemplateGame {
+    let m = TemplateModel::new();
+    let r = TemplateRender::new();
+    let mut g = Game::new(m, r, "template");
     g.init();
-    PokerGame { g }
+    TemplateGame { g }
 }
 
 #[cfg(target_arch = "wasm32")]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-impl PokerGame {
+impl TemplateGame {
     pub fn new() -> Self {
         init_game()
     }
