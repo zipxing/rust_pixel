@@ -123,7 +123,7 @@ def pixel_creat(args):
     print("🍀 creat games folder...%s" % ("games/" + mod +"/"))
     os.chdir("%s/tmp" % curdir)
     os.system("rm -fr pixel_game_template")
-    os.system("cp -r ../games/snake/ ./pixel_game_template")
+    os.system("cp -r ../games/template/ ./pixel_game_template")
     for root, dirs, files in os.walk("pixel_game_template"):
         for f in files:
             fn = os.path.join(root, f)
@@ -134,9 +134,9 @@ def pixel_creat(args):
                 fhr.close()
                 continue
             fhr.close()
-            fcontent = fcontent.replace("Snake", CAPNAME)
-            fcontent = fcontent.replace("SNAKE", UPNAME)
-            fcontent = fcontent.replace("snake", LONAME)
+            fcontent = fcontent.replace("Template", CAPNAME)
+            fcontent = fcontent.replace("TEMPLATE", UPNAME)
+            fcontent = fcontent.replace("template", LONAME)
             fhw = open(fn, 'w')
             fhw.write(fcontent)
             fhw.close()
