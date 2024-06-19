@@ -1,5 +1,8 @@
-#![allow(dead_code)]
+//
+// implement core algorithm...
+//
 
+#![allow(dead_code)]
 use rust_pixel::util::Rand;
 
 pub struct TemplateData {
@@ -10,8 +13,10 @@ pub struct TemplateData {
 
 impl TemplateData {
     pub fn new() -> Self {
+        let mut rd = Rand::new();
+        rd.srand_now();
         Self {
-            rand: Rand::new(),
+            rand: rd,
             pool: vec![],
             index: 0,
         }
@@ -23,6 +28,7 @@ impl TemplateData {
             self.pool.push(i);
         }
         self.rand.shuffle(&mut self.pool);
+        // println!("shuffle ok...");
     }
 
     pub fn next(&mut self) -> u8 {

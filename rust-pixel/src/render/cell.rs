@@ -53,7 +53,7 @@ lazy_static! {
 
 
 /// sym_index, texture_index, fg_color_index
-pub type CellInfo = (u8, u8, u8);
+pub type CellInfo = (u8, u8, Color);
 
 /// returns a cellsym char by index
 ///
@@ -128,7 +128,7 @@ impl Cell {
     ///
     /// sym_index, texture_index, fg_color_index
     pub fn get_cell_info(&self) -> CellInfo {
-        (cellinfo(&self.symbol), u8::from(self.bg), u8::from(self.fg))
+        (cellinfo(&self.symbol), u8::from(self.bg), self.fg)
     }
 
     pub fn set_char(&mut self, ch: char) -> &mut Cell {

@@ -4,7 +4,7 @@
 use template_lib::TemplateData;
 
 #[no_mangle]
-pub extern "C" fn rs_TemplateData_new(v: u8) -> *mut TemplateData {
+pub extern "C" fn rs_TemplateData_new() -> *mut TemplateData {
     let gcs = TemplateData::new();
     Box::into_raw(Box::new(gcs))
 }

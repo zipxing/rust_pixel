@@ -34,6 +34,7 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
+use log::info;
 
 pub struct SdlAdapter {
     // 拖动窗口需要的数据
@@ -326,6 +327,7 @@ impl Adapter for SdlAdapter {
                             let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
                             let tx = &mut texs[texidx / 4];
                             tx.set_color_mod(fc.0, fc.1, fc.2);
+                            tx.set_alpha_mod(fc.3);
                             tc.copy(tx, s1, s2).unwrap();
                         },
                     );
@@ -334,11 +336,12 @@ impl Adapter for SdlAdapter {
                 let rx = self.base.ratio_x;
                 let ry = self.base.ratio_y;
                 let mut rfunc =
-                    |fc: &(u8, u8, u8), s1: ARect, s2: ARect, texidx: usize, _symidx: usize| {
+                    |fc: &(u8, u8, u8, u8), s1: ARect, s2: ARect, texidx: usize, _symidx: usize| {
                         let tx = &mut texs[texidx / 4];
                         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
                         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
                         tx.set_color_mod(fc.0, fc.1, fc.2);
+                        tx.set_alpha_mod(fc.3);
                         tc.copy(tx, ss1, ss2).unwrap();
                     };
                 if stage > LOGO_FRAME {
@@ -354,6 +357,7 @@ impl Adapter for SdlAdapter {
                             let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
                             let cccp = SPoint::new(ccp.x, ccp.y);
                             tx.set_color_mod(fc.0, fc.1, fc.2);
+                            tx.set_alpha_mod(fc.3);
                             tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
                         },
                     );

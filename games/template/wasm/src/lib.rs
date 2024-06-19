@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::js_sys;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub struct WasmGinRummy {
+pub struct WasmTemplate {
     gcs: TemplateData,
     webbuf: Vec<u8>,
 }

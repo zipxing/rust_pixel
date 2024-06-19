@@ -7,7 +7,8 @@ members = [
 exclude = [
     "games/poker/ffi",
     "games/poker/wasm",
-    "games/mahjong/ffi",
+    "games/template/ffi",
+    "games/template/wasm",
 ]
 resolver = "2"
 

@@ -183,7 +183,7 @@ fn render_helper(
     rx: f32,
     ry: f32,
     i: usize,
-    sh: &(u8, u8, u8),
+    sh: &(u8, u8, Color),
     px: u16,
     py: u16,
     is_border: bool,
@@ -218,7 +218,7 @@ fn render_helper(
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8), ARect, ARect, usize, usize, f64, APoint),
+    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize, f64, APoint),
 {
     // sort by render_weight...
     pixel_spt.update_render_index();
@@ -242,7 +242,7 @@ where
                 x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH as f32 / rx) as i32,
                 y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT as f32 / ry) as i32,
             };
-            let fc = Color::Indexed(sh.2).get_rgb();
+            let fc = sh.2.get_rgba();
             f(&fc, s1, s2, texidx, symidx, s.angle, ccp);
         }
     }
@@ -251,12 +251,12 @@ where
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8), ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
 {
     for (i, cell) in buf.content.iter().enumerate() {
         for sh in &cell.draw_history {
             let (s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, sh, 0, 0, false);
-            let fc = Color::Indexed(sh.2).get_rgb();
+            let fc = sh.2.get_rgba();
             f(&fc, s1, s2, texidx, symidx);
         }
     }
@@ -265,11 +265,11 @@ where
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_border<F>(cell_w: u16, cell_h: u16, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8), ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
 {
-    let sh_top = (102u8, 1u8, 7u8);
-    let sh_other = (24u8, 2u8, 7u8);
-    let sh_close = (214u8, 1u8, 7u8);
+    let sh_top = (102u8, 1u8, Color::Indexed(7));
+    let sh_other = (24u8, 2u8, Color::Indexed(7));
+    let sh_close = (214u8, 1u8, Color::Indexed(7));
 
     for n in 0..cell_h as usize + 2 {
         for m in 0..cell_w as usize + 2 {
@@ -296,7 +296,7 @@ where
                 0,
                 true,
             );
-            let fc = Color::Indexed(rsh.2).get_rgb();
+            let fc = rsh.2.get_rgba();
             f(&fc, s1, s2, texidx, symidx);
         }
     }
@@ -305,7 +305,7 @@ where
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_logo<F>(srx: f32, sry: f32, spw: u32, sph: u32, rd: &mut Rand, stage: u32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8), ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
 {
     let rx = srx * 1.0;
     let ry = sry * 1.0;
@@ -323,35 +323,39 @@ where
                 &(
                     PIXEL_LOGO[sci * 3],
                     PIXEL_LOGO[sci * 3 + 2],
-                    PIXEL_LOGO[sci * 3 + 1],
+                    Color::Indexed(PIXEL_LOGO[sci * 3 + 1]),
                 ),
                 spw as u16 / 2 - (PIXEL_LOGO_WIDTH as f32 / 2.0 * symw) as u16,
                 sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,
                 false,
             );
-            let fc = Color::Indexed(PIXEL_LOGO[sci * 3 + 1]).get_rgb();
+            let fc = Color::Indexed(PIXEL_LOGO[sci * 3 + 1]).get_rgba();
 
             let randadj = 12 - (rd.rand() % 24) as i32;
             let sg = LOGO_FRAME as u8 / 3;
             let r: u8;
             let g: u8;
             let b: u8;
+            let a: u8;
             if stage <= sg as u32 {
                 r = (stage as u8).saturating_mul(10);
                 g = (stage as u8).saturating_mul(10);
                 b = (stage as u8).saturating_mul(10);
+                a = 255; 
                 s2.x = s2.x + randadj;
             } else if stage <= sg as u32 * 2 {
                 r = fc.0;
                 g = fc.1;
                 b = fc.2;
+                a = 255; 
             } else {
                 let cc = (stage as u8 - sg as u8 * 2).saturating_mul(10);
                 r = fc.0.saturating_sub(cc);
                 g = fc.1.saturating_sub(cc);
                 b = fc.2.saturating_sub(cc);
+                a = 255; 
             }
-            f(&(r, g, b), s1, s2, texidx, symidx);
+            f(&(r, g, b, a), s1, s2, texidx, symidx);
         }
     }
 }

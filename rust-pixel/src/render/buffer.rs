@@ -56,7 +56,7 @@
 //! Please refer to the merge and built method of push_draw_history
 //! Please refer to the flush method of SDL mode in sdl.rs
 //!
-use crate::{render::cell::Cell, render::style::Style, util::Rect};
+use crate::{render::cell::Cell, render::style::{Style, Color}, util::Rect};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
@@ -241,8 +241,11 @@ impl Buffer {
         }
     }
 
-    pub fn copy_cell(&mut self, pos_self: usize, other: &Buffer, pos_other: usize) {
+    pub fn copy_cell(&mut self, pos_self: usize, other: &Buffer, alpha: u8, pos_other: usize) {
         self.content[pos_self] = other.content[pos_other].clone();
+        let fc = self.content[pos_self].fg.get_rgba();
+        self.content[pos_self].fg = Color::Rgba(fc.0, fc.1, fc.2, alpha);
+        // info!("in copy_cell alpha={}", alpha);
         self.content[pos_self].push_history();
     }
 
@@ -279,14 +282,15 @@ impl Buffer {
                     // (other.area.width * other_part.y + other_part.x + i * bw + j) as usize;
                     (other.area.width * other_part.y + other_part.x + i * other.area.width + j) as usize;
                 // info!("blit...ps{:?} po{:?}", pos_self, pos_other);
-                self.copy_cell(pos_self, other, pos_other);
+                // info!("111.color={:?}", other.content[pos_other].fg.get_rgba());
+                self.copy_cell(pos_self, other, 255, pos_other);
             }
         }
 
         Ok((bw, bh))
     }
 
-    pub fn merge(&mut self, other: &Buffer, fast: bool) {
+    pub fn merge(&mut self, other: &Buffer, alpha: u8, fast: bool) {
         let area = self.area.union(other.area);
         let cell: Cell = Default::default();
         self.content.resize(area.area() as usize, cell.clone());
@@ -310,7 +314,7 @@ impl Buffer {
             let k = ((y - area.y) * area.width + x - area.x) as usize;
             // 增加透明支持
             if !other.content[i].is_blank() {
-                self.copy_cell(k, other, i);
+                self.copy_cell(k, other, alpha, i);
             }
         }
         self.area = area;
