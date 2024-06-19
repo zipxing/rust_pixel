@@ -255,6 +255,7 @@ impl Buffer {
         dsty: u16,
         other: &Buffer,
         other_part: Rect,
+        alpha: u8,
     ) -> Result<(u16, u16), String> {
         //确保dstx和dsty正确
         //make sure dstx and dsty are correct
@@ -283,7 +284,7 @@ impl Buffer {
                     (other.area.width * other_part.y + other_part.x + i * other.area.width + j) as usize;
                 // info!("blit...ps{:?} po{:?}", pos_self, pos_other);
                 // info!("111.color={:?}", other.content[pos_other].fg.get_rgba());
-                self.copy_cell(pos_self, other, 255, pos_other);
+                self.copy_cell(pos_self, other, alpha, pos_other);
             }
         }
 

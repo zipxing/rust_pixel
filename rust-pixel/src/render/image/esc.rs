@@ -56,7 +56,7 @@ impl Asset for EscAsset {
         }
         let nsize = Rect::new(0, 0, max_width, row);
         let mut nsp = Buffer::empty(nsize);
-        let _ = nsp.blit(0, 0, &sp, nsize);
+        let _ = nsp.blit(0, 0, &sp, nsize, 255);
         self.base.parsed_buffers.push(nsp);
     }
 

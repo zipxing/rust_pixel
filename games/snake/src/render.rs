@@ -41,6 +41,7 @@ impl SnakeRender {
         let mut t = Panel::new();
         let mut s = Sprites::new("main");
         let mut l = Sprite::new(0, 0, (SNAKEW + 2) as u16, (SNAKEH + 2) as u16);
+        l.set_alpha(60);
 
         // #[cfg(feature = "sdl")]
         // let mut ssf = SequenceFrames::new();

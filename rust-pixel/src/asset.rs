@@ -70,6 +70,7 @@ pub trait Asset {
             off_y,
             &bs.parsed_buffers[frame_idx % bs.frame_count],
             bs.parsed_buffers[frame_idx % bs.frame_count].area,
+            sp.alpha,
         );
     }
 
