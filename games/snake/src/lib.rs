@@ -3,7 +3,7 @@ mod render;
 
 use crate::{model::SnakeModel, render::SnakeRender};
 use rust_pixel::game::Game;
-// use log::info;
+use log::info;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};

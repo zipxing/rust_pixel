@@ -54,18 +54,19 @@ pix.utils.loop(function(timeStep) {
         const r = wbuf[base + 0];
         const g = wbuf[base + 1];
         const b = wbuf[base + 2];
-        const texidx = wbuf[base + 3]; 
-        const spx = wbuf[base + 4] + 16;
-        const spy = wbuf[base + 5] + 16;
-        const ang = wbuf[base + 8] / 1000.0;
-        const cpx = wbuf[base + 9] | 0;
-        const cpy = wbuf[base + 10] | 0;
+        const a = wbuf[base + 3];
+        const texidx = wbuf[base + 4]; 
+        const spx = wbuf[base + 5] + 16;
+        const spy = wbuf[base + 6] + 16;
+        const ang = wbuf[base + 9] / 1000.0;
+        const cpx = wbuf[base + 10] | 0;
+        const cpy = wbuf[base + 11] | 0;
         transform.identity();
         transform.translate(spx + cpx - 8, spy + cpy - 8);
         if(ang != 0.0) transform.rotate(ang);
         transform.translate(-cpx + 8, -cpy + 8);
         transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
-        drawCells[texidx].draw(transform, r / 255.0, g / 255.0, b / 255.0, 1.0);
+        drawCells[texidx].draw(transform, r / 255.0, g / 255.0, b / 255.0, a / 255.0);
     }
     // only 1 draw call...
     pix.flush();
