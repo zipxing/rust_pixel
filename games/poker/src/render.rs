@@ -85,8 +85,11 @@ impl Render for PokerRender {
             .adapter
             .init(82, 20, 1.2, 1.2, "redblack".to_string());
         self.panel.init(context);
-        let gb = self.sprites.get_by_tag("back");
-        asset2sprite!(gb, context, "back.txt");
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        {
+            let gb = self.sprites.get_by_tag("back");
+            asset2sprite!(gb, context, "back.txt");
+        }
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {

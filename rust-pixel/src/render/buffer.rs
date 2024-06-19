@@ -283,7 +283,6 @@ impl Buffer {
                     // (other.area.width * other_part.y + other_part.x + i * bw + j) as usize;
                     (other.area.width * other_part.y + other_part.x + i * other.area.width + j) as usize;
                 // info!("blit...ps{:?} po{:?}", pos_self, pos_other);
-                // info!("111.color={:?}", other.content[pos_other].fg.get_rgba());
                 self.copy_cell(pos_self, other, alpha, pos_other);
             }
         }
