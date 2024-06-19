@@ -120,7 +120,7 @@ def pixel_creat(args):
 
     #print("🍀 creat assets folder...%s" % ("assets/" + mod + "/"))
     #os.system("cp -r %s/assets/snake/ %s/assets/%s/" % (curdir, curdir, mod))
-    print("🍀 update Cargo.toml add workspace member...")
+    print("🍀 update Cargo.toml...")
     ct = tomlkit.loads(open("Cargo.toml").read())
     ct["workspace"]["exclude"].append("games/%s/ffi" % mod)
     ct["workspace"]["exclude"].append("games/%s/wasm" % mod)
