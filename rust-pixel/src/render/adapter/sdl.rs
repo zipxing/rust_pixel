@@ -34,7 +34,7 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
-use log::info;
+// use log::info;
 
 pub struct SdlAdapter {
     // 拖动窗口需要的数据

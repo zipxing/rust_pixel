@@ -1,10 +1,8 @@
 use crate::model::{SnakeModel, SNAKEH, SNAKEW};
 use log::info;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-use rust_pixel::render::cell::cellsym;
+use rust_pixel::{asset::AssetType, asset2sprite, render::cell::cellsym};
 use rust_pixel::{
-    asset::AssetType,
-    asset2sprite,
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
@@ -40,14 +38,8 @@ impl SnakeRender {
     pub fn new() -> Self {
         let mut t = Panel::new();
         let mut s = Sprites::new("main");
-        let mut l = Sprite::new(0, 0, (SNAKEW + 2) as u16, (SNAKEH + 2) as u16);
-        l.set_alpha(60);
 
-        // #[cfg(feature = "sdl")]
-        // let mut ssf = SequenceFrames::new();
-        //#[cfg(feature = "sdl")]
-        // ssf.load_ssffile("./assets/sdq/2.ssf");
-
+        // Test pixel sprite in graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let mut pl = Sprite::new(4, 6, 1, 1);
@@ -61,85 +53,16 @@ impl SnakeRender {
             );
             t.add_pixel_sprite(pl, "PL1");
         }
-        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+
+        // Main screen sprite...
+        let mut l = Sprite::new(0, 0, (SNAKEW + 2) as u16, (SNAKEH + 2) as u16);
+        l.set_alpha(160);
         l.content.set_str(
-            18,
+            20,
             0,
             "SNAKE [RustPixel]",
             Style::default().fg(Color::Indexed(222)),
         );
-
-        // 测试画线
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        {
-            let pdata = [
-                [40, 40, 80, 40],
-                //[80, 60, 40, 40],
-                [40, 40, 80, 60],
-                [40, 40, 80, 80],
-                //[80, 100, 40, 40],
-                [30, 30, 40, 45],
-                [40, 40, 40, 80],
-                [40, 40, 20, 80],
-                [40, 40, 0, 80],
-                //[0, 60, 40, 40],
-                [40, 40, 0, 60],
-                [40, 40, 0, 40],
-                [40, 40, 0, 20],
-                [40, 40, 0, 0],
-                [40, 40, 20, 0],
-                [40, 40, 40, 0],
-                //[60, 0, 40, 40],
-                [40, 40, 60, 0],
-                [40, 40, 80, 0],
-                [40, 40, 80, 20],
-                [64, 98, 68, 29],
-            ];
-            for pi in 3..4 {
-                let dy = pdata[pi][3] as f32 - pdata[pi][1] as f32;
-                let dx = pdata[pi][2] as f32 - pdata[pi][0] as f32;
-                let mut angle = dy.atan2(dx);
-                if angle < 0.0 {
-                    angle = angle + 3.1415926 * 2.0;
-                }
-                info!("line angle...{:?}", angle / 3.1415926 * 180.0);
-                angle = angle / 3.1415926;
-                if (angle > 0.0 && angle < 0.5)
-                    || (angle > 0.75 && angle < 1.0)
-                    || (angle > 1.5 && angle < 1.75)
-                {
-                    l.draw_line(
-                        pdata[pi][2],
-                        pdata[pi][3],
-                        pdata[pi][0],
-                        pdata[pi][1],
-                        None,
-                        222,
-                        1,
-                    );
-                } else {
-                    l.draw_line(
-                        pdata[pi][0],
-                        pdata[pi][1],
-                        pdata[pi][2],
-                        pdata[pi][3],
-                        None,
-                        222,
-                        1,
-                    );
-                }
-            }
-        }
-
-        /*
-        //Test serde
-        let serialized = bincode::serialize(&l.content).unwrap();
-        l.content = bincode::deserialize(&serialized[..]).unwrap();
-        let mut outf = File::create("tmp/snake.out").unwrap();
-        outf.write_all(&serialized).unwrap();
-        info!("{:?}-{:?}", serialized, serialized.len());
-        */
-
         s.add_by_tag(l, "SNAKE-BORDER");
         s.add_by_tag(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
         s.add_by_tag(
@@ -153,8 +76,6 @@ impl SnakeRender {
 
         Self {
             panel: t,
-            // #[cfg(feature = "sdl")]
-            // ssf: ssf,
             main_scene: s,
         }
     }
@@ -170,14 +91,6 @@ impl SnakeRender {
                 let gv = d.grid[i][j];
                 match gv {
                     0 => {
-                        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-                        l.content.set_str(
-                            j as u16,
-                            i as u16,
-                            " ",
-                            Style::default().fg(Color::Reset).bg(Color::Reset),
-                        );
-                        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                         l.content.set_str(
                             j as u16,
                             i as u16,
@@ -187,8 +100,12 @@ impl SnakeRender {
                     }
                     1 => {
                         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-                        l.content
-                            .set_str(j as u16, i as u16, "▇", Style::default().fg(Color::LightGreen));
+                        l.content.set_str(
+                            j as u16,
+                            i as u16,
+                            "▇",
+                            Style::default().fg(Color::LightGreen),
+                        );
                         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                         l.content.set_str(
                             j as u16,
@@ -262,20 +179,22 @@ impl Render for SnakeRender {
 
     #[allow(unused_variables)]
     fn draw<G: Model>(&mut self, context: &mut Context, _data: &mut G, _dt: f32) {
-        let ss = &mut self.main_scene.get_by_tag("SNAKE-BORDER");
-        asset2sprite!(
-            ss,
-            context,
-            "sdq/dance.ssf",
-            (context.stage / 3) as usize,
-            1,
-            1
-        );
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        if context.stage % 8 == 0 {
-            let pl = self.panel.get_pixel_sprite("PL1");
-            pl.content.area.x += 2;
-            pl.content.area.y += 2;
+        {
+            let ss = &mut self.main_scene.get_by_tag("SNAKE-BORDER");
+            asset2sprite!(
+                ss,
+                context,
+                "sdq/dance.ssf",
+                (context.stage / 3) as usize,
+                1,
+                1
+            );
+            if context.stage % 8 == 0 {
+                let pl = self.panel.get_pixel_sprite("PL1");
+                pl.content.area.x += 2;
+                pl.content.area.y += 2;
+            }
         }
         self.panel
             .draw(context, |a, f| {

@@ -3,7 +3,7 @@ mod render;
 
 use crate::{model::SnakeModel, render::SnakeRender};
 use rust_pixel::game::Game;
-use log::info;
+// use log::info;
 
 #[cfg(target_arch = "wasm32")]
 use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
@@ -50,7 +50,7 @@ impl SnakeGame {
     }
 
     pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
-        info!("asset({:?}): {:?}!!!", url, data);
+        // info!("asset({:?}): {:?}!!!", url, data);
         self.g.context.asset_manager.set_data(url, data);
     }
 

@@ -1,8 +1,6 @@
 // RustPixel
 // copyright zhouxin@tuyoogame.com 2022~2024
 
-//! 主要实现了Adapter适配器，另外，
-//! web相关处理，统一在这里实现
 //! Implements an Adapter class. Moreover,
 //! all web related processing is handled here.
 
@@ -233,8 +231,6 @@ macro_rules! web_event {
     };
 }
 
-/// 转换web的输入事件为pixel输入事件，方便游戏采用统一接口处理
-/// 键盘和鼠标事件的处理，请参考game/unblock/model.rs的handle_input方法
 /// Convert web I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
 pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32) -> Option<Event> {

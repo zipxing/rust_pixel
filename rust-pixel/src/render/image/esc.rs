@@ -1,12 +1,6 @@
 // RustPixel
 // copyright zhouxin@tuyoogame.com 2022~2024
 
-//! 实现了加载和保存.esc文件的方法
-//!
-//! esc文件存储终端模式下的字符图，存储esc终端控制序列
-//! 和utf8文本，可以在终端下直接用cat查看效果:
-//!
-//!
 //! Implements load/save of image files in esc format
 //!
 //! esc file stores the ascii art images in terminal mode, saving esc terminal sequences
@@ -79,7 +73,6 @@ impl Asset for EscAsset {
                     cell.symbol,
                     cell.symbol.width()
                 );
-                //对于中文等宽字符后面跟的空白，要略过处理
                 //Skip processing the space after monospace chinese font
                 if skip > 0 {
                     info!("skip, skip={}", skip);
