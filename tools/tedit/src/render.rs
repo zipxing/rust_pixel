@@ -512,7 +512,7 @@ impl Render for TeditRender {
         context.adapter.init(SYMW + 2 + EDITW + 2, EDITH + 3, 1.0, 1.0, "tedit".to_string());
         self.panel.init(context);
         let l = self.main_scene.get_by_tag("EDIT");
-        l.set_content_asset2sprite(
+        l.set_content_by_asset(
             &mut context.asset_manager,
             #[cfg(not(feature = "sdl"))]
             AssetType::ImgEsc,

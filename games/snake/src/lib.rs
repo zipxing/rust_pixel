@@ -50,7 +50,7 @@ impl SnakeGame {
     }
 
     pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
-        info!("asset({:?}): {:?}!!!", url, data);
+        // info!("asset({:?}): {:?}!!!", url, data);
         self.g.context.asset_manager.set_data(url, data);
     }
 

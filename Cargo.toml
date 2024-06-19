@@ -7,13 +7,14 @@ members = [
 exclude = [
     "games/poker/ffi",
     "games/poker/wasm",
-    "games/mahjong/ffi",
+    "games/template/ffi",
+    "games/template/wasm",
 ]
 resolver = "2"
 
 [workspace.package]
 authors = ["zipxing@hotmail.com"]
-description = "A terminal based game engine & games..."
+description = "2d pixel artgame engine & rapid prototype tools..."
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.

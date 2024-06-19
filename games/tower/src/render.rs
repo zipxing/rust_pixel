@@ -1,5 +1,7 @@
+//
+// Only support graphics mode!!!
+//
 use crate::model::TowerModel;
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use rust_pixel::render::cell::cellsym;
 use rust_pixel::{
     asset::AssetType,
@@ -41,7 +43,6 @@ impl TowerRender {
         }
     }
 
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub fn create_sprites<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
         let w = BW as u16;
@@ -192,16 +193,13 @@ impl TowerRender {
 
 impl Render for TowerRender {
     fn init<G: Model>(&mut self, ctx: &mut Context, data: &mut G) {
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        {
-            ctx.adapter.init(
-                TOWERW as u16 + 2,
-                TOWERH as u16 + 4,
-                1.0,
-                1.0,
-                "tower".to_string(),
-            );
-        }
+        ctx.adapter.init(
+            TOWERW as u16 + 2,
+            TOWERH as u16 + 4,
+            1.0,
+            1.0,
+            "tower".to_string(),
+        );
         self.create_sprites(ctx, data);
         self.panel.init(ctx);
     }

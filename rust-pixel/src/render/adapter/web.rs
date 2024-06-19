@@ -1,8 +1,6 @@
 // RustPixel
 // copyright zhouxin@tuyoogame.com 2022~2024
 
-//! 主要实现了Adapter适配器，另外，
-//! web相关处理，统一在这里实现
 //! Implements an Adapter class. Moreover,
 //! all web related processing is handled here.
 
@@ -32,6 +30,7 @@ pub struct WebCell {
     pub r: u32,
     pub g: u32,
     pub b: u32,
+    pub a: u32,
     pub texsym: u32,
     pub x: i32,
     pub y: i32,
@@ -62,6 +61,7 @@ impl WebAdapter {
         r: u8,
         g: u8,
         b: u8,
+        a: u8,
         texidx: usize,
         symidx: usize,
         s: ARect,
@@ -72,6 +72,7 @@ impl WebAdapter {
         wc.r = r as u32;
         wc.g = g as u32;
         wc.b = b as u32;
+        wc.a = a as u32;
         let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
         let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
         wc.texsym = y * 32u32 + x;
@@ -145,7 +146,7 @@ impl Adapter for WebAdapter {
                 &mut self.rd,
                 stage,
                 |fc, _s1, s2, texidx, symidx| {
-                    tv.push((fc.0, fc.1, fc.2, texidx, symidx, s2));
+                    tv.push((fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2));
                 },
             );
             for tmp in tv {
@@ -156,6 +157,7 @@ impl Adapter for WebAdapter {
                     tmp.3,
                     tmp.4,
                     tmp.5,
+                    tmp.6,
                     0.0,
                     &APoint { x: 0, y: 0 },
                 );
@@ -167,11 +169,12 @@ impl Adapter for WebAdapter {
         let ch = self.base.cell_h;
         let rx = self.base.ratio_x;
         let ry = self.base.ratio_y;
-        let mut rfunc = |fc: &(u8, u8, u8), _s1: ARect, s2: ARect, texidx: usize, symidx: usize| {
+        let mut rfunc = |fc: &(u8, u8, u8, u8), _s1: ARect, s2: ARect, texidx: usize, symidx: usize| {
             self.push_web_buffer(
                 fc.0,
                 fc.1,
                 fc.2,
+                fc.3,
                 texidx,
                 symidx,
                 s2,
@@ -189,7 +192,7 @@ impl Adapter for WebAdapter {
                 rx,
                 ry,
                 |fc, _s1, s2, texidx, symidx, angle, ccp| {
-                    self.push_web_buffer(fc.0, fc.1, fc.2, texidx, symidx, s2, angle, &ccp);
+                    self.push_web_buffer(fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2, angle, &ccp);
                 },
             );
         }
@@ -228,8 +231,6 @@ macro_rules! web_event {
     };
 }
 
-/// 转换web的输入事件为pixel输入事件，方便游戏采用统一接口处理
-/// 键盘和鼠标事件的处理，请参考game/unblock/model.rs的handle_input方法
 /// Convert web I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
 pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32) -> Option<Event> {

@@ -1,0 +1,22 @@
+language = "C++"
+no_includes = false
+
+[parse]
+parse_deps = true
+exclude = [
+    "sdl2",
+    "crossterm",
+    "log",
+    "itertools",
+    "log4rs",
+    "bincode",
+    "rand",
+    "serde_json",
+    "rust_pixel",
+]
+
+[export]
+prefix = "rs_"
+
+[enum]
+rename_variants = "SnakeCase"

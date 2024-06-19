@@ -110,6 +110,7 @@ pub trait Widget {
 pub struct Sprite {
     pub content: Buffer,
     pub angle: f64,
+    pub alpha: u8,
     pub asset_request: Option<(AssetType, String, usize, u16, u16)>,
     render_weight: i32,
 }
@@ -118,7 +119,7 @@ impl Widget for Sprite {
     fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer) {
         if !self.is_hidden() {
             self.check_asset_request(am);
-            buf.merge(&self.content, true);
+            buf.merge(&self.content, self.alpha, true);
         }
     }
 }
@@ -130,9 +131,14 @@ impl Sprite {
         Self {
             content: buffer,
             angle: 0.0,
+            alpha: 255,
             asset_request: None,
             render_weight: 1,
         }
+    }
+
+    pub fn set_alpha(&mut self, a: u8) {
+        self.alpha = a;
     }
 
     pub fn set_sdl_content(&mut self, x: u16, y: u16, sym: u8, fg: u8, bg: u8) {
@@ -264,7 +270,7 @@ impl Sprite {
         //set the pos to (0,0) to merge with boxes
         self.content.area = Rect::new(0, 0, backup_area.width, backup_area.height);
         self.content.reset();
-        self.content.merge(&sp.content, false);
+        self.content.merge(&sp.content, sp.alpha, false);
 
         //after merging, set back to its original pos
         self.content.area = backup_area;

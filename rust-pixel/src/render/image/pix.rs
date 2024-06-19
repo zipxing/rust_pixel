@@ -1,11 +1,6 @@
 // RustPixel
 // copyright zhouxin@tuyoogame.com 2022~2024
 
-//! 实现了加载和保存.pix文件的方法
-//!
-//! pix文件存储图形模式下的字符图，按行存储cell序列，
-//! cell: 字符sym索引，前景色，背景色（图形模式下背景色用来标识纹理）
-//!
 //! Implements load/save of image files in pix format
 //!
 //! pix file stores the ascii art images in graphical mode, saving the cell sequence row by row

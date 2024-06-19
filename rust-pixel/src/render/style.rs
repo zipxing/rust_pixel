@@ -38,12 +38,12 @@ pub enum Color {
     LightMagenta,
     LightCyan,
     White,
-    Rgb(u8, u8, u8),
+    Rgba(u8, u8, u8, u8),
     Indexed(u8),
 }
 
 impl Color {
-    pub fn get_rgb(self) -> (u8, u8, u8) {
+    pub fn get_rgba(self) -> (u8, u8, u8, u8) {
         let cidx: usize;
         match self {
             Color::Reset => cidx = 0,
@@ -64,9 +64,9 @@ impl Color {
             Color::LightCyan => cidx = 14,
             Color::White => cidx = 15,
             Color::Indexed(i) => cidx = i as usize,
-            Color::Rgb(r, g, b) => return (r, g, b),
+            Color::Rgba(r, g, b, a) => return (r, g, b, a),
         };
-        (COLOR_RGB[cidx][0], COLOR_RGB[cidx][1], COLOR_RGB[cidx][2])
+        (COLOR_RGB[cidx][0], COLOR_RGB[cidx][1], COLOR_RGB[cidx][2], 255)
     }
 }
 
@@ -174,7 +174,7 @@ impl From<Color> for CColor {
             Color::LightCyan => CColor::Cyan,
             Color::White => CColor::White,
             Color::Indexed(i) => CColor::AnsiValue(i),
-            Color::Rgb(r, g, b) => CColor::Rgb { r, g, b },
+            Color::Rgba(r, g, b, _a) => CColor::Rgb { r, g, b },
         }
     }
 }
@@ -200,7 +200,7 @@ impl From<Color> for u8 {
             Color::LightCyan => 14,
             Color::White => 15,
             Color::Indexed(i) => i,
-            Color::Rgb(_r, _g, _b) => 0,
+            Color::Rgba(_r, _g, _b, _a) => 0,
         }
     }
 }
@@ -276,7 +276,7 @@ impl ModifierDiff {
 }
 
 pub const COLOR_RGB: [[u8; 3]; 256] = [
-    [0, 0, 0],
+    [128, 128, 128],
     [128, 0, 0],
     [0, 128, 0],
     [128, 128, 0],

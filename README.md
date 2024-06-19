@@ -1,4 +1,4 @@
-![logo](./tmp/logo.png)
+![logo](./screen-shot/logo.png)
     
 #### Introduction
 RustPixel is a **2D game engine** and **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
@@ -6,7 +6,7 @@ RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and 
 
 1. Text Mode: <br>Built with the **crossterm** module, it runs in the terminal and uses **ASCII and Unicode Emoji** for drawing.<br>
 2. Graphical Mode (OS Windows): <br>Built with **sdl2**, it runs in a standalone os window and uses the **PETSCII** character set and **custom** graphical patterns for rendering.
-3. Graphical Mode (Web): <br>Similar to the SDL mode, but the core logic is compiled into wasm and rendered using **WebGL** and **JavaScript** (refer to rust-pixel/web-template/pix.js).
+3. Graphical Mode (Web): <br>Similar to the SDL mode, but the core logic is compiled into wasm and rendered using **WebGL** and **JavaScript** (refer to rust-pixel/web-template/pixel.js).
 
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into ffi and wasm.
 
@@ -80,13 +80,13 @@ RustPixel also includes several tools:
 1. tedit: Used to edit character art assets, example:
 ``` 
     term mode
-    $ cargo pixel r tedit term assets/tmp/tedit.txt
+    $ cargo pixel r tedit term assets/screen-shot/tedit.txt
 
     graphical mode
-    $ cargo pixel r tedit sdl assets/tmp/tedit.pix 
+    $ cargo pixel r tedit sdl assets/screen-shot/tedit.pix 
 ```
- ![tedit_t](./tmp/tedit_term.png)
- ![tedit_s](./tmp/tedit_sdl.png)
+ ![tedit_t](./screen-shot/tedit_term.png)
+ ![tedit_s](./screen-shot/tedit_sdl.png)
 
 2. tpetii: Used to convert regular images into PETSCII character art, example:
 ```
@@ -106,7 +106,7 @@ RustPixel also includes several tools:
     $ cargo pixel r snake s -r
 ```
 
-![graphical mode](./tmp/snake_sdl.gif)
+![graphical mode](./screen-shot/snake_sdl.gif)
 
 ``` 
     term mode
@@ -125,14 +125,14 @@ RustPixel also includes several tools:
     $ cargo pixel r tetris t -r
 ```
 
- ![term mode](./tmp/tetris_term.gif)
+ ![term mode](./screen-shot/tetris_term.gif)
 
 ```
     graphical mode
     $ cargo pixel r tetris s -r
 ```
 
-![graphical mode](./tmp/tetris_sdl.gif)
+![graphical mode](./screen-shot/tetris_sdl.gif)
 
 ```
     web mode
@@ -140,15 +140,15 @@ RustPixel also includes several tools:
     and visit http://localhost:8080/ in your browser
 ```
 
-![web mode](./tmp/tetris_web.gif)
+![web mode](./screen-shot/tetris_web.gif)
 
 3. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
 ``` 
     $ cargo pixel r poker t -r
     $ cargo pixel r gin_rummy t -r
 ```
- ![gin_rummy](./tmp/ginrummy.png)
- ![red_black](./tmp/redblack.png)
+ ![gin_rummy](./screen-shot/ginrummy.png)
+ ![red_black](./screen-shot/redblack.png)
 
 The poker/ffi directory demo how to wrap Rust algorithms into CFFI for use with other languages, showcasing C++ and Python calling poker_ffi
 ```
@@ -170,7 +170,7 @@ The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calli
     $ cargo pixel r tower w -r
     and visit http://localhost:8080/ in your browser
 ```
- ![tower](./tmp/tower_sdl.gif)
+ ![tower](./screen-shot/tower_sdl.gif)
 
 and so on ...
 
