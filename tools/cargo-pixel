@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import gzip
+import tomlkit
 import argparse
 import subprocess
 
@@ -119,6 +120,11 @@ def pixel_creat(args):
 
     #print("🍀 creat assets folder...%s" % ("assets/" + mod + "/"))
     #os.system("cp -r %s/assets/snake/ %s/assets/%s/" % (curdir, curdir, mod))
+    print("🍀 update Cargo.toml add workspace member...")
+    ct = tomlkit.loads(open("Cargo.toml").read())
+    ct["workspace"]["exclude"].append("games/%s/ffi" % mod)
+    ct["workspace"]["exclude"].append("games/%s/wasm" % mod)
+    tomlkit.dump(ct, open("Cargo.toml", "w"))
 
     print("🍀 creat games folder...%s" % ("games/" + mod +"/"))
     os.chdir("%s/tmp" % curdir)
