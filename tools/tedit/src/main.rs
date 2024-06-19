@@ -4,14 +4,10 @@ use std::env;
 use std::error::Error;
 use log::info;
 use rust_pixel::game::Game;
-use rust_pixel::log::init_log;
 use crate::{model::TeditModel, render::TeditRender};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    init_log(log::LevelFilter::Info, "log/tedit.log");
-
     let args: Vec<String> = env::args().collect();
-    info!("Tedit(pixel.rs) start...{:?}", args);
 
     let escfile: &str;
     match args.len() {
@@ -36,7 +32,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let m = TeditModel::new();
     let r = TeditRender::new(escfile);
-    let mut g = Game::new(m, r);
+    let mut g = Game::new(m, r, "tedit");
+    info!("Tedit(pixel.rs) start...{:?}", args);
 
     g.init();
     g.run()?;
