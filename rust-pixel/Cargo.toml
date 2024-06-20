@@ -3,6 +3,9 @@ name = "rust_pixel"
 authors = ["<zhouxin@tuyoogame.com>"]
 version = "0.2.0"
 edition = "2021"
+repository = "https://github.com/zipxing/rust_pixel"
+readme = "https://github.com/zipxing/rust_pixel/README.md"
+license = "Apache-2.0"
 description = "2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web..."
 
 categories = ["game-engines", "game", "gui", "graphics"] # https://crates.io/category_slugs
