@@ -30,6 +30,9 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 ```
 
 **Install Python3** (the latest macOS generally comes with it)
+```
+$ pip3 install tomlkit           # Install tomlkit for read/write Cargo.toml
+```
 
 **Install some dependent libraries and software**
 ``` 

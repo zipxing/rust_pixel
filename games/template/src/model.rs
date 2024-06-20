@@ -10,6 +10,7 @@ pub const CARDH: usize = 7;
 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const CARDH: usize = 5;
 
+#[repr(u8)]
 enum TemplateState {
     Normal,
 }
@@ -50,7 +51,9 @@ impl Model for TemplateModel {
                             self.card = self.data.next();
                             event_emit("Template.RedrawTile");
                         }
-                        _ => {},
+                        _ => {
+                            context.state = TemplateState::Normal as u8;
+                        },
                     }
                 }
                 _ => {}

@@ -34,11 +34,11 @@ impl TemplateRender {
         let adj = 1u16;
         let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
         msg1.content
-            .set_str(0, 0, "press S shuffle cards", Style::default());
+            .set_str(0, 0, "press N for next card", Style::default());
         s.add_by_tag(msg1, "msg1");
         let mut msg2 = Sprite::new(40 + adj, 14, 40, 1);
         msg2.content
-            .set_str(0, 0, "press N for next card", Style::default());
+            .set_str(0, 0, "press S shuffle cards", Style::default());
         s.add_by_tag(msg2, "msg2");
 
         event_register("Template.RedrawTile", "draw_tile");
