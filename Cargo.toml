@@ -14,7 +14,7 @@ resolver = "2"
 
 [workspace.package]
 authors = ["zipxing@hotmail.com"]
-description = "2d pixel artgame engine & rapid prototype tools..."
+description = "2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web..."
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.
