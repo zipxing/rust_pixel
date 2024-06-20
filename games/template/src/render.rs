@@ -8,7 +8,6 @@ use rust_pixel::{
     game::{Model, Render},
     render::panel::Panel,
     render::sprite::{Sprite, Sprites},
-    render::style::Style,
 };
 
 pub struct TemplateRender {
@@ -21,7 +20,9 @@ impl TemplateRender {
         let t = Panel::new();
         let mut s = Sprites::new("main");
 
+        // background...
         let mut gb = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
+        // In text mode "alpha" does not affect
         gb.set_alpha(30);
         s.add_by_tag(gb, "back");
 
@@ -32,14 +33,12 @@ impl TemplateRender {
             );
         }
 
-        let adj = 1u16;
+        let adj = 2u16;
         let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
-        msg1.content
-            .set_str(0, 0, "press N for next card", Style::default());
+        msg1.content.dstr("press N for next card");
         s.add_by_tag(msg1, "msg1");
         let mut msg2 = Sprite::new(40 + adj, 14, 40, 1);
-        msg2.content
-            .set_str(0, 0, "press S shuffle cards", Style::default());
+        msg2.content.dstr("press S shuffle cards");
         s.add_by_tag(msg2, "msg2");
 
         event_register("Template.RedrawTile", "draw_tile");
@@ -54,6 +53,7 @@ impl TemplateRender {
         let d = model.as_any().downcast_mut::<TemplateModel>().unwrap();
         let bi = d.card;
         let l = self.sprites.get_by_tag("t0");
+
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let ext = "pix";
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -76,6 +76,8 @@ impl Render for TemplateRender {
             .adapter
             .init(TEMPLATEW + 2, TEMPLATEH, 1.0, 1.0, "redblack".to_string());
         self.panel.init(context);
+
+        // set a static back img for text mode...
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         {
             let gb = self.sprites.get_by_tag("back");
@@ -92,6 +94,7 @@ impl Render for TemplateRender {
     fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
 
     fn draw<G: Model>(&mut self, ctx: &mut Context, _data: &mut G, _dt: f32) {
+        // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let ss = &mut self.sprites.get_by_tag("back");
