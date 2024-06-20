@@ -4,7 +4,7 @@ authors = ["<zhouxin@tuyoogame.com>"]
 version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/zipxing/rust_pixel"
-readme = "https://github.com/zipxing/rust_pixel/README.md"
+readme = "https://github.com/zipxing/rust_pixel/blob/main/README.md"
 license = "Apache-2.0"
 description = "2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web..."
 
