@@ -19,6 +19,8 @@ use web_sys::js_sys;
 
 pub mod objpool;
 pub mod shape;
+mod particle;
+pub use particle::*;
 mod rand;
 pub use rand::*;
 

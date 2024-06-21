@@ -1,13 +1,14 @@
 use log::debug;
 use rand::prelude::*;
-use std::any::Any;
 use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::{
     context::Context,
     event::event_emit,
     game::Model,
-    util::{Dir, Point},
+    util::{ParticleSystem, ParticleSystemInfo, Dir, Point},
 };
+use std::any::Any;
+use std::f64::consts::PI;
 
 pub const SNAKEW: usize = 60;
 pub const SNAKEH: usize = 36;
@@ -19,6 +20,7 @@ enum SnakeState {
 }
 
 pub struct SnakeModel {
+    pub pats: ParticleSystem,
     pub grid: [[i16; SNAKEW]; SNAKEH],
     pub seed: Point,
     pub body: Vec<Point>,
@@ -28,7 +30,36 @@ pub struct SnakeModel {
 
 impl SnakeModel {
     pub fn new() -> Self {
+        let particle_system_info = ParticleSystemInfo {
+            emission_rate: 100.0,
+            lifetime: -1.0,
+            particle_life_min: 1.0,
+            particle_life_max: 2.0,
+            direction: PI / 2.0,
+            spread: PI / 4.0,
+            relative: false,
+            speed_min: 50.0,
+            speed_max: 100.0,
+            g_min: 9.0,
+            g_max: 10.0,
+            rad_a_min: 3.0,
+            rad_a_max: 5.0,
+            tan_a_min: 1.0,
+            tan_a_max: 5.0,
+            size_start: 1.0,
+            size_end: 5.0,
+            size_var: 1.0,
+            spin_start: 1.0,
+            spin_end: 5.0,
+            spin_var: 1.0,
+            color_start: [0.0, 0.0, 0.0, 0.0],
+            color_end: [1.0, 1.0, 1.0, 1.0],
+            color_var: 0.1,
+            alpha_var: 1.0,
+        };
+        let pats = ParticleSystem::new(particle_system_info);
         Self {
+            pats,
             grid: [[0i16; SNAKEW]; SNAKEH],
             seed: Point { x: 0, y: 0 },
             body: vec![],
@@ -147,6 +178,7 @@ impl Model for SnakeModel {
         self.dir = Dir::Down;
         context.input_events.clear();
         context.state = SnakeState::Normal as u8;
+        self.pats.fire_at(10.0, 10.0);
         event_emit("Snake.RedrawGrid");
     }
 
@@ -174,6 +206,7 @@ impl Model for SnakeModel {
     }
 
     fn handle_auto(&mut self, context: &mut Context, dt: f32) {
+        self.pats.update(dt as f64);
         if self.timeout_auto > 0.4 {
             self.timeout_auto = 0.0;
             self.act(self.dir, context);

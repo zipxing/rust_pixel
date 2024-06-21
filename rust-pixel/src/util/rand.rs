@@ -1,10 +1,10 @@
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::{SystemTime, UNIX_EPOCH};
 use rand::seq::SliceRandom;
 use rand_xoshiro::{
     rand_core::{RngCore, SeedableRng},
     Xoshiro256StarStar,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// RCG
 pub struct Rand {
@@ -45,10 +45,21 @@ impl Rand {
         self.srand(seed as u64);
     }
 
+    pub fn rand64(&mut self) -> u64 {
+        self.rng.next_u64()
+    }
+
     pub fn rand(&mut self) -> u32 {
-        let r = self.rng.next_u64() as u32;
-        //info!("rand use xoshiro...{}", r);
-        r
+        self.rng.next_u64() as u32
+    }
+
+    pub fn gen_range(&mut self, min: f64, max: f64) -> f64 {
+        if min > max {
+            return 0.0;
+        }
+        let u1 = (min * 1000.0) as u64;
+        let u2 = (max * 1000.0) as u64;
+        (u1 + (self.rng.next_u64() % (u2 - u1 + 1))) as f64 / 1000.0
     }
 
     pub fn shuffle<T: Copy>(&mut self, v: &mut Vec<T>) {
@@ -121,5 +132,3 @@ impl RandLCG {
         }
     }
 }
-
-
