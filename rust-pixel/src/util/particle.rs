@@ -10,6 +10,7 @@ const MAX_PARTICLES: usize = 1000;
 
 #[derive(Debug, Clone)]
 pub struct Particle {
+    pub ptype: u8,
     // location
     pub loc: [f64; 2],
     // velocity
@@ -31,8 +32,9 @@ pub struct Particle {
 }
 
 impl Particle {
-    pub fn new() -> Particle {
+    pub fn new_d() -> Particle {
         Particle {
+            ptype: 0,
             loc: [0.0, 0.0],
             v: [0.0, 0.0],
             g: 0.0,
@@ -49,6 +51,19 @@ impl Particle {
         }
     }
 }
+
+impl GObj for Particle {
+    fn new(ptype: u8, ps: &Vec<Point>) -> Bullet {
+        let mut bt = Particle::new_d(); 
+        bt.reset(ptype, ps);
+        bt
+    }
+
+    fn reset(&mut self, ptype: u8, ps: &Vec<Point>) {
+        self.ptype = ptype;
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct ParticleSystemInfo {
