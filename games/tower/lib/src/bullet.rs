@@ -5,7 +5,7 @@ use crate::{BH, BW, TOWERH, TOWERW};
 use std::collections::{HashMap, HashSet};
 use rust_pixel::util::{
     objpool::{GObj, GameObjPool},
-    FPoint, Point,
+    PointF32, PointU16,
 };
 
 #[derive(Default)]
@@ -13,16 +13,16 @@ pub struct Bullet {
     pub btype: u8,
     pub speed: i16,
     pub damage: i32,
-    pub src_pos: Point,
-    pub dst_pos: Point,
-    pub fspeed: FPoint,
-    pub pixel_pos: FPoint,
-    pub csize: Point,
+    pub src_pos: PointU16,
+    pub dst_pos: PointU16,
+    pub fspeed: PointF32,
+    pub pixel_pos: PointF32,
+    pub csize: PointU16,
     pub angle: f32,
 }
 
 impl GObj for Bullet {
-    fn new(btype: u8, ps: &Vec<Point>) -> Bullet {
+    fn new(btype: u8, ps: &Vec<PointU16>) -> Bullet {
         let mut bt = Bullet {
             ..Default::default()
         };
@@ -30,7 +30,7 @@ impl GObj for Bullet {
         bt
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<Point>) {
+    fn reset(&mut self, btype: u8, ps: &Vec<PointU16>) {
         self.btype = btype;
         if btype == 0 {
             self.speed = 45;
@@ -52,7 +52,7 @@ impl GObj for Bullet {
         let h = ps[0].y as f32 * BH as f32;
 
         // tower center...
-        self.pixel_pos = FPoint {
+        self.pixel_pos = PointF32 {
             x: (self.src_pos.x as f32 + 0.66) * w,
             y: (self.src_pos.y as f32 + 0.66) * h,
         };
@@ -65,7 +65,7 @@ impl GObj for Bullet {
         let angle = dy.atan2(dx);
         // info!("bullet reset...src{:?}..dst{:?}..angle{:?}", self.pixel_pos, self.dst_pos, angle);
         self.angle = angle;
-        self.fspeed = FPoint {
+        self.fspeed = PointF32 {
             x: self.speed as f32 * angle.cos(),
             y: self.speed as f32 * angle.sin(),
         };
@@ -114,7 +114,7 @@ impl Bullet {
                     let dy = m.obj.pixel_pos.y - y;
                     let distance = (dx * dx + dy * dy).sqrt();
                     if distance < self.csize.x as f32 * 1.2 {
-                        let bpt = Point {
+                        let bpt = PointU16 {
                             x: m.obj.pixel_pos.x as u16,
                             y: m.obj.pixel_pos.y as u16,
                         };
@@ -123,7 +123,7 @@ impl Bullet {
                             bs.create(0, &vec![bpt]);
                             m.active = false;
                         } else {
-                            let nbpt = Point {
+                            let nbpt = PointU16 {
                                 x: ((bpt.x as f32 + x) / 2.0) as u16,
                                 y: ((bpt.y as f32 + y) / 2.0) as u16,
                             };

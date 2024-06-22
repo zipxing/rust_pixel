@@ -3,7 +3,7 @@ use log::debug;
 //use rand::prelude::*;
 use tetris_lib::{
     ai::*,
-    cell::{Move, MoveRet, TetrisCell},
+    side::{Move, MoveRet, TetrisCell},
     constant::*,
 };
 use std::any::Any;
@@ -25,7 +25,7 @@ use rust_pixel::{
 }*/
 
 pub struct TetrisModel {
-    pub cells: [TetrisCell; 2],
+    pub sides: [TetrisCell; 2],
     pub block_queue: [i8; BLKQUEUE as usize],
     pub trand: Rand,
     pub tai: TetrisAi,
@@ -37,7 +37,7 @@ impl TetrisModel {
     pub fn new() -> Self {
         let c: [TetrisCell; 2] = [TetrisCell::new(0), TetrisCell::new(1)];
         Self {
-            cells: c,
+            sides: c,
             block_queue: [0i8; BLKQUEUE as usize],
             trand: Rand::new(),
             tai: TetrisAi::new(),
@@ -56,8 +56,8 @@ impl TetrisModel {
 
     fn reset(&mut self) {
         self.random_block_queue(0);
-        self.cells[0].reset(&self.block_queue);
-        self.cells[1].reset(&self.block_queue);
+        self.sides[0].reset(&self.block_queue);
+        self.sides[1].reset(&self.block_queue);
         event_emit("Tetris.RedrawGrid");
     }
 
@@ -65,18 +65,18 @@ impl TetrisModel {
         if d == Move::Restart {
             self.reset();
         }
-        if self.cells[0].core.game_over || self.cells[1].core.game_over {
+        if self.sides[0].core.game_over || self.sides[1].core.game_over {
             return;
         }
         match d {
             Move::TurnCw | Move::TurnCcw => {
-                if self.cells[index].move_block(d, false) == MoveRet::Normal {
-                    self.cells[index].make_shadow();
+                if self.sides[index].move_block(d, false) == MoveRet::Normal {
+                    self.sides[index].make_shadow();
                 } else {
                     //开始尝试左右移动再转...
                     let cmds = ["L", "LL", "R", "RR"];
                     for c in cmds {
-                        if self.cells[index].help_turn(d, c) {
+                        if self.sides[index].help_turn(d, c) {
                             return;
                         }
                     }
@@ -87,17 +87,17 @@ impl TetrisModel {
                 debug!("fire fall{}", index);
             }
             Move::Down => {
-                if self.cells[index].move_block(d, false) == MoveRet::ReachBottom {
-                    self.cells[index].next_block(&self.block_queue, false, false);
+                if self.sides[index].move_block(d, false) == MoveRet::ReachBottom {
+                    self.sides[index].next_block(&self.block_queue, false, false);
                 }
             }
             Move::Left | Move::Right => {
-                self.cells[index].move_block(d, false);
-                self.cells[index].make_shadow();
+                self.sides[index].move_block(d, false);
+                self.sides[index].make_shadow();
             }
             Move::Save => {
-                self.cells[index].save_block(&self.block_queue, false);
-                self.cells[index].make_shadow();
+                self.sides[index].save_block(&self.block_queue, false);
+                self.sides[index].make_shadow();
             }
             _ => {}
         }
@@ -142,38 +142,38 @@ impl Model for TetrisModel {
 
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {
         for i in 0..2 as usize {
-            if self.cells[i].core.game_over {
+            if self.sides[i].core.game_over {
                 continue;
             }
-            self.cells[i].timer_process(&self.block_queue);
-            if self.cells[i].core.attack[0] != 0 {
-                self.cells[1 - i].attacked(
+            self.sides[i].timer_process(&self.block_queue);
+            if self.sides[i].core.attack[0] != 0 {
+                self.sides[1 - i].attacked(
                     &mut self.trand,
-                    self.cells[i].core.attack[0],
-                    self.cells[i].core.attack[1],
+                    self.sides[i].core.attack[0],
+                    self.sides[i].core.attack[1],
                 );
-                self.cells[1 - i].make_shadow();
-                self.cells[i].core.attack[0] = 0;
+                self.sides[1 - i].make_shadow();
+                self.sides[i].core.attack[0] = 0;
             }
         }
     }
 
     fn handle_auto(&mut self, context: &mut Context, dt: f32) {
         if self.tai.work2idx >= 0 {
-            self.tai.get_ai_act(&self.block_queue, &mut self.cells[1]);
+            self.tai.get_ai_act(&self.block_queue, &mut self.sides[1]);
         }
 
         if self.timeout_auto > 0.4 {
             self.timeout_auto = 0.0;
             self.act(0, Move::Down, context);
-            self.cells[0].core.dump_debug();
+            self.sides[0].core.dump_debug();
         } else {
             self.timeout_auto += dt;
         }
 
         if self.timeout_ai > 0.1 {
             self.timeout_ai = 0.0;
-            let c = self.tai.get_ai_act(&self.block_queue, &mut self.cells[1]);
+            let c = self.tai.get_ai_act(&self.block_queue, &mut self.sides[1]);
             debug!("getAiAct::{}", c);
             let d: Option<Move> = match c {
                 'S' => Some(Move::Save),

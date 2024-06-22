@@ -2,13 +2,13 @@ use crate::monster::Monster;
 use crate::{BH, BW};
 use rust_pixel::util::{
     objpool::{GObj, GameObjPool},
-    Point, Rand,
+    PointU16, Rand,
 };
 
 #[derive(Default)]
 pub struct Tower {
     pub ttype: u8,
-    pub pos: Point,
+    pub pos: PointU16,
     pub range: i16,
     pub interval: i16,
     pub cd: i16,
@@ -16,7 +16,7 @@ pub struct Tower {
 }
 
 impl GObj for Tower {
-    fn new(ttype: u8, ps: &Vec<Point>) -> Tower {
+    fn new(ttype: u8, ps: &Vec<PointU16>) -> Tower {
         let mut t = Tower {
             ..Default::default()
         };
@@ -24,7 +24,7 @@ impl GObj for Tower {
         t
     }
 
-    fn reset(&mut self, ttype: u8, ps: &Vec<Point>) {
+    fn reset(&mut self, ttype: u8, ps: &Vec<PointU16>) {
         self.ttype = ttype;
         if ttype == 0 {
             self.range = 100;

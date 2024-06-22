@@ -16,7 +16,7 @@ pub fn circle(x0: u16, y0: u16, radius: u16) -> Vec<(i16, i16)> {
     let mut d: i16 = 3 - 2 * radius as i16;
 
     while x <= y {
-        // Each quadrant's points are symmetric, so we can add them all at once
+        // Each quadrant's PointU16s are symmetric, so we can add them all at once
         points.push((x0 as i16 + x, y0 as i16 + y));
         points.push((x0 as i16 - x, y0 as i16 + y));
         points.push((x0 as i16 + x, y0 as i16 - y));
@@ -53,7 +53,7 @@ fn reverse_bresenham_next_point(x0: i16, y0: i16, x1: i16, y1: i16) -> (i16, i16
     (x, y)
 }
 
-// draws a line using | - \ / chars, needs to adjust the start and end point of the line
+// draws a line using | - \ / chars, needs to adjust the start and end PointU16 of the line
 pub fn prepare_line(px0: u16, py0: u16, px1: u16, py1: u16) -> (i16, i16, i16, i16) {
     let fdy = py1 as f32 - py0 as f32;
     let fdx = px1 as f32 - px0 as f32;

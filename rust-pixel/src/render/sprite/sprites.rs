@@ -13,7 +13,7 @@ use crate::{
     asset::AssetManager,
     render::sprite::Sprite,
     render::panel::Frame,
-    util::Point,
+    util::PointU16,
 };
 // use log::info;
 use std::{
@@ -61,7 +61,7 @@ impl Sprites {
         }
     }
 
-    pub fn get_max_size(&self) -> Point {
+    pub fn get_max_size(&self) -> PointU16 {
         let mut mx: u16 = 0;
         let mut my: u16 = 0;
         for ts in &self.sprites {
@@ -74,7 +74,7 @@ impl Sprites {
                 my = sy;
             }
         }
-        Point { x: mx, y: my }
+        PointU16 { x: mx, y: my }
     }
 
     pub fn add(&mut self, ts: Sprite) {

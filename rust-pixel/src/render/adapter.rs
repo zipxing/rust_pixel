@@ -5,7 +5,7 @@
 use crate::render::style::Color;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::util::{
-    Rand, {APoint, ARect},
+    Rand, {PointI32, ARect},
 };
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::LOGO_FRAME;
@@ -218,7 +218,7 @@ fn render_helper(
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize, f64, APoint),
+    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize, f64, PointI32),
 {
     // sort by render_weight...
     pixel_spt.update_render_index();
@@ -238,7 +238,7 @@ where
             let x = i % pw as usize;
             let y = i / pw as usize;
             // center point ...
-            let ccp = APoint {
+            let ccp = PointI32 {
                 x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH as f32 / rx) as i32,
                 y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT as f32 / ry) as i32,
             };

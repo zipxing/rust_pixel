@@ -4,7 +4,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_emit, timer_fire, timer_register},
     game::Model,
-    util::{objpool::GameObjPool, Point},
+    util::{objpool::GameObjPool, PointU16},
 };
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -26,7 +26,7 @@ pub struct TowerModel {
     //  value: set of monsters id
     pub monster_map: HashMap<usize, HashSet<usize>>,
 
-    pub timeout_auto: f32,
+    // pub timeout_auto: f32,
 
     pub bombs: GameObjPool<Bomb>,
     pub blocks: GameObjPool<Block>,
@@ -41,7 +41,7 @@ impl TowerModel {
         Self {
             grid: vec![],
             monster_map: HashMap::new(),
-            timeout_auto: 0.0,
+            // timeout_auto: 0.0,
             bombs: GameObjPool::<Bomb>::new("BB", MAX_BOMB_COUNT),
             blocks: GameObjPool::<Block>::new("BL", MAX_BLOCK_COUNT),
             towers: GameObjPool::<Tower>::new("T", MAX_TOWER_COUNT),
@@ -72,36 +72,36 @@ impl Model for TowerModel {
         ctx.state = TowerState::Normal as u8;
         // 创建路障
         let bps = vec![
-            Point { x: 0, y: 1 },
-            Point { x: 1, y: 1 },
-            Point { x: 2, y: 3 },
-            Point { x: 2, y: 4 },
-            Point { x: 3, y: 6 },
-            Point { x: 4, y: 6 },
-            Point { x: 5, y: 6 },
-            Point { x: 6, y: 6 },
+            PointU16 { x: 0, y: 1 },
+            PointU16 { x: 1, y: 1 },
+            PointU16 { x: 2, y: 3 },
+            PointU16 { x: 2, y: 4 },
+            PointU16 { x: 3, y: 6 },
+            PointU16 { x: 4, y: 6 },
+            PointU16 { x: 5, y: 6 },
+            PointU16 { x: 6, y: 6 },
         ];
         for p in &bps {
             self.blocks.create(0, &vec![*p]);
         }
 
         // 创建类型为0的塔
-        let mut tps = vec![Point { x: 5, y: 3 }, Point { x: 10, y: 4 }];
+        let mut tps = vec![PointU16 { x: 5, y: 3 }, PointU16 { x: 10, y: 4 }];
         for p in &tps {
             self.towers.create(0, &vec![*p]);
         }
         // 创建类型为1的塔
         tps = vec![
-            Point { x: 2, y: 2 },
-            Point { x: 8, y: 8 },
-            Point { x: 10, y: 7 },
-            Point { x: 12, y: 8 },
+            PointU16 { x: 2, y: 2 },
+            PointU16 { x: 8, y: 8 },
+            PointU16 { x: 10, y: 7 },
+            PointU16 { x: 12, y: 8 },
         ];
         for p in &tps {
             self.towers.create(1, &vec![*p]);
         }
         // 创建类型为2的塔
-        tps = vec![Point { x: 2, y: 5 }, Point { x: 15, y: 8 }];
+        tps = vec![PointU16 { x: 2, y: 5 }, PointU16 { x: 15, y: 8 }];
         for p in &tps {
             self.towers.create(2, &vec![*p]);
         }
@@ -156,15 +156,15 @@ impl Model for TowerModel {
         self.towers.update_active(|t| {
             for v in &t.obj.update(&mut self.monsters, &mut ctx.rand) {
                 let target_monster_pos = self.monsters.pool[*v].obj.pixel_pos;
-                let dst_pos = Point {
+                let dst_pos = PointU16 {
                     x: target_monster_pos.x as u16,
                     y: target_monster_pos.y as u16,
                 };
-                let cell_size = Point {
+                let cell_size = PointU16 {
                     x: ctx.adapter.cell_width() as u16,
                     y: ctx.adapter.cell_height() as u16,
                 };
-                let mid = Point { x: *v as u16, y: 0 };
+                let mid = PointU16 { x: *v as u16, y: 0 };
                 // cell_size, tower_pos, monster_pos
                 if t.obj.ttype == 2 {
                     self.lasers
@@ -180,7 +180,7 @@ impl Model for TowerModel {
     fn handle_event(&mut self, _ctx: &mut Context, _dt: f32) {}
 
     fn handle_timer(&mut self, ctx: &mut Context, _dt: f32) {
-        let csp = Point {
+        let csp = PointU16 {
             x: ctx.adapter.cell_width() as u16,
             y: ctx.adapter.cell_height() as u16,
         };

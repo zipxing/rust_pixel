@@ -6,7 +6,7 @@ use log::debug;
 use rust_pixel::{
     event::{event_check, event_emit, timer_cancel, timer_fire, timer_register, timer_stage},
     //game::{Context, Model, Render},
-    util::{Point, Rand},
+    util::{PointU16, Rand},
 };
 
 //https://harddrop.com/wiki/T-Spin_Triple_Setups
@@ -53,7 +53,7 @@ pub struct TetrisCore {
     pub shadow_y: i8,
     pub full_rows: [i8; (ZONG + 2) as usize],
     pub full_row_count: u8,
-    pub cling_blocks: [Point; 6],
+    pub cling_blocks: [PointU16; 6],
     pub cling_block_count: u8,
     pub block_index: u16,
     pub attack: [u16; 2], //0: line count, 1: attack hole random seed
@@ -63,8 +63,8 @@ pub struct TetrisCore {
 
 impl TetrisCore {
     pub fn new() -> Self {
-        let cell: TetrisCore = Default::default();
-        cell
+        let side: TetrisCore = Default::default();
+        side
     }
 
     pub fn dump_debug(&mut self) {
@@ -383,7 +383,7 @@ impl TetrisCell {
                 if !ai {
                     if self.get_gd(iy, ix) != 100 {
                         //纪录下需要显示“粘住光晕”的块坐标及个数
-                        self.core.cling_blocks[self.core.cling_block_count as usize] = Point {
+                        self.core.cling_blocks[self.core.cling_block_count as usize] = PointU16 {
                             x: (cx + n - 2) as u16,
                             y: (cy + m) as u16,
                         };

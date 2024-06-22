@@ -13,7 +13,7 @@ use crate::{
     // render::image::*,
     render::style::{Color, Style},
     util::shape::{circle, line, prepare_line},
-    util::{FPoint, Rect},
+    util::{PointF32, Rect},
 };
 use bitflags::bitflags;
 // use log::info;
@@ -184,8 +184,8 @@ impl Sprite {
         self.angle = a;
     }
 
-    pub fn get_center_point(&self) -> FPoint {
-        FPoint {
+    pub fn get_center_point(&self) -> PointF32 {
+        PointF32 {
             x: self.content.area.x as f32 + self.content.area.width as f32 / 2.0,
             y: self.content.area.y as f32 + self.content.area.height as f32 / 2.0,
         }

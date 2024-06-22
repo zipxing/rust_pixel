@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zhouxin@tuyoogame.com 2022~2024
 
-//! Utils of random rect point...
+//! Utils of random rect PointU16...
 //! and a simple object pool: objpool.rs
 //! some primitive algorithm: shape.rs
 
@@ -19,8 +19,8 @@ use web_sys::js_sys;
 
 pub mod objpool;
 pub mod shape;
-mod particle;
-pub use particle::*;
+// mod particle;
+// pub use particle::*;
 mod rand;
 pub use rand::*;
 
@@ -91,9 +91,27 @@ pub enum Dir {
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct APoint {
+pub struct PointI32 {
     pub x: i32,
     pub y: i32,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct PointU16 {
+    pub x: u16,
+    pub y: u16,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct PointI16 {
+    pub x: i16,
+    pub y: i16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PointF32 {
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -102,24 +120,6 @@ pub struct ARect {
     pub y: i32,
     pub w: u32,
     pub h: u32,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct Point {
-    pub x: u16,
-    pub y: u16,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct IPoint {
-    pub x: i16,
-    pub y: i16,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct FPoint {
-    pub x: f32,
-    pub y: f32,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default, Serialize, Deserialize)]

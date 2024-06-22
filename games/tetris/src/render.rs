@@ -170,12 +170,12 @@ impl TetrisRender {
                 let rx = j * 2;
                 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                 let rx = j;
-                if d.cells[0].get_md(d.cells[0].core.save_block, 0, i * 4 + j) != 0 {
+                if d.sides[0].get_md(d.sides[0].core.save_block, 0, i * 4 + j) != 0 {
                     self.set_block(
                         "hold",
                         rx as u16,
                         i as u16,
-                        d.cells[0].core.save_block as u8 + 1,
+                        d.sides[0].core.save_block as u8 + 1,
                     );
                 } else {
                     self.set_block("hold", rx as u16, i as u16, 0);
@@ -192,12 +192,12 @@ impl TetrisRender {
                 let rx = j * 2;
                 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                 let rx = j;
-                if d.cells[0].get_md(d.cells[0].core.next_block, 0, i * 4 + j) != 0 {
+                if d.sides[0].get_md(d.sides[0].core.next_block, 0, i * 4 + j) != 0 {
                     self.set_block(
                         "next",
                         rx as u16,
                         i as u16,
-                        d.cells[0].core.next_block as u8 + 1,
+                        d.sides[0].core.next_block as u8 + 1,
                     );
                 } else {
                     self.set_block("next", rx as u16, i as u16, 0);
@@ -222,7 +222,7 @@ impl TetrisRender {
                     let rx = j * 2;
                     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                     let rx = j;
-                    let gv = d.cells[n].get_gd(i as i8, (j + 2) as i8);
+                    let gv = d.sides[n].get_gd(i as i8, (j + 2) as i8);
                     match gv {
                         0 => {
                             self.set_block(&format!("grid{}", n), rx, i, 0);
@@ -245,12 +245,12 @@ impl TetrisRender {
             }
             for i in 0..4 {
                 for j in 0..4 {
-                    let ttx = d.cells[n].core.shadow_x + j;
-                    let tty = d.cells[n].core.shadow_y + i;
-                    if d.cells[n].is_in_grid(tty, ttx) {
-                        if d.cells[n].get_md(
-                            d.cells[n].core.cur_block,
-                            d.cells[n].core.cur_z,
+                    let ttx = d.sides[n].core.shadow_x + j;
+                    let tty = d.sides[n].core.shadow_y + i;
+                    if d.sides[n].is_in_grid(tty, ttx) {
+                        if d.sides[n].get_md(
+                            d.sides[n].core.cur_block,
+                            d.sides[n].core.cur_z,
                             i * 4 + j,
                         ) != 0
                         {
@@ -260,7 +260,7 @@ impl TetrisRender {
                             let rx = ttx - 2;
                             //Ensure that when the shadow and the normal block overlap, the shadow
                             //does not cover the normal block...
-                            if d.cells[n].get_gd(tty, ttx) == 0 {
+                            if d.sides[n].get_gd(tty, ttx) == 0 {
                                 self.set_block(&format!("grid{}", n), rx as u16, tty as u16, 20);
                             }
                         }

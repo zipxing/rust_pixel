@@ -1,14 +1,14 @@
 use crate::{BH, BW};
-use rust_pixel::util::{objpool::GObj, Point};
+use rust_pixel::util::{objpool::GObj, PointU16};
 
 #[derive(Default)]
 pub struct Block {
     pub btype: u8,
-    pub pos: Point,
+    pub pos: PointU16,
 }
 
 impl GObj for Block {
-    fn new(btype: u8, ps: &Vec<Point>) -> Block {
+    fn new(btype: u8, ps: &Vec<PointU16>) -> Block {
         let mut b = Block {
             ..Default::default()
         };
@@ -16,7 +16,7 @@ impl GObj for Block {
         b
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<Point>) {
+    fn reset(&mut self, btype: u8, ps: &Vec<PointU16>) {
         self.btype = btype;
         self.pos = ps[0];
     }

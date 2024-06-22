@@ -26,22 +26,22 @@
 //! }
 //! ```
 
-use crate::util::Point;
+use crate::util::PointU16;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 // (y, x)
-pub type APoint = (usize, usize);
+pub type PointUsize = (usize, usize);
 
-impl From<Point> for APoint {
-    fn from(p: Point) -> Self {
+impl From<PointU16> for PointUsize {
+    fn from(p: PointU16) -> Self {
         (p.y as usize, p.x as usize)
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 struct ANode {
-    pos: APoint,
+    pos: PointUsize,
     g: usize,
     f: usize,
 }
@@ -58,7 +58,7 @@ impl PartialOrd for ANode {
     }
 }
 
-pub fn a_star<F>(map: &Vec<Vec<u8>>, start: APoint, end: APoint, func: F) -> Option<Vec<APoint>>
+pub fn a_star<F>(map: &Vec<Vec<u8>>, start: PointUsize, end: PointUsize, func: F) -> Option<Vec<PointUsize>>
 where
     F: Fn(u8) -> bool,
 {
@@ -111,11 +111,11 @@ where
     None
 }
 
-fn manhattan_distance(a: APoint, b: APoint) -> usize {
+fn manhattan_distance(a: PointUsize, b: PointUsize) -> usize {
     ((a.0 as isize - b.0 as isize).abs() + (a.1 as isize - b.1 as isize).abs()) as usize
 }
 
-fn is_valid<F>(pos: APoint, map: &Vec<Vec<u8>>, f: F) -> bool
+fn is_valid<F>(pos: PointUsize, map: &Vec<Vec<u8>>, f: F) -> bool
 where
     F: Fn(u8) -> bool,
 {

@@ -1,5 +1,6 @@
 use crate::util::{
     Rand, 
+    PointU16,
     objpool::{GObj, GameObjPool},
 };
 use std::f64::consts::PI;
@@ -53,13 +54,13 @@ impl Particle {
 }
 
 impl GObj for Particle {
-    fn new(ptype: u8, ps: &Vec<Point>) -> Bullet {
+    fn new(ptype: u8, ps: &Vec<PointU16>) -> Bullet {
         let mut bt = Particle::new_d(); 
         bt.reset(ptype, ps);
         bt
     }
 
-    fn reset(&mut self, ptype: u8, ps: &Vec<Point>) {
+    fn reset(&mut self, ptype: u8, ps: &Vec<PointU16>) {
         self.ptype = ptype;
     }
 }
