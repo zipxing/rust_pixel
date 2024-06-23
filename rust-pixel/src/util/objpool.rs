@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 /// game object interface, requires to implement new and reset method
 pub trait GObj {
-    fn new(t: u8, ps: &Vec<u32>) -> Self;
+    fn new() -> Self;
     fn reset(&mut self, t: u8, ps: &Vec<u32>);
 }
 
@@ -70,7 +70,8 @@ where
         // if not found, create a new one and add to the pool
         if !find {
             let l = self.pool.len();
-            let bo = GObj::new(otype, ps);
+            let mut bo: T = T::new();
+            bo.reset(otype, ps);
             self.pool.push(GameObject {
                 id: l,
                 obj: bo,

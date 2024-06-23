@@ -8,12 +8,8 @@ pub struct Bomb {
 }
 
 impl GObj for Bomb {
-    fn new(btype: u8, ps: &Vec<u32>) -> Bomb {
-        let mut b = Bomb {
-            ..Default::default()
-        };
-        b.reset(btype, ps);
-        b
+    fn new() -> Bomb {
+        Default::default()
     }
 
     fn reset(&mut self, btype: u8, ps: &Vec<u32>) {

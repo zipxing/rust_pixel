@@ -4,7 +4,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_emit, timer_fire, timer_register},
     game::Model,
-    util::{objpool::GameObjPool},
+    util::objpool::GameObjPool,
 };
 use std::any::Any;
 use std::collections::{HashMap, HashSet};

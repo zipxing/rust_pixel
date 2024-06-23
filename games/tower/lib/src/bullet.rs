@@ -22,12 +22,8 @@ pub struct Bullet {
 }
 
 impl GObj for Bullet {
-    fn new(btype: u8, ps: &Vec<u32>) -> Bullet {
-        let mut bt = Bullet {
-            ..Default::default()
-        };
-        bt.reset(btype, ps);
-        bt
+    fn new() -> Bullet {
+        Default::default()
     }
 
     fn reset(&mut self, btype: u8, ps: &Vec<u32>) {

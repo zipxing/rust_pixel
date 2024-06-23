@@ -8,12 +8,8 @@ pub struct Block {
 }
 
 impl GObj for Block {
-    fn new(btype: u8, ps: &Vec<u32>) -> Block {
-        let mut b = Block {
-            ..Default::default()
-        };
-        b.reset(btype, ps);
-        b
+    fn new() -> Block {
+        Default::default()
     }
 
     fn reset(&mut self, btype: u8, ps: &Vec<u32>) {

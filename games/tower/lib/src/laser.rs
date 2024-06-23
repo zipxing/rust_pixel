@@ -20,12 +20,8 @@ pub struct Laser {
 }
 
 impl GObj for Laser {
-    fn new(btype: u8, ps: &Vec<u32>) -> Laser {
-        let mut bt = Laser {
-            ..Default::default()
-        };
-        bt.reset(btype, ps);
-        bt
+    fn new() -> Laser {
+        Default::default()
     }
 
     fn reset(&mut self, btype: u8, ps: &Vec<u32>) {

@@ -16,12 +16,8 @@ pub struct Tower {
 }
 
 impl GObj for Tower {
-    fn new(ttype: u8, ps: &Vec<u32>) -> Tower {
-        let mut t = Tower {
-            ..Default::default()
-        };
-        t.reset(ttype, ps);
-        t
+    fn new() -> Tower {
+        Default::default()
     }
 
     fn reset(&mut self, ttype: u8, ps: &Vec<u32>) {

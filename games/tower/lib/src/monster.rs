@@ -22,12 +22,8 @@ pub struct Monster {
 }
 
 impl GObj for Monster {
-    fn new(mtype: u8, ps: &Vec<u32>) -> Monster {
-        let mut m = Monster {
-            ..Default::default()
-        };
-        m.reset(mtype, ps);
-        m
+    fn new() -> Monster {
+        Default::default()
     }
 
     fn reset(&mut self, mtype: u8, ps: &Vec<u32>) {
