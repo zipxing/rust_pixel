@@ -1,4 +1,4 @@
-use rust_pixel::util::{objpool::GObj, PointF32, PointU16};
+use rust_pixel::util::{objpool::GObj, PointF32};
 
 #[derive(Default)]
 pub struct Bomb {
@@ -8,7 +8,7 @@ pub struct Bomb {
 }
 
 impl GObj for Bomb {
-    fn new(btype: u8, ps: &Vec<PointU16>) -> Bomb {
+    fn new(btype: u8, ps: &Vec<u32>) -> Bomb {
         let mut b = Bomb {
             ..Default::default()
         };
@@ -16,13 +16,13 @@ impl GObj for Bomb {
         b
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<PointU16>) {
+    fn reset(&mut self, btype: u8, ps: &Vec<u32>) {
         self.btype = btype;
         self.pixel_pos = PointF32 {
-            x: ps[0].x as f32,
-            y: ps[0].y as f32,
+            x: ps[0] as f32,
+            y: ps[1] as f32,
         };
-        self.stage = if btype == 0 {15} else {2};
+        self.stage = if btype == 0 { 15 } else { 2 };
     }
 }
 

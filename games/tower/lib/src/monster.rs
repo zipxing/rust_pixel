@@ -22,7 +22,7 @@ pub struct Monster {
 }
 
 impl GObj for Monster {
-    fn new(mtype: u8, ps: &Vec<PointU16>) -> Monster {
+    fn new(mtype: u8, ps: &Vec<u32>) -> Monster {
         let mut m = Monster {
             ..Default::default()
         };
@@ -30,7 +30,7 @@ impl GObj for Monster {
         m
     }
 
-    fn reset(&mut self, mtype: u8, ps: &Vec<PointU16>) {
+    fn reset(&mut self, mtype: u8, ps: &Vec<u32>) {
         self.mtype = mtype;
         if mtype == 1 {
             self.life = 5800;
@@ -44,8 +44,8 @@ impl GObj for Monster {
         self.pos = PointU16 { x: 0, y: 0 };
         self.next_pos = PointU16 { x: 0, y: 0 };
         self.pixel_pos = PointF32 {
-            x: ps[0].x as f32,
-            y: ps[0].y as f32,
+            x: ps[0] as f32,
+            y: ps[1] as f32,
         };
         self.interval = 1;
         self.cd = 0;

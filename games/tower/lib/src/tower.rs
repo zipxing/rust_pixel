@@ -16,7 +16,7 @@ pub struct Tower {
 }
 
 impl GObj for Tower {
-    fn new(ttype: u8, ps: &Vec<PointU16>) -> Tower {
+    fn new(ttype: u8, ps: &Vec<u32>) -> Tower {
         let mut t = Tower {
             ..Default::default()
         };
@@ -24,7 +24,7 @@ impl GObj for Tower {
         t
     }
 
-    fn reset(&mut self, ttype: u8, ps: &Vec<PointU16>) {
+    fn reset(&mut self, ttype: u8, ps: &Vec<u32>) {
         self.ttype = ttype;
         if ttype == 0 {
             self.range = 100;
@@ -38,7 +38,10 @@ impl GObj for Tower {
             self.interval = 4;
         }
         self.cd = 0;
-        self.pos = ps[0];
+        self.pos = PointU16 {
+            x: ps[0] as u16,
+            y: ps[1] as u16,
+        };
         self.target = None;
     }
 }

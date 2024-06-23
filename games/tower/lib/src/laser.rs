@@ -20,7 +20,7 @@ pub struct Laser {
 }
 
 impl GObj for Laser {
-    fn new(btype: u8, ps: &Vec<PointU16>) -> Laser {
+    fn new(btype: u8, ps: &Vec<u32>) -> Laser {
         let mut bt = Laser {
             ..Default::default()
         };
@@ -28,20 +28,20 @@ impl GObj for Laser {
         bt
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<PointU16>) {
+    fn reset(&mut self, btype: u8, ps: &Vec<u32>) {
         self.btype = btype;
         self.damage = 25;
 
         // cell size in pixel...
-        self.csize = ps[0];
+        self.csize = PointU16{x: ps[0] as u16, y: ps[1] as u16};
         // source pos (tower pos)...
-        self.src_pos = ps[1];
+        self.src_pos = PointU16{x: ps[2] as u16, y: ps[3] as u16};
         // dst pos ( monster pos )
         self.dst_pos = PointU16 {
-            x: ps[2].x / self.csize.x,
-            y: ps[2].y / self.csize.y,
+            x: ps[4] as u16 / self.csize.x,
+            y: ps[5] as u16 / self.csize.y,
         };
-        self.target_monster = ps[3].x as usize;
+        self.target_monster = ps[6] as usize;
         self.stage = 6;
     }
 }
@@ -69,12 +69,12 @@ impl Laser {
             return true;
         } else {
             m.obj.life -= self.damage;
-            let bpt = PointU16 {
-                x: m.obj.pixel_pos.x as u16,
-                y: m.obj.pixel_pos.y as u16,
-            };
+            let bpt = (
+                m.obj.pixel_pos.x as u32,
+                m.obj.pixel_pos.y as u32,
+            );
             if m.obj.life < 0 {
-                bs.create(0, &vec![bpt]);
+                bs.create(0, &vec![bpt.0, bpt.1]);
                 m.active = false;
             } else {
                 // let nbpt = PointU16 {

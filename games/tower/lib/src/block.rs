@@ -8,7 +8,7 @@ pub struct Block {
 }
 
 impl GObj for Block {
-    fn new(btype: u8, ps: &Vec<PointU16>) -> Block {
+    fn new(btype: u8, ps: &Vec<u32>) -> Block {
         let mut b = Block {
             ..Default::default()
         };
@@ -16,9 +16,12 @@ impl GObj for Block {
         b
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<PointU16>) {
+    fn reset(&mut self, btype: u8, ps: &Vec<u32>) {
         self.btype = btype;
-        self.pos = ps[0];
+        self.pos = PointU16 {
+            x: ps[0] as u16,
+            y: ps[1] as u16,
+        };
     }
 }
 

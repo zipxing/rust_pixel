@@ -7,14 +7,13 @@
 //! render::panel provides create_sprites, draw_objs methods to create
 //! render sprite and render objects and can be used jointly
 
-use crate::util::PointU16;
 use std::collections::HashMap;
 // use log::info;
 
 /// game object interface, requires to implement new and reset method
 pub trait GObj {
-    fn new(t: u8, ps: &Vec<PointU16>) -> Self;
-    fn reset(&mut self, t: u8, ps: &Vec<PointU16>);
+    fn new(t: u8, ps: &Vec<u32>) -> Self;
+    fn reset(&mut self, t: u8, ps: &Vec<u32>);
 }
 
 /// game object, id is the index offset in the objpool
@@ -57,7 +56,7 @@ where
         }
     }
 
-    pub fn create(&mut self, otype: u8, ps: &Vec<PointU16>) {
+    pub fn create(&mut self, otype: u8, ps: &Vec<u32>) {
         let mut find = false;
         // search for an available object
         for o in &mut self.pool {
