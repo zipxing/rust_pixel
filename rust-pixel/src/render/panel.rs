@@ -122,7 +122,7 @@ impl Panel {
 
     /// create a max number of sprites
     /// and calls f closure to init
-    pub fn create_sprites<T, F>(
+    pub fn bind_objs<T, F>(
         &mut self,
         pool: &GameObjPool<T>,
         size_x: u16,

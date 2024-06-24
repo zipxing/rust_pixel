@@ -44,24 +44,24 @@ impl TowerRender {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
         let w = BW as u16;
         let h = BH as u16;
-        self.panel.create_sprites(&d.blocks, w, h, |bl| {
+        self.panel.bind_objs(&d.blocks, w, h, |bl| {
             asset2sprite!(bl, ctx, "pix/block.pix");
         });
-        self.panel.create_sprites(&d.towers, w, h, |_bl| {});
-        self.panel.create_sprites(&d.monsters, 1, 2, |pl| {
+        self.panel.bind_objs(&d.towers, w, h, |_bl| {});
+        self.panel.bind_objs(&d.monsters, 1, 2, |pl| {
             pl.set_sdl_content(0, 0, 15, 15, 2);
             pl.set_sdl_content(0, 1, 7, 15, 2);
         });
-        self.panel.create_sprites(&d.bullets, 1, 1, |pl| {
+        self.panel.bind_objs(&d.bullets, 1, 1, |pl| {
             pl.set_sdl_content(0, 0, 29, 10, 2);
         });
-        self.panel.create_sprites(
+        self.panel.bind_objs(
             &d.lasers,
             TOWERW as u16,
             TOWERH as u16,
             |_pl| {},
         );
-        self.panel.create_sprites(&d.bombs, 1, 1, |_pl| {});
+        self.panel.bind_objs(&d.bombs, 1, 1, |_pl| {});
     }
 
     pub fn draw_movie<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
