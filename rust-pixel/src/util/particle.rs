@@ -292,7 +292,7 @@ impl ParticleSystem {
 
     pub fn stop(&mut self) {
         self.age = -2.0;
-        // self.particles.clear();
+        self.particles.pool.clear();
     }
 
     pub fn move_to(&mut self, x: f64, y: f64) {

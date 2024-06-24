@@ -80,6 +80,27 @@ impl SnakeRender {
         }
     }
 
+    pub fn create_sprites<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
+        self.panel.create_sprites(&d.pats.particles, 1, 1, |bl| {
+            bl.set_sdl_content(0, 0, 29, 10, 2);
+        });
+    }
+
+    pub fn draw_movie<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
+
+        self.panel.draw_objs(
+            &mut d.pats.particles,
+            |pl, m| {
+                pl.set_pos(
+                    m.obj.loc[0] as u16,
+                    m.obj.loc[1] as u16,
+                );
+            },
+        );
+    }
+
     pub fn draw_grid<G: Model>(&mut self, context: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_ref::<SnakeModel>().unwrap();
         let ml = self.main_scene.get_by_tag("SNAKE-MSG");
@@ -147,7 +168,7 @@ impl SnakeRender {
 }
 
 impl Render for SnakeRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+    fn init<G: Model>(&mut self, context: &mut Context, data: &mut G) {
         context.adapter.init(
             SNAKEW as u16 + 2,
             SNAKEH as u16 + 4,
@@ -155,6 +176,7 @@ impl Render for SnakeRender {
             1.0,
             "snake".to_string(),
         );
+        self.create_sprites(context, data);
         self.panel.init(context);
     }
 
@@ -178,7 +200,7 @@ impl Render for SnakeRender {
     }
 
     #[allow(unused_variables)]
-    fn draw<G: Model>(&mut self, context: &mut Context, _data: &mut G, _dt: f32) {
+    fn draw<G: Model>(&mut self, context: &mut Context, model: &mut G, _dt: f32) {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let ss = &mut self.main_scene.get_by_tag("SNAKE-BORDER");
@@ -196,6 +218,7 @@ impl Render for SnakeRender {
                 pl.content.area.y += 2;
             }
         }
+        self.draw_movie(context, model);
         self.panel
             .draw(context, |a, f| {
                 self.main_scene.render_all(a, f);
