@@ -7,7 +7,7 @@ use rust_pixel::{
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
     render::panel::Panel,
-    render::sprite::{Sprite, Sprites},
+    render::sprite::Sprite,
     render::style::{Color, Style},
 };
 
@@ -30,14 +30,14 @@ const COLORS: [Color; 14] = [
 
 pub struct SnakeRender {
     pub panel: Panel,
-    pub main_scene: Sprites,
+    // pub main_scene: Sprites,
 }
 
 impl SnakeRender {
     #[allow(unused_mut)]
     pub fn new() -> Self {
         let mut t = Panel::new();
-        let mut s = Sprites::new("main");
+        // let mut s = Sprites::new("main");
 
         // Test pixel sprite in graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -63,9 +63,9 @@ impl SnakeRender {
             "SNAKE [RustPixel]",
             Style::default().fg(Color::Indexed(222)),
         );
-        s.add_by_tag(l, "SNAKE-BORDER");
-        s.add_by_tag(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
-        s.add_by_tag(
+        t.add_sprite(l, "SNAKE-BORDER");
+        t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
+        t.add_sprite(
             Sprite::new(0, (SNAKEH + 3) as u16, SNAKEW as u16, 1u16),
             "SNAKE-MSG",
         );
@@ -76,7 +76,7 @@ impl SnakeRender {
 
         Self {
             panel: t,
-            main_scene: s,
+            //main_scene: s,
         }
     }
 
@@ -90,22 +90,16 @@ impl SnakeRender {
     pub fn draw_movie<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
 
-        self.panel.draw_objs(
-            &mut d.pats.particles,
-            |pl, m| {
-                pl.set_pos(
-                    m.obj.loc[0] as u16,
-                    m.obj.loc[1] as u16,
-                );
-            },
-        );
+        self.panel.draw_objs(&mut d.pats.particles, |pl, m| {
+            pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
+        });
     }
 
     pub fn draw_grid<G: Model>(&mut self, context: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_ref::<SnakeModel>().unwrap();
-        let ml = self.main_scene.get_by_tag("SNAKE-MSG");
+        let ml = self.panel.get_sprite("SNAKE-MSG");
         ml.content.set_str(0, 0, "snake", Style::default());
-        let l = self.main_scene.get_by_tag("SNAKE");
+        let l = self.panel.get_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {
             for j in 0..SNAKEW {
@@ -188,7 +182,7 @@ impl Render for SnakeRender {
 
     fn handle_timer<G: Model>(&mut self, context: &mut Context, _model: &mut G, _dt: f32) {
         if event_check("Snake.TestTimer", "test_timer") {
-            let ml = self.main_scene.get_by_tag("SNAKE-MSG");
+            let ml = self.panel.get_sprite("SNAKE-MSG");
             ml.content.set_str(
                 (context.stage / 6) as u16 % SNAKEW as u16,
                 0,
@@ -203,7 +197,7 @@ impl Render for SnakeRender {
     fn draw<G: Model>(&mut self, context: &mut Context, model: &mut G, _dt: f32) {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
-            let ss = &mut self.main_scene.get_by_tag("SNAKE-BORDER");
+            let ss = &mut self.panel.get_sprite("SNAKE-BORDER");
             asset2sprite!(
                 ss,
                 context,
@@ -220,9 +214,11 @@ impl Render for SnakeRender {
         }
         self.draw_movie(context, model);
         self.panel
-            .draw(context, |a, f| {
-                self.main_scene.render_all(a, f);
-            })
+            .draw(
+                context, // , |a, f| {
+                        // self.main_scene.render_all(a, f);
+                        //}
+            )
             .unwrap();
     }
 }

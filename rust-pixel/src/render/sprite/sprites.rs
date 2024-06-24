@@ -12,9 +12,10 @@
 use crate::{
     asset::AssetManager,
     render::sprite::Sprite,
-    render::panel::Frame,
+    render::buffer::Buffer,
     util::PointU16,
 };
+use crate::render::sprite::Widget;
 // use log::info;
 use std::{
     cmp::Reverse,
@@ -114,8 +115,6 @@ impl Sprites {
     }
 
     pub fn update_render_index(&mut self) {
-        // 按照render_weight进行排序
-        // render_weight越大的越后面渲染（上层)
         // renders in an order by render_weight
         // bigger render_weight is rendered later（upper level)
         if self.render_index.len() == 0 {
@@ -129,10 +128,11 @@ impl Sprites {
         }
     }
 
-    pub fn render_all(&mut self, am: &mut AssetManager, frame: &mut Frame) {
+    pub fn render_all(&mut self, am: &mut AssetManager, buffer: &mut Buffer) {
         self.update_render_index();
         for v in &self.render_index {
-            frame.render_widget(am, &mut self.sprites[v.0]);
+            self.sprites[v.0].render(am, buffer);
+            // frame.render_widget(am, &mut self.sprites[v.0]);
         }
     }
 }
