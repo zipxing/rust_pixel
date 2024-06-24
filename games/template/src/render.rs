@@ -77,7 +77,7 @@ impl Render for TemplateRender {
         // set a static back img for text mode...
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         {
-            let gb = self.sprites.get_by_tag("back");
+            let gb = self.panel.get_sprite("back");
             asset2sprite!(gb, context, "back.txt");
         }
     }
