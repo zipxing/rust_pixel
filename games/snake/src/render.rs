@@ -30,14 +30,12 @@ const COLORS: [Color; 14] = [
 
 pub struct SnakeRender {
     pub panel: Panel,
-    // pub main_scene: Sprites,
 }
 
 impl SnakeRender {
     #[allow(unused_mut)]
     pub fn new() -> Self {
         let mut t = Panel::new();
-        // let mut s = Sprites::new("main");
 
         // Test pixel sprite in graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -76,7 +74,6 @@ impl SnakeRender {
 
         Self {
             panel: t,
-            //main_scene: s,
         }
     }
 
@@ -213,12 +210,5 @@ impl Render for SnakeRender {
             }
         }
         self.draw_movie(context, model);
-        self.panel
-            .draw(
-                context, // , |a, f| {
-                        // self.main_scene.render_all(a, f);
-                        //}
-            )
-            .unwrap();
-    }
+        self.panel.draw(context).unwrap(); }
 }

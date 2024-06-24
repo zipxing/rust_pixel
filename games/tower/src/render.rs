@@ -9,7 +9,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    render::sprite::{Sprite, Sprites},
+    render::sprite::Sprite,
     render::style::{Color, Style},
     render::panel::Panel,
     util::shape::lightning,
@@ -20,16 +20,14 @@ use tower_lib::*;
 
 pub struct TowerRender {
     pub panel: Panel,
-    pub sprites: Sprites,
 }
 
 impl TowerRender {
     pub fn new() -> Self {
-        let t = Panel::new();
-        let mut s = Sprites::new("main");
+        let mut t = Panel::new();
 
-        s.add_by_tag(Sprite::new(1, 1, TOWERW as u16, TOWERH as u16), "TOWER");
-        s.add_by_tag(
+        t.add_sprite(Sprite::new(1, 1, TOWERW as u16, TOWERH as u16), "TOWER");
+        t.add_sprite(
             Sprite::new(0, (TOWERH + 3) as u16, TOWERW as u16, 1u16),
             "TOWER-MSG",
         );
@@ -39,7 +37,6 @@ impl TowerRender {
 
         Self {
             panel: t,
-            sprites: s,
         }
     }
 
@@ -159,7 +156,7 @@ impl TowerRender {
     pub fn draw_grid<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
 
-        let l = self.sprites.get_by_tag("TOWER");
+        let l = self.panel.get_sprite("TOWER");
         for i in 0..TOWERH {
             for j in 0..TOWERW {
                 if d.grid[i][j] == 0 {
@@ -212,7 +209,7 @@ impl Render for TowerRender {
 
     fn handle_timer<G: Model>(&mut self, ctx: &mut Context, _model: &mut G, _dt: f32) {
         if event_check("Tower.TestTimer", "test_timer") {
-            let ml = self.sprites.get_by_tag("TOWER-MSG");
+            let ml = self.panel.get_sprite("TOWER-MSG");
             ml.content.set_str(
                 (ctx.stage / 6) as u16 % TOWERW as u16,
                 0,
@@ -226,11 +223,6 @@ impl Render for TowerRender {
     fn draw<G: Model>(&mut self, ctx: &mut Context, model: &mut G, _dt: f32) {
         self.draw_tower(ctx, model);
         self.draw_movie(ctx, model);
-
-        self.panel
-            .draw(ctx, |a, f| {
-                self.sprites.render_all(a, f);
-            })
-            .unwrap();
+        self.panel.draw(ctx).unwrap();
     }
 }

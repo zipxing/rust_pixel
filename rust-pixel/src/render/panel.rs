@@ -23,15 +23,18 @@
 
 use crate::{
     context::Context,
-    LOGO_FRAME,
     render::{
         buffer::Buffer,
         sprite::{Sprite, Sprites},
     },
-    util::{Rect, objpool::{GObj, GameObjPool, GameObject}},
+    util::{
+        objpool::{GObj, GameObjPool, GameObject},
+        Rect,
+    },
+    LOGO_FRAME,
 };
-use std::io;
 use log::info;
+use std::io;
 
 pub struct Panel {
     pub buffers: [Buffer; 2],
@@ -39,22 +42,6 @@ pub struct Panel {
     pub pixel_sprites: Sprites,
     pub sprites: Sprites,
 }
-
-// /// Represents a consistent panel interface for rendering.
-// pub struct Frame<'a> {
-//     panel: &'a mut Panel,
-//     cursor_position: Option<(u16, u16)>,
-// }
-
-// impl<'a> Frame<'a> {
-//     pub fn render_widget<D: Widget>(&mut self, am: &mut AssetManager, w: &mut D) {
-//         w.render(am, self.panel.current_buffer_mut());
-//     }
-
-//     pub fn set_cursor(&mut self, x: u16, y: u16) {
-//         self.cursor_position = Some((x, y));
-//     }
-// }
 
 #[allow(unused)]
 impl Panel {
@@ -79,13 +66,6 @@ impl Panel {
         self.buffers[1].resize(size);
         info!("panel init size...{:?}", size);
     }
-
-    // pub fn get_frame(&mut self) -> Frame {
-    //     Frame {
-    //         panel: self,
-    //         cursor_position: None,
-    //     }
-    // }
 
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current]
@@ -112,9 +92,8 @@ impl Panel {
     }
 
     pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
-
-
-        self.sprites.render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+        self.sprites
+            .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
 
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];
@@ -176,7 +155,7 @@ impl Panel {
                         //info!("render set hidden true...");
                         self.get_pixel_sprite(&format!("{}{}", os.prefix, oid))
                             .set_hidden(true);
-                        }
+                    }
                     _ => {}
                 }
                 continue;

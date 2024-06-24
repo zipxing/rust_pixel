@@ -7,27 +7,25 @@ use rust_pixel::{
     event::{event_check, event_register},
     game::{Model, Render},
     render::panel::Panel,
-    render::sprite::{Sprite, Sprites},
+    render::sprite::Sprite,
 };
 
 pub struct TemplateRender {
     pub panel: Panel,
-    pub sprites: Sprites,
 }
 
 impl TemplateRender {
     pub fn new() -> Self {
-        let t = Panel::new();
-        let mut s = Sprites::new("main");
+        let mut t = Panel::new();
 
         // background...
         let mut gb = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
         // In text mode "alpha" does not affect
         gb.set_alpha(30);
-        s.add_by_tag(gb, "back");
+        t.add_sprite(gb, "back");
 
         for i in 0..1 {
-            s.add_by_tag(
+            t.add_sprite(
                 Sprite::new(0, 0, CARDW as u16, CARDH as u16),
                 &format!("t{}", i),
             );
@@ -36,23 +34,22 @@ impl TemplateRender {
         let adj = 2u16;
         let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
         msg1.content.dstr("press N for next card");
-        s.add_by_tag(msg1, "msg1");
+        t.add_sprite(msg1, "msg1");
         let mut msg2 = Sprite::new(40 + adj, 14, 40, 1);
         msg2.content.dstr("press S shuffle cards");
-        s.add_by_tag(msg2, "msg2");
+        t.add_sprite(msg2, "msg2");
 
         event_register("Template.RedrawTile", "draw_tile");
 
         Self {
             panel: t,
-            sprites: s,
         }
     }
 
     pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<TemplateModel>().unwrap();
         let bi = d.card;
-        let l = self.sprites.get_by_tag("t0");
+        let l = self.panel.get_sprite("t0");
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let ext = "pix";
@@ -97,7 +94,7 @@ impl Render for TemplateRender {
         // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
-            let ss = &mut self.sprites.get_by_tag("back");
+            let ss = &mut self.panel.get_sprite("back");
             asset2sprite!(
                 ss,
                 ctx,
@@ -108,10 +105,6 @@ impl Render for TemplateRender {
             );
         }
 
-        self.panel
-            .draw(ctx, |a, f| {
-                self.sprites.render_all(a, f);
-            })
-            .unwrap();
+        self.panel.draw(ctx).unwrap();
     }
 }

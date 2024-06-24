@@ -11,58 +11,53 @@ use rust_pixel::{
     event::{event_check, event_register, timer_exdata, timer_stage},
     game::{Model, Render},
     render::panel::Panel,
-    render::sprite::{Sprite, Sprites},
+    render::sprite::Sprite,
     render::style::{Color, Style},
 };
 
 pub struct TetrisRender {
     pub panel: Panel,
-    pub main_scene: Sprites,
 }
 
 impl TetrisRender {
     pub fn new() -> Self {
-        let t = Panel::new();
-        let mut s = Sprites::new("main");
+        let mut t = Panel::new();
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let tsback = Sprite::new(0, 0, 35, 24);
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let tsback = Sprite::new(0, 0, 80, 30);
-        s.add_by_tag(tsback, "back");
+        t.add_sprite(tsback, "back");
 
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let l0 = Sprite::new(2, 7, HENG * 2, ZONG);
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let l0 = Sprite::new(1, 2, HENG, ZONG);
-        s.add_by_tag(l0, "grid0");
+        t.add_sprite(l0, "grid0");
 
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let l1 = Sprite::new(55, 7, HENG * 2, ZONG);
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let l1 = Sprite::new(24, 2, HENG, ZONG);
-        s.add_by_tag(l1, "grid1");
+        t.add_sprite(l1, "grid1");
 
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let l2 = Sprite::new(27, 8, 8, 4);
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let l2 = Sprite::new(13, 8, 4, 4);
-        s.add_by_tag(l2, "next");
+        t.add_sprite(l2, "next");
 
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let l3 = Sprite::new(42, 8, 8, 4);
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let l3 = Sprite::new(17, 8, 4, 4);
-        s.add_by_tag(l3, "hold");
+        t.add_sprite(l3, "hold");
 
         event_register("Tetris.RedrawNext", "redraw_next");
         event_register("Tetris.RedrawHold", "redraw_hold");
         event_register("Tetris.RedrawMsg", "redraw_msg");
 
-        Self {
-            panel: t,
-            main_scene: s,
-        }
+        Self { panel: t }
     }
 
     fn set_block(&mut self, sname: &str, x: u16, y: u16, c: u8) {
@@ -81,7 +76,7 @@ impl TetrisRender {
         let c2: &str;
         let fg: Color;
         let bg: Color;
-        let l = self.main_scene.get_by_tag(sname);
+        let l = self.panel.get_sprite(sname);
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         match c {
@@ -278,7 +273,7 @@ impl Render for TetrisRender {
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         context.adapter.init(80, 30, 1.0, 1.0, "tetris".to_string());
         self.panel.init(context);
-        let l = self.main_scene.get_by_tag("back");
+        let l = self.panel.get_sprite("back");
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let bp = "back.pix";
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -288,14 +283,7 @@ impl Render for TetrisRender {
 
     fn draw<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
         self.draw_grid(context, data);
-        self.panel
-            .draw(context, |a, f| {
-                let sname = ["back", "grid0", "grid1", "next", "hold"];
-                for sn in &sname {
-                    f.render_widget(a, self.main_scene.get_by_tag(*sn));
-                }
-            })
-            .unwrap();
+        self.panel.draw(context).unwrap();
     }
 
     fn handle_event<G: Model>(&mut self, _context: &mut Context, data: &mut G, _dt: f32) {
