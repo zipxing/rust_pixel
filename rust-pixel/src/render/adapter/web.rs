@@ -51,7 +51,7 @@ impl WebAdapter {
     pub fn new(gn: &str) -> Self {
         Self {
             web_buf: vec![],
-            base: AdapterBase::new(gn),
+            base: AdapterBase::new(pre, gn),
             rd: Rand::new(),
         }
     }
