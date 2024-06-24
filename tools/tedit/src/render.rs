@@ -7,7 +7,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    render::sprite::{Sprites, BorderType, Borders, Sprite},
+    render::sprite::{BorderType, Borders, Sprite},
     render::style::{Color, Style},
     render::panel::Panel,
     // util::check_panel_size,
@@ -158,15 +158,12 @@ pub const MSG_COLOR: Color = Color::Indexed(251);
 
 pub struct TeditRender {
     pub panel: Panel,
-    //pub panelf: TermFile,
-    pub main_scene: Sprites,
     pub escfile: String,
 }
 
 impl TeditRender {
     pub fn new(fpath: &str) -> Self {
-        let t = Panel::new();
-        let mut s = Sprites::new("main");
+        let mut t = Panel::new();
 
         //Color box...
         let mut l = Sprite::new(0, SYMH + 2, (COLORW + 2) as u16, (COLORH + 2) as u16);
@@ -209,7 +206,7 @@ impl TeditRender {
             "FGBG>",
             Style::default().fg(Color::LightGreen).bg(Color::Indexed(0)),
         );
-        s.add_by_tag(l, "COLOR");
+        t.add_sprite(l, "COLOR");
 
         //Symbol box...
         let mut cl = Sprite::new(0, 0, (SYMW + 2) as u16, (SYMH + 2) as u16);
@@ -251,7 +248,7 @@ impl TeditRender {
             "NEXT>",
             Style::default().fg(Color::LightGreen).bg(Color::Indexed(0)),
         );
-        s.add_by_tag(cl, "SYMBOL");
+        t.add_sprite(cl, "SYMBOL");
 
         //Edit box...
         let mut elb = Sprite::new((SYMW + 2) as u16, 0, (EDITW + 2) as u16, (EDITH + 2) as u16);
@@ -266,10 +263,10 @@ impl TeditRender {
             "Editor",
             Style::default().fg(TITLE_COLOR).bg(Color::Indexed(0)),
         );
-        s.add_by_tag(elb, "EDIT-BORDER");
+        t.add_sprite(elb, "EDIT-BORDER");
 
         let el = Sprite::new((SYMW + 3) as u16, 1, EDITW as u16, EDITH as u16);
-        s.add_by_tag(el, "EDIT");
+        t.add_sprite(el, "EDIT");
 
         let mut msg1 = Sprite::new(0, (EDITH + 2) as u16, (SYMW + 2) as u16, 1u16);
         msg1.content.set_str(
@@ -284,7 +281,7 @@ impl TeditRender {
             "",
             Style::default().bg(Color::Indexed(0)).fg(MENUBG_COLOR),
         );
-        s.add_by_tag(msg1, "MSG1");
+        t.add_sprite(msg1, "MSG1");
 
         let mut msg3 = Sprite::new(
             (SYMW + 2) as u16,
@@ -312,7 +309,7 @@ impl TeditRender {
             "SAVE>",
             Style::default().fg(Color::LightGreen).bg(Color::Indexed(0)),
         );
-        s.add_by_tag(msg3, "MSG3");
+        t.add_sprite(msg3, "MSG3");
 
         event_register("Tedit.RedrawEdit", "draw_edit");
         event_register("Tedit.RedrawPen", "draw_pen");
@@ -328,13 +325,12 @@ impl TeditRender {
 
         Self {
             panel: t,
-            main_scene: s,
             escfile: String::from(fpath),
         }
     }
 
     pub fn save<G: Model>(&mut self, ctx: &mut Context,  _model: &mut G) {
-        let el: &mut Sprite = self.main_scene.get_by_tag("EDIT");
+        let el: &mut Sprite = self.panel.get_sprite("EDIT");
         if let Some(ast) = ctx.asset_manager.get(&self.escfile) {
             match ast.get_state() {
                 AssetState::Ready => {
@@ -349,7 +345,7 @@ impl TeditRender {
 
     pub fn draw_pen<G: Model>(&mut self, _context: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_ref::<TeditModel>().unwrap();
-        let cb = self.main_scene.get_by_tag("COLOR");
+        let cb = self.panel.get_sprite("COLOR");
 
         if d.color_tab_idx == 0 {
             cb.content.set_str(
@@ -367,7 +363,7 @@ impl TeditRender {
             );
         }
 
-        let sb = self.main_scene.get_by_tag("SYMBOL");
+        let sb = self.panel.get_sprite("SYMBOL");
         #[cfg(not(feature = "sdl"))]
         for i in 0..SYMH - 3 {
             sb.content.set_str(
@@ -408,7 +404,7 @@ impl TeditRender {
             Style::default().fg(Color::LightGreen).bg(Color::Indexed(0)),
         );
 
-        let m1: &mut Sprite = self.main_scene.get_by_tag("MSG1");
+        let m1: &mut Sprite = self.panel.get_sprite("MSG1");
         match d.curpen {
             TeditPen::SYMBOL(idx) => {
                 #[cfg(not(feature = "sdl"))]
@@ -468,7 +464,7 @@ impl TeditRender {
     pub fn draw_edit<G: Model>(&mut self, _context: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_ref::<TeditModel>().unwrap();
         let si = d.cury * EDITW + d.curx;
-        let elb: &mut Sprite = self.main_scene.get_by_tag("EDIT");
+        let elb: &mut Sprite = self.panel.get_sprite("EDIT");
         match d.curpen {
             TeditPen::SYMBOL(idx) => {
                 #[cfg(not(feature = "sdl"))]
@@ -512,7 +508,7 @@ impl Render for TeditRender {
         // context.adapter.set_path_prefix("tools".to_string());
         context.adapter.init(SYMW + 2 + EDITW + 2, EDITH + 3, 1.0, 1.0, "tedit".to_string());
         self.panel.init(context);
-        let l = self.main_scene.get_by_tag("EDIT");
+        let l = self.panel.get_sprite("EDIT");
         l.set_content_by_asset(
             &mut context.asset_manager,
             #[cfg(not(feature = "sdl"))]
@@ -546,11 +542,8 @@ impl Render for TeditRender {
         }
     }
 
-    fn draw<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {
-        //不实际关心返回值，可以用如下代码仅处理错误
-        if let Err(e) = self.panel.draw(_context, |a, f| {
-            self.main_scene.render_all(a, f);
-        }) {
+    fn draw<G: Model>(&mut self, context: &mut Context, _model: &mut G, _dt: f32) {
+        if let Err(e) = self.panel.draw(context) {
             info!("draw error:{}", e);
         }
 
