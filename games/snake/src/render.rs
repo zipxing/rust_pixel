@@ -79,7 +79,7 @@ impl SnakeRender {
 
     pub fn create_sprites<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
-        self.panel.bind_objs(&d.pats.particles, 1, 1, |bl| {
+        self.panel.bind_objpool(&d.pats.particles, 1, 1, |bl| {
             bl.set_sdl_content(0, 0, 25, 10, 2);
         });
     }
@@ -87,7 +87,7 @@ impl SnakeRender {
     pub fn draw_movie<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
 
-        self.panel.draw_objs(&mut d.pats.particles, |pl, m| {
+        self.panel.draw_objpool(&mut d.pats.particles, |pl, m| {
             pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
         });
     }

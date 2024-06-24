@@ -44,30 +44,30 @@ impl TowerRender {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
         let w = BW as u16;
         let h = BH as u16;
-        self.panel.bind_objs(&d.blocks, w, h, |bl| {
+        self.panel.bind_objpool(&d.blocks, w, h, |bl| {
             asset2sprite!(bl, ctx, "pix/block.pix");
         });
-        self.panel.bind_objs(&d.towers, w, h, |_bl| {});
-        self.panel.bind_objs(&d.monsters, 1, 2, |pl| {
+        self.panel.bind_objpool(&d.towers, w, h, |_bl| {});
+        self.panel.bind_objpool(&d.monsters, 1, 2, |pl| {
             pl.set_sdl_content(0, 0, 15, 15, 2);
             pl.set_sdl_content(0, 1, 7, 15, 2);
         });
-        self.panel.bind_objs(&d.bullets, 1, 1, |pl| {
+        self.panel.bind_objpool(&d.bullets, 1, 1, |pl| {
             pl.set_sdl_content(0, 0, 29, 10, 2);
         });
-        self.panel.bind_objs(
+        self.panel.bind_objpool(
             &d.lasers,
             TOWERW as u16,
             TOWERH as u16,
             |_pl| {},
         );
-        self.panel.bind_objs(&d.bombs, 1, 1, |_pl| {});
+        self.panel.bind_objpool(&d.bombs, 1, 1, |_pl| {});
     }
 
     pub fn draw_movie<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
 
-        self.panel.draw_objs(
+        self.panel.draw_objpool(
             &mut d.monsters,
             |pl, m| {
                 let li = [9u8, 10, 11, 12, 13, 14, 15, 22, 23];
@@ -85,7 +85,7 @@ impl TowerRender {
             },
         );
 
-        self.panel.draw_objs(
+        self.panel.draw_objpool(
             &mut d.bombs,
             |pl, b| {
                 let li = [27u8, 26, 25, 24];
@@ -105,7 +105,7 @@ impl TowerRender {
             },
         );
 
-        self.panel.draw_objs(
+        self.panel.draw_objpool(
             &mut d.lasers,
             |pl, l| {
                 pl.content.reset();
@@ -122,7 +122,7 @@ impl TowerRender {
             },
         );
 
-        self.panel.draw_objs(
+        self.panel.draw_objpool(
             &mut d.bullets,
             |pl, b| {
                 if b.obj.btype == 0 {
@@ -138,7 +138,7 @@ impl TowerRender {
 
     pub fn draw_tower<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
-        self.panel.draw_objs(
+        self.panel.draw_objpool(
             &mut d.towers,
             |pl, m| {
                 asset2sprite!(pl, ctx, &format!("pix/tower{}.pix", m.obj.ttype + 1));
@@ -176,7 +176,7 @@ impl TowerRender {
             }
         }
 
-        self.panel.draw_objs(
+        self.panel.draw_objpool(
             &mut d.blocks,
             |pl, m| {
                 pl.set_pos(

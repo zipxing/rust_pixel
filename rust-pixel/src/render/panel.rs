@@ -122,13 +122,8 @@ impl Panel {
 
     /// create a max number of sprites
     /// and calls f closure to init
-    pub fn bind_objs<T, F>(
-        &mut self,
-        pool: &GameObjPool<T>,
-        size_x: u16,
-        size_y: u16,
-        mut f: F,
-    ) where
+    pub fn bind_objpool<T, F>(&mut self, pool: &GameObjPool<T>, size_x: u16, size_y: u16, mut f: F)
+    where
         T: GObj,
         F: FnMut(&mut Sprite),
     {
@@ -142,7 +137,7 @@ impl Panel {
 
     /// drawing sprites
     /// and calls f closure to set content and pos
-    pub fn draw_objs<T, F>(&mut self, os: &mut GameObjPool<T>, mut f: F)
+    pub fn draw_objpool<T, F>(&mut self, os: &mut GameObjPool<T>, mut f: F)
     where
         T: GObj,
         F: FnMut(&mut Sprite, &GameObject<T>),
