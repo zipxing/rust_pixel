@@ -31,27 +31,6 @@ pub struct Particle {
     pub term_age: f64,
 }
 
-// impl Particle {
-//     pub fn new_d() -> Particle {
-//         Particle {
-//             ptype: 0,
-//             loc: [0.0, 0.0],
-//             v: [0.0, 0.0],
-//             g: 0.0,
-//             rad_a: 0.0,
-//             tan_a: 0.0,
-//             spin: 0.0,
-//             spin_dt: 0.0,
-//             size: 0.0,
-//             size_dt: 0.0,
-//             color: [1.0, 1.0, 1.0, 1.0],
-//             color_dt: [0.1, 0.05, 0.03, 0.2],
-//             age: 0.0,
-//             term_age: 0.0,
-//         }
-//     }
-// }
-
 impl GObj for Particle {
     fn new() -> Self {
         Default::default()
@@ -202,10 +181,6 @@ impl ParticleSystem {
             self.emission_residue = particles_needed - particles_to_create as f64;
 
             for _ in 0..particles_to_create {
-                // if self.particles.len() >= MAX_PARTICLES {
-                //     break;
-                // }
-
                 let mut pv: Vec<u32> = vec![];
                 let age = 0.0;
                 pv.push((age * 1000.0) as u32);
@@ -301,69 +276,3 @@ impl ParticleSystem {
     }
 }
 
-// fn main() {
-//     let particle_system_info = ParticleSystemInfo {
-//         emission_rate: 100.0,
-//         lifetime: -1.0,
-//         particle_life_min: 1.0,
-//         particle_life_max: 2.0,
-//         direction: PI / 2.0,
-//         spread: PI / 4.0,
-//         relative: false,
-//         speed_min: 50.0,
-//         speed_max: 100.0,
-//         g_min: 9.0,
-//         g_max: 10.0,
-//         rad_a_min: 3.0,
-//         rad_a_max: 5.0,
-//         tan_a_min: 1.0,
-//         tan_a_max: 5.0,
-//         size_start: 1.0,
-//         size_end: 5.0,
-//         size_var: 1.0,
-//         spin_start: 1.0,
-//         spin_end: 5.0,
-//         spin_var: 1.0,
-//         color_start: [0.0, 0.0, 0.0, 0.0],
-//         color_end: [1.0, 1.0, 1.0, 1.0],
-//         color_var: 0.1,
-//         alpha_var: 1.0,
-//     };
-
-//     let mut particle_system = ParticleSystem::new(particle_system_info);
-
-//     let mut window: PistonWindow = WindowSettings::new("Particle System", [WIDTH, HEIGHT])
-//         .exit_on_esc(true)
-//         .build()
-//         .unwrap();
-
-//     let mut mx: f64 = 0.0;
-//     let mut my: f64 = 0.0;
-
-//     while let Some(event) = window.next() {
-//         match event {
-//             Event::Input(Input::Move(Motion::MouseCursor(mousepos_args)), _timestamp_not_used) =>
-//             {
-//                 mx = mousepos_args[0];
-//                 my = mousepos_args[1];
-//             }
-//             _ => {
-
-//             }
-//         }
-//         if let Some(Button::Mouse(MouseButton::Left)) = event.press_args() {
-//             println!("22222PPP, .{:?}", event);
-//             println!("1111111111111111PPP");
-//             particle_system.fire_at(mx, my);
-//         }
-
-//         if let Some(UpdateArgs { dt }) = event.update_args() {
-//             particle_system.update(dt);
-//         }
-
-//         window.draw_2d(&event, |c, g, _| {
-//             clear([0.0, 0.0, 0.0, 1.0], g);
-//             particle_system.render(c, g);
-//         });
-//     }
-// }

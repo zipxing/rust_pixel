@@ -83,7 +83,7 @@ impl SnakeRender {
     pub fn create_sprites<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
         self.panel.create_sprites(&d.pats.particles, 1, 1, |bl| {
-            bl.set_sdl_content(0, 0, 6, 10, 2);
+            bl.set_sdl_content(0, 0, 25, 10, 2);
         });
     }
 
