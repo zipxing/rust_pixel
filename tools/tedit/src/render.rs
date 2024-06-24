@@ -509,6 +509,7 @@ impl TeditRender {
 
 impl Render for TeditRender {
     fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+        // context.adapter.set_path_prefix("tools".to_string());
         context.adapter.init(SYMW + 2 + EDITW + 2, EDITH + 3, 1.0, 1.0, "tedit".to_string());
         self.panel.init(context);
         let l = self.main_scene.get_by_tag("EDIT");

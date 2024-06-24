@@ -2,8 +2,8 @@ use crate::{check_passable, TOWERH, TOWERW};
 // use log::info;
 use std::collections::{HashMap, HashSet};
 use rust_pixel::{
-    algorithm::astar::{a_star, APoint},
-    util::{objpool::GObj, FPoint, Point, Rand},
+    algorithm::astar::{a_star, PointUsize},
+    util::{objpool::GObj, PointF32, PointU16, Rand},
 };
 
 #[derive(Default)]
@@ -12,25 +12,21 @@ pub struct Monster {
     pub life: i32,
     pub max_life: i32,
     pub speed: i16,
-    pub fspeed: FPoint,
-    pub pos: Point,
-    pub next_pos: Point,
-    pub pixel_pos: FPoint,
+    pub fspeed: PointF32,
+    pub pos: PointU16,
+    pub next_pos: PointU16,
+    pub pixel_pos: PointF32,
     pub interval: i16,
     pub cd: i16,
-    pub path: Vec<APoint>,
+    pub path: Vec<PointUsize>,
 }
 
 impl GObj for Monster {
-    fn new(mtype: u8, ps: &Vec<Point>) -> Monster {
-        let mut m = Monster {
-            ..Default::default()
-        };
-        m.reset(mtype, ps);
-        m
+    fn new() -> Monster {
+        Default::default()
     }
 
-    fn reset(&mut self, mtype: u8, ps: &Vec<Point>) {
+    fn reset(&mut self, mtype: u8, ps: &Vec<u32>) {
         self.mtype = mtype;
         if mtype == 1 {
             self.life = 5800;
@@ -40,12 +36,12 @@ impl GObj for Monster {
             self.speed = 3;
         }
         self.max_life = self.life;
-        self.fspeed = FPoint { x: 0.0, y: 0.0 };
-        self.pos = Point { x: 0, y: 0 };
-        self.next_pos = Point { x: 0, y: 0 };
-        self.pixel_pos = FPoint {
-            x: ps[0].x as f32,
-            y: ps[0].y as f32,
+        self.fspeed = PointF32 { x: 0.0, y: 0.0 };
+        self.pos = PointU16 { x: 0, y: 0 };
+        self.next_pos = PointU16 { x: 0, y: 0 };
+        self.pixel_pos = PointF32 {
+            x: ps[0] as f32,
+            y: ps[1] as f32,
         };
         self.interval = 1;
         self.cd = 0;
@@ -56,7 +52,7 @@ impl GObj for Monster {
 impl Monster {
     pub fn find_path<P>(&mut self, grids: &mut Vec<Vec<u8>>, start_p: P)
     where
-        P: Into<APoint>,
+        P: Into<PointUsize>,
     {
         self.path = a_star(grids, start_p.into(), (TOWERH - 1, TOWERW - 1), |v| {
             check_passable(v)
@@ -70,7 +66,7 @@ impl Monster {
         }
         let mut ng = self.path.remove(1);
         if check_passable(grids[ng.0][ng.1]) {
-            self.next_pos = Point {
+            self.next_pos = PointU16 {
                 x: ng.1 as u16,
                 y: ng.0 as u16,
             };
@@ -78,7 +74,7 @@ impl Monster {
             // 如果不通，重新寻找path
             self.find_path(grids, self.pos);
             ng = self.path.remove(1);
-            self.next_pos = Point {
+            self.next_pos = PointU16 {
                 x: ng.1 as u16,
                 y: ng.0 as u16,
             };
@@ -86,7 +82,7 @@ impl Monster {
         let dy = self.next_pos.y as f32 - self.pos.y as f32;
         let dx = self.next_pos.x as f32 - self.pos.x as f32;
         let angle = dy.atan2(dx);
-        self.fspeed = FPoint {
+        self.fspeed = PointF32 {
             x: self.speed as f32 * angle.cos(),
             y: self.speed as f32 * angle.sin(),
         };

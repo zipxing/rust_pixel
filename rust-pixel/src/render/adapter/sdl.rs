@@ -67,11 +67,11 @@ pub enum SdlBorderArea {
 }
 
 impl SdlAdapter {
-    pub fn new(gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str) -> Self {
         Self {
             context: sdl2::init().unwrap(),
             event_pump: None,
-            base: AdapterBase::new(gn),
+            base: AdapterBase::new(pre, gn),
             cursor: None,
             canvas: None,
             asset_textures: None,
@@ -218,7 +218,8 @@ impl Adapter for SdlAdapter {
             vt.push(
                 texture_creator
                     .load_texture(format!(
-                        "games{}{}{}{}",
+                        "{}{}{}{}{}",
+                        self.base.path_prefix,
                         std::path::MAIN_SEPARATOR,
                         self.base.game_name,
                         std::path::MAIN_SEPARATOR,
@@ -236,7 +237,8 @@ impl Adapter for SdlAdapter {
             .unwrap();
 
         let surface = Surface::from_file(format!(
-                        "games{}{}{}{}",
+                        "{}{}{}{}{}",
+                        self.base.path_prefix,
                         std::path::MAIN_SEPARATOR,
                         self.base.game_name,
                         std::path::MAIN_SEPARATOR,

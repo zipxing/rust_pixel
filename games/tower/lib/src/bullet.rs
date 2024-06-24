@@ -2,35 +2,31 @@ use crate::bomb::Bomb;
 use crate::monster::Monster;
 use crate::{BH, BW, TOWERH, TOWERW};
 // use log::info;
-use std::collections::{HashMap, HashSet};
 use rust_pixel::util::{
     objpool::{GObj, GameObjPool},
-    FPoint, Point,
+    PointF32, PointU16,
 };
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 pub struct Bullet {
     pub btype: u8,
     pub speed: i16,
     pub damage: i32,
-    pub src_pos: Point,
-    pub dst_pos: Point,
-    pub fspeed: FPoint,
-    pub pixel_pos: FPoint,
-    pub csize: Point,
+    pub src_pos: PointU16,
+    pub dst_pos: PointU16,
+    pub fspeed: PointF32,
+    pub pixel_pos: PointF32,
+    pub csize: PointU16,
     pub angle: f32,
 }
 
 impl GObj for Bullet {
-    fn new(btype: u8, ps: &Vec<Point>) -> Bullet {
-        let mut bt = Bullet {
-            ..Default::default()
-        };
-        bt.reset(btype, ps);
-        bt
+    fn new() -> Bullet {
+        Default::default()
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<Point>) {
+    fn reset(&mut self, btype: u8, ps: &Vec<u32>) {
         self.btype = btype;
         if btype == 0 {
             self.speed = 45;
@@ -41,18 +37,27 @@ impl GObj for Bullet {
         }
 
         // cell size in pixel...
-        self.csize = ps[0];
+        self.csize = PointU16 {
+            x: ps[0] as u16,
+            y: ps[1] as u16,
+        };
         // source pos (tower pos)...
-        self.src_pos = ps[1];
+        self.src_pos = PointU16 {
+            x: ps[2] as u16,
+            y: ps[3] as u16,
+        };
         // dst pos ( monster pos )
-        self.dst_pos = ps[2];
+        self.dst_pos = PointU16 {
+            x: ps[4] as u16,
+            y: ps[5] as u16,
+        };
 
         // tower size...
-        let w = ps[0].x as f32 * BW as f32;
-        let h = ps[0].y as f32 * BH as f32;
+        let w = ps[0] as f32 * BW as f32;
+        let h = ps[1] as f32 * BH as f32;
 
         // tower center...
-        self.pixel_pos = FPoint {
+        self.pixel_pos = PointF32 {
             x: (self.src_pos.x as f32 + 0.66) * w,
             y: (self.src_pos.y as f32 + 0.66) * h,
         };
@@ -65,7 +70,7 @@ impl GObj for Bullet {
         let angle = dy.atan2(dx);
         // info!("bullet reset...src{:?}..dst{:?}..angle{:?}", self.pixel_pos, self.dst_pos, angle);
         self.angle = angle;
-        self.fspeed = FPoint {
+        self.fspeed = PointF32 {
             x: self.speed as f32 * angle.cos(),
             y: self.speed as f32 * angle.sin(),
         };
@@ -114,20 +119,20 @@ impl Bullet {
                     let dy = m.obj.pixel_pos.y - y;
                     let distance = (dx * dx + dy * dy).sqrt();
                     if distance < self.csize.x as f32 * 1.2 {
-                        let bpt = Point {
-                            x: m.obj.pixel_pos.x as u16,
-                            y: m.obj.pixel_pos.y as u16,
-                        };
+                        let bpt = (
+                            m.obj.pixel_pos.x as u32,
+                            m.obj.pixel_pos.y as u32,
+                        );
                         m.obj.life -= self.damage;
                         if m.obj.life < 0 {
-                            bs.create(0, &vec![bpt]);
+                            bs.create(0, &vec![bpt.0, bpt.1]);
                             m.active = false;
                         } else {
-                            let nbpt = Point {
-                                x: ((bpt.x as f32 + x) / 2.0) as u16,
-                                y: ((bpt.y as f32 + y) / 2.0) as u16,
-                            };
-                            bs.create(1, &vec![nbpt]);
+                            let nbpt = (
+                                ((bpt.0 as f32 + x) / 2.0) as u32,
+                                ((bpt.1 as f32 + y) / 2.0) as u32,
+                            );
+                            bs.create(1, &vec![nbpt.0, nbpt.1]);
                         }
                         return false;
                     }

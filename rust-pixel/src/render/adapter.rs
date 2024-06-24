@@ -5,7 +5,7 @@
 use crate::render::style::Color;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::util::{
-    Rand, {APoint, ARect},
+    Rand, {PointI32, ARect},
 };
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::LOGO_FRAME;
@@ -79,6 +79,7 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 
 pub struct AdapterBase {
     pub game_name: String,
+    pub path_prefix: String,
     pub title: String,
     pub cell_w: u16,
     pub cell_h: u16,
@@ -89,9 +90,10 @@ pub struct AdapterBase {
 }
 
 impl AdapterBase {
-    pub fn new(gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str) -> Self {
         Self {
             game_name: gn.to_string(),
+            path_prefix: pre.to_string(),
             title: "".to_string(),
             cell_w: 0,
             cell_h: 0,
@@ -168,6 +170,11 @@ pub trait Adapter {
         self
     }
 
+    fn set_path_prefix(&mut self, s: String) {
+        let bs = self.get_base();
+        bs.path_prefix = s;
+    }
+
     fn cell_width(&self) -> f32;
     fn cell_height(&self) -> f32;
     fn hide_cursor(&mut self) -> Result<(), String>;
@@ -218,7 +225,7 @@ fn render_helper(
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize, f64, APoint),
+    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize, f64, PointI32),
 {
     // sort by render_weight...
     pixel_spt.update_render_index();
@@ -238,7 +245,7 @@ where
             let x = i % pw as usize;
             let y = i / pw as usize;
             // center point ...
-            let ccp = APoint {
+            let ccp = PointI32 {
                 x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH as f32 / rx) as i32,
                 y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT as f32 / ry) as i32,
             };

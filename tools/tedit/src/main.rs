@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let m = TeditModel::new();
     let r = TeditRender::new(escfile);
-    let mut g = Game::new(m, r, "tedit");
+    let mut g = Game::new(m, r, "tools/tedit");
     info!("Tedit(pixel.rs) start...{:?}", args);
 
     g.init();

@@ -86,10 +86,20 @@ where
     R: Render,
 {
     pub fn new(m: M, r: R, name: &str) -> Self {
-        init_log(log::LevelFilter::Info, &format!("log/{}.log", name));
-        info!("{}(rust_pixel) start...", name);
+        let res: Vec<String> = name.to_string().split("/").map(|s| s.to_string()).collect();
+        init_log(
+            log::LevelFilter::Info,
+            &format!("log{}{}.log", std::path::MAIN_SEPARATOR, name),
+        );
+        info!("{}(rust_pixel) start...{:?}", name, res);
+        let ctx = match res.len() {
+            1 => { Context::new("games", name) },
+            2 => { Context::new(&res[0], &res[1]) },
+            _ => { Context::new("games", name) },
+        };
         Self {
-            context: Context::new(name),
+
+            context: ctx,
             model: m,
             render: r,
         }

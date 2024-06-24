@@ -2,7 +2,7 @@
 //use log::debug;
 //use rand::prelude::*;
 use crate::{
-    cell::{Move, MoveRet, TetrisCell, TetrisCore},
+    side::{Move, MoveRet, TetrisCell, TetrisCore},
     constant::*,
 };
 //use std::any::Any;
@@ -111,7 +111,7 @@ impl TetrisAi {
         }
     }
 
-    pub fn get_cell_score(
+    pub fn get_side_score(
         &self,
         core: &TetrisCore,
         cx: i8,
@@ -321,7 +321,7 @@ impl TetrisAi {
         tg.next_block(blocks, true, false);
         self.tact_queue.push('N');
 
-        let s = self.get_cell_score(&tg.core, cx, cy, cf, 0, combo);
+        let s = self.get_side_score(&tg.core, cx, cy, cf, 0, combo);
         if scan {
             self.ms_scan.push(AiDat {
                 score: s,
@@ -373,7 +373,7 @@ impl TetrisAi {
         self.tact_queue.push('W');
         let nf = tg.core.full_row_count;
         tg.clear_row(true);
-        let s = self.get_cell_score(&tg.core, cx, cy, cf, nf, combo);
+        let s = self.get_side_score(&tg.core, cx, cy, cf, nf, combo);
         if s > self.max_score {
             self.mact_queue = self.tact_queue.clone();
             self.mact_queue.push('N');
