@@ -143,7 +143,7 @@ impl Sprite {
     }
 
     /// set string content at (x,y) with fg/bg color... 
-    pub fn sstr<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
+    pub fn set_color_str<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
     where
         S: AsRef<str>,
     {
@@ -152,7 +152,7 @@ impl Sprite {
     }
 
     /// set string content at (0,0) with default style... 
-    pub fn dstr<S>(&mut self, string: S)
+    pub fn set_default_str<S>(&mut self, string: S)
     where
         S: AsRef<str>,
     {
@@ -160,7 +160,7 @@ impl Sprite {
     }
 
     /// set graphic model symbol(texture:texture_id, index:sym) at (x,y) with fgcolor... 
-    pub fn ssym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
+    pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
         self.content.set_str(
             x,
             y,

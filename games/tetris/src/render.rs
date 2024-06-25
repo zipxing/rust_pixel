@@ -147,11 +147,11 @@ impl TetrisRender {
         }
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         if x < HENG * 2 && y < ZONG {
-            l.sstr(x, y, c1, fg, bg);
+            l.set_color_str(x, y, c1, fg, bg);
         }
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         if x + 1 < HENG * 2 && y < ZONG {
-            l.sstr(x + 1, y, c2, fg, bg);
+            l.set_color_str(x + 1, y, c2, fg, bg);
         }
     }
 

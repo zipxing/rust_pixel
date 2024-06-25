@@ -70,7 +70,7 @@ impl GinRummyRender {
             }
 
             let m = self.panel.get_sprite(msg[n]);
-            m.sstr(
+            m.set_color_str(
                 0,
                 0,
                 format!(

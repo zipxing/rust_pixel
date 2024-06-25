@@ -49,11 +49,11 @@ impl TowerRender {
         });
         self.panel.bind_objpool(&d.towers, w, h, |_bl| {});
         self.panel.bind_objpool(&d.monsters, 1, 2, |pl| {
-            pl.ssym(0, 0, 2, 15, Color::Indexed(15));
-            pl.ssym(0, 1, 2, 7, Color::Indexed(15));
+            pl.set_graph_sym(0, 0, 2, 15, Color::Indexed(15));
+            pl.set_graph_sym(0, 1, 2, 7, Color::Indexed(15));
         });
         self.panel.bind_objpool(&d.bullets, 1, 1, |pl| {
-            pl.ssym(0, 0, 2, 29, Color::Indexed(10));
+            pl.set_graph_sym(0, 0, 2, 29, Color::Indexed(10));
         });
         self.panel.bind_objpool(
             &d.lasers,
@@ -76,11 +76,11 @@ impl TowerRender {
                     m.obj.pixel_pos.y as u16 - ctx.adapter.cell_height() as u16,
                 );
                 let step = m.obj.max_life as usize / 8 + 1;
-                pl.ssym(0, 0, 2, li[8 - m.obj.life as usize / step], Color::Indexed(15));
+                pl.set_graph_sym(0, 0, 2, li[8 - m.obj.life as usize / step], Color::Indexed(15));
                 if m.obj.mtype == 0 {
-                    pl.ssym(0, 1, 2, 6, Color::Indexed(15));
+                    pl.set_graph_sym(0, 1, 2, 6, Color::Indexed(15));
                 } else {
-                    pl.ssym(0, 1, 2, 7, Color::Indexed(15));
+                    pl.set_graph_sym(0, 1, 2, 7, Color::Indexed(15));
                 }
             },
         );
@@ -93,14 +93,14 @@ impl TowerRender {
                     // 怪物死掉后的炸弹波纹...
                     let sym = li[b.obj.stage as usize / 4];
                     pl.set_pos(b.obj.pixel_pos.x as u16, b.obj.pixel_pos.y as u16);
-                    pl.ssym(0, 0, 2, sym, Color::Indexed(15));
+                    pl.set_graph_sym(0, 0, 2, sym, Color::Indexed(15));
                 } else {
                     // 怪物中弹的炸弹波纹...
                     pl.set_pos(
                         b.obj.pixel_pos.x as u16 + ctx.adapter.cell_width() as u16 / 4,
                         b.obj.pixel_pos.y as u16 + ctx.adapter.cell_height() as u16 / 4,
                     );
-                    pl.ssym(0, 0, 2, 25, Color::Indexed(8));
+                    pl.set_graph_sym(0, 0, 2, 25, Color::Indexed(8));
                 }
             },
         );
@@ -125,9 +125,9 @@ impl TowerRender {
             &mut d.bullets,
             |pl, b| {
                 if b.obj.btype == 0 {
-                    pl.ssym(0, 0, 2, 8, Color::Indexed(15));
+                    pl.set_graph_sym(0, 0, 2, 8, Color::Indexed(15));
                 } else {
-                    pl.ssym(0, 0, 2, 29, Color::Indexed(10));
+                    pl.set_graph_sym(0, 0, 2, 29, Color::Indexed(10));
                 }
                 pl.set_pos(b.obj.pixel_pos.x as u16, b.obj.pixel_pos.y as u16);
                 pl.set_angle(b.obj.angle as f64 / 3.1415926 * 180.0 + 90.0);
@@ -163,7 +163,7 @@ impl TowerRender {
                     if i % 3 == 0 && j % 3 == 0 {
                         sym = 102u8;
                     }
-                    l.sstr(
+                    l.set_color_str(
                         j as u16,
                         i as u16,
                         cellsym(sym),
@@ -208,7 +208,7 @@ impl Render for TowerRender {
     fn handle_timer<G: Model>(&mut self, ctx: &mut Context, _model: &mut G, _dt: f32) {
         if event_check("Tower.TestTimer", "test_timer") {
             let ml = self.panel.get_sprite("TOWER-MSG");
-            ml.sstr(
+            ml.set_color_str(
                 (ctx.stage / 6) as u16 % TOWERW as u16,
                 0,
                 "tower",

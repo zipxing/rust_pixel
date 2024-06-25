@@ -27,10 +27,10 @@ impl TemplateRender {
         // msg...
         let adj = 2u16;
         let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
-        msg1.dstr("press N for next card");
+        msg1.set_default_str("press N for next card");
         panel.add_sprite(msg1, "msg1");
         let mut msg2 = Sprite::new(40 + adj, 14, 40, 1);
-        msg2.dstr("press S shuffle cards");
+        msg2.set_default_str("press S shuffle cards");
         panel.add_sprite(msg2, "msg2");
 
         event_register("Template.RedrawTile", "draw_tile");
