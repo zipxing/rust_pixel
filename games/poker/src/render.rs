@@ -8,7 +8,7 @@ use rust_pixel::{
     game::{Model, Render},
     render::panel::Panel,
     render::sprite::Sprite,
-    render::style::{Color, Style},
+    render::style::Color,
 };
 
 pub struct PokerRender {
@@ -64,11 +64,12 @@ impl PokerRender {
                 l.set_pos(x, 7);
             }
             let m = self.panel.get_sprite(msg[n]);
-            m.content.set_str(
+            m.sstr(
                 0,
                 0,
                 format!("{:?}", ts[n].texas),
-                Style::default().fg(Color::Indexed(222)),
+                Color::Indexed(222),
+                Color::Reset,
             );
         }
     }
@@ -78,7 +79,7 @@ impl Render for PokerRender {
     fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
         context
             .adapter
-            .init(82, 20, 1.2, 1.2, "redblack".to_string());
+            .init(82, 20, 1.0, 1.0, "redblack".to_string());
         self.panel.init(context);
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         {

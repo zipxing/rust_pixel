@@ -7,7 +7,7 @@ use rust_pixel::{
     event::{event_check, event_register},
     game::{Model, Render},
     render::sprite::Sprite,
-    render::style::{Color, Style},
+    render::style::Color,
     render::panel::Panel,
 };
 
@@ -70,7 +70,7 @@ impl GinRummyRender {
             }
 
             let m = self.panel.get_sprite(msg[n]);
-            m.content.set_str(
+            m.sstr(
                 0,
                 0,
                 format!(
@@ -78,7 +78,8 @@ impl GinRummyRender {
                     if n == 0 { "" } else { "(freeze)" },
                     ts[n].best
                 ),
-                Style::default().fg(Color::Indexed(222)),
+                Color::Indexed(222),
+                Color::Reset,
             );
         }
         for p in pv {

@@ -133,16 +133,16 @@ impl CityRender {
             Style::default().fg(COLORS[border_color as usize % COLORS.len()]).bg(Color::Indexed(1)),
         );
         //设置内容
-        l.content.set_str(
+        l.sstr(
             3,
             2,
             msg,
-            Style::default().fg(COLORS[msg_color as usize % COLORS.len()]),
+            COLORS[msg_color as usize % COLORS.len()],
+            Color::Reset,
         );
         //绘制是否删除标记
         if is_del {
-            l.content
-                .set_str(3, 0, "DEL?", Style::default().fg(COLORS[7]));
+            l.sstr(3, 0, "DEL?", COLORS[7], Color::Reset);
         }
     }
 
