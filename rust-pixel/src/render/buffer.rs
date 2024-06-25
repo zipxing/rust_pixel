@@ -7,8 +7,11 @@
 //!
 //! Almost all Unicode chars can be drawn in text mode, depending on the terminal apps
 //! (use of iterm2 in macOS is recommended). For example:
+//! ```
 //! my_buffer.set_str(0, 0, "Hello world 😃.",
 //!     Style::default().fg(Color::Red).bg(Color::Reset))
+//! ```
+//!
 //! Beware of the display width and height of unicode chars
 //! Display width is a bit tricky, very much relying on the terminal apps(currently the development
 //! work uses iterm2 in macOS). Moreover, bold and italics fonts are also supported in text mode.
@@ -25,37 +28,34 @@
 //! 2: assets/c64e1.png custom extension 1
 //! 3: assets/c64e2.png custom extension 2
 //! each texture is an image of 16 row * 16 row = 256 chars
-//!
 //! # Example
 //! ```
-//! // my_buffer.set_str(0, 0, sdlsym(0),
-//! //     Style::default().fg(Color::Red).bg(Color::Indexed(1)))
+//! my_buffer.set_str(0, 0, sdlsym(0),
+//!     Style::default().fg(Color::Red).bg(Color::Indexed(1)))
 //! ```
-//!
 //! sets pos(0,0) in the buffer to the 1st char of texture1(assets/c64u.png)
+//!
 //! For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64l.png
 //! instead of using unicode chars
 //! Some common chars a-Z and tabs are preset in SDL_SYM_MAP,
 //! for easier set of latin letters using set_str in SDL mode
-//!
 //! # Example
 //! ```
-//! // my_buffer.set_str(0, 0, "Hello world.",
-//! //     Style::default().fg(Color::Red).bg(Color::Indexed(0)))
+//! my_buffer.set_str(0, 0, "Hello world.",
+//!     Style::default().fg(Color::Red).bg(Color::Indexed(0)))
 //! ```
-//!
 //! Warning！bg here must be set to Color::Indexed(0)，because the offset in SDL_SYM_MAP is preset based on
 //! texture0(assets/c64l.png). May have display issues if set to another texture.
 //!
-//! To support opacity in SDL mode, a draw_history attribute is appended to each cell
+//! To support opacity in Graphics mode, a draw_history attribute is appended to each cell
 //! to store the symbol and color list.
 //! Symbol and color are pushed to draw_history,
 //! everytime when a sprite is merged to the main buffer.
-//! During rendering, cell is rendered by its opacity order first to render_texture, and later
-//! render_text displays on the canvas
-//! Please refer to the merge and built method of push_draw_history
-//! Please refer to the flush method of SDL mode in sdl.rs
-//!
+//! During rendering, cell is rendered by its order first to render_texture, and later
+//! displays render_texture on the canvas
+//! Please refer to the copy_cell method of push_history
+//! Please refer to the render_buffer method of SDL mode in sdl.rs
+//! Please refer to the render_buffer method of WASM mode in web.rs
 use crate::{render::cell::Cell, render::style::{Style, Color}, util::Rect};
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -257,12 +257,10 @@ impl Buffer {
         other_part: Rect,
         alpha: u8,
     ) -> Result<(u16, u16), String> {
-        //确保dstx和dsty正确
         //make sure dstx and dsty are correct
         if dstx >= self.area.width || dsty >= self.area.height {
             return Err(String::from("buffer blit:dstx, dsty too large"));
         }
-        //确保other_part正确
         //make sure other_part is correct
         let oa = Rect::new(0, 0, other.area.width, other.area.height);
         if !other_part.intersects(oa) {
@@ -312,7 +310,7 @@ impl Buffer {
         for i in 0..size {
             let (x, y) = other.pos_of(i);
             let k = ((y - area.y) * area.width + x - area.x) as usize;
-            // 增加透明支持
+            // add transparent support...
             if !other.content[i].is_blank() {
                 self.copy_cell(k, other, alpha, i);
             }
