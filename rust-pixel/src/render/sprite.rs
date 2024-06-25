@@ -142,14 +142,29 @@ impl Sprite {
         self.alpha = a;
     }
 
-    pub fn set_sdl_content(&mut self, x: u16, y: u16, sym: u8, fg: u8, bg: u8) {
+    pub fn sstr<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
+    where
+        S: AsRef<str>,
+    {
+        self.content
+            .set_str(x, y, string, Style::default().fg(f).bg(b));
+    }
+
+    pub fn dstr<S>(&mut self, string: S)
+    where
+        S: AsRef<str>,
+    {
+        self.content.set_str(0, 0, string, Style::default());
+    }
+
+    pub fn ssym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
         self.content.set_str(
             x,
             y,
             cellsym(sym),
             Style::default()
-                .fg(Color::Indexed(fg))
-                .bg(Color::Indexed(bg)),
+                .fg(f)
+                .bg(Color::Indexed(texture_id)),
         );
     }
 

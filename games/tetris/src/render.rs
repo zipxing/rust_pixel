@@ -12,7 +12,7 @@ use rust_pixel::{
     game::{Model, Render},
     render::panel::Panel,
     render::sprite::Sprite,
-    render::style::{Color, Style},
+    render::style::Color,
 };
 
 pub struct TetrisRender {
@@ -143,17 +143,15 @@ impl TetrisRender {
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         if x < HENG && y < ZONG {
-            l.content.set_str(x, y, c1, Style::default().fg(fg).bg(bg));
+            l.sstr(x, y, c1, fg, bg);
         }
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         if x < HENG * 2 && y < ZONG {
-            l.content.set_str(x, y, c1, Style::default().fg(fg).bg(bg));
+            l.sstr(x, y, c1, fg, bg);
         }
-
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         if x + 1 < HENG * 2 && y < ZONG {
-            l.content
-                .set_str(x + 1, y, c2, Style::default().fg(fg).bg(bg));
+            l.sstr(x + 1, y, c2, fg, bg);
         }
     }
 
