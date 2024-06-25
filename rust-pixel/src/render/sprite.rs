@@ -82,7 +82,8 @@ macro_rules! asset2sprite {
             _ => {},
         }
         #[cfg(not(target_arch = "wasm32"))]
-        let nl = &format!("games{}{}{}assets{}{}",
+        let nl = &format!("{}{}{}{}assets{}{}",
+            $ctx.prefix_path,
             std::path::MAIN_SEPARATOR,
             $ctx.game_name,
             std::path::MAIN_SEPARATOR,
@@ -141,14 +142,32 @@ impl Sprite {
         self.alpha = a;
     }
 
-    pub fn set_sdl_content(&mut self, x: u16, y: u16, sym: u8, fg: u8, bg: u8) {
+    /// set string content at (x,y) with fg/bg color... 
+    pub fn set_color_str<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
+    where
+        S: AsRef<str>,
+    {
+        self.content
+            .set_str(x, y, string, Style::default().fg(f).bg(b));
+    }
+
+    /// set string content at (0,0) with default style... 
+    pub fn set_default_str<S>(&mut self, string: S)
+    where
+        S: AsRef<str>,
+    {
+        self.content.set_str(0, 0, string, Style::default());
+    }
+
+    /// set graphic model symbol(texture:texture_id, index:sym) at (x,y) with fgcolor... 
+    pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
         self.content.set_str(
             x,
             y,
             cellsym(sym),
             Style::default()
-                .fg(Color::Indexed(fg))
-                .bg(Color::Indexed(bg)),
+                .fg(f)
+                .bg(Color::Indexed(texture_id)),
         );
     }
 

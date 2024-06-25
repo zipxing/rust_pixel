@@ -22,38 +22,25 @@
 //! Refer to the implementation in pixel.js
 
 use crate::{
-    asset::AssetManager,
     context::Context,
-    LOGO_FRAME,
     render::{
         buffer::Buffer,
-        sprite::{Sprite, Sprites, Widget},
+        sprite::{Sprite, Sprites},
     },
-    util::{Rect, objpool::{GObj, GameObjPool, GameObject}},
+    util::{
+        objpool::{GObj, GameObjPool, GameObject},
+        Rect,
+    },
+    LOGO_FRAME,
 };
-use std::io;
 use log::info;
+use std::io;
 
 pub struct Panel {
     pub buffers: [Buffer; 2],
     pub current: usize,
     pub pixel_sprites: Sprites,
-}
-
-/// Represents a consistent panel interface for rendering.
-pub struct Frame<'a> {
-    panel: &'a mut Panel,
-    cursor_position: Option<(u16, u16)>,
-}
-
-impl<'a> Frame<'a> {
-    pub fn render_widget<D: Widget>(&mut self, am: &mut AssetManager, w: &mut D) {
-        w.render(am, self.panel.current_buffer_mut());
-    }
-
-    pub fn set_cursor(&mut self, x: u16, y: u16) {
-        self.cursor_position = Some((x, y));
-    }
+    pub sprites: Sprites,
 }
 
 #[allow(unused)]
@@ -64,10 +51,12 @@ impl Panel {
 
         let size = Rect::new(0, 0, width, height);
         let sc = Sprites::new("pixel");
+        let nsc = Sprites::new("main");
         Panel {
             buffers: [Buffer::empty(size), Buffer::empty(size)],
             current: 0,
             pixel_sprites: sc,
+            sprites: nsc,
         }
     }
 
@@ -78,15 +67,16 @@ impl Panel {
         info!("panel init size...{:?}", size);
     }
 
-    pub fn get_frame(&mut self) -> Frame {
-        Frame {
-            panel: self,
-            cursor_position: None,
-        }
-    }
-
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current]
+    }
+
+    pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
+        self.sprites.add_by_tag(sp, tag);
+    }
+
+    pub fn get_sprite(&mut self, tag: &str) -> &mut Sprite {
+        self.sprites.get_by_tag(tag)
     }
 
     pub fn add_pixel_sprite(&mut self, sp: Sprite, tag: &str) {
@@ -101,12 +91,9 @@ impl Panel {
         ctx.adapter.reset();
     }
 
-    pub fn draw<F>(&mut self, ctx: &mut Context, f: F) -> io::Result<()>
-    where
-        F: FnOnce(&mut AssetManager, &mut Frame),
-    {
-        let mut frame = self.get_frame();
-        f(&mut ctx.asset_manager, &mut frame);
+    pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
+        self.sprites
+            .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
 
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];
@@ -135,13 +122,8 @@ impl Panel {
 
     /// create a max number of sprites
     /// and calls f closure to init
-    pub fn create_sprites<T, F>(
-        &mut self,
-        pool: &GameObjPool<T>,
-        size_x: u16,
-        size_y: u16,
-        mut f: F,
-    ) where
+    pub fn creat_objpool_sprites<T, F>(&mut self, pool: &GameObjPool<T>, size_x: u16, size_y: u16, mut f: F)
+    where
         T: GObj,
         F: FnMut(&mut Sprite),
     {
@@ -155,7 +137,7 @@ impl Panel {
 
     /// drawing sprites
     /// and calls f closure to set content and pos
-    pub fn draw_objs<T, F>(&mut self, os: &mut GameObjPool<T>, mut f: F)
+    pub fn draw_objpool<T, F>(&mut self, os: &mut GameObjPool<T>, mut f: F)
     where
         T: GObj,
         F: FnMut(&mut Sprite, &GameObject<T>),
@@ -168,7 +150,7 @@ impl Panel {
                         //info!("render set hidden true...");
                         self.get_pixel_sprite(&format!("{}{}", os.prefix, oid))
                             .set_hidden(true);
-                        }
+                    }
                     _ => {}
                 }
                 continue;

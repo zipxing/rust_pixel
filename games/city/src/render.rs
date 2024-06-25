@@ -7,7 +7,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_percent, timer_rstage},
     game::{Model, Render},
-    render::sprite::{Sprites, Sprite},
+    render::sprite::Sprite,
     render::style::{Color, Style},
     render::panel::Panel,
     util::Rect,
@@ -46,31 +46,27 @@ pub fn level_info(l: i16) -> String {
 
 pub struct CityRender {
     pub panel: Panel,
-    pub main_scene: Sprites,
-    //存储17种不同边框的方块，用于绘制
-    // pub boxes: Sprites,
 }
 
 impl CityRender {
     pub fn new() -> Self {
         info!("create city render...");
-        let t = Panel::new();
+        let mut t = Panel::new();
 
         //背景
-        let mut s = Sprites::new("main");
         let tsback = Sprite::new(0, 0, 70, 40);
-        s.add_by_tag(tsback, "back");
+        t.add_sprite(tsback, "back");
 
         //25个单元块
         for i in 0..NCOL * NROW {
-            s.add_by_tag(
+            t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
                 &format!("cc{}", i),
             );
         }
 
         //msg块
-        s.add_by_tag(
+        t.add_sprite(
             Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16),
             "msg",
         );
@@ -80,8 +76,6 @@ impl CityRender {
 
         Self {
             panel: t,
-            main_scene: s,
-            // boxes: bs,
         }
     }
 
@@ -120,7 +114,7 @@ impl CityRender {
         msg_color: i8,
         is_del: bool,
     ) {
-        let l = self.main_scene.get_by_tag(&format!("cc{}", id));
+        let l = self.panel.get_sprite(&format!("cc{}", id));
         let area = Rect::new(0, 0, 10, 5);
         l.content.resize(area);
         l.content.reset();
@@ -139,16 +133,16 @@ impl CityRender {
             Style::default().fg(COLORS[border_color as usize % COLORS.len()]).bg(Color::Indexed(1)),
         );
         //设置内容
-        l.content.set_str(
+        l.set_color_str(
             3,
             2,
             msg,
-            Style::default().fg(COLORS[msg_color as usize % COLORS.len()]),
+            COLORS[msg_color as usize % COLORS.len()],
+            Color::Reset,
         );
         //绘制是否删除标记
         if is_del {
-            l.content
-                .set_str(3, 0, "DEL?", Style::default().fg(COLORS[7]));
+            l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
         }
     }
 
@@ -262,7 +256,7 @@ impl Render for CityRender {
     fn init<G: Model>(&mut self, ctx: &mut Context, _data: &mut G) {
         ctx.adapter.init(70, 40, 2.0, 1.0, "city".to_string());
         self.panel.init(ctx);
-        let l = self.main_scene.get_by_tag("back");
+        let l = self.panel.get_sprite("back");
         asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
@@ -276,10 +270,6 @@ impl Render for CityRender {
 
     fn draw<G: Model>(&mut self, ctx: &mut Context, data: &mut G, _dt: f32) {
         self.draw_movie(ctx, data);
-        self.panel
-            .draw(ctx, |a, f| {
-                self.main_scene.render_all(a, f);
-            })
-            .unwrap();
+        self.panel.draw(ctx).unwrap();
     }
 }

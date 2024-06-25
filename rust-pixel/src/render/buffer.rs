@@ -353,11 +353,11 @@ impl Buffer {
 mod tests {
     use super::*;
 
-    fn cell(s: &str) -> Cell {
-        let mut cell = Cell::default();
-        cell.set_symbol(s);
-        cell
-    }
+    // fn cell(s: &str) -> Cell {
+    //     let mut cell = Cell::default();
+    //     cell.set_symbol(s);
+    //     cell
+    // }
 
     #[test]
     fn it_translates_to_and_from_coordinates() {

@@ -6,27 +6,25 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register},
     game::{Model, Render},
-    render::sprite::{Sprite, Sprites},
-    render::style::{Color, Style},
+    render::sprite::Sprite,
+    render::style::Color,
     render::panel::Panel,
 };
 
 pub struct GinRummyRender {
     pub panel: Panel,
-    pub sprites: Sprites,
 }
 
 impl GinRummyRender {
     pub fn new() -> Self {
-        let t = Panel::new();
-        let mut s = Sprites::new("main");
+        let mut t = Panel::new();
 
         let gb = Sprite::new(0, 0, 50, 35);
-        s.add_by_tag(gb, "back");
+        t.add_sprite(gb, "back");
 
         //red 10张牌, black 10张牌
         for i in 0..20 {
-            s.add_by_tag(
+            t.add_sprite(
                 Sprite::new(0, 0, CARDW as u16, CARDH as u16),
                 &format!("t{}", i),
             );
@@ -34,15 +32,14 @@ impl GinRummyRender {
 
         let adj = 2u16;
         let msgred = Sprite::new(0 + adj, 2, 40, 1);
-        s.add_by_tag(msgred, "msgred");
+        t.add_sprite(msgred, "msgred");
         let msgblack = Sprite::new(0 + adj, 6 + CARDH as u16, 40, 1);
-        s.add_by_tag(msgblack, "msgblack");
+        t.add_sprite(msgblack, "msgblack");
 
         event_register("GinRummy.RedrawTile", "draw_tile");
 
         Self {
             panel: t,
-            sprites: s,
         }
     }
 
@@ -72,8 +69,8 @@ impl GinRummyRender {
                 i += 1;
             }
 
-            let m = self.sprites.get_by_tag(msg[n]);
-            m.content.set_str(
+            let m = self.panel.get_sprite(msg[n]);
+            m.set_color_str(
                 0,
                 0,
                 format!(
@@ -81,12 +78,13 @@ impl GinRummyRender {
                     if n == 0 { "" } else { "(freeze)" },
                     ts[n].best
                 ),
-                Style::default().fg(Color::Indexed(222)),
+                Color::Indexed(222),
+                Color::Reset,
             );
         }
         for p in pv {
             let (i, bi, n, xadj) = p;
-            let l = self.sprites.get_by_tag(&format!("t{}", i));
+            let l = self.panel.get_sprite(&format!("t{}", i));
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             let ext = "pix";
             #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -120,10 +118,6 @@ impl Render for GinRummyRender {
     fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
 
     fn draw<G: Model>(&mut self, ctx: &mut Context, _data: &mut G, _dt: f32) {
-        self.panel
-            .draw(ctx, |a, f| {
-                self.sprites.render_all(a, f);
-            })
-            .unwrap();
+        self.panel.draw(ctx).unwrap();
     }
 }
