@@ -1,14 +1,14 @@
 use crate::model::{SnakeModel, SNAKEH, SNAKEW};
 use log::info;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-use rust_pixel::{asset::AssetType, asset2sprite, render::cell::cellsym};
+use rust_pixel::{asset::AssetType, asset2sprite};
 use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
     render::panel::Panel,
     render::sprite::Sprite,
-    render::style::{Color, Style},
+    render::style::Color,
 };
 
 const COLORS: [Color; 14] = [
@@ -41,25 +41,19 @@ impl SnakeRender {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let mut pl = Sprite::new(4, 6, 1, 1);
-            pl.content.set_str(
-                0,
-                0,
-                cellsym(20),
-                Style::default()
-                    .fg(Color::Indexed(222))
-                    .bg(Color::Indexed(1)),
-            );
+            pl.set_graph_sym(0, 0, 1, 20, Color::Indexed(222));
             t.add_pixel_sprite(pl, "PL1");
         }
 
         // Main screen sprite...
         let mut l = Sprite::new(0, 0, (SNAKEW + 2) as u16, (SNAKEH + 2) as u16);
         l.set_alpha(160);
-        l.content.set_str(
+        l.set_color_str(
             20,
             0,
             "SNAKE [RustPixel]",
-            Style::default().fg(Color::Indexed(222)),
+            Color::Indexed(222),
+            Color::Reset,
         );
         t.add_sprite(l, "SNAKE-BORDER");
         t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
@@ -72,9 +66,7 @@ impl SnakeRender {
         timer_register("Snake.TestTimer", 0.1, "test_timer");
         timer_fire("Snake.TestTimer", 8u8);
 
-        Self {
-            panel: t,
-        }
+        Self { panel: t }
     }
 
     pub fn create_sprites<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
@@ -95,7 +87,7 @@ impl SnakeRender {
     pub fn draw_grid<G: Model>(&mut self, context: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_ref::<SnakeModel>().unwrap();
         let ml = self.panel.get_sprite("SNAKE-MSG");
-        ml.content.set_str(0, 0, "snake", Style::default());
+        ml.set_default_str("snake");
         let l = self.panel.get_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {
@@ -103,54 +95,27 @@ impl SnakeRender {
                 let gv = d.grid[i][j];
                 match gv {
                     0 => {
-                        l.content.set_str(
-                            j as u16,
-                            i as u16,
-                            " ",
-                            Style::default().fg(Color::Reset).bg(Color::Reset),
-                        );
+                        l.set_color_str(j as u16, i as u16, " ", Color::Reset, Color::Reset);
                     }
                     1 => {
                         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-                        l.content.set_str(
-                            j as u16,
-                            i as u16,
-                            "▇",
-                            Style::default().fg(Color::LightGreen),
-                        );
+                        l.set_color_str(j as u16, i as u16, "▇", Color::LightGreen, Color::Reset);
                         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-                        l.content.set_str(
-                            j as u16,
-                            i as u16,
-                            cellsym(0),
-                            Style::default().fg(Color::LightGreen).bg(Color::Red),
-                        );
+                        l.set_graph_sym(j as u16, i as u16, 1, 0, Color::LightGreen);
                     }
                     10000 => {
                         let c = COLORS[(context.stage / 5) as usize % COLORS.len()];
                         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-                        l.content
-                            .set_str(j as u16, i as u16, "∙", Style::default().fg(c));
+                        l.set_color_str(j as u16, i as u16, "∙", c, Color::Reset);
                         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-                        l.content.set_str(
-                            j as u16,
-                            i as u16,
-                            cellsym(83),
-                            Style::default().fg(c).bg(Color::Red),
-                        );
+                        l.set_graph_sym(j as u16, i as u16, 1, 83, c);
                     }
                     _ => {
                         let c = COLORS[gv as usize % COLORS.len()];
                         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-                        l.content
-                            .set_str(j as u16, i as u16, "▒", Style::default().fg(c));
+                        l.set_color_str(j as u16, i as u16, "▒", c, Color::Reset);
                         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-                        l.content.set_str(
-                            j as u16,
-                            i as u16,
-                            cellsym(102),
-                            Style::default().fg(c).bg(Color::Red),
-                        );
+                        l.set_graph_sym(j as u16, i as u16, 1, 102, c);
                     }
                 }
             }
@@ -180,11 +145,12 @@ impl Render for SnakeRender {
     fn handle_timer<G: Model>(&mut self, context: &mut Context, _model: &mut G, _dt: f32) {
         if event_check("Snake.TestTimer", "test_timer") {
             let ml = self.panel.get_sprite("SNAKE-MSG");
-            ml.content.set_str(
+            ml.set_color_str(
                 (context.stage / 6) as u16 % SNAKEW as u16,
                 0,
                 "snake",
-                Style::default().fg(Color::Yellow),
+                Color::Yellow,
+                Color::Reset,
             );
             timer_fire("Snake.TestTimer", 8u8);
         }
@@ -210,5 +176,6 @@ impl Render for SnakeRender {
             }
         }
         self.draw_movie(context, model);
-        self.panel.draw(context).unwrap(); }
+        self.panel.draw(context).unwrap();
+    }
 }
