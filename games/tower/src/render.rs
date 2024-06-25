@@ -44,24 +44,24 @@ impl TowerRender {
         let d = model.as_any().downcast_mut::<TowerModel>().unwrap();
         let w = BW as u16;
         let h = BH as u16;
-        self.panel.bind_objpool(&d.blocks, w, h, |bl| {
+        self.panel.creat_objpool_sprites(&d.blocks, w, h, |bl| {
             asset2sprite!(bl, ctx, "pix/block.pix");
         });
-        self.panel.bind_objpool(&d.towers, w, h, |_bl| {});
-        self.panel.bind_objpool(&d.monsters, 1, 2, |pl| {
+        self.panel.creat_objpool_sprites(&d.towers, w, h, |_bl| {});
+        self.panel.creat_objpool_sprites(&d.monsters, 1, 2, |pl| {
             pl.set_graph_sym(0, 0, 2, 15, Color::Indexed(15));
             pl.set_graph_sym(0, 1, 2, 7, Color::Indexed(15));
         });
-        self.panel.bind_objpool(&d.bullets, 1, 1, |pl| {
+        self.panel.creat_objpool_sprites(&d.bullets, 1, 1, |pl| {
             pl.set_graph_sym(0, 0, 2, 29, Color::Indexed(10));
         });
-        self.panel.bind_objpool(
+        self.panel.creat_objpool_sprites(
             &d.lasers,
             TOWERW as u16,
             TOWERH as u16,
             |_pl| {},
         );
-        self.panel.bind_objpool(&d.bombs, 1, 1, |_pl| {});
+        self.panel.creat_objpool_sprites(&d.bombs, 1, 1, |_pl| {});
     }
 
     pub fn draw_movie<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {

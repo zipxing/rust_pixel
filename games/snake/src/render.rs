@@ -71,7 +71,7 @@ impl SnakeRender {
 
     pub fn create_sprites<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
-        self.panel.bind_objpool(&d.pats.particles, 1, 1, |bl| {
+        self.panel.creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
             bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
         });
     }
