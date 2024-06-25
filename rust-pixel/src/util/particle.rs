@@ -253,7 +253,7 @@ impl ParticleSystem {
 
     pub fn fire_at(&mut self, x: f64, y: f64) {
         self.stop();
-        self.move_to(x, y);
+        self.move_to(x, y, false);
         self.fire();
     }
 
@@ -270,8 +270,28 @@ impl ParticleSystem {
         self.particles.pool.clear();
     }
 
-    pub fn move_to(&mut self, x: f64, y: f64) {
-        self.prev_loc = if self.age == -2.0 { [x, y] } else { self.loc };
+    pub fn move_to(&mut self, x: f64, y: f64, b_move_particles: bool) {
+        if b_move_particles {
+            let dx = x - self.loc[0];
+            let dy = y - self.loc[1];
+
+            for p in &mut self.particles.pool {
+                if p.active {
+                    p.obj.loc[0] += dx;
+                    p.obj.loc[1] += dy;
+                }
+            }
+
+            self.prev_loc[0] += dx;
+            self.prev_loc[1] += dy;
+        } else {
+            if self.age == -2.0 {
+                self.prev_loc = [x, y];
+            } else {
+                self.prev_loc = self.loc;
+            }
+        }
+
         self.loc = [x, y];
     }
 }
