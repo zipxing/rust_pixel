@@ -25,6 +25,7 @@ pub struct SnakeModel {
     pub seed: PointU16,
     pub body: Vec<PointU16>,
     pub dir: Dir,
+    pub count: f64,
     pub timeout_auto: f32,
 }
 
@@ -64,6 +65,7 @@ impl SnakeModel {
             seed: PointU16 { x: 0, y: 0 },
             body: vec![],
             dir: Dir::Down,
+            count: 0.0,
             timeout_auto: 0.0,
         }
     }
@@ -207,14 +209,13 @@ impl Model for SnakeModel {
 
     fn handle_auto(&mut self, context: &mut Context, dt: f32) {
         self.pats.update(dt as f64);
-        let mut count = 0.0f64;
+        self.count += 1.0;
+        if self.count > 200.0 {
+            self.count = 0.0f64;
+        }
+        self.pats.move_to(10.0 + 1.0 * self.count, 10.0 + 1.0 * self.count, true);
         if self.timeout_auto > 0.4 {
             self.timeout_auto = 0.0;
-            count += 1.0;
-            if count > 300.0 {
-                count = 0.0f64;
-            }
-            self.pats.move_to(10.0 + 0.1 * count, 10.0 + 0.1 * count, true);
             self.act(self.dir, context);
         } else {
             self.timeout_auto += dt;
