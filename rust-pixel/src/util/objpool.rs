@@ -56,6 +56,8 @@ where
         }
     }
 
+    /// search available object or creat new object...
+    /// then call a custom closure init this obj
     pub fn create_with_func<F>(&mut self, otype: u8, mut f: F)
     where
         F: FnMut(u8, &mut GameObject<T>),
@@ -84,13 +86,14 @@ where
         }
     }
 
+    /// create obj by vector...
     pub fn create(&mut self, otype: u8, ps: &Vec<u32>) {
         self.create_with_func(otype, |t, po| {
             po.obj.reset(t, ps);
         });
     }
 
-    // processing active object by calling custom closure
+    /// processing active object by calling custom closure
     pub fn update_active<F>(&mut self, mut f: F)
     where
         F: FnMut(&mut GameObject<T>),
