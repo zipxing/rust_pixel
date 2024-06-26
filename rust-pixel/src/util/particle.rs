@@ -3,6 +3,7 @@ use crate::util::{
     Rand,
 };
 use std::f64::consts::PI;
+// use log::info;
 
 // const WIDTH: u32 = 800;
 // const HEIGHT: u32 = 600;
@@ -36,42 +37,7 @@ impl GObj for Particle {
         Default::default()
     }
 
-    fn reset(&mut self, ptype: u8, pv: &Vec<u32>) {
-        self.ptype = ptype;
-        let mut idx = 0usize;
-        self.age = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.term_age = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.loc[0] = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.loc[1] = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.v[0] = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.v[1] = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.g = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.rad_a = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.tan_a = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.size = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.size_dt = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.spin = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        self.spin_dt = pv[idx] as f64 / 1000.0;
-        idx += 1;
-        for i in 0..4 {
-            self.color[i] = pv[idx] as f64 / 1000.0;
-            idx += 1;
-            self.color_dt[i] = pv[idx] as f64 / 1000.0;
-            idx += 1;
-        }
-    }
+    fn reset(&mut self, _ptype: u8, _pv: &Vec<u32>) {}
 }
 
 #[derive(Debug, Clone)]
@@ -181,70 +147,58 @@ impl ParticleSystem {
             self.emission_residue = particles_needed - particles_to_create as f64;
 
             for _ in 0..particles_to_create {
-                let mut pv: Vec<u32> = vec![];
-                let age = 0.0;
-                pv.push((age * 1000.0) as u32);
-                let term_age = self
-                    .rnd
-                    .gen_range(self.info.particle_life_min, self.info.particle_life_max);
-                pv.push((term_age * 1000.0) as u32);
+                self.particles.create_with_func(0, |ot, po| {
+                    let p = &mut po.obj;
+                    p.ptype = ot;
+                    p.age = 0.0;
+                    p.term_age = self
+                        .rnd
+                        .gen_range(self.info.particle_life_min, self.info.particle_life_max);
+                    p.loc[0] = self.prev_loc[0]
+                        + (self.loc[0] - self.prev_loc[0]) * self.rnd.gen_range(0.0, 1.0);
+                    p.loc[1] = self.prev_loc[1]
+                        + (self.loc[1] - self.prev_loc[1]) * self.rnd.gen_range(0.0, 1.0);
 
-                let loc0 = self.prev_loc[0]
-                    + (self.loc[0] - self.prev_loc[0]) * self.rnd.gen_range(0.0, 1.0);
-                pv.push((loc0 * 1000.0) as u32);
-                let loc1 = self.prev_loc[1]
-                    + (self.loc[1] - self.prev_loc[1]) * self.rnd.gen_range(0.0, 1.0);
-                pv.push((loc1 * 1000.0) as u32);
+                    let angle = self.info.direction - PI / 2.0
+                        + self.rnd.gen_range(0.0, self.info.spread)
+                        - self.info.spread / 2.0;
+                    let speed = self.rnd.gen_range(self.info.speed_min, self.info.speed_max);
 
-                let angle = self.info.direction - PI / 2.0
-                    + self.rnd.gen_range(0.0, self.info.spread)
-                    - self.info.spread / 2.0;
-                let speed = self.rnd.gen_range(self.info.speed_min, self.info.speed_max);
+                    let v0 = angle.cos() * speed;
+                    let v1 = angle.sin() * speed;
+                    p.v[0] = v0;
+                    p.v[1] = v1;
+                    p.g = self.rnd.gen_range(self.info.g_min, self.info.g_max);
+                    p.rad_a = self.rnd.gen_range(self.info.rad_a_min, self.info.rad_a_max);
+                    p.tan_a = self.rnd.gen_range(self.info.tan_a_min, self.info.tan_a_max);
 
-                let v0 = angle.cos() * speed;
-                pv.push((v0 * 1000.0) as u32);
-                let v1 = angle.sin() * speed;
-                pv.push((v1 * 1000.0) as u32);
-                let g = self.rnd.gen_range(self.info.g_min, self.info.g_max);
-                pv.push((g * 1000.0) as u32);
-                let rad_a = self.rnd.gen_range(self.info.rad_a_min, self.info.rad_a_max);
-                pv.push((rad_a * 1000.0) as u32);
-                let tan_a = self.rnd.gen_range(self.info.tan_a_min, self.info.tan_a_max);
-                pv.push((tan_a * 1000.0) as u32);
-
-                // size...
-                let size = self.rnd.gen_range(
-                    self.info.size_start,
-                    self.info.size_start
+                    // size...
+                    p.size = self.rnd.gen_range(
+                        self.info.size_start,
+                        self.info.size_start
                         + (self.info.size_end - self.info.size_start) * self.info.size_var,
-                );
-                pv.push((size * 1000.0) as u32);
-                // size_dt...
-                let size_dt = (self.info.size_end - size) / term_age;
-                pv.push((size_dt * 1000.0) as u32);
-
-                let spin = self.rnd.gen_range(
-                    self.info.spin_start,
-                    self.info.spin_start
-                        + (self.info.spin_end - self.info.spin_start) * self.info.spin_var,
-                );
-                pv.push((spin * 1000.0) as u32);
-                let spin_dt = (self.info.spin_end - spin) / term_age;
-                pv.push((spin_dt * 1000.0) as u32);
-
-                for i in 0..4 {
-                    let color = self.rnd.gen_range(
-                        self.info.color_start[i],
-                        self.info.color_start[i]
-                            + (self.info.color_end[i] - self.info.color_start[i])
-                                * self.info.color_var,
                     );
-                    pv.push((color * 1000.0) as u32);
-                    let color_dt = (self.info.color_end[i] - color) / term_age;
-                    pv.push((color_dt * 1000.0) as u32);
-                }
+                    // size_dt...
+                    p.size_dt = (self.info.size_end - p.size) / p.term_age;
 
-                self.particles.create(0, &pv);
+                    p.spin = self.rnd.gen_range(
+                        self.info.spin_start,
+                        self.info.spin_start
+                        + (self.info.spin_end - self.info.spin_start) * self.info.spin_var,
+                    );
+                    p.spin_dt = (self.info.spin_end - p.spin) / p.term_age;
+
+                    for i in 0..4 {
+                        p.color[i] = self.rnd.gen_range(
+                            self.info.color_start[i],
+                            self.info.color_start[i]
+                            + (self.info.color_end[i] - self.info.color_start[i])
+                            * self.info.color_var,
+                        );
+                        p.color_dt[i] = (self.info.color_end[i] - p.color[i]) / p.term_age;
+                    }
+                    po.active = true;
+                });
             }
         }
 

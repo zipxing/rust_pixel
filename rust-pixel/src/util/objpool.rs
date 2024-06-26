@@ -56,12 +56,15 @@ where
         }
     }
 
-    pub fn create(&mut self, otype: u8, ps: &Vec<u32>) {
+    pub fn create_with_func<F>(&mut self, otype: u8, mut f: F)
+    where
+        F: FnMut(u8, &mut GameObject<T>),
+    {
         let mut find = false;
         // search for an available object
         for o in &mut self.pool {
             if !o.active {
-                o.obj.reset(otype, ps);
+                f(otype, o);
                 o.active = true;
                 find = true;
                 break;
@@ -70,18 +73,25 @@ where
         // if not found, create a new one and add to the pool
         if !find {
             let l = self.pool.len();
-            let mut bo: T = T::new();
-            bo.reset(otype, ps);
-            self.pool.push(GameObject {
+            let bo: T = T::new();
+            let mut o = GameObject {
                 id: l,
                 obj: bo,
                 active: true,
-            });
+            };
+            f(otype, &mut o);
+            self.pool.push(o);
         }
     }
 
+    pub fn create(&mut self, otype: u8, ps: &Vec<u32>) {
+        self.create_with_func(otype, |t, po| {
+            po.obj.reset(t, ps);
+        });
+    }
+
     // processing active object by calling custom closure
-    pub fn update_active<F>(&mut self, mut f: F) 
+    pub fn update_active<F>(&mut self, mut f: F)
     where
         F: FnMut(&mut GameObject<T>),
     {
