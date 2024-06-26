@@ -14,7 +14,6 @@
 [Benchmarks]: https://github.com/khvzak/script-bench-rs
 [FAQ]: FAQ.md
     
-#### Introduction
 RustPixel is a **2D game engine** and **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
 RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and especially for developing and debugging CPU-intensive core algorithm logic. It can be compiled into **FFI** for front-end and back-end use, and also into **WASM** for web-based projects.You can even use it to develop **terminal applications**.<br>
 
