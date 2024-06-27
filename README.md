@@ -10,10 +10,10 @@
 [docs.rs]: https://docs.rs/rust_pixel
 [MSRV]: https://img.shields.io/badge/rust-1.71+-brightgreen.svg?&logo=rust
 
-[Change Log]  |  [Coding]  |  [FAQ]
+[Change Log]&nbsp; | &nbsp;[Coding]&nbsp;  | &nbsp;[FAQ]&nbsp;
 
 [Change Log]: change.md
-[Coding Tour]: coding.md
+[Coding]: coding.md
 [FAQ]: faq.md
 
 RustPixel is a **2D game engine** and **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
