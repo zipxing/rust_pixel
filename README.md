@@ -1,6 +1,6 @@
 ![logo](./screen-shot/logo.png)
 
-[![License]][] [![Latest Version]][crates.io] [![Downloads]][] [![API Documentation]][docs.rs] ![MSRV]
+[![License]] [![Latest Version]][crates.io] [![Downloads]] [![API Documentation]][docs.rs] ![MSRV]
 
 [License]: https://img.shields.io/badge/license-Apache2.0-blue.svg
 [Latest Version]: https://img.shields.io/crates/v/rust_pixel.svg
