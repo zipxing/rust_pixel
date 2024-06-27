@@ -1,6 +1,22 @@
 ![logo](./screen-shot/logo.png)
-    
-#### Introduction
+
+![License] [![Latest Version]][crates.io] ![Downloads] [![API Documentation]][docs.rs] ![MSRV]
+
+[License]: https://img.shields.io/badge/license-Apache2.0-blue.svg
+[Latest Version]: https://img.shields.io/crates/v/rust_pixel.svg
+[crates.io]: https://crates.io/crates/rust_pixel
+[Downloads]: https://img.shields.io/crates/d/rust_pixel.svg
+[API Documentation]: https://docs.rs/rust_pixel/badge.svg
+[docs.rs]: https://docs.rs/rust_pixel
+[MSRV]: https://img.shields.io/badge/rust-1.71+-brightgreen.svg?&logo=rust
+
+[Change Log]&nbsp;&nbsp; | &nbsp;&nbsp;[Coding]&nbsp;&nbsp; | &nbsp;&nbsp;[FAQ]&nbsp;&nbsp; | &nbsp;&nbsp;[TODO]
+
+[Change Log]: change.md
+[Coding]: coding.md
+[FAQ]: faq.md
+[TODO]: todo.md
+
 RustPixel is a **2D game engine** and **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
 RustPixel is suitable for creating 2D pixel-style games, rapid prototyping, and especially for developing and debugging CPU-intensive core algorithm logic. It can be compiled into **FFI** for front-end and back-end use, and also into **WASM** for web-based projects.You can even use it to develop **terminal applications**.<br>
 
