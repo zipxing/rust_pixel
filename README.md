@@ -5,7 +5,7 @@
 [License]: https://img.shields.io/badge/license-Apache2.0-blue.svg
 [Latest Version]: https://img.shields.io/crates/v/rust_pixel.svg
 [crates.io]: https://crates.io/crates/rust_pixel
-[Downloads]: https://https://img.shields.io/crates/d/rust_pixel.svg
+[Downloads]: https://img.shields.io/crates/d/rust_pixel.svg
 [API Documentation]: https://docs.rs/rust_pixel/badge.svg
 [docs.rs]: https://docs.rs/rust_pixel
 [MSRV]: https://img.shields.io/badge/rust-1.71+-brightgreen.svg?&logo=rust
