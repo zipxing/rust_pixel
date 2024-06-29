@@ -11,7 +11,7 @@ use crate::{
     render::{
         adapter::{
             render_border, render_logo, render_main_buffer, render_pixel_sprites,
-            PointU16I32, ARect, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+            PointI32, ARect, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
         },
         buffer::Buffer,
         sprite::Sprites,
@@ -48,7 +48,7 @@ pub struct WebAdapter {
 }
 
 impl WebAdapter {
-    pub fn new(gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str) -> Self {
         Self {
             web_buf: vec![],
             base: AdapterBase::new(pre, gn),
@@ -66,7 +66,7 @@ impl WebAdapter {
         symidx: usize,
         s: ARect,
         angle: f64,
-        ccp: &PointU16I32,
+        ccp: &PointI32,
     ) {
         let mut wc: WebCell = Default::default();
         wc.r = r as u32;
@@ -159,7 +159,7 @@ impl Adapter for WebAdapter {
                     tmp.5,
                     tmp.6,
                     0.0,
-                    &PointU16I32 { x: 0, y: 0 },
+                    &PointI32 { x: 0, y: 0 },
                 );
             }
             return Ok(());
@@ -179,7 +179,7 @@ impl Adapter for WebAdapter {
                 symidx,
                 s2,
                 0.0,
-                &PointU16I32 { x: 0, y: 0 },
+                &PointI32 { x: 0, y: 0 },
             );
         };
         render_border(cw, ch, rx, ry, &mut rfunc);

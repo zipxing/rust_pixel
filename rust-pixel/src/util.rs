@@ -14,8 +14,6 @@ use std::{
     io::{self, ErrorKind},
     path::{Path, PathBuf, MAIN_SEPARATOR},
 };
-#[cfg(target_arch = "wasm32")]
-use web_sys::js_sys;
 
 pub mod objpool;
 pub mod shape;

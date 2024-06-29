@@ -249,7 +249,8 @@ where
                 x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH as f32 / rx) as i32,
                 y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT as f32 / ry) as i32,
             };
-            let fc = sh.2.get_rgba();
+            let mut fc = sh.2.get_rgba();
+            fc.3 = s.alpha;
             f(&fc, s1, s2, texidx, symidx, s.angle, ccp);
         }
     }

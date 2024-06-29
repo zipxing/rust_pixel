@@ -5,7 +5,7 @@ use rust_pixel::{
     context::Context,
     event::event_emit,
     game::Model,
-    util::{ParticleSystem, ParticleSystemInfo, Dir, PointU16},
+    util::{ParticleSystem, ParticleSystemInfo, Dir, PointF32, PointU16},
 };
 use std::any::Any;
 use std::f64::consts::PI;
@@ -181,6 +181,7 @@ impl Model for SnakeModel {
         context.input_events.clear();
         context.state = SnakeState::Normal as u8;
         self.pats.fire_at(10.0, 10.0);
+
         event_emit("Snake.RedrawGrid");
     }
 
@@ -213,7 +214,7 @@ impl Model for SnakeModel {
         if self.count > 200.0 {
             self.count = 0.0f64;
         }
-        self.pats.move_to(10.0 + 1.0 * self.count, 10.0 + 1.0 * self.count, true);
+        self.pats.move_to(10.0 + 5.0 * self.count, 10.0 + 5.0 * self.count, false);
         if self.timeout_auto > 0.4 {
             self.timeout_auto = 0.0;
             self.act(self.dir, context);
@@ -229,3 +230,4 @@ impl Model for SnakeModel {
         self
     }
 }
+
