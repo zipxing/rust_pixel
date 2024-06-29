@@ -24,7 +24,7 @@ impl TemplateRender {
         {
             for i in 0..15 {
                 let mut pl = Sprite::new(4, 6, 1, 1);
-                pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(203));
+                pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(14));
                 pl.set_alpha(255 - 15*(15 - i));
                 panel.add_pixel_sprite(pl, &format!("PL{}", i+1));
             }
@@ -108,6 +108,8 @@ impl Render for TemplateRender {
                 d.bezier.advance_and_maybe_reverse(dt as f64 * 0.1 + 0.01 * i as f64);
                 let kf_now = d.bezier.now_strict().unwrap();
                 pl.set_pos(kf_now.x as u16, kf_now.y as u16);
+                let c = ((ctx.stage / 10) % 255) as u8;
+                pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(c));
                 d.bezier.advance_and_maybe_reverse(-0.01 * i as f64);
             }
         }
