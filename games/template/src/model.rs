@@ -40,10 +40,6 @@ impl Model for TemplateModel {
         let in_points = [
             PointF32 { x: 0.0, y: 0.0 },
             PointF32 { x: 1200.0, y: 100.0 },
-            // PointF32 {
-            //     x: 1200.0,
-            //     y: 400.0,
-            // },
             PointF32 {
                 x: TEMPLATEW as f32 * 16.0,
                 y: TEMPLATEH as f32 * 16.0,

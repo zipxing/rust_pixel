@@ -1,3 +1,44 @@
+# 0.3.1
+1. Add bezier algorithm, refer to algorithm/bezier.rs
+2. Add a demo about keyframe animation and bezier path,refer to games/template/model.rs & render.rs
+- model
+```
+        let in_points = [
+            PointF32 { x: 0.0, y: 0.0 },
+            PointF32 { x: 1200.0, y: 100.0 },
+            PointF32 {
+                x: TEMPLATEW as f32 * 16.0,
+                y: TEMPLATEH as f32 * 16.0,
+            },
+        ];
+        let num = 100;
+        let mut pts = vec![PointF32 { x: 0.0, y: 0.0 }; num];
+        draw_bezier_curves(&in_points, &mut pts);
+        let mut ks = Vec::new();
+        for i in 0..num {
+            ks.push((pts[i], i as f64 / num as f64).into());
+        }
+        self.bezier = AnimationSequence::from(ks);
+```
+- render
+```
+        for i in 0..15 {
+            let mut pl = Sprite::new(4, 6, 1, 1);
+            pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(203));
+            pl.set_alpha(255 - 15*(15 - i));
+            panel.add_pixel_sprite(pl, &format!("PL{}", i+1));
+        }
+        ...
+        for i in 0..15 {
+            let pl = &mut self.panel.get_pixel_sprite(&format!("PL{}", i+1));
+            d.bezier.advance_and_maybe_reverse(dt as f64 * 0.1 + 0.01 * i as f64);
+            let kf_now = d.bezier.now_strict().unwrap();
+            pl.set_pos(kf_now.x as u16, kf_now.y as u16);
+            d.bezier.advance_and_maybe_reverse(-0.01 * i as f64);
+        }
+```
+3. Fix some bugs...
+
 # 0.3.0
 1. Add particle system
 ```
