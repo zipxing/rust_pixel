@@ -5,7 +5,7 @@ use rust_pixel::{
     context::Context,
     event::event_emit,
     game::Model,
-    util::{ParticleSystem, ParticleSystemInfo, Dir, PointF32, PointU16},
+    util::{ParticleSystem, ParticleSystemInfo, Dir, PointU16},
 };
 use std::any::Any;
 use std::f64::consts::PI;
