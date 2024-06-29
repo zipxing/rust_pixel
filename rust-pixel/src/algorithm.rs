@@ -4,6 +4,8 @@
 //! here integrates some common algorithms e.g. disjoint-set data structure, astar
 pub mod union_find;
 pub mod astar;
+mod bezier;
+pub use bezier::*;
 
 pub fn findv<T: std::cmp::PartialEq>(v1: &Vec<T>, val: &T) -> bool {
     v1.contains(val)

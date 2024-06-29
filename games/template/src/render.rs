@@ -24,8 +24,8 @@ impl TemplateRender {
         {
             for i in 0..15 {
                 let mut pl = Sprite::new(4, 6, 1, 1);
-                pl.set_graph_sym(0, 0, 1, 20, Color::Indexed(222));
-                pl.set_alpha(255 - 10*(15 - i));
+                pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(203));
+                pl.set_alpha(255 - 15*(15 - i));
                 panel.add_pixel_sprite(pl, &format!("PL{}", i+1));
             }
         }

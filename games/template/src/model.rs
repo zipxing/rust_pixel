@@ -1,9 +1,8 @@
-use keyframe_derive::CanTween;
 use rust_pixel::event::{Event, KeyCode};
-// use rust_pixel::util::PointF32;
+use rust_pixel::util::PointF32;
 use keyframe::{functions::*, AnimationSequence};
 // use log::info;
-use rust_pixel::{context::Context, event::event_emit, game::Model};
+use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
 use std::any::Any;
 use template_lib::TemplateData;
 
@@ -18,12 +17,6 @@ pub const TEMPLATEH: u16 = 40;
 #[repr(u8)]
 enum TemplateState {
     Normal,
-}
-
-#[derive(CanTween, Debug, Clone, Copy, PartialEq, Default)]
-pub struct PointF32 {
-    pub x: f32,
-    pub y: f32,
 }
 
 pub struct TemplateModel {
@@ -46,11 +39,11 @@ impl Model for TemplateModel {
     fn init(&mut self, _context: &mut Context) {
         let in_points = [
             PointF32 { x: 0.0, y: 0.0 },
-            PointF32 { x: 800.0, y: 100.0 },
-            PointF32 {
-                x: 1200.0,
-                y: 400.0,
-            },
+            PointF32 { x: 1200.0, y: 100.0 },
+            // PointF32 {
+            //     x: 1200.0,
+            //     y: 400.0,
+            // },
             PointF32 {
                 x: TEMPLATEW as f32 * 16.0,
                 y: TEMPLATEH as f32 * 16.0,
@@ -105,48 +98,3 @@ impl Model for TemplateModel {
     }
 }
 
-fn bezier_interpolation_func(t: f32, points: &[PointF32], count: usize) -> PointF32 {
-    assert!(count > 0);
-
-    let mut tmp_points = points.to_vec();
-    for i in 1..count {
-        for j in 0..(count - i) {
-            if i == 1 {
-                tmp_points[j].x = points[j].x * (1.0 - t) + points[j + 1].x * t;
-                tmp_points[j].y = points[j].y * (1.0 - t) + points[j + 1].y * t;
-                continue;
-            }
-            tmp_points[j].x = tmp_points[j].x * (1.0 - t) + tmp_points[j + 1].x * t;
-            tmp_points[j].y = tmp_points[j].y * (1.0 - t) + tmp_points[j + 1].y * t;
-        }
-    }
-    tmp_points[0]
-}
-
-fn draw_bezier_curves(points: &[PointF32], out_points: &mut [PointF32]) {
-    let step = 1.0 / out_points.len() as f32;
-    let mut t = 0.0;
-    for i in 0..out_points.len() {
-        let temp_point = bezier_interpolation_func(t, points, points.len());
-        t += step;
-        out_points[i] = temp_point;
-    }
-}
-
-// fn main() {
-// 	let in_points = [
-// 		PointF32 { x: 100.0, y: 100.0 },
-// 		PointF32 { x: 200.0, y: 200.0 },
-// 		PointF32 { x: 250.0, y: 250.0 },
-// 		PointF32 { x: 280.0, y: 290.0 },
-// 		PointF32 { x: 300.0, y: 100.0 },
-// 	];
-// 	let num = 100;
-// 	let mut out_points = vec![PointF32 { x: 0.0, y: 0.0 }; num];
-
-// 	draw_bezier_curves(&in_points, in_points.len(), &mut out_points);
-
-// 	for (j, point) in out_points.iter().enumerate() {
-// 		println!("{} \t X={} \t Y={}", j, point.x, point.y);
-// 	}
-// }

@@ -14,6 +14,7 @@ use std::{
     io::{self, ErrorKind},
     path::{Path, PathBuf, MAIN_SEPARATOR},
 };
+use keyframe_derive::CanTween;
 
 pub mod objpool;
 pub mod shape;
@@ -106,7 +107,7 @@ pub struct PointI16 {
     pub y: i16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(CanTween, Debug, Clone, Copy, PartialEq, Default)]
 pub struct PointF32 {
     pub x: f32,
     pub y: f32,
