@@ -8,7 +8,7 @@ readme = "../README.md"
 license = "Apache-2.0"
 description = "2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web..."
 
-categories = ["game-engines", "game", "gui", "graphics"] # https://crates.io/category_slugs
+categories = ["game-engines", "gui", "graphics"] # https://crates.io/category_slugs
 
 [dependencies]
 bincode = "1.3.1"
