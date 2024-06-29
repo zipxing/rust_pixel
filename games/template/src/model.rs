@@ -38,8 +38,10 @@ impl TemplateModel {
 impl Model for TemplateModel {
     fn init(&mut self, _context: &mut Context) {
         let in_points = [
-            PointF32 { x: 0.0, y: 0.0 },
-            PointF32 { x: 1200.0, y: 100.0 },
+            PointF32 { x: 10.0, y: 30.0 },
+            PointF32 { x: 210.0, y: 450.0 },
+            PointF32 { x: 110.0, y: 150.0 },
+            PointF32 { x: 1200.0, y: 150.0 },
             PointF32 {
                 x: TEMPLATEW as f32 * 16.0,
                 y: TEMPLATEH as f32 * 16.0,
