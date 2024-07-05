@@ -11,11 +11,6 @@ use regex::Regex;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
-fn clean_argv() {
-    let args: Vec<String> = env::args().filter(|arg| arg != "pixel").collect();
-    env::set_var("CLEANED_ARGS", args.join(" "));
-}
-
 fn common_arg(app: App) -> App {
     app.arg(
         Arg::with_name("dir")
@@ -252,7 +247,6 @@ fn pixel_convert_gif(args: &ArgMatches) {
 }
 
 fn main() {
-    clean_argv();
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(sub_m),
