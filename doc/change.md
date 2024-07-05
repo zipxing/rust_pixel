@@ -1,3 +1,8 @@
+# 0.3.2
+- Rewrite cargo-pixel with rust
+- Removed python3 dependence
+- Updated readme.md
+
 # 0.3.1
 1. Add bezier algorithm, refer to algorithm/bezier.rs
 2. Add a demo about keyframe animation and bezier path,refer to games/template/model.rs & render.rs
