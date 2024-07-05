@@ -1,6 +1,7 @@
-use std::env;
+// use std::env;
 use std::fs;
 use std::io::{self, Write};
+use std::process::Stdio;
 // use std::path::Path;
 use std::process::Command;
 use std::str;
@@ -192,12 +193,13 @@ fn pixel_convert_gif(args: &ArgMatches) {
     let output = Command::new("sh")
         .arg("-c")
         .arg(format!("ffmpeg -i {} -vsync 0 tmp/t%d.png", gif))
+        .stderr(Stdio::piped())
         .output()
         .expect("failed to execute process");
 
-    let stdout = str::from_utf8(&output.stdout).unwrap();
+    let stderr = str::from_utf8(&output.stderr).unwrap();
     let rf = Regex::new(r"(.*)frame=(.*?)(\d+)(.*)").unwrap();
-    let fg = rf.captures(stdout).unwrap();
+    let fg = rf.captures(stderr).unwrap();
     let frame_count: usize = fg.get(3).unwrap().as_str().parse().unwrap();
     println!("    frame_count = {}", frame_count);
 
@@ -205,7 +207,7 @@ fn pixel_convert_gif(args: &ArgMatches) {
     for x in 0..frame_count {
         print!("\r{}  ", x + 1);
         io::stdout().flush().unwrap();
-        let cmd = format!("cargo r --bin tpetii --release tmp/t{}.png  {} {} > tmp/t{}.pix", x + 1, width, height, x + 1);
+        let cmd = format!("cargo r --bin tpetii --release tmp/t{}.png  {} {} > tmp/t{}.pix 2>/dev/null", x + 1, width, height, x + 1);
         Command::new("sh")
             .arg("-c")
             .arg(&cmd)
@@ -244,6 +246,11 @@ fn pixel_convert_gif(args: &ArgMatches) {
     fsdq.write_all(&datas).unwrap();
 
     println!("\n🍀 {} write ok!", ssf);
+    Command::new("sh")
+        .arg("-c")
+        .arg("rm tmp/t*.p*")
+        .status()
+        .expect("failed to execute process");
 }
 
 fn main() {
