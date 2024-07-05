@@ -47,11 +47,6 @@ $ . "$HOME/.cargo/env"            # For sh/bash/zsh/ash/dash/pdksh
 curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 ```
 
-**Install Python3** (the latest macOS generally comes with it)
-```
-$ pip3 install tomlkit           # Install tomlkit for read/write Cargo.toml
-```
-
 **Install some dependent libraries and software**
 ``` 
 $ brew install ffmpeg            # Used to convert gif to ssf sequence frame files(.ssf)
@@ -77,11 +72,10 @@ This will add the directory to the environment variable each time you start up a
 ``` 
 $ git clone https://github.com/zipxing/rust_pixel
 $ cd rust_pixel
-$ cp tools/cargo-pixel ~/.cargo/bin
+$ cargo install --path tools/cargo-pixel --root ~/.cargo
 ``` 
 
 #### Usage Instructions
---- MacOS ---
 ``` 
 $ cd rust_pixel
 $ cargo pixel run snake term            #Run the snake game in terminal mode
