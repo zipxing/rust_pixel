@@ -1,3 +1,10 @@
+# 0.3.3
+- Fix cargo-pixel create bug
+```
+$ cargo pixel c games mygame
+$ cargo pixel c apps myapp
+```
+
 # 0.3.2
 - Rewrite cargo-pixel with rust
 - Removed python3 dependence

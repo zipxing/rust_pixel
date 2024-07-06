@@ -86,9 +86,10 @@ $ cargo pixel r tower w --webport 8081  #Change web server port
 $ cargo pixel r tower w -r              #Run with release mode
 ``` 
 
-You can also use cargo pixel to create your own game
+You can also use cargo pixel to create your own game or app
 ```
-$ cargo pixel c mygame           #Create mygame using snake as a template
+$ cargo pixel c games mygame           #Create mygame in ./games using games/template as a template
+$ cargo pixel c apps myapp             #Create myapp in ./apps using games/template as a template
 ```
 
 RustPixel also includes several tools:

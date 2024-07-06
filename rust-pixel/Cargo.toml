@@ -1,7 +1,7 @@
 [package]
 name = "rust_pixel"
 authors = ["<zhouxin@tuyoogame.com>"]
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 repository = "https://github.com/zipxing/rust_pixel"
 readme = "../README.md"
