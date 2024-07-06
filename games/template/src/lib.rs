@@ -18,7 +18,7 @@ pub struct TemplateGame {
 pub fn init_game() -> TemplateGame {
     let m = TemplateModel::new();
     let r = TemplateRender::new();
-    let mut g = Game::new(m, r, "template");
+    let mut g = Game::new(m, r, "games/template");
     g.init();
     TemplateGame { g }
 }

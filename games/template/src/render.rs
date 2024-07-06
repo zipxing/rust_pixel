@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 use crate::model::{TemplateModel, CARDH, CARDW, TEMPLATEH, TEMPLATEW};
 // use log::info;
 use rust_pixel::{
@@ -97,10 +99,10 @@ impl Render for TemplateRender {
     fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
 
     fn draw<G: Model>(&mut self, ctx: &mut Context, data: &mut G, dt: f32) {
-        let d = data.as_any().downcast_mut::<TemplateModel>().unwrap();
         // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
+            let d = data.as_any().downcast_mut::<TemplateModel>().unwrap();
             let ss = &mut self.panel.get_sprite("back");
             asset2sprite!(ss, ctx, "1.ssf", (ctx.stage / 3) as usize, 40, 1);
             for i in 0..15 {
