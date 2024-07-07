@@ -157,7 +157,7 @@ impl Adapter for CrosstermAdapter {
                 // reset pen color
                 to_error(queue!(
                     self.writer,
-                    SetForegroundColor(CColor::from((192, 192, 192)))
+                    SetForegroundColor(CColor::from((128, 128, 128)))
                 ))?;
             }
             return Ok(());

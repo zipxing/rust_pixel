@@ -35,7 +35,7 @@ impl Color {
     pub fn get_rgba(self) -> (u8, u8, u8, u8) {
         let cidx: usize;
         match self {
-            Color::Reset => cidx = 0,
+            Color::Reset => cidx = 8,
             Color::Black => cidx = 0,
             Color::Red => cidx = 1,
             Color::Green => cidx = 2,
@@ -61,6 +61,28 @@ impl Color {
             COLOR_RGB[cidx][2],
             255,
         )
+    }
+
+    /// See: <https://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef>
+    pub fn luminance(&self) -> f64 {
+        fn f(s: f64) -> f64 {
+            if s <= 0.03928 {
+                s / 12.92
+            } else {
+                f64::powf((s + 0.055) / 1.055, 2.4)
+            }
+        }
+
+        let c = self.get_rgba();
+        let r = f(c.0 as f64 / 255.0);
+        let g = f(c.1 as f64 / 255.0);
+        let b = f(c.2 as f64 / 255.0);
+
+        0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    pub fn is_dark(&self) -> bool {
+        self.luminance() <= 0.179
     }
 }
 
@@ -118,7 +140,7 @@ impl From<Color> for u8 {
 }
 
 pub const COLOR_RGB: [[u8; 3]; 256] = [
-    [128, 128, 128],
+    [0, 0, 0],
     [128, 0, 0],
     [0, 128, 0],
     [128, 128, 0],
