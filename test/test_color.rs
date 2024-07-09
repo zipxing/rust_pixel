@@ -1,4 +1,5 @@
 use std::ops::{Index, IndexMut};
+// use std::mem;
 use ColorSpace::*;
 
 pub enum ColorSpace {
@@ -14,29 +15,32 @@ pub enum ColorSpace {
     XYZA,
 }
 
+// pub const COLOR_SPACE_COUNT: usize = mem::variant_count::<ColorSpace>();
+pub const COLOR_SPACE_COUNT: usize = 10;
+
 pub type ColorData = [f64; 4];
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProColor {
-    pub space_matrix: [Option<ColorData>; 10], 
+pub struct ColorPro {
+    pub space_matrix: [Option<ColorData>; COLOR_SPACE_COUNT], 
 }
 
-impl Index<ColorSpace> for ProColor {
+impl Index<ColorSpace> for ColorPro {
     type Output = Option<ColorData>;
     fn index(&self, index: ColorSpace) -> &Self::Output {
         &self.space_matrix[index as usize]
     }
 }
 
-impl IndexMut<ColorSpace> for ProColor {
+impl IndexMut<ColorSpace> for ColorPro {
     fn index_mut(&mut self, index: ColorSpace) -> &mut Self::Output {
         &mut self.space_matrix[index as usize]
     }
 }
 
-impl ProColor {
+impl ColorPro {
     pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
-        let mut smat = [None; 10];
+        let mut smat = [None; COLOR_SPACE_COUNT];
         smat[cs as usize] = Some(color);
         Self {
             space_matrix: smat,
@@ -417,7 +421,7 @@ fn oklcha_to_xyz(oklcha: ColorData) -> ColorData {
 }
 
 fn main() {
-    let mut color = ProColor::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
+    let mut color = ColorPro::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
     let _ = color.fill_all_spaces();
     println!("{:?}", color.space_matrix);
 }
