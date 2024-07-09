@@ -250,7 +250,7 @@ fn pixel_creat(args: &ArgMatches) {
                         let content = fs::read(&path).unwrap();
                         let mut content_str = String::from_utf8_lossy(&content).to_string();
                         content_str = content_str
-                            .replace("games/template", &format!("{}/{}", dirname, capname));
+                            .replace("games/template", &format!("{}/{}", dirname, loname));
                         content_str = content_str.replace("Template", capname);
                         content_str = content_str.replace("TEMPLATE", upname);
                         content_str = content_str.replace("template", loname);
