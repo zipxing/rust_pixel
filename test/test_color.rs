@@ -1,3 +1,6 @@
+use std::ops::{Index, IndexMut};
+use ColorSpace::*;
+
 pub enum ColorSpace {
     SRGBA,
     LinearRGBA,
@@ -9,169 +12,104 @@ pub enum ColorSpace {
     OKLabA,
     OKLchA,
     XYZA,
-};
+}
 
 pub type ColorData = [f64; 4];
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProColor {
-    pub space_matrix: [Option<ColorData>; 10]; 
+    pub space_matrix: [Option<ColorData>; 10], 
+}
+
+impl Index<ColorSpace> for ProColor {
+    type Output = Option<ColorData>;
+    fn index(&self, index: ColorSpace) -> &Self::Output {
+        &self.space_matrix[index as usize]
+    }
+}
+
+impl IndexMut<ColorSpace> for ProColor {
+    fn index_mut(&mut self, index: ColorSpace) -> &mut Self::Output {
+        &mut self.space_matrix[index as usize]
+    }
 }
 
 impl ProColor {
-    fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
-        let smat = [None; 10];
+    pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
+        let mut smat = [None; 10];
         smat[cs as usize] = Some(color);
         Self {
             space_matrix: smat,
         }
     }
 
-    fn to_space_data(&mut self, cs: ColorSpace) -> Result<(), String> {
+    pub fn fill_all_spaces(&mut self) -> Result<(), String> {
+        self.to_xyza()?;
+        let xyza = self[XYZA].unwrap();
+        if self[SRGBA] == None {
+            self[SRGBA] = Some(xyz_to_srgba(xyza));
+        }
+        if self[LinearRGBA] == None {
+            self[LinearRGBA] = Some(xyz_to_linear_rgba(xyza));
+        }
+        if self[HSLA] == None {
+            self[HSLA] = Some(srgba_to_hsla(self[SRGBA].unwrap()));
+        }
+        if self[HSVA] == None {
+            self[HSVA] = Some(srgba_to_hsva(self[SRGBA].unwrap()));
+        }
+        if self[HWBA] == None {
+            self[HWBA] = Some(srgba_to_hwba(self[SRGBA].unwrap()));
+        }
+        if self[LabA] == None {
+            self[LabA] = Some(xyz_to_laba(xyza));
+        }
+        if self[LchA] == None {
+            self[LchA] = Some(laba_to_lcha(self[LabA].unwrap()));
+        }
+        if self[OKLabA] == None {
+            self[OKLabA] = Some(xyz_to_oklaba(xyza));
+        }
+        if self[OKLchA] == None {
+            self[OKLchA] = Some(oklaba_to_oklcha(self[OKLabA].unwrap()));
+        }
         Ok(())
     }
 
-    fn to_xyza(&mut self) -> Result<(), String> {
-        if let Some(xyza) = self.space_matrix[ColorSpace::XYZA as usize] {
+    pub fn to_xyza(&mut self) -> Result<(), String> {
+        if self[XYZA] != None {
             return Ok(());
         }
 
-        let xyza = if let Some(srgba) = self.srgba {
-            srgba_to_xyz(srgba)
-        } else if let Some(linear_rgba) = self.linear_rgba {
-            linear_rgba_to_xyz(linear_rgba)
-        } else if let Some(hsla) = self.hsla {
-            srgba_to_xyz(hsla_to_srgba(hsla))
-        } else if let Some(hsva) = self.hsva {
-            srgba_to_xyz(hsva_to_srgba(hsva))
-        } else if let Some(hwba) = self.hwba {
-            srgba_to_xyz(hwba_to_srgba(hwba))
-        } else if let Some(laba) = self.laba {
-            laba_to_xyz(laba)
-        } else if let Some(lcha) = self.lcha {
-            lcha_to_xyz(lcha)
-        } else if let Some(oklaba) = self.oklaba {
-            oklaba_to_xyz(oklaba)
-        } else if let Some(oklcha) = self.oklcha {
-            oklcha_to_xyz(oklcha)
+        let xyza; 
+        if let Some(srgba) = self[SRGBA] {
+            xyza = srgba_to_xyz(srgba);
+        } else if let Some(linear_rgba) = self[LinearRGBA] {
+            xyza = linear_rgba_to_xyz(linear_rgba);
+        } else if let Some(hsla) = self[HSLA] {
+            xyza = srgba_to_xyz(hsla_to_srgba(hsla));
+        } else if let Some(hsva) = self[HSVA] {
+            xyza = srgba_to_xyz(hsva_to_srgba(hsva));
+        } else if let Some(hwba) = self[HWBA] {
+            xyza = srgba_to_xyz(hwba_to_srgba(hwba));
+        } else if let Some(laba) = self[LabA] {
+            xyza = laba_to_xyz(laba);
+        } else if let Some(lcha) = self[LchA] {
+            xyza = lcha_to_xyz(lcha);
+        } else if let Some(oklaba) = self[OKLabA] {
+            xyza = oklaba_to_xyz(oklaba);
+        } else if let Some(oklcha) = self[OKLchA] {
+            xyza = oklcha_to_xyz(oklcha);
         } else {
-            panic!("No color space available for conversion");
+            return Err("No color data available for conversion".to_string());
         };
 
-        self.xyza = Some(xyza);
-        xyza
-    }
-
-    fn to_srgba(&mut self) -> [f64; 4] {
-        if let Some(srgba) = self.srgba {
-            return srgba;
-        }
-
-        let xyza = self.to_xyza();
-        let srgba = xyz_to_srgba(xyza);
-
-        self.srgba = Some(srgba);
-        srgba
-    }
-
-    fn to_linear_rgba(&mut self) -> [f64; 4] {
-        if let Some(linear_rgba) = self.linear_rgba {
-            return linear_rgba;
-        }
-
-        let xyza = self.to_xyza();
-        let linear_rgba = xyz_to_linear_rgba(xyza);
-
-        self.linear_rgba = Some(linear_rgba);
-        linear_rgba
-    }
-
-    fn to_hsla(&mut self) -> [f64; 4] {
-        if let Some(hsla) = self.hsla {
-            return hsla;
-        }
-
-        let srgba = self.to_srgba();
-        let hsla = srgba_to_hsla(srgba);
-
-        self.hsla = Some(hsla);
-        hsla
-    }
-
-    fn to_hsva(&mut self) -> [f64; 4] {
-        if let Some(hsva) = self.hsva {
-            return hsva;
-        }
-
-        let srgba = self.to_srgba();
-        let hsva = srgba_to_hsva(srgba);
-
-        self.hsva = Some(hsva);
-        hsva
-    }
-
-    fn to_hwba(&mut self) -> [f64; 4] {
-        if let Some(hwba) = self.hwba {
-            return hwba;
-        }
-
-        let srgba = self.to_srgba();
-        let hwba = srgba_to_hwba(srgba);
-
-        self.hwba = Some(hwba);
-        hwba
-    }
-
-    fn to_laba(&mut self) -> [f64; 4] {
-        if let Some(laba) = self.laba {
-            return laba;
-        }
-
-        let xyza = self.to_xyza();
-        let laba = xyz_to_laba(xyza);
-
-        self.laba = Some(laba);
-        laba
-    }
-
-    fn to_lcha(&mut self) -> [f64; 4] {
-        if let Some(lcha) = self.lcha {
-            return lcha;
-        }
-
-        let laba = self.to_laba();
-        let lcha = laba_to_lcha(laba);
-
-        self.lcha = Some(lcha);
-        lcha
-    }
-
-    fn to_oklaba(&mut self) -> [f64; 4] {
-        if let Some(oklaba) = self.oklaba {
-            return oklaba;
-        }
-
-        let xyza = self.to_xyza();
-        let oklaba = xyz_to_oklaba(xyza);
-
-        self.oklaba = Some(oklaba);
-        oklaba
-    }
-
-    fn to_oklcha(&mut self) -> [f64; 4] {
-        if let Some(oklcha) = self.oklcha {
-            return oklcha;
-        }
-
-        let oklaba = self.to_oklaba();
-        let oklcha = oklaba_to_oklcha(oklaba);
-
-        self.oklcha = Some(oklcha);
-        oklcha
+        self[XYZA]= Some(xyza);
+        Ok(())
     }
 }
 
-fn srgba_to_xyz(srgba: [f64; 4]) -> [f64; 4] {
+fn srgba_to_xyz(srgba: ColorData) -> ColorData {
     let sr = linearize(srgba[0]);
     let sg = linearize(srgba[1]);
     let sb = linearize(srgba[2]);
@@ -199,7 +137,7 @@ fn delinearize(value: f64) -> f64 {
     }
 }
 
-fn xyz_to_srgba(xyz: [f64; 4]) -> [f64; 4] {
+fn xyz_to_srgba(xyz: ColorData) -> ColorData {
     let r = xyz[0] * 3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
     let g = -xyz[0] * 0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
     let b = xyz[0] * 0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
@@ -211,7 +149,7 @@ fn xyz_to_srgba(xyz: [f64; 4]) -> [f64; 4] {
     [sr, sg, sb, xyz[3]]
 }
 
-fn linear_rgba_to_xyz(linear_rgba: [f64; 4]) -> [f64; 4] {
+fn linear_rgba_to_xyz(linear_rgba: ColorData) -> ColorData {
     let x = linear_rgba[0] * 0.4124564 + linear_rgba[1] * 0.3575761 + linear_rgba[2] * 0.1804375;
     let y = linear_rgba[0] * 0.2126729 + linear_rgba[1] * 0.7151522 + linear_rgba[2] * 0.0721750;
     let z = linear_rgba[0] * 0.0193339 + linear_rgba[1] * 0.1191920 + linear_rgba[2] * 0.9503041;
@@ -219,7 +157,7 @@ fn linear_rgba_to_xyz(linear_rgba: [f64; 4]) -> [f64; 4] {
     [x, y, z, linear_rgba[3]]
 }
 
-fn xyz_to_linear_rgba(xyz: [f64; 4]) -> [f64; 4] {
+fn xyz_to_linear_rgba(xyz: ColorData) -> ColorData {
     let r = xyz[0] * 3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
     let g = -xyz[0] * 0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
     let b = xyz[0] * 0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
@@ -227,7 +165,7 @@ fn xyz_to_linear_rgba(xyz: [f64; 4]) -> [f64; 4] {
     [r, g, b, xyz[3]]
 }
 
-fn hsla_to_srgba(hsla: [f64; 4]) -> [f64; 4] {
+fn hsla_to_srgba(hsla: ColorData) -> ColorData {
     let (h, s, l, a) = (hsla[0], hsla[1], hsla[2], hsla[3]);
 
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
@@ -246,7 +184,7 @@ fn hsla_to_srgba(hsla: [f64; 4]) -> [f64; 4] {
     [r + m, g + m, b + m, a]
 }
 
-fn srgba_to_hsla(srgba: [f64; 4]) -> [f64; 4] {
+fn srgba_to_hsla(srgba: ColorData) -> ColorData {
     let (r, g, b, a) = (srgba[0], srgba[1], srgba[2], srgba[3]);
 
     let max = r.max(g.max(b));
@@ -273,7 +211,7 @@ fn srgba_to_hsla(srgba: [f64; 4]) -> [f64; 4] {
     [h, s, l, a]
 }
 
-fn hsva_to_srgba(hsva: [f64; 4]) -> [f64; 4] {
+fn hsva_to_srgba(hsva: ColorData) -> ColorData {
     let (h, s, v, a) = (hsva[0], hsva[1], hsva[2], hsva[3]);
 
     let c = v * s;
@@ -292,7 +230,7 @@ fn hsva_to_srgba(hsva: [f64; 4]) -> [f64; 4] {
     [r + m, g + m, b + m, a]
 }
 
-fn srgba_to_hsva(srgba: [f64; 4]) -> [f64; 4] {
+fn srgba_to_hsva(srgba: ColorData) -> ColorData {
     let (r, g, b, a) = (srgba[0], srgba[1], srgba[2], srgba[3]);
 
     let max = r.max(g.max(b));
@@ -315,7 +253,7 @@ fn srgba_to_hsva(srgba: [f64; 4]) -> [f64; 4] {
     [h, s, v, a]
 }
 
-fn hwba_to_srgba(hwba: [f64; 4]) -> [f64; 4] {
+fn hwba_to_srgba(hwba: ColorData) -> ColorData {
     let (h, w, b, a) = (hwba[0], hwba[1], hwba[2], hwba[3]);
 
     let v = 1.0 - b;
@@ -324,7 +262,7 @@ fn hwba_to_srgba(hwba: [f64; 4]) -> [f64; 4] {
     hsva_to_srgba([h, s, v, a])
 }
 
-fn srgba_to_hwba(srgba: [f64; 4]) -> [f64; 4] {
+fn srgba_to_hwba(srgba: ColorData) -> ColorData {
     let hsva = srgba_to_hsva(srgba);
     let (h, s, v, a) = (hsva[0], hsva[1], hsva[2], hsva[3]);
 
@@ -334,7 +272,7 @@ fn srgba_to_hwba(srgba: [f64; 4]) -> [f64; 4] {
     [h, w, b, a]
 }
 
-fn xyz_to_laba(xyza: [f64; 4]) -> [f64; 4] {
+fn xyz_to_laba(xyza: ColorData) -> ColorData {
     let epsilon = 0.008856;
     let kappa = 903.3;
 
@@ -365,7 +303,7 @@ fn xyz_to_laba(xyza: [f64; 4]) -> [f64; 4] {
     [l, a, b, xyza[3]]
 }
 
-fn laba_to_xyz(laba: [f64; 4]) -> [f64; 4] {
+fn laba_to_xyz(laba: ColorData) -> ColorData {
     let epsilon = 0.008856;
     let kappa = 903.3;
 
@@ -396,7 +334,7 @@ fn laba_to_xyz(laba: [f64; 4]) -> [f64; 4] {
     [x, y, z, laba[3]]
 }
 
-fn laba_to_lcha(laba: [f64; 4]) -> [f64; 4] {
+fn laba_to_lcha(laba: ColorData) -> ColorData {
     let l = laba[0];
     let c = (laba[1].powi(2) + laba[2].powi(2)).sqrt();
     let h = laba[2].atan2(laba[1]).to_degrees();
@@ -405,7 +343,7 @@ fn laba_to_lcha(laba: [f64; 4]) -> [f64; 4] {
     [l, c, h, laba[3]]
 }
 
-fn lcha_to_laba(lcha: [f64; 4]) -> [f64; 4] {
+fn lcha_to_laba(lcha: ColorData) -> ColorData {
     let l = lcha[0];
     let a = lcha[1] * lcha[2].to_radians().cos();
     let b = lcha[1] * lcha[2].to_radians().sin();
@@ -413,12 +351,12 @@ fn lcha_to_laba(lcha: [f64; 4]) -> [f64; 4] {
     [l, a, b, lcha[3]]
 }
 
-fn lcha_to_xyz(lcha: [f64; 4]) -> [f64; 4] {
+fn lcha_to_xyz(lcha: ColorData) -> ColorData {
     let laba = lcha_to_laba(lcha);
     laba_to_xyz(laba)
 }
 
-fn xyz_to_oklaba(xyza: [f64; 4]) -> [f64; 4] {
+fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
     let l = 0.4121656120 * xyza[0] + 0.5362752080 * xyza[1] + 0.0514575653 * xyza[2];
     let m = 0.2118591070 * xyza[0] + 0.6807189584 * xyza[1] + 0.1074065790 * xyza[2];
     let s = 0.0883097947 * xyza[0] + 0.2818474174 * xyza[1] + 0.6298501064 * xyza[2];
@@ -434,7 +372,7 @@ fn xyz_to_oklaba(xyza: [f64; 4]) -> [f64; 4] {
     [l, a, b, xyza[3]]
 }
 
-fn oklaba_to_xyz(oklaba: [f64; 4]) -> [f64; 4] {
+fn oklaba_to_xyz(oklaba: ColorData) -> ColorData {
     let l_ = oklaba[0] + 0.3963377774 * oklaba[1] + 0.2158037573 * oklaba[2];
     let m_ = oklaba[0] - 0.1055613458 * oklaba[1] - 0.0638541728 * oklaba[2];
     let s_ = oklaba[0] - 0.0894841775 * oklaba[1] - 1.2914855480 * oklaba[2];
@@ -450,7 +388,7 @@ fn oklaba_to_xyz(oklaba: [f64; 4]) -> [f64; 4] {
     [x, y, z, oklaba[3]]
 }
 
-fn oklaba_to_oklcha(oklaba: [f64; 4]) -> [f64; 4] {
+fn oklaba_to_oklcha(oklaba: ColorData) -> ColorData {
     let l = oklaba[0];
     let a = oklaba[1];
     let b = oklaba[2];
@@ -462,7 +400,7 @@ fn oklaba_to_oklcha(oklaba: [f64; 4]) -> [f64; 4] {
     [l, c, h, oklaba[3]]
 }
 
-fn oklcha_to_oklaba(oklcha: [f64; 4]) -> [f64; 4] {
+fn oklcha_to_oklaba(oklcha: ColorData) -> ColorData {
     let l = oklcha[0];
     let c = oklcha[1];
     let h = oklcha[2].to_radians();
@@ -473,20 +411,13 @@ fn oklcha_to_oklaba(oklcha: [f64; 4]) -> [f64; 4] {
     [l, a, b, oklcha[3]]
 }
 
-fn oklcha_to_xyz(oklcha: [f64; 4]) -> [f64; 4] {
+fn oklcha_to_xyz(oklcha: ColorData) -> ColorData {
     let oklaba = oklcha_to_oklaba(oklcha);
     oklaba_to_xyz(oklaba)
 }
 
 fn main() {
-    let mut color = Color::from_srgba([0.5, 0.5, 0.5, 1.0]);
-    println!("{:?}", color.to_xyza());
-    println!("{:?}", color.to_linear_rgba());
-    println!("{:?}", color.to_hsla());
-    println!("{:?}", color.to_hsva());
-    println!("{:?}", color.to_hwba());
-    println!("{:?}", color.to_laba());
-    println!("{:?}", color.to_lcha());
-    println!("{:?}", color.to_oklaba());
-    println!("{:?}", color.to_oklcha());
+    let mut color = ProColor::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
+    let _ = color.fill_all_spaces();
+    println!("{:?}", color.space_matrix);
 }
