@@ -1,10 +1,13 @@
-use rust_pixel::event::{Event, KeyCode};
-use rust_pixel::util::PointF32;
 use keyframe::{functions::*, AnimationSequence};
-// use log::info;
+use log::info;
+use palette_lib::PaletteData;
+use rust_pixel::event::{Event, KeyCode};
+use rust_pixel::render::style::{
+    ColorDataWrap, ColorPro, ColorSpace::*, COLOR_SPACE_COUNT, COLOR_SPACE_NAME,
+};
+use rust_pixel::util::PointF32;
 use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
 use std::any::Any;
-use palette_lib::PaletteData;
 
 pub const CARDW: usize = 7;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -41,7 +44,10 @@ impl Model for PaletteModel {
             PointF32 { x: 10.0, y: 30.0 },
             PointF32 { x: 210.0, y: 450.0 },
             PointF32 { x: 110.0, y: 150.0 },
-            PointF32 { x: 1200.0, y: 150.0 },
+            PointF32 {
+                x: 1200.0,
+                y: 150.0,
+            },
             PointF32 {
                 x: PALETTEW as f32 * 16.0,
                 y: PALETTEH as f32 * 16.0,
@@ -61,6 +67,16 @@ impl Model for PaletteModel {
         self.bezier = AnimationSequence::from(ks);
         self.data.shuffle();
         self.card = self.data.next();
+
+        let mut color = ColorPro::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
+        let _ = color.fill_all_spaces();
+        for i in 0..COLOR_SPACE_COUNT {
+            info!(
+                "{}:{:?}",
+                COLOR_SPACE_NAME[i],
+                ColorDataWrap(color.space_matrix[i].unwrap())
+            );
+        }
         event_emit("Palette.RedrawTile");
     }
 
@@ -95,4 +111,3 @@ impl Model for PaletteModel {
         self
     }
 }
-

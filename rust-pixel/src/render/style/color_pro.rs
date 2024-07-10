@@ -1,9 +1,12 @@
+// https://products.aspose.com/svg/zh/net/color-converter/rgb-to-hwb/
+use std::fmt;
 use std::ops::{Index, IndexMut};
 use ColorSpace::*;
 
 pub enum ColorSpace {
     SRGBA,
     LinearRGBA,
+    CMYK,
     HSLA,
     HSVA,
     HWBA,
@@ -15,9 +18,35 @@ pub enum ColorSpace {
 }
 
 // pub const COLOR_SPACE_COUNT: usize = std::mem::variant_count::<ColorSpace>();
-pub const COLOR_SPACE_COUNT: usize = 10;
+pub const COLOR_SPACE_COUNT: usize = 11;
+pub const COLOR_SPACE_NAME: [&'static str; COLOR_SPACE_COUNT] = [
+    "srgb",
+    "linear_rgb",
+    "cmyk",
+    "hsl",
+    "hsv",
+    "hwb",
+    "lab",
+    "lch",
+    "oklab",
+    "oklch",
+    "xyz",
+];
 
 pub type ColorData = [f64; 4];
+
+// wrap for debug trait...
+pub struct ColorDataWrap(pub ColorData);
+
+impl fmt::Debug for ColorDataWrap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:.3} {:.3} {:.3} {:.3}",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ColorPro {
@@ -49,6 +78,9 @@ impl ColorPro {
         let xyza = self[XYZA].unwrap();
         if self[SRGBA] == None {
             self[SRGBA] = Some(xyz_to_srgba(xyza));
+        }
+        if self[CMYK] == None {
+            self[CMYK] = Some(srgba_to_cmyk(self[SRGBA].unwrap()));
         }
         if self[LinearRGBA] == None {
             self[LinearRGBA] = Some(xyz_to_linear_rgba(xyza));
@@ -85,6 +117,8 @@ impl ColorPro {
         let xyza;
         if let Some(srgba) = self[SRGBA] {
             xyza = srgba_to_xyz(srgba);
+        } else if let Some(cmyk) = self[CMYK] {
+            xyza = srgba_to_xyz(cmyk_to_srgba(cmyk));
         } else if let Some(linear_rgba) = self[LinearRGBA] {
             xyza = linear_rgba_to_xyz(linear_rgba);
         } else if let Some(hsla) = self[HSLA] {
@@ -417,8 +451,41 @@ fn oklcha_to_xyz(oklcha: ColorData) -> ColorData {
     oklaba_to_xyz(oklaba)
 }
 
-// fn main() {
-//     let mut color = ColorPro::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
-//     let _ = color.fill_all_spaces();
-//     println!("{:?}", color.space_matrix);
-// }
+fn srgba_to_cmyk(srgb: ColorData) -> ColorData {
+    let r = srgb[0];
+    let g = srgb[1];
+    let b = srgb[2];
+
+    let k = 1.0 - r.max(g.max(b));
+    let c = if k < 1.0 {
+        (1.0 - r - k) / (1.0 - k)
+    } else {
+        0.0
+    };
+    let m = if k < 1.0 {
+        (1.0 - g - k) / (1.0 - k)
+    } else {
+        0.0
+    };
+    let y = if k < 1.0 {
+        (1.0 - b - k) / (1.0 - k)
+    } else {
+        0.0
+    };
+
+    [c, m, y, k]
+}
+
+fn cmyk_to_srgba(cmyk: ColorData) -> ColorData {
+    let c = cmyk[0];
+    let m = cmyk[1];
+    let y = cmyk[2];
+    let k = cmyk[3];
+
+    let r = (1.0 - c) * (1.0 - k);
+    let g = (1.0 - m) * (1.0 - k);
+    let b = (1.0 - y) * (1.0 - k);
+
+    [r, g, b, 1.0]
+}
+
