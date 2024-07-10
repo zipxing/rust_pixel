@@ -1,5 +1,4 @@
 use std::ops::{Index, IndexMut};
-// use std::mem;
 use ColorSpace::*;
 
 pub enum ColorSpace {
@@ -15,14 +14,14 @@ pub enum ColorSpace {
     XYZA,
 }
 
-// pub const COLOR_SPACE_COUNT: usize = mem::variant_count::<ColorSpace>();
+// pub const COLOR_SPACE_COUNT: usize = std::mem::variant_count::<ColorSpace>();
 pub const COLOR_SPACE_COUNT: usize = 10;
 
 pub type ColorData = [f64; 4];
 
 #[derive(Debug, Clone, Copy)]
 pub struct ColorPro {
-    pub space_matrix: [Option<ColorData>; COLOR_SPACE_COUNT], 
+    pub space_matrix: [Option<ColorData>; COLOR_SPACE_COUNT],
 }
 
 impl Index<ColorSpace> for ColorPro {
@@ -42,9 +41,7 @@ impl ColorPro {
     pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
         smat[cs as usize] = Some(color);
-        Self {
-            space_matrix: smat,
-        }
+        Self { space_matrix: smat }
     }
 
     pub fn fill_all_spaces(&mut self) -> Result<(), String> {
@@ -85,7 +82,7 @@ impl ColorPro {
             return Ok(());
         }
 
-        let xyza; 
+        let xyza;
         if let Some(srgba) = self[SRGBA] {
             xyza = srgba_to_xyz(srgba);
         } else if let Some(linear_rgba) = self[LinearRGBA] {
@@ -108,7 +105,7 @@ impl ColorPro {
             return Err("No color data available for conversion".to_string());
         };
 
-        self[XYZA]= Some(xyza);
+        self[XYZA] = Some(xyza);
         Ok(())
     }
 }
@@ -420,8 +417,8 @@ fn oklcha_to_xyz(oklcha: ColorData) -> ColorData {
     oklaba_to_xyz(oklaba)
 }
 
-fn main() {
-    let mut color = ColorPro::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
-    let _ = color.fill_all_spaces();
-    println!("{:?}", color.space_matrix);
-}
+// fn main() {
+//     let mut color = ColorPro::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
+//     let _ = color.fill_all_spaces();
+//     println!("{:?}", color.space_matrix);
+// }
