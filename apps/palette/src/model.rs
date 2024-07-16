@@ -86,12 +86,15 @@ impl Model for PaletteModel {
 
         let mut color_scale = ColorScale::empty();
 
-        for (i, color) in colors.into_iter().enumerate() {
+        for (i, mut color) in colors.into_iter().enumerate() {
+            let _ = color.fill_all_spaces();
             let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
             color_scale.add_stop(color, position);
         }
 
-        let count = 10;
+        info!("color_stop.....{:?}", color_scale);
+
+        let count = 5;
 
         for i in 0..count {
             let position = Fraction::from(i as f64 / (count as f64 - 1.0));
