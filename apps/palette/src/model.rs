@@ -3,7 +3,7 @@ use log::info;
 use palette_lib::PaletteData;
 use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::render::style::{
-    ColorDataWrap, ColorPro, ColorSpace::*, COLOR_SPACE_COUNT, COLOR_SPACE_NAME,
+    Fraction, ColorScale, ColorDataWrap, ColorPro, ColorSpace::*, COLOR_SPACE_COUNT, COLOR_SPACE_NAME,
 };
 use rust_pixel::util::PointF32;
 use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
@@ -77,6 +77,27 @@ impl Model for PaletteModel {
                 ColorDataWrap(color.space_matrix[i].unwrap())
             );
         }
+
+        let colors = vec![
+            ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]), 
+            ColorPro::from_space_data(SRGBA, [0.0, 1.0, 1.0, 1.0]), 
+        ];
+        let color_count = colors.len();
+
+        let mut color_scale = ColorScale::empty();
+
+        for (i, color) in colors.into_iter().enumerate() {
+            let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
+            color_scale.add_stop(color, position);
+        }
+
+        let count = 10;
+
+        for i in 0..count {
+            let position = Fraction::from(i as f64 / (count as f64 - 1.0));
+            let color = color_scale.sample(position, OKLchA).expect("gradient color");
+        }
+
         event_emit("Palette.RedrawTile");
     }
 
