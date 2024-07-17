@@ -68,7 +68,7 @@ impl Model for PaletteModel {
         self.data.shuffle();
         self.card = self.data.next();
 
-        let mut color = ColorPro::from_space_data(SRGBA, [0.5, 0.5, 0.5, 1.0]);
+        let mut color = ColorPro::from_space_data(SRGBA, [0.498039, 0.498039, 0.498039, 1.0]);
         let _ = color.fill_all_spaces();
         for i in 0..COLOR_SPACE_COUNT {
             info!(
@@ -99,6 +99,11 @@ impl Model for PaletteModel {
         for i in 0..count {
             let position = Fraction::from(i as f64 / (count as f64 - 1.0));
             let color = color_scale.sample(position, OKLchA).expect("gradient color");
+            let mut cp = ColorPro::from_space_data(OKLchA, color);
+            let _ = cp.fill_all_spaces();
+            info!("color_sample_srgba.....{:?}", cp[SRGBA]);
+            info!("color_sample_xyz.....{:?}", cp[XYZA]);
+            info!("color_sample_oklch.....{:?}", cp[OKLchA]);
         }
 
         event_emit("Palette.RedrawTile");

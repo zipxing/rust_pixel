@@ -2,6 +2,7 @@
 use std::fmt;
 use std::ops::{Index, IndexMut};
 use ColorSpace::*;
+use log::info;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ColorSpace {
@@ -309,8 +310,8 @@ fn srgba_to_hwba(srgba: ColorData) -> ColorData {
 }
 
 fn xyz_to_laba(xyza: ColorData) -> ColorData {
-    let epsilon = 0.008856;
-    let kappa = 903.3;
+    let epsilon = 0.00885645;
+    let kappa = 903.296;
 
     let xr = xyza[0] / 0.95047;
     let yr = xyza[1] / 1.00000;
@@ -340,8 +341,8 @@ fn xyz_to_laba(xyza: ColorData) -> ColorData {
 }
 
 fn laba_to_xyz(laba: ColorData) -> ColorData {
-    let epsilon = 0.008856;
-    let kappa = 903.3;
+    let epsilon = 0.00885645;
+    let kappa = 903.296;
 
     let fy = (laba[0] + 16.0) / 116.0;
     let fx = laba[1] / 500.0 + fy;
@@ -372,8 +373,11 @@ fn laba_to_xyz(laba: ColorData) -> ColorData {
 
 fn laba_to_lcha(laba: ColorData) -> ColorData {
     let l = laba[0];
-    let c = (laba[1].powi(2) + laba[2].powi(2)).sqrt();
-    let h = laba[2].atan2(laba[1]).to_degrees();
+    let a = laba[1];
+    let b = laba[2];
+    let c = (a * a + b * b).sqrt();
+    let h = f64::atan2(b, a);
+    let h = h.to_degrees();
     let h = if h < 0.0 { h + 360.0 } else { h };
 
     [l, c, h, laba[3]]
@@ -393,9 +397,9 @@ fn lcha_to_xyz(lcha: ColorData) -> ColorData {
 }
 
 fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
-    let l = 0.4121656120 * xyza[0] + 0.5362752080 * xyza[1] + 0.0514575653 * xyza[2];
-    let m = 0.2118591070 * xyza[0] + 0.6807189584 * xyza[1] + 0.1074065790 * xyza[2];
-    let s = 0.0883097947 * xyza[0] + 0.2818474174 * xyza[1] + 0.6298501064 * xyza[2];
+    let l = 0.8189330101 * xyza[0] + 0.3618667424 * xyza[1] - 0.1288597137 * xyza[2];
+    let m = 0.0329845436 * xyza[1] + 0.9293118715 * xyza[1] + 0.0361456387 * xyza[2];
+    let s = 0.0482003018 * xyza[2] + 0.2643662691 * xyza[1] + 0.6338517070 * xyza[2];
 
     let l_ = l.cbrt();
     let m_ = m.cbrt();
@@ -409,17 +413,13 @@ fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
 }
 
 fn oklaba_to_xyz(oklaba: ColorData) -> ColorData {
-    let l_ = oklaba[0] + 0.3963377774 * oklaba[1] + 0.2158037573 * oklaba[2];
-    let m_ = oklaba[0] - 0.1055613458 * oklaba[1] - 0.0638541728 * oklaba[2];
-    let s_ = oklaba[0] - 0.0894841775 * oklaba[1] - 1.2914855480 * oklaba[2];
+    let l = (1.00000000 * oklaba[0] + 0.39633779 * oklaba[1] + 0.21580376 * oklaba[2]).powi(3);
+    let m = (1.00000001 * oklaba[0] - 0.10556134 * oklaba[1] - 0.06385417 * oklaba[2]).powi(3);
+    let s = (1.00000005 * oklaba[0] - 0.08948418 * oklaba[1] - 1.29148554 * oklaba[2]).powi(3);
 
-    let l = l_.powi(3);
-    let m = m_.powi(3);
-    let s = s_.powi(3);
-
-    let x = 0.9999999984 * l + 0.3963377774 * m + 0.2158037573 * s;
-    let y = 1.0000000004 * l - 0.1055613458 * m - 0.0638541728 * s;
-    let z = 1.0000000043 * l - 0.0894841775 * m - 1.2914855480 * s;
+    let x =  1.22701385 * l - 0.55779998 * m + 0.28125615 * s;
+    let y = -0.04058018 * l + 1.11225687 * m - 0.07167668 * s;
+    let z = -0.07638128 * l - 0.42148198 * m + 1.58616322 * s;
 
     [x, y, z, oklaba[3]]
 }
