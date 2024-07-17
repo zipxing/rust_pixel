@@ -111,42 +111,105 @@ impl ColorPro {
         Ok(())
     }
 
+    pub fn set_data(&mut self, cs: ColorSpace, data: ColorData) {
+        if self[cs] == None {
+            self[cs] = Some(data);
+        }
+    }
+
     pub fn to_xyza(&mut self) -> Result<(), String> {
         if self[XYZA] != None {
             return Ok(());
         }
 
-        let xyza;
         if let Some(srgba) = self[SRGBA] {
-            xyza = srgba_to_xyz(srgba);
-        } else if let Some(cmyk) = self[CMYK] {
-            xyza = srgba_to_xyz(cmyk_to_srgba(cmyk));
-        } else if let Some(linear_rgba) = self[LinearRGBA] {
+            let linear;
+            let xyza;
+            (xyza, linear) = srgba_to_xyz(srgba);
+            self.set_data(LinearRGBA, linear);
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(cmyk) = self[CMYK] {
+            let linear;
+            let xyza;
+            let srgba = cmyk_to_srgba(cmyk);
+            self.set_data(SRGBA, srgba);
+            (xyza, linear) = srgba_to_xyz(srgba);
+            self.set_data(LinearRGBA, linear);
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(linear_rgba) = self[LinearRGBA] {
+            let xyza;
             xyza = linear_rgba_to_xyz(linear_rgba);
-        } else if let Some(hsla) = self[HSLA] {
-            xyza = srgba_to_xyz(hsla_to_srgba(hsla));
-        } else if let Some(hsva) = self[HSVA] {
-            xyza = srgba_to_xyz(hsva_to_srgba(hsva));
-        } else if let Some(hwba) = self[HWBA] {
-            xyza = srgba_to_xyz(hwba_to_srgba(hwba));
-        } else if let Some(laba) = self[LabA] {
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(hsla) = self[HSLA] {
+            let linear;
+            let xyza;
+            let srgba = hsla_to_srgba(hsla);
+            self.set_data(SRGBA, srgba);
+            (xyza, linear) = srgba_to_xyz(srgba);
+            self.set_data(LinearRGBA, linear);
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(hsva) = self[HSVA] {
+            let linear;
+            let xyza;
+            let srgba = hsva_to_srgba(hsva);
+            self.set_data(SRGBA, srgba);
+            (xyza, linear) = srgba_to_xyz(srgba);
+            self.set_data(LinearRGBA, linear);
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(hwba) = self[HWBA] {
+            let linear;
+            let xyza;
+            let srgba = hwba_to_srgba(hwba);
+            self.set_data(SRGBA, srgba);
+            (xyza, linear) = srgba_to_xyz(srgba);
+            self.set_data(LinearRGBA, linear);
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(laba) = self[LabA] {
+            let xyza;
             xyza = laba_to_xyz(laba);
-        } else if let Some(lcha) = self[LchA] {
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(lcha) = self[LchA] {
+            let xyza;
             xyza = lcha_to_xyz(lcha);
-        } else if let Some(oklaba) = self[OKLabA] {
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(oklaba) = self[OKLabA] {
+            let xyza;
             xyza = oklaba_to_xyz(oklaba);
-        } else if let Some(oklcha) = self[OKLchA] {
+            self.set_data(XYZA, xyza);
+        } 
+
+        if let Some(oklcha) = self[OKLchA] {
+            let xyza;
             xyza = oklcha_to_xyz(oklcha);
-        } else {
+            self.set_data(XYZA, xyza);
+        } 
+
+        if self[XYZA] == None {
             return Err("No color data available for conversion".to_string());
         };
 
-        self[XYZA] = Some(xyza);
         Ok(())
     }
 }
 
-fn srgba_to_xyz(srgba: ColorData) -> ColorData {
+// return xyz & linear
+fn srgba_to_xyz(srgba: ColorData) -> (ColorData, ColorData) {
     let sr = linearize(srgba[0]);
     let sg = linearize(srgba[1]);
     let sb = linearize(srgba[2]);
@@ -155,7 +218,7 @@ fn srgba_to_xyz(srgba: ColorData) -> ColorData {
     let y = sr * 0.2126729 + sg * 0.7151522 + sb * 0.0721750;
     let z = sr * 0.0193339 + sg * 0.1191920 + sb * 0.9503041;
 
-    [x, y, z, srgba[3]]
+    ([x, y, z, srgba[3]], [sr, sr, sb, srgba[3]])
 }
 
 fn linearize(value: f64) -> f64 {
