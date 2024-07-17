@@ -1,8 +1,8 @@
 // https://products.aspose.com/svg/zh/net/color-converter/rgb-to-hwb/
+// use log::info;
 use std::fmt;
 use std::ops::{Index, IndexMut};
 use ColorSpace::*;
-use log::info;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ColorSpace {
@@ -310,8 +310,8 @@ fn srgba_to_hwba(srgba: ColorData) -> ColorData {
 }
 
 fn xyz_to_laba(xyza: ColorData) -> ColorData {
-    let epsilon = 0.00885645;
-    let kappa = 903.296;
+    let epsilon = 0.008856;
+    let kappa = 903.3;
 
     let xr = xyza[0] / 0.95047;
     let yr = xyza[1] / 1.00000;
@@ -341,8 +341,8 @@ fn xyz_to_laba(xyza: ColorData) -> ColorData {
 }
 
 fn laba_to_xyz(laba: ColorData) -> ColorData {
-    let epsilon = 0.00885645;
-    let kappa = 903.296;
+    let epsilon = 0.008856;
+    let kappa = 903.3;
 
     let fy = (laba[0] + 16.0) / 116.0;
     let fx = laba[1] / 500.0 + fy;
@@ -417,7 +417,7 @@ fn oklaba_to_xyz(oklaba: ColorData) -> ColorData {
     let m = (1.00000001 * oklaba[0] - 0.10556134 * oklaba[1] - 0.06385417 * oklaba[2]).powi(3);
     let s = (1.00000005 * oklaba[0] - 0.08948418 * oklaba[1] - 1.29148554 * oklaba[2]).powi(3);
 
-    let x =  1.22701385 * l - 0.55779998 * m + 0.28125615 * s;
+    let x = 1.22701385 * l - 0.55779998 * m + 0.28125615 * s;
     let y = -0.04058018 * l + 1.11225687 * m - 0.07167668 * s;
     let z = -0.07638128 * l - 0.42148198 * m + 1.58616322 * s;
 
@@ -568,11 +568,7 @@ impl ColorScale {
         self
     }
 
-    pub fn sample(
-        &self,
-        position: Fraction,
-        cs: ColorSpace,
-    ) -> Option<ColorData> {
+    pub fn sample(&self, position: Fraction, cs: ColorSpace) -> Option<ColorData> {
         if self.color_stops.len() < 2 {
             return None;
         }

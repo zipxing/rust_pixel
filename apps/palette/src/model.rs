@@ -101,9 +101,10 @@ impl Model for PaletteModel {
             let color = color_scale.sample(position, OKLchA).expect("gradient color");
             let mut cp = ColorPro::from_space_data(OKLchA, color);
             let _ = cp.fill_all_spaces();
-            info!("color_sample_srgba.....{:?}", cp[SRGBA]);
-            info!("color_sample_xyz.....{:?}", cp[XYZA]);
-            info!("color_sample_oklch.....{:?}", cp[OKLchA]);
+            info!("color_sample_oklch.....{:?}", ColorDataWrap(cp[OKLchA].unwrap()));
+            info!("color_sample_xyz.....{:?}", ColorDataWrap(cp[XYZA].unwrap()));
+            info!("color_sample_oklab.....{:?}", ColorDataWrap(cp[OKLabA].unwrap()));
+            info!("color_sample_srgba.....{:?}", ColorDataWrap(cp[SRGBA].unwrap()));
         }
 
         event_emit("Palette.RedrawTile");
