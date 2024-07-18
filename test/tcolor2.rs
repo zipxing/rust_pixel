@@ -128,10 +128,14 @@ fn oklab_to_xyz(lab: Oklab) -> XYZ {
     let m3 = m2 * m2 * m2;
     let s3 = s2 * s2 * s2;
 
+    let x = 1.2270138511 * l3 - 0.5577999806 * m3 + 0.2812561481 * s3;
+    let y = -0.0405801784 * l3 + 1.1122568696 * m3 - 0.0716766787 * s3;
+    let z = -0.0763812845 * l3 - 0.4214819784 * m3 + 1.5861632204 * s3;
+
     XYZ {
-        x:  1.2270138511 * l3 - 0.5577999806 * m3 + 0.2812561481 * s3,
-        y: -0.0405801784 * l3 + 1.1122568696 * m3 - 0.0716766787 * s3,
-        z: -0.0763812845 * l3 - 0.4214819784 * m3 + 1.5861632204 * s3,
+        x: x,
+        y: y,
+        z: z,
     }
 }
 
@@ -185,11 +189,11 @@ fn oklch_to_srgb(oklch: Oklch) -> SRGB {
 fn main() {
     // let srgb_color = SRGB { r: 1.0, g: 0.0, b: 0.0 };
     // 0.697336 0.231878 70.619969
-    let srgb_color = SRGB { r: 215.0 / 255.0, g: 138.0 / 255.0, b: 0.0 };
-    let oklch_color = srgb_to_oklch(srgb_color);
-    println!("Oklch: {:?}", oklch_color);
+    // let srgb_color = SRGB { r: 215.0 / 255.0, g: 138.0 / 255.0, b: 0.0 };
+    // let oklch_color = srgb_to_oklch(srgb_color);
+    // println!("Oklch: {:?}", oklch_color);
 
-    // let oklch_color = Oklch {  l: 0.697336, c: 0.231878, h: 70.619969};
+    let oklch_color = Oklch {  l: 0.697336, c: 0.231878, h: 70.619969};
     let converted_srgb_color = oklch_to_srgb(oklch_color);
     println!("Converted sRGB: {:?}", converted_srgb_color);
 }
