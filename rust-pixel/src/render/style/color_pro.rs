@@ -4,6 +4,8 @@ use std::fmt;
 use std::ops::{Index, IndexMut};
 use ColorSpace::*;
 
+pub const COLOR_SPACE_COUNT: usize = 11;
+
 #[derive(Debug, Clone, Copy)]
 pub enum ColorSpace {
     SRGBA,
@@ -19,8 +21,6 @@ pub enum ColorSpace {
     XYZA,
 }
 
-// pub const COLOR_SPACE_COUNT: usize = std::mem::variant_count::<ColorSpace>();
-pub const COLOR_SPACE_COUNT: usize = 11;
 pub const COLOR_SPACE_NAME: [&'static str; COLOR_SPACE_COUNT] = [
     "srgb",
     "linear_rgb",
@@ -183,8 +183,10 @@ impl ColorPro {
         } 
 
         if let Some(lcha) = self[LchA] {
+            let laba;
             let xyza;
-            xyza = lcha_to_xyz(lcha);
+            (xyza, laba) = lcha_to_xyz(lcha);
+            self.set_data(LabA, laba);
             self.set_data(XYZA, xyza);
         } 
 
@@ -196,8 +198,10 @@ impl ColorPro {
 
         if let Some(oklcha) = self[OKLchA] {
             let xyza;
-            xyza = oklcha_to_xyz(oklcha);
+            let oklaba;
+            (xyza, oklaba) = oklcha_to_xyz(oklcha);
             self.set_data(XYZA, xyza);
+            self.set_data(OKLabA, oklaba);
         } 
 
         if self[XYZA] == None {
@@ -454,9 +458,9 @@ fn lcha_to_laba(lcha: ColorData) -> ColorData {
     [l, a, b, lcha[3]]
 }
 
-fn lcha_to_xyz(lcha: ColorData) -> ColorData {
+fn lcha_to_xyz(lcha: ColorData) -> (ColorData, ColorData) {
     let laba = lcha_to_laba(lcha);
-    laba_to_xyz(laba)
+    (laba_to_xyz(laba), laba)
 }
 
 fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
@@ -510,9 +514,9 @@ fn oklcha_to_oklaba(oklcha: ColorData) -> ColorData {
     [l, a, b, oklcha[3]]
 }
 
-fn oklcha_to_xyz(oklcha: ColorData) -> ColorData {
+fn oklcha_to_xyz(oklcha: ColorData) -> (ColorData, ColorData) {
     let oklaba = oklcha_to_oklaba(oklcha);
-    oklaba_to_xyz(oklaba)
+    (oklaba_to_xyz(oklaba), oklaba)
 }
 
 fn srgba_to_cmyk(srgb: ColorData) -> ColorData {

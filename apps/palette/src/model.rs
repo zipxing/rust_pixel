@@ -105,6 +105,7 @@ impl Model for PaletteModel {
             info!("color_sample_xyz.....{:?}", ColorDataWrap(cp[XYZA].unwrap()));
             info!("color_sample_oklab.....{:?}", ColorDataWrap(cp[OKLabA].unwrap()));
             info!("color_sample_srgba.....{:?}", ColorDataWrap(cp[SRGBA].unwrap()));
+            info!("------------------------------")
         }
 
         event_emit("Palette.RedrawTile");
