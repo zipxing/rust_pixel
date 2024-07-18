@@ -75,46 +75,27 @@ impl ColorPro {
         Self { space_matrix: smat }
     }
 
-    pub fn fill_all_spaces(&mut self) -> Result<(), String> {
-        self.to_xyza()?;
-        let xyza = self[XYZA].unwrap();
-        if self[SRGBA] == None {
-            self[SRGBA] = Some(xyz_to_srgba(xyza));
-        }
-        if self[CMYK] == None {
-            self[CMYK] = Some(srgba_to_cmyk(self[SRGBA].unwrap()));
-        }
-        if self[LinearRGBA] == None {
-            self[LinearRGBA] = Some(xyz_to_linear_rgba(xyza));
-        }
-        if self[HSLA] == None {
-            self[HSLA] = Some(srgba_to_hsla(self[SRGBA].unwrap()));
-        }
-        if self[HSVA] == None {
-            self[HSVA] = Some(srgba_to_hsva(self[SRGBA].unwrap()));
-        }
-        if self[HWBA] == None {
-            self[HWBA] = Some(srgba_to_hwba(self[SRGBA].unwrap()));
-        }
-        if self[LabA] == None {
-            self[LabA] = Some(xyz_to_laba(xyza));
-        }
-        if self[LchA] == None {
-            self[LchA] = Some(laba_to_lcha(self[LabA].unwrap()));
-        }
-        if self[OKLabA] == None {
-            self[OKLabA] = Some(xyz_to_oklaba(xyza));
-        }
-        if self[OKLchA] == None {
-            self[OKLchA] = Some(oklaba_to_oklcha(self[OKLabA].unwrap()));
-        }
-        Ok(())
-    }
-
     pub fn set_data(&mut self, cs: ColorSpace, data: ColorData) {
         if self[cs] == None {
             self[cs] = Some(data);
         }
+    }
+
+    pub fn fill_all_spaces(&mut self) -> Result<(), String> {
+        self.to_xyza()?;
+        let xyza = self[XYZA].unwrap();
+        self.set_data(SRGBA, xyz_to_srgba(xyza));
+        let srgba = self[SRGBA].unwrap();
+        self.set_data(CMYK, srgba_to_cmyk(srgba));
+        self.set_data(LinearRGBA, xyz_to_linear_rgba(xyza));
+        self.set_data(HSLA, srgba_to_hsla(srgba));
+        self.set_data(HSVA, srgba_to_hsva(srgba));
+        self.set_data(HWBA, srgba_to_hwba(srgba));
+        self.set_data(LabA, xyz_to_laba(xyza));
+        self.set_data(LchA, laba_to_lcha(self[LabA].unwrap()));
+        self.set_data(OKLabA, xyz_to_oklaba(xyza));
+        self.set_data(OKLchA, oklaba_to_oklcha(self[OKLabA].unwrap()));
+        Ok(())
     }
 
     pub fn to_xyza(&mut self) -> Result<(), String> {
@@ -128,7 +109,7 @@ impl ColorPro {
             (xyza, linear) = srgba_to_xyz(srgba);
             self.set_data(LinearRGBA, linear);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(cmyk) = self[CMYK] {
             let linear;
@@ -138,13 +119,13 @@ impl ColorPro {
             (xyza, linear) = srgba_to_xyz(srgba);
             self.set_data(LinearRGBA, linear);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(linear_rgba) = self[LinearRGBA] {
             let xyza;
             xyza = linear_rgba_to_xyz(linear_rgba);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(hsla) = self[HSLA] {
             let linear;
@@ -154,7 +135,7 @@ impl ColorPro {
             (xyza, linear) = srgba_to_xyz(srgba);
             self.set_data(LinearRGBA, linear);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(hsva) = self[HSVA] {
             let linear;
@@ -164,7 +145,7 @@ impl ColorPro {
             (xyza, linear) = srgba_to_xyz(srgba);
             self.set_data(LinearRGBA, linear);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(hwba) = self[HWBA] {
             let linear;
@@ -174,13 +155,13 @@ impl ColorPro {
             (xyza, linear) = srgba_to_xyz(srgba);
             self.set_data(LinearRGBA, linear);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(laba) = self[LabA] {
             let xyza;
             xyza = laba_to_xyz(laba);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(lcha) = self[LchA] {
             let laba;
@@ -188,13 +169,13 @@ impl ColorPro {
             (xyza, laba) = lcha_to_xyz(lcha);
             self.set_data(LabA, laba);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(oklaba) = self[OKLabA] {
             let xyza;
             xyza = oklaba_to_xyz(oklaba);
             self.set_data(XYZA, xyza);
-        } 
+        }
 
         if let Some(oklcha) = self[OKLchA] {
             let xyza;
@@ -202,7 +183,7 @@ impl ColorPro {
             (xyza, oklaba) = oklcha_to_xyz(oklcha);
             self.set_data(XYZA, xyza);
             self.set_data(OKLabA, oklaba);
-        } 
+        }
 
         if self[XYZA] == None {
             return Err("No color data available for conversion".to_string());
@@ -262,9 +243,9 @@ fn linear_rgba_to_xyz(linear_rgba: ColorData) -> ColorData {
 }
 
 fn xyz_to_linear_rgba(xyz: ColorData) -> ColorData {
-    let r = xyz[0] *  3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
+    let r = xyz[0] * 3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
     let g = xyz[0] * -0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
-    let b = xyz[0] *  0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
+    let b = xyz[0] * 0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
 
     [r, g, b, xyz[3]]
 }
