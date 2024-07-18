@@ -183,10 +183,13 @@ fn oklch_to_srgb(oklch: Oklch) -> SRGB {
 }
 
 fn main() {
-    let srgb_color = SRGB { r: 1.0, g: 0.0, b: 0.0 };
+    // let srgb_color = SRGB { r: 1.0, g: 0.0, b: 0.0 };
+    // 0.697336 0.231878 70.619969
+    let srgb_color = SRGB { r: 215.0 / 255.0, g: 138.0 / 255.0, b: 0.0 };
     let oklch_color = srgb_to_oklch(srgb_color);
     println!("Oklch: {:?}", oklch_color);
 
+    // let oklch_color = Oklch {  l: 0.697336, c: 0.231878, h: 70.619969};
     let converted_srgb_color = oklch_to_srgb(oklch_color);
     println!("Converted sRGB: {:?}", converted_srgb_color);
 }
