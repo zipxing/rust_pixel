@@ -68,7 +68,7 @@ impl Model for PaletteModel {
         self.data.shuffle();
         self.card = self.data.next();
 
-        let mut color = ColorPro::from_space_data(SRGBA, [0.498039, 0.498039, 0.498039, 1.0]);
+        let mut color = ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]);
         let _ = color.fill_all_spaces();
         for i in 0..COLOR_SPACE_COUNT {
             info!(

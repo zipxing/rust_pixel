@@ -44,7 +44,7 @@ impl fmt::Debug for ColorDataWrap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:.3} {:.3} {:.3} {:.3}",
+            "{:.6} {:.6} {:.6} {:.6}",
             self.0[0], self.0[1], self.0[2], self.0[3]
         )
     }
@@ -222,7 +222,7 @@ fn srgba_to_xyz(srgba: ColorData) -> (ColorData, ColorData) {
     let y = sr * 0.2126729 + sg * 0.7151522 + sb * 0.0721750;
     let z = sr * 0.0193339 + sg * 0.1191920 + sb * 0.9503041;
 
-    ([x, y, z, srgba[3]], [sr, sr, sb, srgba[3]])
+    ([x, y, z, srgba[3]], [sr, sg, sb, srgba[3]])
 }
 
 fn linearize(value: f64) -> f64 {
@@ -262,9 +262,9 @@ fn linear_rgba_to_xyz(linear_rgba: ColorData) -> ColorData {
 }
 
 fn xyz_to_linear_rgba(xyz: ColorData) -> ColorData {
-    let r = xyz[0] * 3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
-    let g = -xyz[0] * 0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
-    let b = xyz[0] * 0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
+    let r = xyz[0] *  3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
+    let g = xyz[0] * -0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
+    let b = xyz[0] *  0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
 
     [r, g, b, xyz[3]]
 }
@@ -465,8 +465,8 @@ fn lcha_to_xyz(lcha: ColorData) -> (ColorData, ColorData) {
 
 fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
     let l = 0.8189330101 * xyza[0] + 0.3618667424 * xyza[1] - 0.1288597137 * xyza[2];
-    let m = 0.0329845436 * xyza[1] + 0.9293118715 * xyza[1] + 0.0361456387 * xyza[2];
-    let s = 0.0482003018 * xyza[2] + 0.2643662691 * xyza[1] + 0.6338517070 * xyza[2];
+    let m = 0.0329845436 * xyza[0] + 0.9293118715 * xyza[1] + 0.0361456387 * xyza[2];
+    let s = 0.0482003018 * xyza[0] + 0.2643662691 * xyza[1] + 0.6338517070 * xyza[2];
 
     let l_ = l.cbrt();
     let m_ = m.cbrt();
