@@ -3,7 +3,8 @@ use log::info;
 use palette_lib::PaletteData;
 use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::render::style::{
-    Fraction, ColorScale, ColorDataWrap, ColorPro, ColorSpace::*, COLOR_SPACE_COUNT, COLOR_SPACE_NAME,
+    delta_e_cie76, delta_e_ciede2000, ColorDataWrap, ColorPro, ColorScale, ColorSpace::*, Fraction,
+    COLOR_SPACE_COUNT, COLOR_SPACE_NAME,
 };
 use rust_pixel::util::PointF32;
 use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
@@ -26,6 +27,7 @@ pub struct PaletteModel {
     pub data: PaletteData,
     pub bezier: AnimationSequence<PointF32>,
     pub card: u8,
+    pub colors: Vec<ColorPro>,
 }
 
 impl PaletteModel {
@@ -34,6 +36,7 @@ impl PaletteModel {
             data: PaletteData::new(),
             bezier: AnimationSequence::new(),
             card: 0,
+            colors: vec![],
         }
     }
 }
@@ -68,8 +71,8 @@ impl Model for PaletteModel {
         self.data.shuffle();
         self.card = self.data.next();
 
-        let mut color = ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]);
-        let _ = color.fill_all_spaces();
+        // test ...
+        let color = ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]);
         for i in 0..COLOR_SPACE_COUNT {
             info!(
                 "{}:{:?}",
@@ -78,33 +81,52 @@ impl Model for PaletteModel {
             );
         }
 
+        let c1 = ColorPro::from_space_data(LabA, [50.0, 0.8, -80.0, 1.0]);
+        let c2 = ColorPro::from_space_data(LabA, [100.0, 1.2, 90.0, 1.0]);
+        let d1 = delta_e_cie76(c1[LabA].unwrap(), c2[LabA].unwrap());
+        let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
+        info!("d76...{}, d2000...{}", d1, d2);
+
         let colors = vec![
-            ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]), 
-            ColorPro::from_space_data(SRGBA, [0.0, 1.0, 1.0, 1.0]), 
+            ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]),
+            ColorPro::from_space_data(SRGBA, [0.0, 1.0, 1.0, 1.0]),
         ];
         let color_count = colors.len();
 
         let mut color_scale = ColorScale::empty();
 
-        for (i, mut color) in colors.into_iter().enumerate() {
-            let _ = color.fill_all_spaces();
+        for (i, color) in colors.into_iter().enumerate() {
             let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
             color_scale.add_stop(color, position);
         }
 
         info!("color_stop.....{:?}", color_scale);
 
-        let count = 5;
+        let count = 20;
 
         for i in 0..count {
             let position = Fraction::from(i as f64 / (count as f64 - 1.0));
-            let color = color_scale.sample(position, OKLchA).expect("gradient color");
-            let mut cp = ColorPro::from_space_data(OKLchA, color);
-            let _ = cp.fill_all_spaces();
-            info!("color_sample_oklch.....{:?}", ColorDataWrap(cp[OKLchA].unwrap()));
-            info!("color_sample_xyz.....{:?}", ColorDataWrap(cp[XYZA].unwrap()));
-            info!("color_sample_oklab.....{:?}", ColorDataWrap(cp[OKLabA].unwrap()));
-            info!("color_sample_srgba.....{:?}", ColorDataWrap(cp[SRGBA].unwrap()));
+            let color = color_scale
+                .sample(position, OKLchA)
+                .expect("gradient color");
+            let cp = ColorPro::from_space_data(OKLchA, color);
+            self.colors.push(cp);
+            info!(
+                "color_sample_oklch.....{:?}",
+                ColorDataWrap(cp[OKLchA].unwrap())
+            );
+            info!(
+                "color_sample_xyz.....{:?}",
+                ColorDataWrap(cp[XYZA].unwrap())
+            );
+            info!(
+                "color_sample_oklab.....{:?}",
+                ColorDataWrap(cp[OKLabA].unwrap())
+            );
+            info!(
+                "color_sample_srgba.....{:?}",
+                ColorDataWrap(cp[SRGBA].unwrap())
+            );
             info!("------------------------------")
         }
 

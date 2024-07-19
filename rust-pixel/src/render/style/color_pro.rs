@@ -1,5 +1,6 @@
 // https://products.aspose.com/svg/zh/net/color-converter/rgb-to-hwb/
 // use log::info;
+use std::f64::consts::PI;
 use std::fmt;
 use std::ops::{Index, IndexMut};
 use ColorSpace::*;
@@ -72,13 +73,9 @@ impl ColorPro {
     pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
         smat[cs as usize] = Some(color);
-        Self { space_matrix: smat }
-    }
-
-    pub fn set_data(&mut self, cs: ColorSpace, data: ColorData) {
-        if self[cs] == None {
-            self[cs] = Some(data);
-        }
+        let mut s = Self { space_matrix: smat };
+        let _ = s.fill_all_spaces();
+        s
     }
 
     pub fn fill_all_spaces(&mut self) -> Result<(), String> {
@@ -98,7 +95,28 @@ impl ColorPro {
         Ok(())
     }
 
-    pub fn to_xyza(&mut self) -> Result<(), String> {
+    pub fn get_srgba_u8(&mut self) -> (u8, u8, u8, u8) {
+        let _ = self.fill_all_spaces();
+        let srgba = self[SRGBA].unwrap();
+        let r = srgba[0];
+        let g = srgba[1];
+        let b = srgba[2];
+        let a = srgba[3];
+        (
+            if r < 0.0 { 0 } else { (255.0 * r) as u8 },
+            if g < 0.0 { 0 } else { (255.0 * g) as u8 },
+            if b < 0.0 { 0 } else { (255.0 * b) as u8 },
+            (255.0 * a) as u8,
+        )
+    }
+
+    fn set_data(&mut self, cs: ColorSpace, data: ColorData) {
+        if self[cs] == None {
+            self[cs] = Some(data);
+        }
+    }
+
+    fn to_xyza(&mut self) -> Result<(), String> {
         if self[XYZA] != None {
             return Ok(());
         }
@@ -212,12 +230,12 @@ fn delinearize(value: f64) -> f64 {
 }
 
 #[inline(always)]
-fn srgba_to_linear(srgba: ColorData) -> ColorData {
-    let sr = linearize(srgba[0]);
-    let sg = linearize(srgba[1]);
-    let sb = linearize(srgba[2]);
+fn srgba_to_linear(s: ColorData) -> ColorData {
+    let r = linearize(s[0]);
+    let g = linearize(s[1]);
+    let b = linearize(s[2]);
 
-    [sr, sg, sb, srgba[3]]
+    [r, g, b, s[3]]
 }
 
 #[inline(always)]
@@ -225,17 +243,17 @@ fn linear_to_srgba(l: ColorData) -> ColorData {
     let sr = delinearize(l[0]);
     let sg = delinearize(l[1]);
     let sb = delinearize(l[2]);
-    
+
     [sr, sg, sb, l[3]]
 }
 
 #[inline(always)]
-fn linear_to_xyz(linear_rgba: ColorData) -> ColorData {
-    let x = linear_rgba[0] * 0.4124564 + linear_rgba[1] * 0.3575761 + linear_rgba[2] * 0.1804375;
-    let y = linear_rgba[0] * 0.2126729 + linear_rgba[1] * 0.7151522 + linear_rgba[2] * 0.0721750;
-    let z = linear_rgba[0] * 0.0193339 + linear_rgba[1] * 0.1191920 + linear_rgba[2] * 0.9503041;
+fn linear_to_xyz(l: ColorData) -> ColorData {
+    let x = l[0] * 0.4124564 + l[1] * 0.3575761 + l[2] * 0.1804375;
+    let y = l[0] * 0.2126729 + l[1] * 0.7151522 + l[2] * 0.0721750;
+    let z = l[0] * 0.0193339 + l[1] * 0.1191920 + l[2] * 0.9503041;
 
-    [x, y, z, linear_rgba[3]]
+    [x, y, z, l[3]]
 }
 
 #[inline(always)]
@@ -564,6 +582,76 @@ fn cmyk_to_srgba(cmyk: ColorData) -> ColorData {
     let b = (1.0 - y) * (1.0 - k);
 
     [r, g, b, 1.0]
+}
+
+pub fn delta_e_cie76(lab1: ColorData, lab2: ColorData) -> f64 {
+    ((lab1[0] - lab2[0]).powi(2) + (lab1[1] - lab2[1]).powi(2) + (lab1[2] - lab2[2]).powi(2)).sqrt()
+}
+
+fn deg_to_rad(deg: f64) -> f64 {
+    deg * PI / 180.0
+}
+
+fn rad_to_deg(rad: f64) -> f64 {
+    rad * 180.0 / PI
+}
+
+pub fn delta_e_ciede2000(lab1: ColorData, lab2: ColorData) -> f64 {
+    let k_l = 1.0;
+    let k_c = 1.0;
+    let k_h = 1.0;
+
+    let delta_l_prime = lab2[0] - lab1[0];
+    let l_bar = (lab1[0] + lab2[0]) / 2.0;
+    let c1 = (lab1[1].powi(2) + lab1[2].powi(2)).sqrt();
+    let c2 = (lab2[1].powi(2) + lab2[2].powi(2)).sqrt();
+    let c_bar = (c1 + c2) / 2.0;
+    let g = 0.5 * (1.0 - (c_bar.powi(7) / (c_bar.powi(7) + 25.0_f64.powi(7))).sqrt());
+
+    let a1_prime = lab1[1] * (1.0 + g);
+    let a2_prime = lab2[1] * (1.0 + g);
+    let c1_prime = (a1_prime.powi(2) + lab1[2].powi(2)).sqrt();
+    let c2_prime = (a2_prime.powi(2) + lab2[2].powi(2)).sqrt();
+    let c_bar_prime = (c1_prime + c2_prime) / 2.0;
+    let delta_c_prime = c2_prime - c1_prime;
+
+    let h1_prime = rad_to_deg(lab1[2].atan2(a1_prime)).rem_euclid(360.0);
+    let h2_prime = rad_to_deg(lab2[2].atan2(a2_prime)).rem_euclid(360.0);
+    let delta_h_prime = if (c1_prime * c2_prime).abs() < 1e-4 {
+        0.0
+    } else if (h2_prime - h1_prime).abs() <= 180.0 {
+        h2_prime - h1_prime
+    } else if h2_prime <= h1_prime {
+        h2_prime - h1_prime + 360.0
+    } else {
+        h2_prime - h1_prime - 360.0
+    };
+    let delta_h_prime_radians = deg_to_rad(delta_h_prime);
+    let delta_h_prime_2 = 2.0 * (c1_prime * c2_prime).sqrt() * (delta_h_prime_radians / 2.0).sin();
+
+    let h_bar_prime = if (c1_prime * c2_prime).abs() < 1e-4 {
+        h1_prime + h2_prime
+    } else if (h1_prime - h2_prime).abs() <= 180.0 {
+        (h1_prime + h2_prime) / 2.0
+    } else if h1_prime + h2_prime < 360.0 {
+        (h1_prime + h2_prime + 360.0) / 2.0
+    } else {
+        (h1_prime + h2_prime - 360.0) / 2.0
+    };
+    let t = 1.0 - 0.17 * (deg_to_rad(h_bar_prime - 30.0)).cos()
+        + 0.24 * (deg_to_rad(2.0 * h_bar_prime)).cos()
+        + 0.32 * (deg_to_rad(3.0 * h_bar_prime + 6.0)).cos()
+        - 0.20 * (deg_to_rad(4.0 * h_bar_prime - 63.0)).cos();
+    let s_l = 1.0 + (0.015 * (l_bar - 50.0).powi(2) / (20.0 + (l_bar - 50.0).powi(2)).sqrt());
+    let s_c = 1.0 + 0.045 * c_bar_prime;
+    let s_h = 1.0 + 0.015 * c_bar_prime * t;
+    let r_t = -2.0 * (deg_to_rad(60.0 * (-((h_bar_prime - 275.0) / 25.0).powi(2)).exp())).sin();
+
+    ((delta_l_prime / (k_l * s_l)).powi(2)
+        + (delta_c_prime / (k_c * s_c)).powi(2)
+        + (delta_h_prime_2 / (k_h * s_h)).powi(2)
+        + r_t * (delta_c_prime / (k_c * s_c)) * (delta_h_prime_2 / (k_h * s_h)))
+        .sqrt()
 }
 
 fn interpolate(a: f64, b: f64, fra: Fraction) -> f64 {

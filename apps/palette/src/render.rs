@@ -36,27 +36,32 @@ impl PaletteRender {
         let adjx = 1;
         let adjy = 20;
 
-        for row in 0..15 {
-            for col in 0..10 {
-                let mut pl = Sprite::new(adjx + col * 10, adjy + row, 10, 1);
-                let idx = (row * 10 + col) as usize;
-                if idx >= COLORS_WITH_NAME.len() {
-                    break;
-                }
-                let s = COLORS_WITH_NAME[idx].0;
-                let r = COLORS_WITH_NAME[idx].1;
-                let g = COLORS_WITH_NAME[idx].2;
-                let b = COLORS_WITH_NAME[idx].3;
-                let cr = Color::Rgba(r, g, b, 255);
-                pl.set_color_str(
-                    0,
-                    0,
-                    &format!("{:10}", s),
-                    if cr.is_dark() {Color::White} else {Color::Rgba(0, 0, 0, 255)},
-                    cr
-                );
-                panel.add_sprite(pl, &format!("{}", idx));
-            }
+        // for row in 0..15 {
+        //     for col in 0..10 {
+        //         let mut pl = Sprite::new(adjx + col * 10, adjy + row, 10, 1);
+        //         let idx = (row * 10 + col) as usize;
+        //         if idx >= COLORS_WITH_NAME.len() {
+        //             break;
+        //         }
+        //         let s = COLORS_WITH_NAME[idx].0;
+        //         let r = COLORS_WITH_NAME[idx].1;
+        //         let g = COLORS_WITH_NAME[idx].2;
+        //         let b = COLORS_WITH_NAME[idx].3;
+        //         let cr = Color::Rgba(r, g, b, 255);
+        //         pl.set_color_str(
+        //             0,
+        //             0,
+        //             &format!("{:10}", s),
+        //             if cr.is_dark() {Color::White} else {Color::Rgba(0, 0, 0, 255)},
+        //             cr
+        //         );
+        //         panel.add_sprite(pl, &format!("{}", idx));
+        //     }
+        // }
+
+        for co in 0..20 {
+            let pl = Sprite::new(adjx + co * 4, adjy + 5, 4, 2);
+            panel.add_sprite(pl, &format!("COLOR{}", co));
         }
 
         // background...
@@ -103,7 +108,7 @@ impl PaletteRender {
 }
 
 impl Render for PaletteRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+    fn init<G: Model>(&mut self, context: &mut Context, data: &mut G) {
         context
             .adapter
             .init(PALETTEW + 2, PALETTEH, 1.0, 1.0, "palette".to_string());
@@ -112,8 +117,22 @@ impl Render for PaletteRender {
         // set a static back img for text mode...
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         {
+            let d = data.as_any().downcast_mut::<PaletteModel>().unwrap();
             let gb = self.panel.get_sprite("back");
             asset2sprite!(gb, context, "back.txt");
+            for co in 0..20 {
+                let gb = self.panel.get_sprite(&format!("COLOR{}", co));
+                let (r, g, b, a) = d.colors[co].get_srgba_u8();
+                let cr = Color::Rgba(r, g, b, 255);
+                gb.set_color_str(
+                    0,
+                    0,
+                    &format!("{:10}", " "),
+                    if cr.is_dark() {Color::White} else {Color::Rgba(0, 0, 0, 255)},
+                    cr
+                );
+
+            }
         }
     }
 
