@@ -87,7 +87,7 @@ impl ColorPro {
         self.set_data(SRGBA, xyz_to_srgba(xyza));
         let srgba = self[SRGBA].unwrap();
         self.set_data(CMYK, srgba_to_cmyk(srgba));
-        self.set_data(LinearRGBA, xyz_to_linear_rgba(xyza));
+        self.set_data(LinearRGBA, xyz_to_linear(xyza));
         self.set_data(HSLA, srgba_to_hsla(srgba));
         self.set_data(HSVA, srgba_to_hsva(srgba));
         self.set_data(HWBA, srgba_to_hwba(srgba));
@@ -123,7 +123,7 @@ impl ColorPro {
 
         if let Some(linear_rgba) = self[LinearRGBA] {
             let xyza;
-            xyza = linear_rgba_to_xyz(linear_rgba);
+            xyza = linear_to_xyz(linear_rgba);
             self.set_data(XYZA, xyza);
         }
 
@@ -193,19 +193,7 @@ impl ColorPro {
     }
 }
 
-// return xyz & linear
-fn srgba_to_xyz(srgba: ColorData) -> (ColorData, ColorData) {
-    let sr = linearize(srgba[0]);
-    let sg = linearize(srgba[1]);
-    let sb = linearize(srgba[2]);
-
-    let x = sr * 0.4124564 + sg * 0.3575761 + sb * 0.1804375;
-    let y = sr * 0.2126729 + sg * 0.7151522 + sb * 0.0721750;
-    let z = sr * 0.0193339 + sg * 0.1191920 + sb * 0.9503041;
-
-    ([x, y, z, srgba[3]], [sr, sg, sb, srgba[3]])
-}
-
+#[inline(always)]
 fn linearize(value: f64) -> f64 {
     if value <= 0.04045 {
         value / 12.92
@@ -214,6 +202,7 @@ fn linearize(value: f64) -> f64 {
     }
 }
 
+#[inline(always)]
 fn delinearize(value: f64) -> f64 {
     if value <= 0.0031308 {
         value * 12.92
@@ -222,19 +211,26 @@ fn delinearize(value: f64) -> f64 {
     }
 }
 
-fn xyz_to_srgba(xyz: ColorData) -> ColorData {
-    let r = xyz[0] * 3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
-    let g = -xyz[0] * 0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
-    let b = xyz[0] * 0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
+#[inline(always)]
+fn srgba_to_linear(srgba: ColorData) -> ColorData {
+    let sr = linearize(srgba[0]);
+    let sg = linearize(srgba[1]);
+    let sb = linearize(srgba[2]);
 
-    let sr = delinearize(r);
-    let sg = delinearize(g);
-    let sb = delinearize(b);
-
-    [sr, sg, sb, xyz[3]]
+    [sr, sg, sb, srgba[3]]
 }
 
-fn linear_rgba_to_xyz(linear_rgba: ColorData) -> ColorData {
+#[inline(always)]
+fn linear_to_srgba(l: ColorData) -> ColorData {
+    let sr = delinearize(l[0]);
+    let sg = delinearize(l[1]);
+    let sb = delinearize(l[2]);
+    
+    [sr, sg, sb, l[3]]
+}
+
+#[inline(always)]
+fn linear_to_xyz(linear_rgba: ColorData) -> ColorData {
     let x = linear_rgba[0] * 0.4124564 + linear_rgba[1] * 0.3575761 + linear_rgba[2] * 0.1804375;
     let y = linear_rgba[0] * 0.2126729 + linear_rgba[1] * 0.7151522 + linear_rgba[2] * 0.0721750;
     let z = linear_rgba[0] * 0.0193339 + linear_rgba[1] * 0.1191920 + linear_rgba[2] * 0.9503041;
@@ -242,7 +238,8 @@ fn linear_rgba_to_xyz(linear_rgba: ColorData) -> ColorData {
     [x, y, z, linear_rgba[3]]
 }
 
-fn xyz_to_linear_rgba(xyz: ColorData) -> ColorData {
+#[inline(always)]
+fn xyz_to_linear(xyz: ColorData) -> ColorData {
     let r = xyz[0] * 3.2404542 - xyz[1] * 1.5371385 - xyz[2] * 0.4985314;
     let g = xyz[0] * -0.9692660 + xyz[1] * 1.8760108 + xyz[2] * 0.0415560;
     let b = xyz[0] * 0.0556434 - xyz[1] * 0.2040259 + xyz[2] * 1.0572252;
@@ -250,6 +247,20 @@ fn xyz_to_linear_rgba(xyz: ColorData) -> ColorData {
     [r, g, b, xyz[3]]
 }
 
+#[inline(always)]
+fn srgba_to_xyz(srgba: ColorData) -> (ColorData, ColorData) {
+    let l = srgba_to_linear(srgba);
+    let xyza = linear_to_xyz(l);
+    (xyza, l)
+}
+
+#[inline(always)]
+fn xyz_to_srgba(xyz: ColorData) -> ColorData {
+    let l = xyz_to_linear(xyz);
+    linear_to_srgba(l)
+}
+
+#[inline(always)]
 fn hsla_to_srgba(hsla: ColorData) -> ColorData {
     let (h, s, l, a) = (hsla[0], hsla[1], hsla[2], hsla[3]);
 
@@ -269,6 +280,7 @@ fn hsla_to_srgba(hsla: ColorData) -> ColorData {
     [r + m, g + m, b + m, a]
 }
 
+#[inline(always)]
 fn srgba_to_hsla(srgba: ColorData) -> ColorData {
     let (r, g, b, a) = (srgba[0], srgba[1], srgba[2], srgba[3]);
 
@@ -296,6 +308,7 @@ fn srgba_to_hsla(srgba: ColorData) -> ColorData {
     [h, s, l, a]
 }
 
+#[inline(always)]
 fn hsva_to_srgba(hsva: ColorData) -> ColorData {
     let (h, s, v, a) = (hsva[0], hsva[1], hsva[2], hsva[3]);
 
@@ -315,6 +328,7 @@ fn hsva_to_srgba(hsva: ColorData) -> ColorData {
     [r + m, g + m, b + m, a]
 }
 
+#[inline(always)]
 fn srgba_to_hsva(srgba: ColorData) -> ColorData {
     let (r, g, b, a) = (srgba[0], srgba[1], srgba[2], srgba[3]);
 
@@ -338,6 +352,7 @@ fn srgba_to_hsva(srgba: ColorData) -> ColorData {
     [h, s, v, a]
 }
 
+#[inline(always)]
 fn hwba_to_srgba(hwba: ColorData) -> ColorData {
     let (h, w, b, a) = (hwba[0], hwba[1], hwba[2], hwba[3]);
 
@@ -347,6 +362,7 @@ fn hwba_to_srgba(hwba: ColorData) -> ColorData {
     hsva_to_srgba([h, s, v, a])
 }
 
+#[inline(always)]
 fn srgba_to_hwba(srgba: ColorData) -> ColorData {
     let hsva = srgba_to_hsva(srgba);
     let (h, s, v, a) = (hsva[0], hsva[1], hsva[2], hsva[3]);
@@ -357,6 +373,7 @@ fn srgba_to_hwba(srgba: ColorData) -> ColorData {
     [h, w, b, a]
 }
 
+#[inline(always)]
 fn xyz_to_laba(xyza: ColorData) -> ColorData {
     let epsilon = 0.008856;
     let kappa = 903.3;
@@ -388,6 +405,7 @@ fn xyz_to_laba(xyza: ColorData) -> ColorData {
     [l, a, b, xyza[3]]
 }
 
+#[inline(always)]
 fn laba_to_xyz(laba: ColorData) -> ColorData {
     let epsilon = 0.008856;
     let kappa = 903.3;
@@ -419,6 +437,7 @@ fn laba_to_xyz(laba: ColorData) -> ColorData {
     [x, y, z, laba[3]]
 }
 
+#[inline(always)]
 fn laba_to_lcha(laba: ColorData) -> ColorData {
     let l = laba[0];
     let a = laba[1];
@@ -431,6 +450,7 @@ fn laba_to_lcha(laba: ColorData) -> ColorData {
     [l, c, h, laba[3]]
 }
 
+#[inline(always)]
 fn lcha_to_laba(lcha: ColorData) -> ColorData {
     let l = lcha[0];
     let a = lcha[1] * lcha[2].to_radians().cos();
@@ -439,11 +459,13 @@ fn lcha_to_laba(lcha: ColorData) -> ColorData {
     [l, a, b, lcha[3]]
 }
 
+#[inline(always)]
 fn lcha_to_xyz(lcha: ColorData) -> (ColorData, ColorData) {
     let laba = lcha_to_laba(lcha);
     (laba_to_xyz(laba), laba)
 }
 
+#[inline(always)]
 fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
     let l = 0.8189330101 * xyza[0] + 0.3618667424 * xyza[1] - 0.1288597137 * xyza[2];
     let m = 0.0329845436 * xyza[0] + 0.9293118715 * xyza[1] + 0.0361456387 * xyza[2];
@@ -460,6 +482,7 @@ fn xyz_to_oklaba(xyza: ColorData) -> ColorData {
     [l, a, b, xyza[3]]
 }
 
+#[inline(always)]
 fn oklaba_to_xyz(oklaba: ColorData) -> ColorData {
     let l = (1.00000000 * oklaba[0] + 0.39633779 * oklaba[1] + 0.21580376 * oklaba[2]).powi(3);
     let m = (1.00000001 * oklaba[0] - 0.10556134 * oklaba[1] - 0.06385417 * oklaba[2]).powi(3);
@@ -472,6 +495,7 @@ fn oklaba_to_xyz(oklaba: ColorData) -> ColorData {
     [x, y, z, oklaba[3]]
 }
 
+#[inline(always)]
 fn oklaba_to_oklcha(oklaba: ColorData) -> ColorData {
     let l = oklaba[0];
     let a = oklaba[1];
@@ -484,6 +508,7 @@ fn oklaba_to_oklcha(oklaba: ColorData) -> ColorData {
     [l, c, h, oklaba[3]]
 }
 
+#[inline(always)]
 fn oklcha_to_oklaba(oklcha: ColorData) -> ColorData {
     let l = oklcha[0];
     let c = oklcha[1];
@@ -495,11 +520,13 @@ fn oklcha_to_oklaba(oklcha: ColorData) -> ColorData {
     [l, a, b, oklcha[3]]
 }
 
+#[inline(always)]
 fn oklcha_to_xyz(oklcha: ColorData) -> (ColorData, ColorData) {
     let oklaba = oklcha_to_oklaba(oklcha);
     (oklaba_to_xyz(oklaba), oklaba)
 }
 
+#[inline(always)]
 fn srgba_to_cmyk(srgb: ColorData) -> ColorData {
     let r = srgb[0];
     let g = srgb[1];
@@ -525,6 +552,7 @@ fn srgba_to_cmyk(srgb: ColorData) -> ColorData {
     [c, m, y, k]
 }
 
+#[inline(always)]
 fn cmyk_to_srgba(cmyk: ColorData) -> ColorData {
     let c = cmyk[0];
     let m = cmyk[1];
