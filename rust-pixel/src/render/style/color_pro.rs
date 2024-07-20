@@ -128,6 +128,18 @@ impl ColorPro {
         0.299 * c.v[0] + 0.587 * c.v[1] + 0.114 * c.v[2]
     }
 
+    pub fn chroma(&mut self) -> f64 {
+        let _ = self.fill_all_spaces();
+        let c = self[OKLchA].unwrap();
+        c.v[1]
+    }
+
+    pub fn hue(&mut self) -> f64 {
+        let _ = self.fill_all_spaces();
+        let c = self[OKLchA].unwrap();
+        c.v[2]
+    }
+
     fn fill_all_spaces(&mut self) -> Result<(), String> {
         self.to_xyza()?;
         let xyza = self[XYZA].unwrap();

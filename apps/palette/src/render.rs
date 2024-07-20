@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 use crate::model::{PaletteModel, CCOUNT, PALETTEH, PALETTEW};
 use palette_lib::COLORS_WITH_NAME;
+use std::cell::Cell;
 // use log::info;
 use rust_pixel::{
     asset::AssetType,
@@ -23,25 +24,37 @@ impl PaletteRender {
         let mut panel = Panel::new();
 
         let adjx = 1;
-        let adjy = 6;
+        let adjy = 3;
+
+        let mut ncolors: Vec<(&'static str, Cell<ColorPro>)> = vec![];
+        for c in COLORS_WITH_NAME {
+            let cr = ColorPro::from_space_data(
+                SRGBA,
+                ColorData {
+                    v: [
+                        c.1 as f64 / 255.0,
+                        c.2 as f64 / 255.0,
+                        c.3 as f64 / 255.0,
+                        1.0,
+                    ],
+                },
+            );
+            ncolors.push((c.0, Cell::new(cr)));
+        }
+
+        // ncolors.sort_by_key(|nc| (1000.0 - nc.1.get().brightness() * 1000.0) as i32);
+        // ncolors.sort_by_key(|nc| (1000.0 - nc.1.get().hue() * 1000.0) as i32);
+        ncolors.sort_by_key(|nc| (nc.1.get().chroma() * 1000.0) as i32);
 
         for row in 0..37 {
             for col in 0..4 {
                 let mut pl = Sprite::new(adjx + col * 20, adjy + row, 20, 1);
-                let idx = (row * 10 + col) as usize;
+                let idx = (row * 4 + col) as usize;
                 if idx >= COLORS_WITH_NAME.len() {
                     break;
                 }
-                let s = COLORS_WITH_NAME[idx].0;
-                let r = COLORS_WITH_NAME[idx].1;
-                let g = COLORS_WITH_NAME[idx].2;
-                let b = COLORS_WITH_NAME[idx].3;
-                let mut cr = ColorPro::from_space_data(
-                    SRGBA,
-                    ColorData {
-                        v: [r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0, 1.0],
-                    },
-                );
+                let s = ncolors[idx].0;
+                let mut cr = ncolors[idx].1.get();
                 let color = Color::Professional(cr);
                 pl.set_color_str(
                     0,
@@ -59,7 +72,7 @@ impl PaletteRender {
         }
 
         for co in 0..CCOUNT as u16 {
-            let pl = Sprite::new(adjx + co * 2, adjy - 3, 2, 1);
+            let pl = Sprite::new(adjx + co * 2, adjy - 1, 2, 1);
             panel.add_sprite(pl, &format!("COLOR{}", co));
         }
 
@@ -90,13 +103,7 @@ impl Render for PaletteRender {
             let gb = self.panel.get_sprite(&format!("COLOR{}", co));
             let (r, g, b, a) = d.colors[co].get_srgba_u8();
             let cr = Color::Rgba(r, g, b, 255);
-            gb.set_color_str(
-                0,
-                0,
-                &format!("{:10}", " "),
-                Color::White,
-                cr,
-            );
+            gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         }
     }
 
