@@ -1,11 +1,34 @@
-// https://products.aspose.com/svg/zh/net/color-converter/rgb-to-hwb/
-// use log::info;
+// RustPixel
+// copyright zhouxin@tuyoogame.com 2022~2024
+
+//! Defines Professional Color
+///
+/// Refer:
+///   https://en.wikipedia.org/wiki/Color_space
+///   https://products.aspose.com/svg/zh/net/color-converter/rgb-to-hwb/
+///
+/// ColorSpace range:
+///   sRGB r: 0.0 - 1.0 g: 0.0 - 1.0 b: 0.0 - 1.0
+///   Linear RGB r: 0.0 - 1.0 g: 0.0 - 1.0 b: 0.0 - 1.0
+///   CMYK c: 0.0 - 1.0 m: 0.0 - 1.0 y: 0.0 - 1.0 k: 0.0 - 1.0
+///   HSLA h: 0.0 - 360.0 (degrees) s: 0.0 - 1.0 l: 0.0 - 1.0 a: 0.0 - 1.0
+///   HSVA h: 0.0 - 360.0 (degrees) s: 0.0 - 1.0 v: 0.0 - 1.0 a: 0.0 - 1.0
+///   HWBA h: 0.0 - 360.0 (degrees) w: 0.0 - 1.0 b: 0.0 - 1.0 a: 0.0 - 1.0
+///   Lab l: 0.0 - 100.0 a: -128.0 - 127.0 b: -128.0 - 127.0
+///   LCH l: 0.0 - 100.0 c: 0.0 - 100.0 (approximate, can exceed 100) h: 0.0 - 360.0 (degrees)
+///   Oklab l: 0.0 - 1.0 a: -0.5 - 0.5 (approximate range) b: -0.5 - 0.5 (approximate range)
+///   Oklch l: 0.0 - 1.0 c: 0.0 - 1.0 (approximate range) h: 0.0 - 360.0 (degrees)
+///   XYZ x: 0.0 - 1.0 (normalized range) y: 0.0 - 1.0 (normalized range) z: 0.0 - 1.0 (normalized range)
+///
+///
+///
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
 use std::ops::{Index, IndexMut};
+// use log::info;
 use ColorSpace::*;
 
 pub const COLOR_SPACE_COUNT: usize = 11;
@@ -68,6 +91,30 @@ impl ColorPro {
     /// build color with special colorspace and fill all colorspace data
     pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
+        smat[cs as usize] = Some(color);
+        let mut s = Self { space_matrix: smat };
+        let _ = s.fill_all_spaces();
+        s
+    }
+
+    pub fn from_space_data_u8(cs: ColorSpace, v0: u8, v1: u8, v2: u8, v3: u8) -> Self {
+        let mut smat = [None; COLOR_SPACE_COUNT];
+        let mut color = ColorData {
+            v: [0.0, 0.0, 0.0, 1.0],
+        };
+        match cs {
+            SRGBA | LinearRGBA | CMYK | XYZA => {
+                color = ColorData {
+                    v: [
+                        v0 as f64 / 255.0,
+                        v1 as f64 / 255.0,
+                        v2 as f64 / 255.0,
+                        v3 as f64 / 255.0,
+                    ],
+                }
+            }
+            _ => {}
+        };
         smat[cs as usize] = Some(color);
         let mut s = Self { space_matrix: smat };
         let _ = s.fill_all_spaces();
