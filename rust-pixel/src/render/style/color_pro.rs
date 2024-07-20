@@ -88,7 +88,7 @@ impl IndexMut<ColorSpace> for ColorPro {
 }
 
 impl ColorPro {
-    /// build color with special colorspace and fill all colorspace data
+    /// build colorpro with special colorspace and fill all colorspace data
     pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
         smat[cs as usize] = Some(color);
@@ -97,6 +97,8 @@ impl ColorPro {
         s
     }
 
+    /// build colorpro with special colorspace and u8 parameters
+    /// only vaild for srgb, linear, cmyk, xyz
     pub fn from_space_data_u8(cs: ColorSpace, v0: u8, v1: u8, v2: u8, v3: u8) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
         let mut color = ColorData {
