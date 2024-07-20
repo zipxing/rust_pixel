@@ -3,6 +3,7 @@
 
 //! Defines styles color
 
+use crate::render::style::ColorPro;
 #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crossterm::style::Color as CColor;
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,7 @@ pub enum Color {
     White,
     Rgba(u8, u8, u8, u8),
     Indexed(u8),
+    Professional(ColorPro),
 }
 
 impl Color {
@@ -54,6 +56,7 @@ impl Color {
             Color::White => cidx = 15,
             Color::Indexed(i) => cidx = i as usize,
             Color::Rgba(r, g, b, a) => return (r, g, b, a),
+            Color::Professional(mut cpro) => return cpro.get_srgba_u8(),
         };
         (
             COLOR_RGB[cidx][0],
@@ -61,28 +64,6 @@ impl Color {
             COLOR_RGB[cidx][2],
             255,
         )
-    }
-
-    /// See: <https://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef>
-    pub fn luminance(&self) -> f64 {
-        fn f(s: f64) -> f64 {
-            if s <= 0.03928 {
-                s / 12.92
-            } else {
-                f64::powf((s + 0.055) / 1.055, 2.4)
-            }
-        }
-
-        let c = self.get_rgba();
-        let r = f(c.0 as f64 / 255.0);
-        let g = f(c.1 as f64 / 255.0);
-        let b = f(c.2 as f64 / 255.0);
-
-        0.2126 * r + 0.7152 * g + 0.0722 * b
-    }
-
-    pub fn is_dark(&self) -> bool {
-        self.luminance() <= 0.179
     }
 }
 
@@ -109,6 +90,10 @@ impl From<Color> for CColor {
             Color::White => CColor::White,
             Color::Indexed(i) => CColor::AnsiValue(i),
             Color::Rgba(r, g, b, _a) => CColor::Rgb { r, g, b },
+            Color::Professional(mut cpro) => {
+                let (r, g, b, _a) = cpro.get_srgba_u8();
+                CColor::Rgb { r, g, b }
+            }
         }
     }
 }
@@ -135,6 +120,7 @@ impl From<Color> for u8 {
             Color::White => 15,
             Color::Indexed(i) => i,
             Color::Rgba(_r, _g, _b, _a) => 0,
+            Color::Professional(_cpro) => 0,
         }
     }
 }

@@ -1,22 +1,20 @@
-use keyframe::{functions::*, AnimationSequence};
 use log::info;
+use num_traits::FromPrimitive;
 use palette_lib::PaletteData;
-use rust_pixel::event::{Event, KeyCode};
-use rust_pixel::render::style::{
-    delta_e_cie76, delta_e_ciede2000, ColorDataWrap, ColorPro, ColorScale, ColorSpace::*, Fraction,
-    COLOR_SPACE_COUNT, COLOR_SPACE_NAME,
+use rust_pixel::{
+    context::Context,
+    event::{event_emit, Event, KeyCode},
+    game::Model,
+    render::style::{
+        delta_e_cie76, delta_e_ciede2000, ColorData, ColorPro, ColorScale, ColorSpace,
+        ColorSpace::*, Fraction, COLOR_SPACE_COUNT,
+    },
 };
-use rust_pixel::util::PointF32;
-use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
 use std::any::Any;
 
-pub const CARDW: usize = 7;
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-pub const CARDH: usize = 7;
-#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-pub const CARDH: usize = 5;
 pub const PALETTEW: u16 = 100;
 pub const PALETTEH: u16 = 40;
+pub const CCOUNT: usize = 40;
 
 #[repr(u8)]
 enum PaletteState {
@@ -25,7 +23,6 @@ enum PaletteState {
 
 pub struct PaletteModel {
     pub data: PaletteData,
-    pub bezier: AnimationSequence<PointF32>,
     pub card: u8,
     pub colors: Vec<ColorPro>,
 }
@@ -34,7 +31,6 @@ impl PaletteModel {
     pub fn new() -> Self {
         Self {
             data: PaletteData::new(),
-            bezier: AnimationSequence::new(),
             card: 0,
             colors: vec![],
         }
@@ -43,53 +39,65 @@ impl PaletteModel {
 
 impl Model for PaletteModel {
     fn init(&mut self, _context: &mut Context) {
-        let in_points = [
-            PointF32 { x: 10.0, y: 30.0 },
-            PointF32 { x: 210.0, y: 450.0 },
-            PointF32 { x: 110.0, y: 150.0 },
-            PointF32 {
-                x: 1200.0,
-                y: 150.0,
-            },
-            PointF32 {
-                x: PALETTEW as f32 * 16.0,
-                y: PALETTEH as f32 * 16.0,
-            },
-        ];
-        let num = 100;
-        let mut pts = vec![PointF32 { x: 0.0, y: 0.0 }; num];
-        draw_bezier_curves(&in_points, &mut pts);
-
-        let mut ks = Vec::new();
-
-        for i in 0..num {
-            ks.push((pts[i], i as f64 / num as f64, EaseIn).into());
-            // ks.push((pts[i], i as f64 / num as f64).into());
-        }
-
-        self.bezier = AnimationSequence::from(ks);
         self.data.shuffle();
         self.card = self.data.next();
 
         // test ...
-        let color = ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]);
+        let color = ColorPro::from_space_data(
+            SRGBA,
+            ColorData {
+                v: [1.0, 0.0, 0.0, 1.0],
+            },
+        );
         for i in 0..COLOR_SPACE_COUNT {
             info!(
                 "{}:{:?}",
-                COLOR_SPACE_NAME[i],
-                ColorDataWrap(color.space_matrix[i].unwrap())
+                ColorSpace::from_usize(i).unwrap(),
+                color.space_matrix[i].unwrap()
             );
         }
 
-        let c1 = ColorPro::from_space_data(LabA, [50.0, 0.8, -80.0, 1.0]);
-        let c2 = ColorPro::from_space_data(LabA, [100.0, 1.2, 90.0, 1.0]);
+        let c1 = ColorPro::from_space_data(
+            LabA,
+            ColorData {
+                v: [50.0, 0.8, -80.0, 1.0],
+            },
+        );
+        let c2 = ColorPro::from_space_data(
+            LabA,
+            ColorData {
+                v: [100.0, 1.2, 90.0, 1.0],
+            },
+        );
         let d1 = delta_e_cie76(c1[LabA].unwrap(), c2[LabA].unwrap());
         let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
         info!("d76...{}, d2000...{}", d1, d2);
 
         let colors = vec![
-            ColorPro::from_space_data(SRGBA, [1.0, 0.0, 0.0, 1.0]),
-            ColorPro::from_space_data(SRGBA, [0.0, 1.0, 1.0, 1.0]),
+            ColorPro::from_space_data(
+                SRGBA,
+                ColorData {
+                    v: [1.0, 0.0, 0.0, 1.0],
+                },
+            ),
+            ColorPro::from_space_data(
+                SRGBA,
+                ColorData {
+                    v: [1.0, 1.0, 0.0, 1.0],
+                },
+            ),
+            ColorPro::from_space_data(
+                SRGBA,
+                ColorData {
+                    v: [0.0, 1.0, 1.0, 1.0],
+                },
+            ),
+            ColorPro::from_space_data(
+                SRGBA,
+                ColorData {
+                    v: [1.0, 0.0, 0.0, 1.0],
+                },
+            ),
         ];
         let color_count = colors.len();
 
@@ -102,31 +110,17 @@ impl Model for PaletteModel {
 
         info!("color_stop.....{:?}", color_scale);
 
-        let count = 20;
-
-        for i in 0..count {
-            let position = Fraction::from(i as f64 / (count as f64 - 1.0));
+        for i in 0..CCOUNT {
+            let position = Fraction::from(i as f64 / (CCOUNT as f64 - 1.0));
             let color = color_scale
                 .sample(position, OKLchA)
                 .expect("gradient color");
             let cp = ColorPro::from_space_data(OKLchA, color);
             self.colors.push(cp);
-            info!(
-                "color_sample_oklch.....{:?}",
-                ColorDataWrap(cp[OKLchA].unwrap())
-            );
-            info!(
-                "color_sample_xyz.....{:?}",
-                ColorDataWrap(cp[XYZA].unwrap())
-            );
-            info!(
-                "color_sample_oklab.....{:?}",
-                ColorDataWrap(cp[OKLabA].unwrap())
-            );
-            info!(
-                "color_sample_srgba.....{:?}",
-                ColorDataWrap(cp[SRGBA].unwrap())
-            );
+            info!("color_sample_oklch.....{:?}", cp[OKLchA].unwrap());
+            info!("color_sample_xyz.....{:?}", cp[XYZA].unwrap());
+            info!("color_sample_oklab.....{:?}", cp[OKLabA].unwrap());
+            info!("color_sample_srgba.....{:?}", cp[SRGBA].unwrap());
             info!("------------------------------")
         }
 
