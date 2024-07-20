@@ -1,3 +1,25 @@
+# 0.4.0
+- Add ColorPro for professional color process
+- Support HSL, CMYK, Lab, Lch, OkLab, OkLch ColorSpaces
+- Add a terminal application: palette
+```
+$ cargo pixel r palette t
+
+pub enum ColorSpace {
+    SRGBA,
+    LinearRGBA,
+    CMYK,
+    HSLA,
+    HSVA,
+    HWBA,
+    LabA,
+    LchA,
+    OKLabA,
+    OKLchA,
+    XYZA,
+}
+```
+
 # 0.3.3
 - Fix cargo-pixel create bug
 ```
