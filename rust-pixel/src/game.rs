@@ -87,18 +87,29 @@ where
 {
     pub fn new(m: M, r: R, name: &str) -> Self {
         let res: Vec<String> = name.to_string().split("/").map(|s| s.to_string()).collect();
+        let path_name; 
+        let app_name; 
+        match res.len() {
+            1 => {
+                path_name = "games";
+                app_name = name;
+            }
+            2 => {
+                path_name = &res[0];
+                app_name = &res[1];
+            }
+            _ => {
+                path_name = "games";
+                app_name = name;
+            }
+        };
+        let ctx = Context::new(path_name, app_name);
         init_log(
             log::LevelFilter::Info,
-            &format!("log{}{}.log", std::path::MAIN_SEPARATOR, name),
+            &format!("log{}{}.log", std::path::MAIN_SEPARATOR, app_name),
         );
         info!("{}(rust_pixel) start...{:?}", name, res);
-        let ctx = match res.len() {
-            1 => { Context::new("games", name) },
-            2 => { Context::new(&res[0], &res[1]) },
-            _ => { Context::new("games", name) },
-        };
         Self {
-
             context: ctx,
             model: m,
             render: r,

@@ -3,6 +3,7 @@
 
 //! Defines styles color
 
+use crate::render::style::ColorPro;
 #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crossterm::style::Color as CColor;
 use serde::{Deserialize, Serialize};
@@ -29,13 +30,14 @@ pub enum Color {
     White,
     Rgba(u8, u8, u8, u8),
     Indexed(u8),
+    Professional(ColorPro),
 }
 
 impl Color {
     pub fn get_rgba(self) -> (u8, u8, u8, u8) {
         let cidx: usize;
         match self {
-            Color::Reset => cidx = 0,
+            Color::Reset => cidx = 8,
             Color::Black => cidx = 0,
             Color::Red => cidx = 1,
             Color::Green => cidx = 2,
@@ -54,6 +56,7 @@ impl Color {
             Color::White => cidx = 15,
             Color::Indexed(i) => cidx = i as usize,
             Color::Rgba(r, g, b, a) => return (r, g, b, a),
+            Color::Professional(mut cpro) => return cpro.get_srgba_u8(),
         };
         (
             COLOR_RGB[cidx][0],
@@ -87,6 +90,10 @@ impl From<Color> for CColor {
             Color::White => CColor::White,
             Color::Indexed(i) => CColor::AnsiValue(i),
             Color::Rgba(r, g, b, _a) => CColor::Rgb { r, g, b },
+            Color::Professional(mut cpro) => {
+                let (r, g, b, _a) = cpro.get_srgba_u8();
+                CColor::Rgb { r, g, b }
+            }
         }
     }
 }
@@ -113,12 +120,13 @@ impl From<Color> for u8 {
             Color::White => 15,
             Color::Indexed(i) => i,
             Color::Rgba(_r, _g, _b, _a) => 0,
+            Color::Professional(_cpro) => 0,
         }
     }
 }
 
 pub const COLOR_RGB: [[u8; 3]; 256] = [
-    [128, 128, 128],
+    [0, 0, 0],
     [128, 0, 0],
     [0, 128, 0],
     [128, 128, 0],

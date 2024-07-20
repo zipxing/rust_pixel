@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 mod color;
 pub use color::*;
 
+mod color_pro;
+pub use color_pro::*;
+
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

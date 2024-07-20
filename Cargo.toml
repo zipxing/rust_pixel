@@ -1,21 +1,23 @@
+[profile.release]
+opt-level = 's'
+
 [workspace]
-members = [
-    "rust-pixel",
-    "tools/*",
-    "games/*",
-]
 exclude = [
-    "games/poker/ffi",
-    "games/poker/wasm",
-    "games/template/ffi",
-    "games/template/wasm",
+    'games/poker/ffi',
+    'games/poker/wasm',
+    'games/template/ffi',
+    'games/template/wasm',
+    'apps/palette/ffi',
+    'apps/palette/wasm',
 ]
-resolver = "2"
+members = [
+    'rust-pixel',
+    'tools/*',
+    'games/*',
+    'apps/*',
+]
+resolver = '2'
 
 [workspace.package]
-authors = ["zipxing@hotmail.com"]
-description = "2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web..."
-
-[profile.release]
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"
+authors = ['zipxing@hotmail.com']
+description = '2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web...'

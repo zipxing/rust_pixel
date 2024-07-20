@@ -1,5 +1,23 @@
-// use std::env;
+// RustPixel
+// copyright zhouxin@tuyoogame.com 2022~2024
+
+/// rust_pixel cargo build tools...
+///
+/// Usage:
+/// cargo pixel run snake term
+/// cargo pixel run snake sdl
+/// cargo pixel creat games mygame
+/// cargo pixel build snake web
+///
+/// shortcut:
+/// cargo pixel r snake t
+/// cargo pixel r snake s
+/// cargo pixel r snake w
+/// ...
+///
 use clap::{App, Arg, ArgMatches, SubCommand};
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use regex::Regex;
 use std::ffi::OsStr;
 use std::fs;
@@ -8,10 +26,6 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
-// use serde::Deserialize;
-// use std::collections::HashMap;
-use flate2::write::GzEncoder;
-use flate2::Compression;
 
 fn common_arg(app: App) -> App {
     app.arg(
@@ -39,7 +53,7 @@ fn common_arg(app: App) -> App {
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
         .version("1.0")
-        .author("zhouxin@tuyoogame.com")
+        .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
         .subcommand(common_arg(
@@ -84,7 +98,6 @@ fn make_parser() -> ArgMatches {
 
 fn get_cmds(args: &ArgMatches, subcmd: &str) -> Vec<String> {
     let mut cmds = Vec::new();
-    // let curdir = args.value_of("dir").unwrap();
     let mod_name = args.value_of("mod_name").unwrap();
     let loname = mod_name.to_lowercase();
     let capname = capitalize(mod_name);
@@ -209,7 +222,7 @@ fn pixel_creat(args: &ArgMatches) {
             }
         }
     }
-    fs::write("Cargo.toml", doc.to_string()).unwrap();
+    fs::write("Cargo.toml", toml::to_string_pretty(&doc).unwrap()).unwrap();
 
     println!(
         "🍀 creat games folder...{}",
@@ -237,7 +250,7 @@ fn pixel_creat(args: &ArgMatches) {
                         let content = fs::read(&path).unwrap();
                         let mut content_str = String::from_utf8_lossy(&content).to_string();
                         content_str = content_str
-                            .replace("games/template", &format!("{}/{}", dirname, capname));
+                            .replace("games/template", &format!("{}/{}", dirname, loname));
                         content_str = content_str.replace("Template", capname);
                         content_str = content_str.replace("TEMPLATE", upname);
                         content_str = content_str.replace("template", loname);
