@@ -504,6 +504,7 @@ fn xyz_to_laba(xyza: ColorData) -> ColorData {
     let epsilon = 0.008856;
     let kappa = 903.3;
 
+    // D65 XN YN ZN
     let xr = xyza.v[0] / 0.95047;
     let yr = xyza.v[1] / 1.00000;
     let zr = xyza.v[2] / 1.08883;
@@ -558,6 +559,7 @@ fn laba_to_xyz(laba: ColorData) -> ColorData {
         (116.0 * fz - 16.0) / kappa
     };
 
+    // D65 XN YN ZN
     let x = xr * 0.95047;
     let y = yr * 1.00000;
     let z = zr * 1.08883;
