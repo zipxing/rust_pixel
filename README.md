@@ -22,7 +22,7 @@ It is suitable for creating **2D pixel-style games** and develop **terminal appl
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web-projects.
 
 - Text Mode: Built with **crossterm**, runs in terminal and uses **ASCII and Unicode Emoji** for drawing.
-- Graphical Mode (Sdl2): Built with **sdl2**, runs in OS window and uses **PETSCII** and **custom** graphical symbols for rendering.
+- Graphical Mode (Sdl2): Built with **sdl2**, uses **PETSCII** and **custom** graphical symbols for rendering.
 - Graphical Mode (Web): Similar to the SDL mode, but the core logic is compiled into wasm and rendered using **WebGL** and **JavaScript** (refer to rust-pixel/web-template/pixel.js).
     
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into ffi and wasm.
