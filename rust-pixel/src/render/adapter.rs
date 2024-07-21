@@ -80,6 +80,7 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 pub struct AdapterBase {
     pub game_name: String,
     pub path_prefix: String,
+    pub project_path: String,
     pub title: String,
     pub cell_w: u16,
     pub cell_h: u16,
@@ -90,10 +91,11 @@ pub struct AdapterBase {
 }
 
 impl AdapterBase {
-    pub fn new(pre: &str, gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             game_name: gn.to_string(),
             path_prefix: pre.to_string(),
+            project_path: project_path.to_string(),
             title: "".to_string(),
             cell_w: 0,
             cell_h: 0,
@@ -168,11 +170,6 @@ pub trait Adapter {
         let bs = self.get_base();
         bs.title = s;
         self
-    }
-
-    fn set_path_prefix(&mut self, s: String) {
-        let bs = self.get_base();
-        bs.path_prefix = s;
     }
 
     fn cell_width(&self) -> f32;

@@ -86,9 +86,13 @@ where
     R: Render,
 {
     pub fn new(m: M, r: R, name: &str) -> Self {
+        Self::new_with_project_path(m, r, name, "")
+    }
+
+    pub fn new_with_project_path(m: M, r: R, name: &str, project_path: &str) -> Self {
         let res: Vec<String> = name.to_string().split("/").map(|s| s.to_string()).collect();
-        let path_name; 
-        let app_name; 
+        let path_name;
+        let app_name;
         match res.len() {
             1 => {
                 path_name = "games";
@@ -103,7 +107,17 @@ where
                 app_name = name;
             }
         };
-        let ctx = Context::new(path_name, app_name);
+        // If app embbed in rust_pixel directory, default asset path is 
+        // "games/game_name/" or "apps/app_name/"
+        // else you can set asset_path by yourself
+        // example:
+        // context.set_asset_path("./")...
+        let ap = if project_path == "" {
+            format!("{}{}{}", path_name, std::path::MAIN_SEPARATOR, app_name).to_string()
+        } else {
+            project_path.to_string()
+        };
+        let ctx = Context::new(path_name, app_name, &ap);
         init_log(
             log::LevelFilter::Info,
             &format!("log{}{}.log", std::path::MAIN_SEPARATOR, app_name),

@@ -23,6 +23,7 @@ use crate::asset::AssetManager;
 pub struct Context {
     pub game_name: String,
     pub prefix_path: String,
+    pub project_path: String,
     pub stage: u32,
     pub state: u8,
     pub rand: Rand,
@@ -32,21 +33,26 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(prefix:&str, name: &str) -> Self {
+    pub fn new(prefix:&str, name: &str, project_path: &str) -> Self {
         Self {
             game_name: name.to_string(),
             prefix_path: prefix.to_string(),
+            project_path: project_path.to_string(),
             stage: 0,
             state: 0,
             rand: Rand::new(),
             asset_manager: AssetManager::new(),
             input_events: vec![],
             #[cfg(target_arch = "wasm32")]
-            adapter: Box::new(WebAdapter::new(prefix, name)),
+            adapter: Box::new(WebAdapter::new(prefix, name, project_path)),
             #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
-            adapter: Box::new(SdlAdapter::new(prefix, name)),
+            adapter: Box::new(SdlAdapter::new(prefix, name, project_path)),
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
-            adapter: Box::new(CrosstermAdapter::new(prefix, name)),
+            adapter: Box::new(CrosstermAdapter::new(prefix, name, project_path)),
         }
+    }
+
+    pub fn set_asset_path(&mut self, project_path: &str) {
+        self.project_path = project_path.to_string();
     }
 }

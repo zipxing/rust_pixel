@@ -48,10 +48,10 @@ pub struct WebAdapter {
 }
 
 impl WebAdapter {
-    pub fn new(pre: &str, gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             web_buf: vec![],
-            base: AdapterBase::new(pre, gn),
+            base: AdapterBase::new(pre, gn, project_path),
             rd: Rand::new(),
         }
     }

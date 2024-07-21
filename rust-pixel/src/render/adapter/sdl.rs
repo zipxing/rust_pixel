@@ -67,11 +67,11 @@ pub enum SdlBorderArea {
 }
 
 impl SdlAdapter {
-    pub fn new(pre: &str, gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             context: sdl2::init().unwrap(),
             event_pump: None,
-            base: AdapterBase::new(pre, gn),
+            base: AdapterBase::new(pre, gn, project_path),
             cursor: None,
             canvas: None,
             asset_textures: None,
@@ -218,10 +218,8 @@ impl Adapter for SdlAdapter {
             vt.push(
                 texture_creator
                     .load_texture(format!(
-                        "{}{}{}{}{}",
-                        self.base.path_prefix,
-                        std::path::MAIN_SEPARATOR,
-                        self.base.game_name,
+                        "{}{}{}",
+                        self.base.project_path,
                         std::path::MAIN_SEPARATOR,
                         PIXEL_TEXTURE_FILES[t]
                     ))
@@ -237,10 +235,8 @@ impl Adapter for SdlAdapter {
             .unwrap();
 
         let surface = Surface::from_file(format!(
-                        "{}{}{}{}{}",
-                        self.base.path_prefix,
-                        std::path::MAIN_SEPARATOR,
-                        self.base.game_name,
+                        "{}{}{}",
+                        self.base.project_path,
                         std::path::MAIN_SEPARATOR,
                         "assets/pix/cursor.png"))
             .map_err(|err| format!("failed to load cursor image: {}", err))

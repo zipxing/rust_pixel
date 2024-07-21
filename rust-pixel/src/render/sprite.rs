@@ -82,10 +82,8 @@ macro_rules! asset2sprite {
             _ => {},
         }
         #[cfg(not(target_arch = "wasm32"))]
-        let nl = &format!("{}{}{}{}assets{}{}",
-            $ctx.prefix_path,
-            std::path::MAIN_SEPARATOR,
-            $ctx.game_name,
+        let nl = &format!("{}{}assets{}{}",
+            $ctx.project_path,
             std::path::MAIN_SEPARATOR,
             std::path::MAIN_SEPARATOR,
             $loc);

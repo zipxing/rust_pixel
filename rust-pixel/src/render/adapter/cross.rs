@@ -40,11 +40,11 @@ pub struct CrosstermAdapter {
 
 #[cfg(not(feature = "sdl"))]
 impl CrosstermAdapter {
-    pub fn new(pre: &str, gn: &str) -> Self {
+    pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         let stdout = io::stdout();
         Self {
             writer: Box::new(stdout),
-            base: AdapterBase::new(pre, gn),
+            base: AdapterBase::new(pre, gn, project_path),
             rd: Rand::new(),
         }
     }
