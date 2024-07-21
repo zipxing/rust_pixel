@@ -18,7 +18,8 @@
 [TODO]: doc/todo.md
 
 RustPixel is a **2D game engine** and **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
-It is suitable for creating 2D pixel-style games, rapid prototyping, and develop **terminal applications**.It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web-projects.
+It is suitable for creating **2D pixel-style games** and develop **terminal applications**.<br>
+It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web-projects.
 
 - Text Mode: Built with the **crossterm**, runs in the terminal and uses **ASCII and Unicode Emoji** for drawing.
 - Graphical Mode (Sdl2): Built with **sdl2**, runs in standalone window and uses **PETSCII** and **custom** graphical patterns for rendering.
