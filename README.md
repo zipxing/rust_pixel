@@ -17,12 +17,12 @@
 [FAQ]: doc/faq.md
 [TODO]: doc/todo.md
 
-RustPixel is a **2D game engine** and a set of **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
+RustPixel is a **2D game engine** & **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
 It is suitable for creating **2D pixel-style games** and developing **terminal applications**.<br>
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
 
-- Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII and Unicode Emoji** for drawing.
-- Graphical Mode (SDL2): Built with **SDL2**, using **PETSCII** and **custom** graphical symbols for rendering.
+- Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
+- Graphical Mode (SDL2): Built with **SDL2**, using **PETSCII & custom graphical symbols** for rendering.
 - Graphical Mode (Web): Similar to the SDL2 mode, but the core logic is compiled into WASM and rendered using **WebGL** and **JavaScript** (refer to rust-pixel/web-template/pixel.js).
 
 ![demo](./screen-shot/demo.png)
