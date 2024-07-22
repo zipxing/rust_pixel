@@ -48,11 +48,17 @@ fn common_arg(app: App) -> App {
             .default_value("8080")
             .takes_value(true),
     )
+    .arg(
+        Arg::with_name("standlone")
+            .short('s')
+            .long("standalone")
+            .takes_value(false),
+    )
 }
 
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
-        .version("1.0")
+        .version("2.0")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
