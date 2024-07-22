@@ -18,6 +18,7 @@ pub struct PaletteGame {
 pub fn init_game() -> PaletteGame {
     let m = PaletteModel::new();
     let r = PaletteRender::new();
+    // let mut g = Game::new_with_project_path(m, r, "apps/palette", "./");
     let mut g = Game::new(m, r, "apps/palette");
     g.init();
     PaletteGame { g }

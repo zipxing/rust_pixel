@@ -28,7 +28,7 @@ impl PaletteRender {
 
         let mut ncolors: Vec<(&'static str, Cell<ColorPro>)> = vec![];
         for c in COLORS_WITH_NAME {
-            let cr = ColorPro::from_space_data_u8(SRGBA, c.1, c.2, c.3, 255);
+            let cr = ColorPro::from_space_u8(SRGBA, c.1, c.2, c.3, 255);
             ncolors.push((c.0, Cell::new(cr)));
         }
 

@@ -86,10 +86,10 @@ where
     R: Render,
 {
     pub fn new(m: M, r: R, name: &str) -> Self {
-        Self::new_with_project_path(m, r, name, "")
+        Self::new_with_project_path(m, r, name, None)
     }
 
-    pub fn new_with_project_path(m: M, r: R, name: &str, project_path: &str) -> Self {
+    pub fn new_with_project_path(m: M, r: R, name: &str, project_path: Option<&str>) -> Self {
         let res: Vec<String> = name.to_string().split("/").map(|s| s.to_string()).collect();
         let path_name;
         let app_name;
@@ -112,10 +112,10 @@ where
         // else you can set asset_path by yourself
         // example:
         // context.set_asset_path("./")...
-        let ap = if project_path == "" {
+        let ap = if project_path == None {
             format!("{}{}{}", path_name, std::path::MAIN_SEPARATOR, app_name).to_string()
         } else {
-            project_path.to_string()
+            project_path.unwrap().to_string()
         };
         let ctx = Context::new(path_name, app_name, &ap);
         init_log(

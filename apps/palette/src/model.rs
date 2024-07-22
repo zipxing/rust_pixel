@@ -6,8 +6,8 @@ use rust_pixel::{
     event::{event_emit, Event, KeyCode},
     game::Model,
     render::style::{
-        delta_e_cie76, delta_e_ciede2000, ColorData, ColorPro, ColorScale, ColorSpace,
-        ColorSpace::*, Fraction, COLOR_SPACE_COUNT,
+        delta_e_cie76, delta_e_ciede2000, ColorPro, ColorScale, ColorSpace, ColorSpace::*,
+        Fraction, COLOR_SPACE_COUNT,
     },
 };
 use std::any::Any;
@@ -43,12 +43,7 @@ impl Model for PaletteModel {
         self.card = self.data.next();
 
         // test ...
-        let color = ColorPro::from_space_data(
-            SRGBA,
-            ColorData {
-                v: [1.0, 0.0, 0.0, 1.0],
-            },
-        );
+        let color = ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0);
         for i in 0..COLOR_SPACE_COUNT {
             info!(
                 "{}:{:?}",
@@ -57,47 +52,17 @@ impl Model for PaletteModel {
             );
         }
 
-        let c1 = ColorPro::from_space_data(
-            LabA,
-            ColorData {
-                v: [50.0, 0.8, -80.0, 1.0],
-            },
-        );
-        let c2 = ColorPro::from_space_data(
-            LabA,
-            ColorData {
-                v: [100.0, 1.2, 90.0, 1.0],
-            },
-        );
+        let c1 = ColorPro::from_space_f64(LabA, 50.0, 0.8, -80.0, 1.0);
+        let c2 = ColorPro::from_space_f64(LabA, 100.0, 1.2, 90.0, 1.0);
         let d1 = delta_e_cie76(c1[LabA].unwrap(), c2[LabA].unwrap());
         let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
         info!("d76...{}, d2000...{}", d1, d2);
 
         let colors = vec![
-            ColorPro::from_space_data(
-                SRGBA,
-                ColorData {
-                    v: [1.0, 0.0, 0.0, 1.0],
-                },
-            ),
-            ColorPro::from_space_data(
-                SRGBA,
-                ColorData {
-                    v: [1.0, 1.0, 0.0, 1.0],
-                },
-            ),
-            ColorPro::from_space_data(
-                SRGBA,
-                ColorData {
-                    v: [0.0, 1.0, 1.0, 1.0],
-                },
-            ),
-            ColorPro::from_space_data(
-                SRGBA,
-                ColorData {
-                    v: [1.0, 0.0, 0.0, 1.0],
-                },
-            ),
+            ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),
+            ColorPro::from_space_f64(SRGBA, 1.0, 1.0, 0.0, 1.0),
+            ColorPro::from_space_f64(SRGBA, 0.0, 1.0, 1.0, 1.0),
+            ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),
         ];
         let color_count = colors.len();
 
@@ -115,7 +80,7 @@ impl Model for PaletteModel {
             let color = color_scale
                 .sample(position, OKLchA)
                 .expect("gradient color");
-            let cp = ColorPro::from_space_data(OKLchA, color);
+            let cp = ColorPro::from_space(OKLchA, color);
             self.colors.push(cp);
             info!("color_sample_oklch.....{:?}", cp[OKLchA].unwrap());
             info!("color_sample_xyz.....{:?}", cp[XYZA].unwrap());

@@ -1,3 +1,29 @@
+# 0.4.1
+- Refactor Game and Context, added project_path variable
+- Better support for standalone crates using rust_pixel
+Usually, you can use the following commands to create games or applications that use pixel:
+```
+$ cargo pixel c games mygame
+$ cargo pixel c apps myapp
+```
+However, these crates are embedded into rust_pixel, 
+```
+    let mut g = Game::new(m, r, "games/mygame");
+    g.init();
+```
+the project_path is "games/mygame" or "apps/myapp" by default, the assets file path should be "games/mygame/asset/"
+if you creat a standalone project with:
+```
+$ cargo pixel c ../ mygame --standalone
+$ cargo pixel c ../ mygame -s
+```
+and use "cargo run" in mygame directory, you should use this codes for load assets in "./asset/" path:
+```
+    let mut g = Game::new_with_project_path(m, r, "games/mygame", ".");
+    g.init();
+```
+The cargo pixel creat <path> <project_name> --standlone command will automatically complete the above work for you.
+
 # 0.4.0
 - Add ColorPro for professional color process
 - Support HSL, CMYK, Lab, Lch, OkLab, OkLch ColorSpaces

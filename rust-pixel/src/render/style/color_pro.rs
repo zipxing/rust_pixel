@@ -89,8 +89,20 @@ impl IndexMut<ColorSpace> for ColorPro {
 
 impl ColorPro {
     /// build colorpro with special colorspace and fill all colorspace data
-    pub fn from_space_data(cs: ColorSpace, color: ColorData) -> Self {
+    pub fn from_space(cs: ColorSpace, color: ColorData) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
+        smat[cs as usize] = Some(color);
+        let mut s = Self { space_matrix: smat };
+        let _ = s.fill_all_spaces();
+        s
+    }
+
+    /// build colorpro with special colorspace and f64 parameters
+    pub fn from_space_f64(cs: ColorSpace, v0: f64, v1: f64, v2: f64, v3: f64) -> Self {
+        let mut smat = [None; COLOR_SPACE_COUNT];
+        let color = ColorData {
+            v: [v0, v1, v2, v3],
+        };
         smat[cs as usize] = Some(color);
         let mut s = Self { space_matrix: smat };
         let _ = s.fill_all_spaces();
@@ -99,7 +111,7 @@ impl ColorPro {
 
     /// build colorpro with special colorspace and u8 parameters
     /// only vaild for srgb, linear, cmyk, xyz
-    pub fn from_space_data_u8(cs: ColorSpace, v0: u8, v1: u8, v2: u8, v3: u8) -> Self {
+    pub fn from_space_u8(cs: ColorSpace, v0: u8, v1: u8, v2: u8, v3: u8) -> Self {
         let mut smat = [None; COLOR_SPACE_COUNT];
         let mut color = ColorData {
             v: [0.0, 0.0, 0.0, 1.0],
@@ -125,7 +137,7 @@ impl ColorPro {
 
     /// lightness from 0.0(black) to 1.0(white)
     pub fn from_graytone(l: f64) -> Self {
-        Self::from_space_data(
+        Self::from_space(
             HSLA,
             ColorData {
                 v: [0.0, 0.0, l, 1.0],
