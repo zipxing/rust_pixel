@@ -205,30 +205,33 @@ fn pixel_build(args: &ArgMatches) {
 fn pixel_creat(args: &ArgMatches) {
     let dir_name = args.value_of("dir_name").unwrap();
     let mod_name = args.value_of("mod_name").unwrap();
+    let is_standalone = args.is_present("standalone");
     let upname = mod_name.to_uppercase();
     let loname = mod_name.to_lowercase();
     let capname = capitalize(mod_name);
 
-    println!("🍀 update Cargo.toml...");
-    let ct = fs::read_to_string("Cargo.toml").unwrap();
-    let mut doc = ct.parse::<toml::Value>().unwrap();
-    if let Some(workspace) = doc.get_mut("workspace") {
-        if let Some(members) = workspace.get_mut("members") {
-            if let Some(members_array) = members.as_array_mut() {
-                let ds = format!("{}/*", dir_name);
-                if !members_array.contains(&ds.clone().into()) {
-                    members_array.push(ds.into());
+    if !is_standalone {
+        println!("🍀 update Cargo.toml...");
+        let ct = fs::read_to_string("Cargo.toml").unwrap();
+        let mut doc = ct.parse::<toml::Value>().unwrap();
+        if let Some(workspace) = doc.get_mut("workspace") {
+            if let Some(members) = workspace.get_mut("members") {
+                if let Some(members_array) = members.as_array_mut() {
+                    let ds = format!("{}/*", dir_name);
+                    if !members_array.contains(&ds.clone().into()) {
+                        members_array.push(ds.into());
+                    }
+                }
+            }
+            if let Some(exclude) = workspace.get_mut("exclude") {
+                if let Some(exclude_array) = exclude.as_array_mut() {
+                    exclude_array.push(format!("{}/{}/ffi", dir_name, mod_name).into());
+                    exclude_array.push(format!("{}/{}/wasm", dir_name, mod_name).into());
                 }
             }
         }
-        if let Some(exclude) = workspace.get_mut("exclude") {
-            if let Some(exclude_array) = exclude.as_array_mut() {
-                exclude_array.push(format!("{}/{}/ffi", dir_name, mod_name).into());
-                exclude_array.push(format!("{}/{}/wasm", dir_name, mod_name).into());
-            }
-        }
+        fs::write("Cargo.toml", toml::to_string_pretty(&doc).unwrap()).unwrap();
     }
-    fs::write("Cargo.toml", toml::to_string_pretty(&doc).unwrap()).unwrap();
 
     println!(
         "🍀 creat games folder...{}",
