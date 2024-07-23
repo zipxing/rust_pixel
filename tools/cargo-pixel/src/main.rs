@@ -280,7 +280,6 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
             .arg("cp games/template/stand-alone/pixel.toml tmp/pixel_game_template/pixel.toml")
             .status()
             .expect("failed to execute process");
-        //TODO: write rust_pixel path to cargo.toml lib/cargo.toml and pixel.toml
     }
 
     fn replace_in_files(
@@ -306,6 +305,8 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
                             content_str = content_str
                                 .replace("games/template", &format!("{}/{}", dirname, loname));
                         } else {
+                            content_str = content_str
+                                .replace("$RUST_PIXEL_ROOT", &format!("{}/{}", "app", loname));
                             content_str = content_str
                                 .replace("let mut g = Game::new(m, r, \"games/template\");",
                                     "let mut g = Game::new_with_project_path(m, r, \"games/template\", Some(\".\"));");

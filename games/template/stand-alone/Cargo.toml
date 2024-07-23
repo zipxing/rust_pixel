@@ -19,7 +19,7 @@ keyframe = "=1.1.1"
 wasm-bindgen-futures = "0.4.42"
 web-sys = "0.3.4"
 template_lib = { path = "./lib" }
-rust_pixel = { path = "/Users/xinzhou/Desktop/rust_pixel/rust-pixel" }
+rust_pixel = { path = "$RUST_PIXEL_ROOT" }
 
 [features]
 sdl = ["rust_pixel/sdl"]

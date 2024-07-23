@@ -5,4 +5,4 @@
 # refer to tools/cargo-pixel/src/main.rs
 [pixel]
 standalone = true
-rust_pixel = "/Users/xinzhou/Desktop/rust_pixel/rust-pixel"
+rust_pixel = "$RUST_PIXEL_ROOT"
