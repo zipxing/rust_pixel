@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! Implements load/save of image files in pix format
 //!

@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! buffer is a basic rendering unit in RustPixel, represents a rectangle area
 //! A buffer comprises a cell vector with width * height elements

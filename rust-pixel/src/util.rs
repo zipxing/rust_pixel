@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! Utils of random rect PointU16...
 //! and a simple object pool: objpool.rs

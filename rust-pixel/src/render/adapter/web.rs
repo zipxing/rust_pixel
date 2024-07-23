@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! Implements an Adapter class. Moreover,
 //! all web related processing is handled here.

@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! asset provides the resource manager.
 //! It supports async load. It calls JavaScript methods to load resources asynchronously when runs in wasm mode.

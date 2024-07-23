@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! RustPixel is a rust 2d mini-game engine.
 //! It is ideal for fast prototyping of 2d pixel style games

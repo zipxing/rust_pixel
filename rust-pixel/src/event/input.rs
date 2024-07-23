@@ -1,10 +1,6 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
-//! event还提供了统一的输入事件Event，描述键盘鼠标事件
-//! web，sdl，cross等渲染适配器获取的输入事件，需要转换为
-//! 统一事件然后处理
-//!
 //! This module provides a unified Input Event, describing events from keyboard and mouse
 //! Input events triggered by renders adapter such as web, sdl or cross are converted here to
 //! unified Event

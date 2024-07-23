@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! This module implements a simple object pool
 //! It is designed for recycling of objects, reducing costs for creating objects

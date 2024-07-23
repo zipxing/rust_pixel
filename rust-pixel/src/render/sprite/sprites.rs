@@ -1,10 +1,6 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
-//! sprites.rs实现了精灵集合Sprites，把一系列Sprite存储在vector中
-//! 可以按照索引偏移直接访问，也可以通过hashmap来按照tag访问
-//! render_all方法，会按照sprite的render_weight排序绘制
-//!
 //! sprites.rs implements a set of Sprites. Those Sprites are stored in a vector
 //! Sprite can be accessed via offset in the vector or by tag in the hashmap
 //! render_all method draws the sprites in a sorted order indicated by render_weight

@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 //! Cell is the basic rendering data structure in RustPixel, represents a char
 //! Cell stores some key data such as symbol, fg, bg. Many Cells form a buffer to manage rendering.

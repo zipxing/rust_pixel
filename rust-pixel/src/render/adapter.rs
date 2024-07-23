@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::render::style::Color;

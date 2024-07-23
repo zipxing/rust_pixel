@@ -1,3 +1,6 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022~2024
+
 use crate::util::PointF32;
 
 fn bezier_interpolation_func(t: f32, points: &[PointF32], count: usize) -> PointF32 {

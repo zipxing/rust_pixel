@@ -1,14 +1,9 @@
 // RustPixel
-// copyright zhouxin@tuyoogame.com 2022~2024
+// copyright zipxing@hotmail.com 2022~2024
 
-//! 实现了加载.ssf序列帧文件的方法
-//!
-//! 文件头描述了frame的宽，高，帧数，纹理和每一帧数据偏移量
-//! 文件内容是压缩的帧数据
-//!
-//! $ cat assets/sdq/1.ssf
-//!
 //! Implements load of .ssf seq frame file
+//! 
+//! $ cat assets/sdq/1.ssf
 //!
 //! head of the file describes the width, height, framerate, texture and offset of each frame
 //! file content is compressed frame data
