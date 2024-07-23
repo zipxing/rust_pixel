@@ -386,22 +386,34 @@ fn pixel_convert_gif(args: &ArgMatches) {
         .expect("failed to execute process");
 }
 
-fn check_pixel_toml() {
+#[derive(Debug)]
+struct PixelContext {
+    standalone: bool,
+    rust_pixel_path: String,
+}
+
+fn check_pixel_toml() -> PixelContext {
     let ct = fs::read_to_string("pixel.toml")
         .expect("Can't find pixel.toml!\ncargo-pixel must run in rust_pixel or standalone_rust_pixel_project directory.\npixel.toml ");
     let doc = ct.parse::<toml::Value>().unwrap();
+    let mut pc = PixelContext {
+        standalone: false,
+        rust_pixel_path: "".to_string(),
+    };
     if let Some(pixel) = doc.get("pixel") {
         if let Some(standalone) = pixel.get("standalone") {
-            println!("standalone...{}", standalone);
+            pc.standalone = standalone.as_bool().unwrap();
         }
         if let Some(rust_pixel) = pixel.get("rust_pixel") {
-            println!("rust_pixel...{}", rust_pixel);
+            pc.rust_pixel_path = rust_pixel.to_string();
         }
     }
+    pc
 }
 
 fn main() {
-    check_pixel_toml();
+    let ctx = check_pixel_toml();
+    println!("cargo-pixel context:{:?}", ctx);
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(sub_m),
