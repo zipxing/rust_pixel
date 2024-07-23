@@ -20,7 +20,7 @@ web-sys = "0.3.4"
 rust_pixel = { path = "../../rust-pixel" }
 poker_lib = { path = "./lib" }
 texas_lib = { path = "./texas" }
-sdl2 = { version = "0.36.0", optional = true, features = ["image", "gfx"]}
 
 [features]
-sdl = ["dep:sdl2"]
+sdl = ["rust_pixel/sdl"]
+term = ["rust_pixel/term"]

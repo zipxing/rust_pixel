@@ -26,4 +26,5 @@ rust_pixel = { path = "../../rust-pixel", default-features = false, features = [
 tower_lib = { path = "./lib" }
 
 [features]
-sdl = []
+sdl = ["rust_pixel/sdl"]
+term = ["rust_pixel/term"]

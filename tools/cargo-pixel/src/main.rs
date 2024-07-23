@@ -49,7 +49,7 @@ fn common_arg(app: App) -> App {
             .takes_value(true),
     )
     .arg(
-        Arg::with_name("standlone")
+        Arg::with_name("standalone")
             .short('s')
             .long("standalone")
             .takes_value(false),
@@ -117,7 +117,7 @@ fn get_cmds(args: &ArgMatches, subcmd: &str) -> Vec<String> {
 
     match build_type {
         "term" | "t" => cmds.push(format!(
-            "cargo {} --bin {} {} {}",
+            "cargo {} --bin {} --features term {} {}",
             subcmd,
             mod_name,
             release,
@@ -234,7 +234,7 @@ fn pixel_creat(args: &ArgMatches) {
     }
 
     println!(
-        "🍀 creat games folder...{}",
+        "🍀 creat games folder...({})",
         format!("{}/{}/", dir_name, mod_name)
     );
     let cdir = format!("{}", dir_name);
@@ -246,20 +246,35 @@ fn pixel_creat(args: &ArgMatches) {
         .status()
         .expect("failed to execute process");
 
-    fn replace_in_files(dir: &Path, dirname: &str, capname: &str, upname: &str, loname: &str) {
+    fn replace_in_files(
+        is_standalone: bool,
+        dir: &Path,
+        dirname: &str,
+        capname: &str,
+        upname: &str,
+        loname: &str,
+    ) {
         if dir.is_dir() {
             for entry in fs::read_dir(dir).unwrap() {
                 let entry = entry.unwrap();
                 let path = entry.path();
                 if path.is_dir() {
-                    replace_in_files(&path, dirname, capname, upname, loname);
+                    replace_in_files(is_standalone, &path, dirname, capname, upname, loname);
                 } else if path.is_file() {
                     let ext = path.extension().and_then(OsStr::to_str);
                     if ext == Some("rs") || ext == Some("toml") {
                         let content = fs::read(&path).unwrap();
                         let mut content_str = String::from_utf8_lossy(&content).to_string();
-                        content_str = content_str
-                            .replace("games/template", &format!("{}/{}", dirname, loname));
+                        if !is_standalone {
+                            content_str = content_str
+                                .replace("games/template", &format!("{}/{}", dirname, loname));
+                        } else {
+                            content_str = content_str
+                                .replace("let mut g = Game::new(m, r, \"games/template\");",
+                                    "let mut g = Game::new_with_project_path(m, r, \"games/template\", Some(\".\"));");
+                            content_str = content_str
+                                .replace("games/template", &format!("{}/{}", "app", loname));
+                        }
                         content_str = content_str.replace("Template", capname);
                         content_str = content_str.replace("TEMPLATE", upname);
                         content_str = content_str.replace("template", loname);
@@ -270,6 +285,7 @@ fn pixel_creat(args: &ArgMatches) {
         }
     }
     replace_in_files(
+        is_standalone,
         Path::new("tmp/pixel_game_template"),
         &dir_name,
         &capname,

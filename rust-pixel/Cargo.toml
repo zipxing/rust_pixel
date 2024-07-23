@@ -71,8 +71,9 @@ features = [
 ]
 
 [features]
-default = ["log4rs", "crossterm", "rodio"]
-sdl = ["log4rs", "rodio", "sdl2"]
+default = []
 web = []
+term = ["log4rs", "crossterm", "rodio"]
+sdl = ["log4rs", "rodio", "sdl2"]
 base = ["log4rs"]
 

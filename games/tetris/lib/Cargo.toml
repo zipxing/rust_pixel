@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rust_pixel = { path = "../../../rust-pixel", default-features = false, features = ["web"] }
+rust_pixel = { path = "../../../rust-pixel" }
 log = "0.4.16"
 
