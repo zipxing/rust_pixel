@@ -58,7 +58,7 @@ fn common_arg(app: App) -> App {
 
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
-        .version("2.0")
+        .version("0.2.0")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
@@ -386,7 +386,22 @@ fn pixel_convert_gif(args: &ArgMatches) {
         .expect("failed to execute process");
 }
 
+fn check_pixel_toml() {
+    let ct = fs::read_to_string("pixel.toml")
+        .expect("Can't find pixel.toml!\ncargo-pixel must run in rust_pixel or standalone_rust_pixel_project directory.\npixel.toml ");
+    let doc = ct.parse::<toml::Value>().unwrap();
+    if let Some(pixel) = doc.get("pixel") {
+        if let Some(standalone) = pixel.get("standalone") {
+            println!("standalone...{}", standalone);
+        }
+        if let Some(rust_pixel) = pixel.get("rust_pixel") {
+            println!("rust_pixel...{}", rust_pixel);
+        }
+    }
+}
+
 fn main() {
+    check_pixel_toml();
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(sub_m),
