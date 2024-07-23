@@ -1,0 +1,8 @@
+# RustPixel
+# copyright zipxing@hotmail.com 2022~2024
+
+# pixel.toml is using for cargo-pixel
+# refer to tools/cargo-pixel/src/main.rs
+[pixel]
+standalone = true
+rust_pixel = "/Users/xinzhou/Desktop/rust_pixel/rust-pixel"
