@@ -56,7 +56,7 @@ impl Color {
             Color::White => cidx = 15,
             Color::Indexed(i) => cidx = i as usize,
             Color::Rgba(r, g, b, a) => return (r, g, b, a),
-            Color::Professional(mut cpro) => return cpro.get_srgba_u8(),
+            Color::Professional(cpro) => return cpro.get_srgba_u8(),
         };
         (
             COLOR_RGB[cidx][0],
@@ -90,7 +90,7 @@ impl From<Color> for CColor {
             Color::White => CColor::White,
             Color::Indexed(i) => CColor::AnsiValue(i),
             Color::Rgba(r, g, b, _a) => CColor::Rgb { r, g, b },
-            Color::Professional(mut cpro) => {
+            Color::Professional(cpro) => {
                 let (r, g, b, _a) = cpro.get_srgba_u8();
                 CColor::Rgb { r, g, b }
             }

@@ -1,6 +1,6 @@
 use log::info;
 use num_traits::FromPrimitive;
-use palette_lib::PaletteData;
+use palette_lib::{PaletteData, COLORS_WITH_NAME};
 use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
@@ -10,7 +10,6 @@ use rust_pixel::{
         Fraction, COLOR_SPACE_COUNT,
     },
 };
-use palette_lib::COLORS_WITH_NAME;
 use std::any::Any;
 
 pub const PALETTEW: u16 = 100;

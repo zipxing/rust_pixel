@@ -26,30 +26,31 @@ impl PaletteRender {
         let adjx = 1;
         let adjy = 3;
 
-        let mut ncolors: Vec<(&'static str, Cell<ColorPro>)> = vec![];
+        let mut ncolors: Vec<(&'static str, ColorPro)> = vec![];
         for c in COLORS_WITH_NAME {
             let cr = ColorPro::from_space_u8(SRGBA, c.1, c.2, c.3, 255);
-            ncolors.push((c.0, Cell::new(cr)));
+            ncolors.push((c.0, cr));
         }
 
         // ncolors.sort_by_key(|nc| (1000.0 - nc.1.get().brightness() * 1000.0) as i32);
-        // ncolors.sort_by_key(|nc| (1000.0 - nc.1.get().hue() * 1000.0) as i32);
-        ncolors.sort_by_key(|nc| (nc.1.get().chroma() * 1000.0) as i32);
+        ncolors.sort_by_key(|nc| (1000.0 - nc.1.hue() * 1000.0) as i32);
+        // ncolors.sort_by_key(|nc| (nc.1.get().chroma() * 1000.0) as i32);
 
-        for row in 0..37 {
-            for col in 0..4 {
-                let mut pl = Sprite::new(adjx + col * 20, adjy + row, 20, 1);
-                let idx = (row * 4 + col) as usize;
+        for row in 0..19 {
+            for col in 0..8 {
+                let mut pl = Sprite::new(adjx + col * 10, adjy + row, 10, 1);
+                let idx = (row * 8 + col) as usize;
                 if idx >= COLORS_WITH_NAME.len() {
                     break;
                 }
                 let s = ncolors[idx].0;
-                let mut cr = ncolors[idx].1.get();
+                let cr = ncolors[idx].1;
                 let color = Color::Professional(cr);
                 pl.set_color_str(
                     0,
                     0,
-                    &format!("{:20}", s),
+                    &format!("{:10}", " "),
+                    // &format!("{:10}", s),
                     if cr.is_dark() {
                         Color::White
                     } else {

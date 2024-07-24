@@ -145,8 +145,7 @@ impl ColorPro {
         )
     }
 
-    pub fn get_srgba_u8(&mut self) -> (u8, u8, u8, u8) {
-        let _ = self.fill_all_spaces();
+    pub fn get_srgba_u8(&self) -> (u8, u8, u8, u8) {
         let srgba = self[SRGBA].unwrap();
         let r = srgba.v[0];
         let g = srgba.v[1];
@@ -173,30 +172,26 @@ impl ColorPro {
     }
 
     /// See: <https://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef>
-    pub fn luminance(&mut self) -> f64 {
-        let _ = self.fill_all_spaces();
+    pub fn luminance(&self) -> f64 {
         let c = self[LinearRGBA].unwrap();
         0.2126 * c.v[0] + 0.7152 * c.v[1] + 0.0722 * c.v[2]
     }
 
-    pub fn is_dark(&mut self) -> bool {
+    pub fn is_dark(&self) -> bool {
         self.luminance() <= 0.179
     }
 
-    pub fn brightness(&mut self) -> f64 {
-        let _ = self.fill_all_spaces();
+    pub fn brightness(&self) -> f64 {
         let c = self[SRGBA].unwrap();
         0.299 * c.v[0] + 0.587 * c.v[1] + 0.114 * c.v[2]
     }
 
-    pub fn chroma(&mut self) -> f64 {
-        let _ = self.fill_all_spaces();
+    pub fn chroma(&self) -> f64 {
         let c = self[OKLchA].unwrap();
         c.v[1]
     }
 
-    pub fn hue(&mut self) -> f64 {
-        let _ = self.fill_all_spaces();
+    pub fn hue(&self) -> f64 {
         let c = self[OKLchA].unwrap();
         c.v[2]
     }
