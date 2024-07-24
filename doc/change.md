@@ -14,8 +14,8 @@ However, these crates are embedded into rust_pixel,
 the project_path is "games/mygame" or "apps/myapp" by default, the assets file path should be "games/mygame/asset/"
 if you creat a standalone project with:
 ```
-$ cargo pixel c ../ mygame --standalone
-$ cargo pixel c ../ mygame -s
+$ cargo pixel c .. mygame --standalone
+$ cargo pixel c .. mygame -s
 ```
 and use "cargo run" in mygame directory, you should use this codes for load assets in "./asset/" path:
 ```
@@ -23,6 +23,13 @@ and use "cargo run" in mygame directory, you should use this codes for load asse
     g.init();
 ```
 The cargo pixel creat <path> <project_name> --standlone command will automatically complete the above work for you.
+```
+$ cargo pixel c .. mygame --standalone  #Create a standalone crate in ../mygame 
+$ cd ../mygame 
+$ cargo pixel r mygame t
+$ cargo pixel r mygame s
+
+```
 
 # 0.4.0
 - Add ColorPro for professional color process
