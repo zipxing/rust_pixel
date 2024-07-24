@@ -23,6 +23,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
@@ -137,7 +138,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 .join(" ")
         )),
         "web" | "w" => {
-            let mut crate_path = "".to_string(); 
+            let mut crate_path = "".to_string();
             if ctx.standalone {
                 crate_path = "".to_string();
             } else {
@@ -164,7 +165,10 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 cmds.push(format!("rm -r {}/*", tmpwd));
                 cmds.push(format!("mkdir -p {}", tmpwd));
                 cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
-                cmds.push(format!("cp {}/rust-pixel/web-templates/* {}", ctx.rust_pixel_path, tmpwd));
+                cmds.push(format!(
+                    "cp {}/rust-pixel/web-templates/* {}",
+                    ctx.rust_pixel_path, tmpwd
+                ));
                 cmds.push(format!(
                     "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
                     capname, tmpwd
@@ -191,15 +195,19 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+fn exec_cmd(cmd: &str) {
+    Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .status()
+        .expect("failed to execute process");
+}
+
 fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
     let cmds = get_cmds(ctx, args, "run");
     for cmd in cmds {
         println!("🍀 {}", cmd);
-        Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .status()
-            .expect("failed to execute process");
+        exec_cmd(&cmd);
     }
 }
 
@@ -207,11 +215,7 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
     let cmds = get_cmds(ctx, args, "build");
     for cmd in cmds {
         println!("🍀 {}", cmd);
-        Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .status()
-            .expect("failed to execute process");
+        exec_cmd(&cmd);
     }
 }
 
@@ -258,33 +262,19 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     let _ = fs::remove_dir_all("tmp/pixel_game_template");
     let _ = fs::create_dir_all(cdir);
 
-    Command::new("sh")
-        .arg("-c")
-        .arg("cp -r games/template tmp/pixel_game_template")
-        .status()
-        .expect("failed to execute process");
+    exec_cmd("cp -r games/template tmp/pixel_game_template");
 
     if is_standalone {
-        Command::new("sh")
-            .arg("-c")
-            .arg("cp games/template/stand-alone/Cargo.toml tmp/pixel_game_template/Cargo.toml")
-            .status()
-            .expect("failed to execute process");
-        Command::new("sh")
-            .arg("-c")
-            .arg("cp games/template/stand-alone/LibCargo.toml tmp/pixel_game_template/lib/Cargo.toml")
-            .status()
-            .expect("failed to execute process");
-        Command::new("sh")
-            .arg("-c")
-            .arg("cp games/template/stand-alone/pixel.toml tmp/pixel_game_template/pixel.toml")
-            .status()
-            .expect("failed to execute process");
+        exec_cmd("cp games/template/stand-alone/Cargo.toml tmp/pixel_game_template/Cargo.toml");
+        exec_cmd("cp games/template/stand-alone/LibCargo.toml tmp/pixel_game_template/lib/Cargo.toml");
+        exec_cmd("cp games/template/stand-alone/pixel.toml tmp/pixel_game_template/pixel.toml");
+        exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
     }
 
     fn replace_in_files(
         is_standalone: bool,
         dir: &Path,
+        rust_pixel_path: &str,
         dirname: &str,
         capname: &str,
         upname: &str,
@@ -295,7 +285,15 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
                 let entry = entry.unwrap();
                 let path = entry.path();
                 if path.is_dir() {
-                    replace_in_files(is_standalone, &path, dirname, capname, upname, loname);
+                    replace_in_files(
+                        is_standalone,
+                        &path,
+                        rust_pixel_path,
+                        dirname,
+                        capname,
+                        upname,
+                        loname,
+                    );
                 } else if path.is_file() {
                     let ext = path.extension().and_then(OsStr::to_str);
                     if ext == Some("rs") || ext == Some("toml") {
@@ -305,8 +303,7 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
                             content_str = content_str
                                 .replace("games/template", &format!("{}/{}", dirname, loname));
                         } else {
-                            content_str = content_str
-                                .replace("$RUST_PIXEL_ROOT", &format!("{}/{}", "app", loname));
+                            content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
                             content_str = content_str
                                 .replace("let mut g = Game::new(m, r, \"games/template\");",
                                     "let mut g = Game::new_with_project_path(m, r, \"games/template\", Some(\".\"));");
@@ -325,6 +322,7 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     replace_in_files(
         is_standalone,
         Path::new("tmp/pixel_game_template"),
+        &ctx.rust_pixel_path,
         &dir_name,
         &capname,
         &upname,
@@ -337,10 +335,17 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     )
     .unwrap();
 
-    println!(
-        "🍀 compile & run: \n   cargo pixel r {} term\n   cargo pixel r {} sdl",
-        mod_name, mod_name
-    );
+    if is_standalone {
+        println!(
+            "🍀 compile & run: \n   cd {}/{}\n   cargo pixel r {} term\n   cargo pixel r {} sdl",
+            dir_name, mod_name, mod_name, mod_name
+        );
+    } else {
+        println!(
+            "🍀 compile & run: \n   cargo pixel r {} term\n   cargo pixel r {} sdl",
+            mod_name, mod_name
+        );
+    }
 }
 
 fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
@@ -374,11 +379,7 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
             height,
             x + 1
         );
-        Command::new("sh")
-            .arg("-c")
-            .arg(&cmd)
-            .status()
-            .expect("failed to execute process");
+        exec_cmd(&cmd);
     }
 
     let mut fsdq = fs::File::create(ssf).unwrap();
@@ -417,11 +418,7 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     fsdq.write_all(&datas).unwrap();
 
     println!("\n🍀 {} write ok!", ssf);
-    Command::new("sh")
-        .arg("-c")
-        .arg("rm tmp/t*.p*")
-        .status()
-        .expect("failed to execute process");
+    exec_cmd("rm tmp/t*.p*");
 }
 
 #[derive(Debug)]
@@ -436,22 +433,27 @@ fn check_pixel_toml() -> PixelContext {
     let doc = ct.parse::<toml::Value>().unwrap();
     let mut pc = PixelContext {
         standalone: false,
-        rust_pixel_path: "".to_string(),
+        rust_pixel_path: "./".to_string(),
     };
     if let Some(pixel) = doc.get("pixel") {
         if let Some(standalone) = pixel.get("standalone") {
             pc.standalone = standalone.as_bool().unwrap();
         }
         if let Some(rust_pixel) = pixel.get("rust_pixel") {
-            pc.rust_pixel_path = rust_pixel.to_string();
+            let rpp = rust_pixel.to_string();
+            pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
         }
+    }
+    if !pc.standalone {
+        let srcdir = PathBuf::from(&pc.rust_pixel_path);
+        let rpp = format!("{:?}", fs::canonicalize(&srcdir).unwrap());
+        pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
     }
     pc
 }
 
 fn main() {
     let ctx = check_pixel_toml();
-    println!("cargo-pixel context:{:?}", ctx);
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
