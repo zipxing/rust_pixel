@@ -1,7 +1,7 @@
 # 0.4.1
 - Refactor Game and Context, added project_path variable
 - Better support for standalone crates using rust_pixel
-Usually, you can use the following commands to create games or applications that use pixel:
+- Usually, you can use the following commands to creat games or apps that use pixel:
 ```
 $ cargo pixel c games mygame
 $ cargo pixel c apps myapp
