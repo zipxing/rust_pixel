@@ -10,6 +10,7 @@ use rust_pixel::{
         Fraction, COLOR_SPACE_COUNT,
     },
 };
+use palette_lib::COLORS_WITH_NAME;
 use std::any::Any;
 
 pub const PALETTEW: u16 = 100;
@@ -57,6 +58,25 @@ impl Model for PaletteModel {
         let d1 = delta_e_cie76(c1[LabA].unwrap(), c2[LabA].unwrap());
         let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
         info!("d76...{}, d2000...{}", d1, d2);
+
+        let mut ncolors: Vec<(&'static str, ColorPro)> = vec![];
+        for c in COLORS_WITH_NAME {
+            let cr = ColorPro::from_space_u8(SRGBA, c.1, c.2, c.3, 255);
+            ncolors.push((c.0, cr));
+        }
+
+        let mut deltas: Vec<(usize, f64)> = vec![];
+        let mut count = 0usize;
+        for c in &ncolors {
+            let d = delta_e_ciede2000(c1[LabA].unwrap(), c.1[LabA].unwrap());
+            deltas.push((count, d));
+            count += 1;
+        }
+        deltas.sort_by_key(|nc| (nc.1 * 1000.0) as i32);
+        for i in 0..3 {
+            let id = deltas[i];
+            info!("deltas....{:?}", ncolors[id.0].0);
+        }
 
         let colors = vec![
             ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),

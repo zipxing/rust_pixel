@@ -221,7 +221,7 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
 
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.standalone {
-        println!("cargo-pixel creat must run in rust_pixel root directory.");
+        println!("Cargo pixel creat must run in rust_pixel root directory.");
         return;
     }
     let dir_name = args.value_of("dir_name").unwrap();
