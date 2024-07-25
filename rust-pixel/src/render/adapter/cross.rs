@@ -208,8 +208,6 @@ impl Adapter for CrosstermAdapter {
     }
 }
 
-/// 转换crossterm的输入事件为pixel输入事件，方便游戏采用统一接口处理
-/// 键盘和鼠标事件的处理，请参考game/unblock/model.rs的handle_input方法
 /// Convert crossterm I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
 #[cfg(not(feature = "sdl"))]

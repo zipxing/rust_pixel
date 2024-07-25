@@ -56,6 +56,7 @@
 //! Please refer to the copy_cell method of push_history
 //! Please refer to the render_buffer method of SDL mode in sdl.rs
 //! Please refer to the render_buffer method of WASM mode in web.rs
+#[allow(unused_imports)]
 use crate::{render::cell::Cell, render::style::{Style, Color}, util::Rect};
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -241,10 +242,14 @@ impl Buffer {
         }
     }
 
+    #[allow(unused_variables)]
     pub fn copy_cell(&mut self, pos_self: usize, other: &Buffer, alpha: u8, pos_other: usize) {
         self.content[pos_self] = other.content[pos_other].clone();
-        let fc = self.content[pos_self].fg.get_rgba();
-        self.content[pos_self].fg = Color::Rgba(fc.0, fc.1, fc.2, alpha);
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        {
+            let fc = self.content[pos_self].fg.get_rgba();
+            self.content[pos_self].fg = Color::Rgba(fc.0, fc.1, fc.2, alpha);
+        }
         // info!("in copy_cell alpha={}", alpha);
         self.content[pos_self].push_history();
     }
