@@ -141,14 +141,6 @@ pub fn escstr_to_buffer(l: &String, content: &mut Buffer, row: u16, off_x: u16, 
             &l[pos..cr.start()],
             Style::default(),
         );
-        //注意要使用unicode的长度，不能直接使用byte长度
-        //例如♥的正确长度是1，而byte长度是3
-        //let graphemes = UnicodeSegmentation::graphemes(&l[pos..cr.start()], true)
-        //    .collect::<Vec<&str>>();
-        //采用宽字符个数也不行
-        //cell_pos += graphemes.len() as u16;
-        //采用width返回真正的字符宽度,
-
         //beware of the length of unicode，can not use the length of a byte
         //e.g. the correct length of ♥ is 1，while the length of byte is 3
         //let graphemes = UnicodeSegmentation::graphemes(&l[pos..cr.start()], true)

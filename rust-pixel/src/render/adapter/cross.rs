@@ -54,7 +54,6 @@ impl CrosstermAdapter {
 impl Adapter for CrosstermAdapter {
     fn init(&mut self, w: u16, h: u16, _rx: f32, _ry: f32, _s: String) {
         self.set_size(w, h);
-        // 检查终端尺寸，如果小于绘制需要的尺寸，则警告退出
         // check terminal size, warns and exits if the size is smaller than the required size
         let (width, height) = terminal::size().unwrap();
         if w > width || h > height {
