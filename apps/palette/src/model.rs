@@ -12,7 +12,7 @@ use rust_pixel::{
 };
 use std::any::Any;
 
-pub const PALETTEW: u16 = 100;
+pub const PALETTEW: u16 = 80;
 pub const PALETTEH: u16 = 40;
 pub const CCOUNT: usize = 40;
 

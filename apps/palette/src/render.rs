@@ -23,6 +23,10 @@ impl PaletteRender {
     pub fn new() -> Self {
         let mut panel = Panel::new();
 
+        // background...
+        let gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
+        panel.add_sprite(gb, "back");
+
         let adjx = 2;
         let adjy = 2;
 
@@ -70,11 +74,6 @@ impl PaletteRender {
         //     let pl = Sprite::new(adjx + co * 2, adjy - 1, 2, 1);
         //     panel.add_sprite(pl, &format!("COLOR{}", co));
         // }
-
-        // background...
-        let mut gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
-        gb.set_alpha(30);
-        panel.add_sprite(gb, "back");
 
         event_register("Palette.RedrawTile", "draw_tile");
 
