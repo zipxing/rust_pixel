@@ -30,12 +30,7 @@ impl PaletteRender {
         let adjx = 2;
         let adjy = 2;
 
-        let mut ncolors = vec![];
-        for idx in 0..COLORS_WITH_NAME.len() {
-            let c = COLORS_WITH_NAME[idx];
-            ncolors.push((c.0, c.1));
-        }
-
+        let mut ncolors = COLORS_WITH_NAME.clone();
         ncolors.sort_by_key(|nc| (1000.0 - nc.1.brightness() * 1000.0) as i32);
         // ncolors.sort_by_key(|nc| (1000.0 - nc.1.hue() * 1000.0) as i32);
         // ncolors.sort_by_key(|nc| (nc.1.chroma() * 1000.0) as i32);
@@ -57,8 +52,7 @@ impl PaletteRender {
                 pl.set_color_str(
                     0,
                     0,
-                    &format!("{:19}", s),
-                    // &format!("{:13}", " "),
+                    &format!("{:width$}", s, width = c_width as usize),
                     if cr.is_dark() {
                         Color::White
                     } else {
@@ -68,6 +62,14 @@ impl PaletteRender {
                 );
                 panel.add_sprite(pl, &format!("{}", idx));
             }
+        }
+
+        let pl = Sprite::new(4, 24, 12, 6);
+        panel.add_sprite(pl, "MAIN_COLOR");
+
+        for i in 0..3 {
+            let pl = Sprite::new(61, 25 + i * 2, c_width - 2, 1);
+            panel.add_sprite(pl, &format!("SIMI{}", i));
         }
 
         // for co in 0..CCOUNT as u16 {
@@ -99,6 +101,41 @@ impl Render for PaletteRender {
         //     let cr = Color::Rgba(r, g, b, 255);
         //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         // }
+        let pl = self.panel.get_sprite("MAIN_COLOR");
+        for i in 0..6 {
+            pl.set_color_str(
+                0,
+                i,
+                "            ",
+                Color::White,
+                Color::Professional(d.main_color),
+            );
+        }
+
+        let mut ids: Vec<usize> = vec![];
+        ids.push(d.main_color_similar.0);
+        ids.push(d.main_color_similar.1);
+        ids.push(d.main_color_similar.2);
+
+        for i in 0..3 {
+            let pl = self.panel.get_sprite(&format!("SIMI{}", i));
+
+            let s = COLORS_WITH_NAME[ids[i]].0;
+            let cr = COLORS_WITH_NAME[ids[i]].1;
+            let color = Color::Professional(cr);
+
+            pl.set_color_str(
+                0,
+                0,
+                &format!("{:width$}", s, width = 19usize),
+                if cr.is_dark() {
+                    Color::White
+                } else {
+                    Color::Black
+                },
+                color
+            );
+        }
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {

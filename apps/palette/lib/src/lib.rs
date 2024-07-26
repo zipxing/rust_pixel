@@ -3,8 +3,9 @@
 //
 #![allow(dead_code)]
 use rust_pixel::util::Rand;
-use rust_pixel::render::style::{ColorPro, ColorSpace::*};
+use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorSpace::*};
 use lazy_static::lazy_static;
+// use log::info;
 
 static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("aliceblue", 240, 248, 255),
@@ -166,6 +167,21 @@ lazy_static! {
         }
         ncolors
     };
+}
+
+pub fn find_similar_colors(color: &ColorPro) -> (usize, usize, usize) {
+    let mut deltas: Vec<(usize, f64)> = vec![];
+    for idx in 0..COLORS_WITH_NAME.len() {
+        let c = COLORS_WITH_NAME[idx];
+        let d = delta_e_ciede2000(color[LabA].unwrap(), c.1[LabA].unwrap());
+        deltas.push((idx, d));
+    }
+    deltas.sort_by_key(|nc| (nc.1 * 1000.0) as i32);
+    if deltas[0].1 == 0.0 {
+        (deltas[1].0, deltas[2].0, deltas[3].0)
+    } else {
+        (deltas[0].0, deltas[1].0, deltas[2].0)
+    }
 }
 
 pub struct PaletteData {

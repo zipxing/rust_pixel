@@ -1,6 +1,6 @@
 use log::info;
 use num_traits::FromPrimitive;
-use palette_lib::{PaletteData, COLORS_WITH_NAME};
+use palette_lib::{PaletteData, COLORS_WITH_NAME, find_similar_colors};
 use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
@@ -24,6 +24,8 @@ enum PaletteState {
 pub struct PaletteModel {
     pub data: PaletteData,
     pub card: u8,
+    pub main_color: ColorPro,
+    pub main_color_similar: (usize, usize, usize),
     pub colors: Vec<ColorPro>,
 }
 
@@ -32,6 +34,8 @@ impl PaletteModel {
         Self {
             data: PaletteData::new(),
             card: 0,
+            main_color: COLORS_WITH_NAME[28].1,
+            main_color_similar: (0, 0, 0),
             colors: vec![],
         }
     }
@@ -58,19 +62,7 @@ impl Model for PaletteModel {
         let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
         info!("d76...{}, d2000...{}", d1, d2);
 
-        let mut deltas: Vec<(usize, f64)> = vec![];
-        let mut count = 0usize;
-        for idx in 0..COLORS_WITH_NAME.len() {
-            let c = COLORS_WITH_NAME[idx];
-            let d = delta_e_ciede2000(c1[LabA].unwrap(), c.1[LabA].unwrap());
-            deltas.push((count, d));
-            count += 1;
-        }
-        deltas.sort_by_key(|nc| (nc.1 * 1000.0) as i32);
-        for i in 0..3 {
-            let id = deltas[i];
-            info!("deltas....{:?}", COLORS_WITH_NAME[id.0].0);
-        }
+        self.main_color_similar = find_similar_colors(&self.main_color);
 
         let colors = vec![
             ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),
