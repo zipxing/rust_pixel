@@ -66,7 +66,7 @@ pub const SYMBOL_ASCII: [[&str; 16]; 3] = [
         "ABCDEFGHIJKLMNOPQR",
         "STUVWXYZabcdefghij",
         "klmnopqrstuvwxyz",
-        "éâäàåçêëèïîìÄÅÉæÆô",
+        "▀▄äàåçêëèïîìÄÅÉæÆô",
         "öòûùÿÖÜ¢£¥₧ƒáíóúñÑ",
         "ªº¿αßΓπΣσµτΦΘΩδ∞φε",
         "∩≡±≥≤⌠⌡÷≈‾√ⁿ²♠♣♥♦░",
