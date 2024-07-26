@@ -1,11 +1,12 @@
 //
 // implement core algorithm...
 //
-
 #![allow(dead_code)]
 use rust_pixel::util::Rand;
+use rust_pixel::render::style::{ColorPro, ColorSpace::*};
+use lazy_static::lazy_static;
 
-pub static COLORS_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
+static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("aliceblue", 240, 248, 255),
     ("antiquewhite", 250, 235, 215),
     ("aqua", 0, 255, 255),
@@ -155,6 +156,17 @@ pub static COLORS_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("yellow", 255, 255, 0),
     ("yellowgreen", 154, 205, 50),
 ];
+
+lazy_static! {
+    pub static ref COLORS_WITH_NAME: Vec<(&'static str, ColorPro)> = {
+        let mut ncolors = vec![];
+        for c in COLORS_RGB_WITH_NAME {
+            let cr = ColorPro::from_space_u8(SRGBA, c.1, c.2, c.3, 255);
+            ncolors.push((c.0, cr));
+        }
+        ncolors
+    };
+}
 
 pub struct PaletteData {
     pub rand: Rand,

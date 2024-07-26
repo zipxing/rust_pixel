@@ -58,15 +58,10 @@ impl Model for PaletteModel {
         let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
         info!("d76...{}, d2000...{}", d1, d2);
 
-        let mut ncolors: Vec<(&'static str, ColorPro)> = vec![];
-        for c in COLORS_WITH_NAME {
-            let cr = ColorPro::from_space_u8(SRGBA, c.1, c.2, c.3, 255);
-            ncolors.push((c.0, cr));
-        }
-
         let mut deltas: Vec<(usize, f64)> = vec![];
         let mut count = 0usize;
-        for c in &ncolors {
+        for idx in 0..COLORS_WITH_NAME.len() {
+            let c = COLORS_WITH_NAME[idx];
             let d = delta_e_ciede2000(c1[LabA].unwrap(), c.1[LabA].unwrap());
             deltas.push((count, d));
             count += 1;
@@ -74,7 +69,7 @@ impl Model for PaletteModel {
         deltas.sort_by_key(|nc| (nc.1 * 1000.0) as i32);
         for i in 0..3 {
             let id = deltas[i];
-            info!("deltas....{:?}", ncolors[id.0].0);
+            info!("deltas....{:?}", COLORS_WITH_NAME[id.0].0);
         }
 
         let colors = vec![

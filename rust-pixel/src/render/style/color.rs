@@ -59,9 +59,9 @@ impl Color {
             Color::Professional(cpro) => return cpro.get_srgba_u8(),
         };
         (
-            COLOR_RGB[cidx][0],
-            COLOR_RGB[cidx][1],
-            COLOR_RGB[cidx][2],
+            ANSI_COLOR_RGB[cidx][0],
+            ANSI_COLOR_RGB[cidx][1],
+            ANSI_COLOR_RGB[cidx][2],
             255,
         )
     }
@@ -125,7 +125,7 @@ impl From<Color> for u8 {
     }
 }
 
-pub const COLOR_RGB: [[u8; 3]; 256] = [
+pub const ANSI_COLOR_RGB: [[u8; 3]; 256] = [
     [0, 0, 0],
     [128, 0, 0],
     [0, 128, 0],
