@@ -20,7 +20,28 @@
 ///   Oklch l: 0.0 - 1.0 c: 0.0 - 1.0 (approximate range) h: 0.0 - 360.0 (degrees)
 ///   XYZ x: 0.0 - 1.0 (normalized range) y: 0.0 - 1.0 (normalized range) z: 0.0 - 1.0 (normalized range)
 ///
+/// Example:
+/// ```
+/// // test and print colorspace data...
+/// let color = ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0);
+/// for i in 0..COLOR_SPACE_COUNT {
+///     info!(
+///         "{}:{:?}",
+///         ColorSpace::from_usize(i).unwrap(),
+///         color.space_matrix[i].unwrap()
+///     );
+/// }
+/// ```
 ///
+/// Example:
+/// ```
+/// // test delta_e...
+/// let c1 = ColorPro::from_space_f64(LabA, 50.0, 0.8, -80.0, 1.0);
+/// let c2 = ColorPro::from_space_f64(LabA, 100.0, 1.2, 90.0, 1.0);
+/// let d1 = delta_e_cie76(c1[LabA].unwrap(), c2[LabA].unwrap());
+/// let d2 = delta_e_ciede2000(c1[LabA].unwrap(), c2[LabA].unwrap());
+/// info!("d76...{}, d2000...{}", d1, d2);
+/// ````
 ///
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};

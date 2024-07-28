@@ -2,12 +2,12 @@
 // implement core algorithm...
 //
 #![allow(dead_code)]
-use rust_pixel::util::Rand;
-use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorSpace::*};
 use lazy_static::lazy_static;
+use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorScale, Fraction, ColorSpace::*};
+use rust_pixel::util::Rand;
 // use log::info;
 
-static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
+static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 139] = [
     ("aliceblue", 240, 248, 255),
     ("antiquewhite", 250, 235, 215),
     ("aqua", 0, 255, 255),
@@ -28,13 +28,11 @@ static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("cornflowerblue", 100, 149, 237),
     ("cornsilk", 255, 248, 220),
     ("crimson", 220, 20, 60),
-    ("cyan", 0, 255, 255),
     ("darkblue", 0, 0, 139),
     ("darkcyan", 0, 139, 139),
     ("darkgoldenrod", 184, 134, 11),
     ("darkgray", 169, 169, 169),
     ("darkgreen", 0, 100, 0),
-    ("darkgrey", 169, 169, 169),
     ("darkkhaki", 189, 183, 107),
     ("darkmagenta", 139, 0, 139),
     ("darkolivegreen", 85, 107, 47),
@@ -45,13 +43,11 @@ static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("darkseagreen", 143, 188, 143),
     ("darkslateblue", 72, 61, 139),
     ("darkslategray", 47, 79, 79),
-    ("darkslategrey", 47, 79, 79),
     ("darkturquoise", 0, 206, 209),
     ("darkviolet", 148, 0, 211),
     ("deeppink", 255, 20, 147),
     ("deepskyblue", 0, 191, 255),
     ("dimgray", 105, 105, 105),
-    ("dimgrey", 105, 105, 105),
     ("dodgerblue", 30, 144, 255),
     ("firebrick", 178, 34, 34),
     ("floralwhite", 255, 250, 240),
@@ -64,7 +60,6 @@ static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("gray", 128, 128, 128),
     ("green", 0, 128, 0),
     ("greenyellow", 173, 255, 47),
-    ("grey", 128, 128, 128),
     ("honeydew", 240, 255, 240),
     ("hotpink", 255, 105, 180),
     ("indianred", 205, 92, 92),
@@ -81,19 +76,16 @@ static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("lightgoldenrodyellow", 250, 250, 210),
     ("lightgray", 211, 211, 211),
     ("lightgreen", 144, 238, 144),
-    ("lightgrey", 211, 211, 211),
     ("lightpink", 255, 182, 193),
     ("lightsalmon", 255, 160, 122),
     ("lightseagreen", 32, 178, 170),
     ("lightskyblue", 135, 206, 250),
     ("lightslategray", 119, 136, 153),
-    ("lightslategrey", 119, 136, 153),
     ("lightsteelblue", 176, 196, 222),
     ("lightyellow", 255, 255, 224),
     ("lime", 0, 255, 0),
     ("limegreen", 50, 205, 50),
     ("linen", 250, 240, 230),
-    ("magenta", 255, 0, 255),
     ("maroon", 128, 0, 0),
     ("mediumaquamarine", 102, 205, 170),
     ("mediumblue", 0, 0, 205),
@@ -141,7 +133,6 @@ static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 148] = [
     ("skyblue", 135, 206, 235),
     ("slateblue", 106, 90, 205),
     ("slategray", 112, 128, 144),
-    ("slategrey", 112, 128, 144),
     ("snow", 255, 250, 250),
     ("springgreen", 0, 255, 127),
     ("steelblue", 70, 130, 180),
@@ -181,6 +172,30 @@ pub fn find_similar_colors(color: &ColorPro) -> (usize, usize, usize) {
         (deltas[1].0, deltas[2].0, deltas[3].0)
     } else {
         (deltas[0].0, deltas[1].0, deltas[2].0)
+    }
+}
+
+pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<ColorPro>) {
+    let color_count = colors.len();
+    let mut color_scale = ColorScale::empty();
+
+    for (i, color) in colors.into_iter().enumerate() {
+        let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
+        color_scale.add_stop(*color, position);
+    }
+    // info!("color_stop.....{:?}", color_scale);
+    for i in 0..gcount {
+        let position = Fraction::from(i as f64 / (gcount as f64 - 1.0));
+        let color = color_scale
+            .sample(position, OKLchA)
+            .expect("gradient color");
+        let cp = ColorPro::from_space(OKLchA, color);
+        output_colors.push(cp);
+        // info!("color_sample_oklch.....{:?}", cp[OKLchA].unwrap());
+        // info!("color_sample_xyz.....{:?}", cp[XYZA].unwrap());
+        // info!("color_sample_oklab.....{:?}", cp[OKLabA].unwrap());
+        // info!("color_sample_srgba.....{:?}", cp[SRGBA].unwrap());
+        // info!("------------------------------")
     }
 }
 

@@ -67,6 +67,12 @@ impl Panel {
         info!("panel init size...{:?}", size);
     }
 
+    pub fn clear(&mut self, ctx: &mut Context) {
+        let size = ctx.adapter.size();
+        self.buffers[0] = Buffer::empty(size);
+        self.buffers[1] = Buffer::empty(size);
+    }
+
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current]
     }
