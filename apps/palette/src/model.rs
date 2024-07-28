@@ -33,6 +33,7 @@ pub struct PaletteModel {
     pub card: u8,
     pub main_color: ColorPro,
     pub main_color_similar: (usize, usize, usize),
+    pub named_colors: Vec<(&'static str, ColorPro)>,
     pub gradient_input_colors: Vec<ColorPro>,
     pub gradient_colors: Vec<ColorPro>,
     pub picker_color_hsv: (f64, f64, f64),
@@ -45,11 +46,18 @@ pub struct PaletteModel {
 
 impl PaletteModel {
     pub fn new() -> Self {
+
+        let mut ncolors = COLORS_WITH_NAME.clone();
+        ncolors.sort_by_key(|nc| (1000.0 - nc.1.brightness() * 1000.0) as i32);
+        // ncolors.sort_by_key(|nc| (1000.0 - nc.1.hue() * 1000.0) as i32);
+        // ncolors.sort_by_key(|nc| (nc.1.chroma() * 1000.0) as i32);
+        
         Self {
             data: PaletteData::new(),
             card: 0,
             main_color: COLORS_WITH_NAME[0].1,
             main_color_similar: (0, 0, 0),
+            named_colors: ncolors,
             gradient_input_colors: vec![],
             gradient_colors: vec![],
             picker_color_hsv: (0.0, 1.0, 1.0),

@@ -37,8 +37,8 @@ impl PaletteRender {
         let mut panel_clear = Panel::new();
         let mut gb = Sprite::new(2, 2, PALETTEW - 4, PALETTEH - 21);
         for i in 0..PALETTEH - 21 {
-            for j in 0..PALETTEW  - 4{
-                gb.content.set_str(j, i, " ", Style::default().bg(Color::DarkGray));
+            for j in 0..PALETTEW  - 4 {
+                gb.content.set_str(j, i, " ", Style::default().bg(Color::Indexed(233)));
             }
         }
         panel_clear.add_sprite(gb, "clear");
@@ -52,11 +52,6 @@ impl PaletteRender {
         let adjx = 2;
         let adjy = 2;
 
-        let mut ncolors = COLORS_WITH_NAME.clone();
-        ncolors.sort_by_key(|nc| (1000.0 - nc.1.brightness() * 1000.0) as i32);
-        // ncolors.sort_by_key(|nc| (1000.0 - nc.1.hue() * 1000.0) as i32);
-        // ncolors.sort_by_key(|nc| (nc.1.chroma() * 1000.0) as i32);
-
         let col_count = 4;
         let row_count = 19;
         let c_width = 19;
@@ -64,25 +59,11 @@ impl PaletteRender {
         for i in 0..2 {
             for row in 0..row_count {
                 for col in 0..col_count {
-                    let mut pl = Sprite::new(adjx + col * c_width, adjy + row, c_width, 1);
+                    let pl = Sprite::new(adjx + col * c_width, adjy + row, c_width, 1);
                     let idx = (row_count * col_count * i + row * col_count + col) as usize;
                     if idx >= COLORS_WITH_NAME.len() {
                         break;
                     }
-                    let s = ncolors[idx].0;
-                    let cr = ncolors[idx].1;
-                    let color = Color::Professional(cr);
-                    pl.set_color_str(
-                        0,
-                        0,
-                        &format!("{:width$}", s, width = c_width as usize),
-                        if cr.is_dark() {
-                            Color::White
-                        } else {
-                            Color::Black
-                        },
-                        color,
-                    );
                     panels[i as usize].add_sprite(pl, &format!("{}", idx));
                 }
             }
@@ -136,6 +117,39 @@ impl PaletteRender {
         self.panel_clear.clear(ctx);
         self.panel_clear.draw(ctx).unwrap();
         self.panels[ctx.state as usize].clear(ctx);
+    }
+
+    pub fn draw_named_colors<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+        let col_count = 4;
+        let row_count = 19;
+        let c_width = 19;
+
+        for i in 0..2 {
+            for row in 0..row_count {
+                for col in 0..col_count {
+                    let idx = (row_count * col_count * i + row * col_count + col) as usize;
+                    if idx >= COLORS_WITH_NAME.len() {
+                        break;
+                    }
+                    let pl = self.panels[i as usize].get_sprite(&format!("{}", idx));
+                    let s = d.named_colors[idx].0;
+                    let cr = d.named_colors[idx].1;
+                    let color = Color::Professional(cr);
+                    pl.set_color_str(
+                        0,
+                        0,
+                        &format!("{:width$}", s, width = c_width as usize),
+                        if cr.is_dark() {
+                            Color::White
+                        } else {
+                            Color::Black
+                        },
+                        color,
+                    );
+                }
+            }
+        }
     }
 
     // pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {}
@@ -225,6 +239,7 @@ impl Render for PaletteRender {
         for i in 0..6 {
             self.panels[i].init(context);
         }
+        self.draw_menu(context, data);
 
         let d = data.as_any().downcast_mut::<PaletteModel>().unwrap();
         let gb = self.panel.get_sprite("back");
@@ -235,7 +250,7 @@ impl Render for PaletteRender {
         //     let cr = Color::Rgba(r, g, b, 255);
         //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         // }
-
+        //
         let width = 25;
 
         for y in 0..width {
