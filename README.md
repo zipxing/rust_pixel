@@ -197,5 +197,5 @@ The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calli
 ```
  ![tower](./screen-shot/tower_sdl.gif)
 
-and so on ...
+and so on ... ...
 
