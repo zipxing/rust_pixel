@@ -77,6 +77,7 @@ impl Panel {
         info!("panel init size...{:?}", size);
     }
 
+    // clear some area...
     pub fn clear(&mut self, ctx: &mut Context, area: Rect, sym: &str, fg: Color, bg: Color) {
         let size = ctx.adapter.size();
         self.buffers[0] = Buffer::empty(size);
