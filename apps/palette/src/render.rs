@@ -26,11 +26,11 @@ pub struct PaletteRender {
 impl PaletteRender {
     pub fn new() -> Self {
         let mut panel = Panel::new();
-        panel.add_layer("back");
+        panel.add_layer("main");
 
         // background...
         let gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
-        panel.add_layer_sprite(gb, "back", "back");
+        panel.add_layer_sprite(gb, "main", "back");
 
         for i in 0..6 {
             panel.add_layer(&format!("{}", i));
@@ -59,11 +59,11 @@ impl PaletteRender {
         }
 
         let pl = Sprite::new(4, 24, 12, 6);
-        panel.add_layer_sprite(pl, "back", "MAIN_COLOR");
+        panel.add_layer_sprite(pl, "main", "main_color");
 
         for i in 0..3 {
             let pl = Sprite::new(61, 25 + i * 2, c_width - 2, 1);
-            panel.add_layer_sprite(pl, "back", &format!("SIMI{}", i));
+            panel.add_layer_sprite(pl, "main", &format!("simi{}", i));
         }
 
         let width = 25;
@@ -82,7 +82,7 @@ impl PaletteRender {
         }
 
         let mb = Sprite::new(MENUX, MENUY, MENUW, 1);
-        panel.add_layer_sprite(mb, "back", "menu");
+        panel.add_layer_sprite(mb, "main", "menu");
         // for co in 0..CCOUNT as u16 {
         //     let pl = Sprite::new(adjx + co * 2, adjy - 1, 2, 1);
         //     panel.add_sprite(pl, &format!("COLOR{}", co));
@@ -104,13 +104,6 @@ impl PaletteRender {
             self.panel.deactive_layer(&format!("{}", i));
         }
         self.panel.active_layer(&format!("{}", ctx.state));
-        // self.panel[ctx.state as usize].clear(
-        //     ctx,
-        //     Rect::new(2, 2, PALETTEW - 4, PALETTEH - 21),
-        //     "B",
-        //     Color::Indexed(1),
-        //     Color::Indexed(4),
-        // );
     }
 
     pub fn draw_named_colors<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
@@ -146,10 +139,9 @@ impl PaletteRender {
         }
     }
 
-    // pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {}
     pub fn draw_main_color<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        let pl = self.panel.get_layer_sprite("back", "MAIN_COLOR");
+        let pl = self.panel.get_layer_sprite("main", "main_color");
         for i in 0..6 {
             pl.set_color_str(
                 0,
@@ -166,7 +158,7 @@ impl PaletteRender {
         ids.push(d.main_color_similar.2);
 
         for i in 0..3 {
-            let pl = self.panel.get_layer_sprite("back", &format!("SIMI{}", i));
+            let pl = self.panel.get_layer_sprite("main", &format!("simi{}", i));
 
             let s = COLORS_WITH_NAME[ids[i]].0;
             let cr = COLORS_WITH_NAME[ids[i]].1;
@@ -188,7 +180,7 @@ impl PaletteRender {
 
     pub fn draw_menu<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        let mb = self.panel.get_layer_sprite("back", "menu");
+        let mb = self.panel.get_layer_sprite("main", "menu");
         let cst = ctx.state as usize;
         let mut xoff = 0u16;
         if cst == 0 {
@@ -232,7 +224,7 @@ impl Render for PaletteRender {
         self.draw_menu(context, data);
 
         let d = data.as_any().downcast_mut::<PaletteModel>().unwrap();
-        let gb = self.panel.get_layer_sprite("back", "back");
+        let gb = self.panel.get_layer_sprite("main", "back");
         asset2sprite!(gb, context, "back.txt");
         // for co in 0..CCOUNT {
         //     let gb = self.panel.get_sprite(&format!("COLOR{}", co));
