@@ -36,15 +36,16 @@ use crate::{
     LOGO_FRAME,
 };
 use log::info;
-use std::io;
+use std::{
+    io,
+    collections::HashMap,
+};
 
 pub struct Panel {
     pub buffers: [Buffer; 2],
     pub current: usize,
-    pub pixel_sprites: Sprites,
-    pub sprites: Sprites,
-    // pub layer_tag_index: HashMap<String, usize>,
-    // pub layers: Vec<Sprites>,
+    pub layer_tag_index: HashMap<String, usize>,
+    pub layers: Vec<Sprites>,
 }
 
 #[allow(unused)]
@@ -52,16 +53,20 @@ impl Panel {
     #[allow(unused_mut)]
     pub fn new() -> Self {
         let (width, height) = (180, 80);
-
         let size = Rect::new(0, 0, width, height);
+        let mut layers = vec![];
         let sc = Sprites::new("pixel");
         let nsc = Sprites::new("main");
+        layers.push(nsc);
+        layers.push(sc);
+        let mut layer_tag_index = HashMap::new();
+        layer_tag_index.insert("main".to_string(), 0);
+        layer_tag_index.insert("pixel".to_string(), 1);
         Panel {
             buffers: [Buffer::empty(size), Buffer::empty(size)],
             current: 0,
-            pixel_sprites: sc,
-            sprites: nsc,
-            // layers: vec![],
+            layer_tag_index,
+            layers,
         }
     }
 
@@ -86,7 +91,7 @@ impl Panel {
             .render_buffer(
                 &self.buffers[0],
                 &self.buffers[1],
-                &mut self.pixel_sprites,
+                &mut self.layers[1],
                 ctx.stage,
             )
             .unwrap();
@@ -96,20 +101,24 @@ impl Panel {
         &mut self.buffers[self.current]
     }
 
+    /*pub add_layer(&mut self, tag: &str) {
+
+    }*/
+
     pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.sprites.add_by_tag(sp, tag);
+        self.layers[0].add_by_tag(sp, tag);
     }
 
     pub fn get_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.sprites.get_by_tag(tag)
+        self.layers[0].get_by_tag(tag)
     }
 
     pub fn add_pixel_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.pixel_sprites.add_by_tag(sp, tag);
+        self.layers[1].add_by_tag(sp, tag);
     }
 
     pub fn get_pixel_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.pixel_sprites.get_by_tag(tag)
+        self.layers[1].get_by_tag(tag)
     }
 
     pub fn reset(&mut self, ctx: &mut Context) {
@@ -117,22 +126,21 @@ impl Panel {
     }
 
     pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
-        self.sprites
+        self.layers[0]
             .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
-
-        let cb = &self.buffers[self.current];
-        let pb = &self.buffers[1 - self.current];
-
-        for si in &self.pixel_sprites.render_index {
-            let s = &mut self.pixel_sprites.sprites[si.0];
+        for idx in 0..self.layers[1].render_index.len() {
+            let si = self.layers[1].render_index[idx];
+            let s = &mut self.layers[1].sprites[si.0];
             if s.is_hidden() {
                 continue;
             }
             s.check_asset_request(&mut ctx.asset_manager);
         }
 
+        let cb = &self.buffers[self.current];
+        let pb = &self.buffers[1 - self.current];
         ctx.adapter
-            .render_buffer(cb, pb, &mut self.pixel_sprites, ctx.stage)
+            .render_buffer(cb, pb, &mut self.layers[1], ctx.stage)
             .unwrap();
         ctx.adapter.hide_cursor().unwrap();
 

@@ -90,8 +90,6 @@ impl Sprites {
         &mut self.sprites[*idx]
     }
 
-    // 用于获取一个不可变引用，常用于
-    // 从图集中获取一个图用于copy_content
     // to get a non-referencable variable, usually used to
     // copy_content an image from an image set
     pub fn get_by_tag_immut(&self, name: &str) -> &Sprite {
