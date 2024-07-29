@@ -3,10 +3,9 @@
 use crate::model::{
     PaletteModel, PaletteState, GRADIENT_COUNT, MENUW, MENUX, MENUY, PALETTEH, PALETTEW,
 };
+use log::info;
 use num_traits::FromPrimitive;
 use palette_lib::COLORS_WITH_NAME;
-use std::cell::Cell;
-use log::info;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -15,12 +14,13 @@ use rust_pixel::{
     game::{Model, Render},
     render::panel::Panel,
     render::sprite::Sprite,
-    render::style::{Style, Color, ColorData, ColorPro, ColorSpace::*},
+    render::style::{Color, ColorData, ColorPro, ColorSpace::*, Style},
+    util::Rect,
 };
+use std::cell::Cell;
 
 pub struct PaletteRender {
     pub panel: Panel,
-    pub panel_clear: Panel,
     pub panel_main: Panel,
     pub panels: Vec<Panel>,
 }
@@ -33,15 +33,6 @@ impl PaletteRender {
         // background...
         let gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
         panel.add_sprite(gb, "back");
-
-        let mut panel_clear = Panel::new();
-        let mut gb = Sprite::new(2, 2, PALETTEW - 4, PALETTEH - 21);
-        for i in 0..PALETTEH - 21 {
-            for j in 0..PALETTEW  - 4 {
-                gb.content.set_str(j, i, " ", Style::default().bg(Color::Indexed(233)));
-            }
-        }
-        panel_clear.add_sprite(gb, "clear");
 
         // tab panels...
         for i in 0..6 {
@@ -106,7 +97,6 @@ impl PaletteRender {
 
         Self {
             panel,
-            panel_clear,
             panel_main,
             panels,
         }
@@ -114,9 +104,14 @@ impl PaletteRender {
 
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        self.panel_clear.clear(ctx);
-        self.panel_clear.draw(ctx).unwrap();
-        self.panels[ctx.state as usize].clear(ctx);
+        info!("draw_panel_clear....");
+        self.panels[ctx.state as usize].clear(
+            ctx,
+            Rect::new(2, 2, PALETTEW - 4, PALETTEH - 21),
+            "B",
+            Color::Indexed(1),
+            Color::Indexed(4),
+        );
     }
 
     pub fn draw_named_colors<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
@@ -270,6 +265,7 @@ impl Render for PaletteRender {
                 pl.set_color_str(0, 0, " ", color, color);
             }
         }
+        self.draw_named_colors(context, data);
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {

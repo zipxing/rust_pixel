@@ -25,7 +25,9 @@ use crate::{
     context::Context,
     render::{
         buffer::Buffer,
+        cell::Cell,
         sprite::{Sprite, Sprites},
+        style::Color,
     },
     util::{
         objpool::{GObj, GameObjPool, GameObject},
@@ -41,6 +43,8 @@ pub struct Panel {
     pub current: usize,
     pub pixel_sprites: Sprites,
     pub sprites: Sprites,
+    // pub layer_tag_index: HashMap<String, usize>,
+    // pub layers: Vec<Sprites>,
 }
 
 #[allow(unused)]
@@ -57,6 +61,7 @@ impl Panel {
             current: 0,
             pixel_sprites: sc,
             sprites: nsc,
+            // layers: vec![],
         }
     }
 
@@ -67,10 +72,24 @@ impl Panel {
         info!("panel init size...{:?}", size);
     }
 
-    pub fn clear(&mut self, ctx: &mut Context) {
+    pub fn clear(&mut self, ctx: &mut Context, area: Rect, sym: &str, fg: Color, bg: Color) {
         let size = ctx.adapter.size();
         self.buffers[0] = Buffer::empty(size);
         self.buffers[1] = Buffer::empty(size);
+        let mut cell: Cell = Default::default();
+        cell.set_symbol(sym);
+        cell.set_fg(fg);
+        cell.set_bg(bg);
+        let buf = Buffer::filled(area, &cell);
+        self.buffers[0].merge(&buf, 255, false);
+        ctx.adapter
+            .render_buffer(
+                &self.buffers[0],
+                &self.buffers[1],
+                &mut self.pixel_sprites,
+                ctx.stage,
+            )
+            .unwrap();
     }
 
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
@@ -128,8 +147,13 @@ impl Panel {
 
     /// create a max number of sprites
     /// and calls f closure to init
-    pub fn creat_objpool_sprites<T, F>(&mut self, pool: &GameObjPool<T>, size_x: u16, size_y: u16, mut f: F)
-    where
+    pub fn creat_objpool_sprites<T, F>(
+        &mut self,
+        pool: &GameObjPool<T>,
+        size_x: u16,
+        size_y: u16,
+        mut f: F,
+    ) where
         T: GObj,
         F: FnMut(&mut Sprite),
     {

@@ -72,10 +72,10 @@ impl PaletteModel {
     fn update_main_color(&mut self, context: &mut Context) {
         match  PaletteState::from_usize(context.state as usize).unwrap() {
             PaletteState::NameA => {
-                self.main_color = COLORS_WITH_NAME[self.select_y * self.select_x_max + self.select_x].1;
+                self.main_color = self.named_colors[self.select_y * self.select_x_max + self.select_x].1;
             },
             PaletteState::NameB => {
-                self.main_color = COLORS_WITH_NAME[76 + self.select_y * self.select_x_max + self.select_x].1;
+                self.main_color = self.named_colors[76 + self.select_y * self.select_x_max + self.select_x].1;
             },
             _ => {}
         }

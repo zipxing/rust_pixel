@@ -1,6 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+// use log::info;
 use crate::{
     event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
     render::{
@@ -162,6 +163,7 @@ impl Adapter for CrosstermAdapter {
             return Ok(());
         }
         let updates = previous_buffer.diff(current_buffer);
+        // info!("diff_len.....{:?}", updates.len());
 
         let mut fg = Color::Reset;
         let mut bg = Color::Reset;

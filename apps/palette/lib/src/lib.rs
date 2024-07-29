@@ -3,7 +3,7 @@
 //
 #![allow(dead_code)]
 use lazy_static::lazy_static;
-use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorScale, Fraction, ColorSpace::*};
+use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorScale, ColorSpace::*, Fraction};
 use rust_pixel::util::Rand;
 // use log::info;
 
@@ -191,11 +191,6 @@ pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<C
             .expect("gradient color");
         let cp = ColorPro::from_space(OKLchA, color);
         output_colors.push(cp);
-        // info!("color_sample_oklch.....{:?}", cp[OKLchA].unwrap());
-        // info!("color_sample_xyz.....{:?}", cp[XYZA].unwrap());
-        // info!("color_sample_oklab.....{:?}", cp[OKLabA].unwrap());
-        // info!("color_sample_srgba.....{:?}", cp[SRGBA].unwrap());
-        // info!("------------------------------")
     }
 }
 
