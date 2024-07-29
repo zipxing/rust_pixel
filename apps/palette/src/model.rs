@@ -170,19 +170,17 @@ impl Model for PaletteModel {
                     KeyCode::Char('1') => {
                         context.state = PaletteState::NameA as u8;
                         self.switch_state(context, 0);
-                        
-                        // self.data.shuffle();
-                        // self.card = self.data.next();
-                        // event_emit("Palette.RedrawTile");
                     }
                     KeyCode::Char('2') => {
-                        // self.card = self.data.next();
-                        // event_emit("Palette.RedrawTile");
                         context.state = PaletteState::NameB as u8;
                         self.switch_state(context, 1);
                     }
+                    KeyCode::Char('3') => {
+                        context.state = PaletteState::Picker as u8;
+                        self.switch_state(context, 2);
+                    }
                     _ => {
-                        context.state = PaletteState::NameA as u8;
+                        context.state = PaletteState::Picker as u8;
                     }
                 },
                 _ => {}
