@@ -235,12 +235,13 @@ impl Adapter for SdlAdapter {
             .unwrap();
 
         let surface = Surface::from_file(format!(
-                        "{}{}{}",
-                        self.base.project_path,
-                        std::path::MAIN_SEPARATOR,
-                        "assets/pix/cursor.png"))
-            .map_err(|err| format!("failed to load cursor image: {}", err))
-            .unwrap();
+            "{}{}{}",
+            self.base.project_path,
+            std::path::MAIN_SEPARATOR,
+            "assets/pix/cursor.png"
+        ))
+        .map_err(|err| format!("failed to load cursor image: {}", err))
+        .unwrap();
         self.set_mouse_cursor(&surface);
 
         self.canvas = Some(canvas);
@@ -296,7 +297,7 @@ impl Adapter for SdlAdapter {
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
-        pixel_sprites: &mut Sprites,
+        pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
         let width = current_buffer.area.width;
@@ -345,20 +346,24 @@ impl Adapter for SdlAdapter {
                 if stage > LOGO_FRAME {
                     render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
                     render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
-                    render_pixel_sprites(
-                        pixel_sprites,
-                        rx,
-                        ry,
-                        |fc, s1, s2, texidx, _symidx, angle, ccp| {
-                            let tx = &mut texs[texidx / 4];
-                            let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-                            let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-                            let cccp = SPoint::new(ccp.x, ccp.y);
-                            tx.set_color_mod(fc.0, fc.1, fc.2);
-                            tx.set_alpha_mod(fc.3);
-                            tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
-                        },
-                    );
+                    for idx in 0..pixel_sprites.len() {
+                        if pixel_sprites[idx].is_pixel {
+                            render_pixel_sprites(
+                                &mut pixel_sprites[idx],
+                                rx,
+                                ry,
+                                |fc, s1, s2, texidx, _symidx, angle, ccp| {
+                                    let tx = &mut texs[texidx / 4];
+                                    let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
+                                    let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
+                                    let cccp = SPoint::new(ccp.x, ccp.y);
+                                    tx.set_color_mod(fc.0, fc.1, fc.2);
+                                    tx.set_alpha_mod(fc.3);
+                                    tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
+                                },
+                            );
+                        }
+                    }
                 }
             })
             .unwrap();

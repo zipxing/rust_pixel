@@ -25,9 +25,9 @@ use crate::{
     context::Context,
     render::{
         buffer::Buffer,
-        cell::Cell,
+        // cell::Cell,
         sprite::{Sprite, Sprites},
-        style::Color,
+        // style::Color,
     },
     util::{
         objpool::{GObj, GameObjPool, GameObject},
@@ -55,13 +55,18 @@ impl Panel {
         let (width, height) = (180, 80);
         let size = Rect::new(0, 0, width, height);
         let mut layers = vec![];
-        let sc = Sprites::new("pixel");
+
         let nsc = Sprites::new("main");
         layers.push(nsc);
+
+        let mut sc = Sprites::new("pixel");
+        sc.is_pixel = true;
         layers.push(sc);
+
         let mut layer_tag_index = HashMap::new();
         layer_tag_index.insert("main".to_string(), 0);
         layer_tag_index.insert("pixel".to_string(), 1);
+
         Panel {
             buffers: [Buffer::empty(size), Buffer::empty(size)],
             current: 0,
@@ -77,34 +82,79 @@ impl Panel {
         info!("panel init size...{:?}", size);
     }
 
-    // clear some area...
-    pub fn clear(&mut self, ctx: &mut Context, area: Rect, sym: &str, fg: Color, bg: Color) {
-        let size = ctx.adapter.size();
-        self.buffers[0] = Buffer::empty(size);
-        self.buffers[1] = Buffer::empty(size);
-        let mut cell: Cell = Default::default();
-        cell.set_symbol(sym);
-        cell.set_fg(fg);
-        cell.set_bg(bg);
-        let buf = Buffer::filled(area, &cell);
-        self.buffers[0].merge(&buf, 255, false);
-        ctx.adapter
-            .render_buffer(
-                &self.buffers[0],
-                &self.buffers[1],
-                &mut self.layers[1],
-                ctx.stage,
-            )
-            .unwrap();
-    }
+    // // clear some area...
+    // pub fn clear(&mut self, ctx: &mut Context, area: Rect, sym: &str, fg: Color, bg: Color) {
+    //     let size = ctx.adapter.size();
+    //     self.buffers[0] = Buffer::empty(size);
+    //     self.buffers[1] = Buffer::empty(size);
+    //     let mut cell: Cell = Default::default();
+    //     cell.set_symbol(sym);
+    //     cell.set_fg(fg);
+    //     cell.set_bg(bg);
+    //     let buf = Buffer::filled(area, &cell);
+    //     self.buffers[0].merge(&buf, 255, false);
+    //     ctx.adapter
+    //         .render_buffer(
+    //             &self.buffers[0],
+    //             &self.buffers[1],
+    //             &mut self.layers,
+    //             ctx.stage,
+    //         )
+    //         .unwrap();
+    // }
 
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current]
     }
 
-    /*pub add_layer(&mut self, tag: &str) {
+    fn add_layer_inner(&mut self, name: &str, is_pixel: bool) {
+        let sps = if is_pixel {
+            Sprites::new_pixel(name)
+        } else {
+            Sprites::new(name)
+        };
+        self.layers.push(sps);
+        self.layer_tag_index
+            .insert(name.to_string(), self.layers.len() - 1);
+    }
 
-    }*/
+    pub fn add_layer(&mut self, name: &str) {
+        self.add_layer_inner(name, false);
+    }
+
+    pub fn add_layer_pixel(&mut self, name: &str) {
+        self.add_layer_inner(name, true);
+    }
+
+    pub fn add_layer_sprite(&mut self, sp: Sprite, layer_name: &str, tag: &str) {
+        let idx = self.layer_tag_index.get(layer_name).unwrap();
+        self.layers[*idx].add_by_tag(sp, tag);
+    }
+
+    pub fn get_layer_sprite(&mut self, layer_name: &str, tag: &str) -> &mut Sprite {
+        let idx = self.layer_tag_index.get(layer_name).unwrap();
+        self.layers[*idx].get_by_tag(tag)
+    }
+
+    pub fn deactive_layer(&mut self, layer_name: &str) {
+        let idx = self.layer_tag_index.get(layer_name).unwrap();
+        self.layers[*idx].deactive();
+    }
+
+    pub fn active_layer(&mut self, layer_name: &str) {
+        let idx = self.layer_tag_index.get(layer_name).unwrap();
+        self.layers[*idx].active();
+    }
+
+    // pub fn add_layer_pixel_sprite(&mut self, sp: Sprite, layer_name: &str, tag: &str) {
+    //     let idx = self.layer_tag_index.get(layer_name).unwrap();
+    //     self.layers[*idx].add_by_tag(sp, tag);
+    // }
+
+    // pub fn get_layer_pixel_sprite(&mut self, layer_name: &str, tag: &str) {
+    //     let idx = self.layer_tag_index.get(layer_name).unwrap();
+    //     self.layers[*idx].get_by_tag(tag);
+    // }
 
     pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
         self.layers[0].add_by_tag(sp, tag);
@@ -127,21 +177,28 @@ impl Panel {
     }
 
     pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
-        self.layers[0]
-            .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
-        for idx in 0..self.layers[1].render_index.len() {
-            let si = self.layers[1].render_index[idx];
-            let s = &mut self.layers[1].sprites[si.0];
-            if s.is_hidden() {
+        for idx in 0..self.layers.len() {
+            if self.layers[idx].is_hidden {
                 continue;
             }
-            s.check_asset_request(&mut ctx.asset_manager);
+            if self.layers[idx].is_pixel {
+                for idx in 0..self.layers[1].render_index.len() {
+                    let si = self.layers[1].render_index[idx];
+                    let s = &mut self.layers[1].sprites[si.0];
+                    if s.is_hidden() {
+                        continue;
+                    }
+                    s.check_asset_request(&mut ctx.asset_manager);
+                }
+            } else {
+                self.layers[idx]
+                    .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+            }
         }
-
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];
         ctx.adapter
-            .render_buffer(cb, pb, &mut self.layers[1], ctx.stage)
+            .render_buffer(cb, pb, &mut self.layers, ctx.stage)
             .unwrap();
         ctx.adapter.hide_cursor().unwrap();
 

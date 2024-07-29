@@ -19,13 +19,12 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-/// 文本精灵集合，把一系列Sprite存储在vector中
-/// 可以按照索引偏移直接访问，也可以通过hashmap来按照
-/// tag访问
 /// Set of text sprite, stored in a vector
 /// Sprite can be accessed via offset in the vector or by tag in the hashmap
 pub struct Sprites {
     pub name: String,
+    pub is_pixel: bool,
+    pub is_hidden: bool, 
     pub sprites: Vec<Sprite>,
     pub tag_index: HashMap<String, usize>,
 
@@ -52,10 +51,31 @@ impl Sprites {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
+            is_pixel: false,
+            is_hidden: false,
             sprites: vec![],
             tag_index: HashMap::new(),
             render_index: vec![],
         }
+    }
+
+    pub fn new_pixel(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            is_pixel: true,
+            is_hidden: false,
+            sprites: vec![],
+            tag_index: HashMap::new(),
+            render_index: vec![],
+        }
+    }
+
+    pub fn active(&mut self) {
+        self.is_hidden = false;
+    }
+
+    pub fn deactive(&mut self) {
+        self.is_hidden = true;
     }
 
     pub fn get_max_size(&self) -> PointU16 {

@@ -130,7 +130,7 @@ impl Adapter for CrosstermAdapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        _pix: &mut Sprites,
+        _pix: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
         if stage <= LOGO_FRAME {

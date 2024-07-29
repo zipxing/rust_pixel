@@ -10,8 +10,8 @@ use crate::event::{
 use crate::{
     render::{
         adapter::{
-            render_border, render_logo, render_main_buffer, render_pixel_sprites,
-            PointI32, ARect, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+            render_border, render_logo, render_main_buffer, render_pixel_sprites, ARect, Adapter,
+            AdapterBase, PointI32, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
         },
         buffer::Buffer,
         sprite::Sprites,
@@ -131,7 +131,7 @@ impl Adapter for WebAdapter {
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
-        pixel_sprites: &mut Sprites,
+        pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
         self.web_buf.clear();
@@ -169,32 +169,39 @@ impl Adapter for WebAdapter {
         let ch = self.base.cell_h;
         let rx = self.base.ratio_x;
         let ry = self.base.ratio_y;
-        let mut rfunc = |fc: &(u8, u8, u8, u8), _s1: ARect, s2: ARect, texidx: usize, symidx: usize| {
-            self.push_web_buffer(
-                fc.0,
-                fc.1,
-                fc.2,
-                fc.3,
-                texidx,
-                symidx,
-                s2,
-                0.0,
-                &PointI32 { x: 0, y: 0 },
-            );
-        };
+        let mut rfunc =
+            |fc: &(u8, u8, u8, u8), _s1: ARect, s2: ARect, texidx: usize, symidx: usize| {
+                self.push_web_buffer(
+                    fc.0,
+                    fc.1,
+                    fc.2,
+                    fc.3,
+                    texidx,
+                    symidx,
+                    s2,
+                    0.0,
+                    &PointI32 { x: 0, y: 0 },
+                );
+            };
         render_border(cw, ch, rx, ry, &mut rfunc);
         if stage > LOGO_FRAME {
             render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
         }
         if stage > LOGO_FRAME {
-            render_pixel_sprites(
-                pixel_sprites,
-                rx,
-                ry,
-                |fc, _s1, s2, texidx, symidx, angle, ccp| {
-                    self.push_web_buffer(fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2, angle, &ccp);
-                },
-            );
+            for idx in 0..pixel_sprites.len() {
+                if pixel_sprites[idx].is_pixel {
+                    render_pixel_sprites(
+                        &mut pixel_sprites[idx],
+                        rx,
+                        ry,
+                        |fc, _s1, s2, texidx, symidx, angle, ccp| {
+                            self.push_web_buffer(
+                                fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2, angle, &ccp,
+                            );
+                        },
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -276,7 +283,7 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32)
                 if medat.0 == 1 {
                     mcte = web_event!(Drag, medat, Left);
                 } else {
-                    mcte = web_event!(Moved, medat, );
+                    mcte = web_event!(Moved, medat,);
                 }
             }
             _ => {}
