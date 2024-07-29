@@ -25,9 +25,7 @@ use crate::{
     context::Context,
     render::{
         buffer::Buffer,
-        // cell::Cell,
         sprite::{Sprite, Sprites},
-        // style::Color,
     },
     util::{
         objpool::{GObj, GameObjPool, GameObject},
@@ -36,10 +34,7 @@ use crate::{
     LOGO_FRAME,
 };
 use log::info;
-use std::{
-    io,
-    collections::HashMap,
-};
+use std::{collections::HashMap, io};
 
 pub struct Panel {
     pub buffers: [Buffer; 2],
@@ -54,8 +49,8 @@ impl Panel {
     pub fn new() -> Self {
         let (width, height) = (180, 80);
         let size = Rect::new(0, 0, width, height);
-        let mut layers = vec![];
 
+        let mut layers = vec![];
         let nsc = Sprites::new("main");
         layers.push(nsc);
 
@@ -107,7 +102,7 @@ impl Panel {
         &mut self.buffers[self.current]
     }
 
-    fn add_layer_inner(&mut self, name: &str, is_pixel: bool) {
+    fn _add_layer(&mut self, name: &str, is_pixel: bool) {
         let sps = if is_pixel {
             Sprites::new_pixel(name)
         } else {
@@ -119,11 +114,11 @@ impl Panel {
     }
 
     pub fn add_layer(&mut self, name: &str) {
-        self.add_layer_inner(name, false);
+        self._add_layer(name, false);
     }
 
     pub fn add_layer_pixel(&mut self, name: &str) {
-        self.add_layer_inner(name, true);
+        self._add_layer(name, true);
     }
 
     pub fn add_layer_sprite(&mut self, sp: Sprite, layer_name: &str, tag: &str) {
@@ -145,16 +140,6 @@ impl Panel {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
         self.layers[*idx].active();
     }
-
-    // pub fn add_layer_pixel_sprite(&mut self, sp: Sprite, layer_name: &str, tag: &str) {
-    //     let idx = self.layer_tag_index.get(layer_name).unwrap();
-    //     self.layers[*idx].add_by_tag(sp, tag);
-    // }
-
-    // pub fn get_layer_pixel_sprite(&mut self, layer_name: &str, tag: &str) {
-    //     let idx = self.layer_tag_index.get(layer_name).unwrap();
-    //     self.layers[*idx].get_by_tag(tag);
-    // }
 
     pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
         self.layers[0].add_by_tag(sp, tag);
@@ -181,19 +166,26 @@ impl Panel {
             if self.layers[idx].is_hidden {
                 continue;
             }
-            if self.layers[idx].is_pixel {
-                for idx in 0..self.layers[1].render_index.len() {
-                    let si = self.layers[1].render_index[idx];
-                    let s = &mut self.layers[1].sprites[si.0];
-                    if s.is_hidden() {
-                        continue;
-                    }
-                    s.check_asset_request(&mut ctx.asset_manager);
-                }
-            } else {
+            for idx in 0..self.layers[idx].render_index.len() {
+                let si = self.layers[idx].render_index[idx];
+                let s = &mut self.layers[idx].sprites[si.0];
                 self.layers[idx]
                     .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
             }
+
+            // if self.layers[idx].is_pixel {
+            //     for idx in 0..self.layers[idx].render_index.len() {
+            //         let si = self.layers[idx].render_index[idx];
+            //         let s = &mut self.layers[idx].sprites[si.0];
+            //         if s.is_hidden() {
+            //             continue;
+            //         }
+            //         s.check_asset_request(&mut ctx.asset_manager);
+            //     }
+            // } else {
+            //     self.layers[idx]
+            //         .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+            // }
         }
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];

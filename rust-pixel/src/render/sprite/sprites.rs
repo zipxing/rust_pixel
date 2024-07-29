@@ -145,8 +145,7 @@ impl Sprites {
     pub fn render_all(&mut self, am: &mut AssetManager, buffer: &mut Buffer) {
         self.update_render_index();
         for v in &self.render_index {
-            self.sprites[v.0].render(am, buffer);
-            // frame.render_widget(am, &mut self.sprites[v.0]);
+            self.sprites[v.0].render(self.is_pixel, am, buffer);
         }
     }
 }
