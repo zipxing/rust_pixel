@@ -30,6 +30,9 @@ pub struct Sprites {
 
     // sprite index, render weight...
     pub render_index: Vec<(usize, i32)>,
+
+    // render weight as layers in panel...
+    pub render_weight: i32,
 }
 
 /// 实现Index，IndexMut协议
@@ -56,6 +59,7 @@ impl Sprites {
             sprites: vec![],
             tag_index: HashMap::new(),
             render_index: vec![],
+            render_weight: 1, 
         }
     }
 
@@ -67,6 +71,7 @@ impl Sprites {
             sprites: vec![],
             tag_index: HashMap::new(),
             render_index: vec![],
+            render_weight: 1, 
         }
     }
 

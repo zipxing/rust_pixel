@@ -35,12 +35,16 @@ use crate::{
 };
 use log::info;
 use std::{collections::HashMap, io};
+use std::cmp::Reverse;
 
 pub struct Panel {
     pub buffers: [Buffer; 2],
     pub current: usize,
     pub layer_tag_index: HashMap<String, usize>,
     pub layers: Vec<Sprites>,
+
+    // layer index, render weight...
+    pub render_index: Vec<(usize, i32)>,
 }
 
 #[allow(unused)]
@@ -67,6 +71,7 @@ impl Panel {
             current: 0,
             layer_tag_index,
             layers,
+            render_index: vec![],
         }
     }
 
@@ -110,6 +115,12 @@ impl Panel {
         self.layers[*idx].get_by_tag(tag)
     }
 
+    pub fn set_layer_weight(&mut self, layer_name: &str, w: i32) {
+        let idx = self.layer_tag_index.get(layer_name).unwrap();
+        self.layers[*idx].render_weight = w;
+        self.render_index.clear();
+    }
+
     pub fn deactive_layer(&mut self, layer_name: &str) {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
         self.layers[*idx].deactive();
@@ -140,10 +151,22 @@ impl Panel {
         ctx.adapter.reset();
     }
 
+    pub fn update_render_index(&mut self) {
+        if self.render_index.len() == 0 {
+            let mut i = 0usize;
+            for s in &self.layers {
+                self.render_index.push((i, s.render_weight));
+                i += 1;
+            }
+            self.render_index.sort_by_key(|d| Reverse(d.1));
+        }
+    }
+
     pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
-        for idx in 0..self.layers.len() {
-            if !self.layers[idx].is_hidden {
-                self.layers[idx]
+        self.update_render_index();
+        for idx in &self.render_index {
+            if !self.layers[idx.0].is_hidden {
+                self.layers[idx.0]
                     .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
             }
         }
