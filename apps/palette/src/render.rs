@@ -1,8 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use crate::model::{
-    PaletteModel, PaletteState, GRADIENT_COUNT, MENUW, MENUX, MENUY, PALETTEH, PALETTEW,
-};
+use crate::model::*;
 use log::info;
 use num_traits::FromPrimitive;
 use palette_lib::COLORS_WITH_NAME;
@@ -26,30 +24,42 @@ pub struct PaletteRender {
 impl PaletteRender {
     pub fn new() -> Self {
         let mut panel = Panel::new();
+
+        // creat main layer
         panel.add_layer("main");
 
-        // background...
+        // background
         let gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
         panel.add_layer_sprite(gb, "main", "back");
 
+        // top menu
+        let mb = Sprite::new(MENUX, MENUY, MENUW, 1);
+        panel.add_layer_sprite(mb, "main", "menu");
+
+        // main color
+        let pl = Sprite::new(4, 24, 12, 6);
+        panel.add_layer_sprite(pl, "main", "main_color");
+
+        // 3 similar colors
+        for i in 0..3 {
+            let pl = Sprite::new(61, 25 + i * 2, C_WIDTH - 2, 1);
+            panel.add_layer_sprite(pl, "main", &format!("simi{}", i));
+        }
+
+        // creat 6 state layers
         for i in 0..6 {
             panel.add_layer(&format!("{}", i));
-            panel.deactive_layer(&format!("{}", i));
+            if i != 0 {
+                panel.deactive_layer(&format!("{}", i));
+            }
         }
-        panel.active_layer("0");
 
-        let adjx = 2;
-        let adjy = 2;
-
-        let col_count = 4;
-        let row_count = 19;
-        let c_width = 19;
-
+        // named colors in layer0 or layer1
         for i in 0..2 {
-            for row in 0..row_count {
-                for col in 0..col_count {
-                    let pl = Sprite::new(adjx + col * c_width, adjy + row, c_width, 1);
-                    let idx = (row_count * col_count * i + row * col_count + col) as usize;
+            for row in 0..ROW_COUNT {
+                for col in 0..COL_COUNT {
+                    let pl = Sprite::new(ADJX + col * C_WIDTH, ADJY + row, C_WIDTH, 1);
+                    let idx = (ROW_COUNT * COL_COUNT * i + row * COL_COUNT + col) as usize;
                     if idx >= COLORS_WITH_NAME.len() {
                         break;
                     }
@@ -58,33 +68,22 @@ impl PaletteRender {
             }
         }
 
-        let pl = Sprite::new(4, 24, 12, 6);
-        panel.add_layer_sprite(pl, "main", "main_color");
-
-        for i in 0..3 {
-            let pl = Sprite::new(61, 25 + i * 2, c_width - 2, 1);
-            panel.add_layer_sprite(pl, "main", &format!("simi{}", i));
+        // color picker in layer2
+        for y in 0..PICKER_COUNT {
+            for x in 0..PICKER_COUNT {
+                let pl = Sprite::new(ADJX + x * 2, ADJY + y, 2, 1);
+                panel.add_layer_sprite(pl, "2", &format!("pick{}", y * PICKER_COUNT + x));
+            }
         }
-
-        let width = 25;
-        for y in 0..width {
-            for x in 0..width {
-                let pl = Sprite::new(adjx + x * 2, adjy + y, 2, 1);
-                panel.add_layer_sprite(pl, "2", &format!("pick{}", y * width + x));
+        for j in 0..4 {
+            for i in 0..30 {
+                let pl = Sprite::new(45 + i, 9 + j, 1, 1);
+                panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", j * 30 + i));
             }
         }
 
-        for j in 0..2 {
-            for i in 0..60 {
-                let pl = Sprite::new(8 + i, 29 + j, 1, 1);
-                panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", j * 60 + i));
-            }
-        }
-
-        let mb = Sprite::new(MENUX, MENUY, MENUW, 1);
-        panel.add_layer_sprite(mb, "main", "menu");
         // for co in 0..CCOUNT as u16 {
-        //     let pl = Sprite::new(adjx + co * 2, adjy - 1, 2, 1);
+        //     let pl = Sprite::new(ADJX + co * 2, ADJY - 1, 2, 1);
         //     panel.add_sprite(pl, &format!("COLOR{}", co));
         // }
 
@@ -92,41 +91,41 @@ impl PaletteRender {
         event_register("Palette.RedrawPanel", "draw_panel");
         event_register("Palette.RedrawMainColor", "draw_main_color");
 
-        Self {
-            panel,
-        }
+        Self { panel }
     }
 
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
         info!("draw_panel_clear....");
         for i in 0..6 {
-            self.panel.deactive_layer(&format!("{}", i));
+            if i != ctx.state as usize {
+                self.panel.deactive_layer(&format!("{}", i));
+            } else {
+                self.panel.active_layer(&format!("{}", i));
+            }
         }
-        self.panel.active_layer(&format!("{}", ctx.state));
     }
 
     pub fn draw_named_colors<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        let col_count = 4;
-        let row_count = 19;
-        let c_width = 19;
 
         for i in 0..2 {
-            for row in 0..row_count {
-                for col in 0..col_count {
-                    let idx = (row_count * col_count * i + row * col_count + col) as usize;
+            for row in 0..ROW_COUNT {
+                for col in 0..COL_COUNT {
+                    let idx = (ROW_COUNT * COL_COUNT * i + row * COL_COUNT + col) as usize;
                     if idx >= COLORS_WITH_NAME.len() {
                         break;
                     }
-                    let pl = self.panel.get_layer_sprite(&format!("{}", i), &format!("{}", idx));
+                    let pl = self
+                        .panel
+                        .get_layer_sprite(&format!("{}", i), &format!("{}", idx));
                     let s = d.named_colors[idx].0;
                     let cr = d.named_colors[idx].1;
                     let color = Color::Professional(cr);
                     pl.set_color_str(
                         0,
                         0,
-                        &format!("{:width$}", s, width = c_width as usize),
+                        &format!("{:width$}", s, width = C_WIDTH as usize),
                         if cr.is_dark() {
                             Color::White
                         } else {
@@ -167,7 +166,7 @@ impl PaletteRender {
             pl.set_color_str(
                 0,
                 0,
-                &format!("{:width$}", s, width = 19usize),
+                &format!("{:width$}", s, width = C_WIDTH as usize),
                 if cr.is_dark() {
                     Color::White
                 } else {
@@ -233,12 +232,12 @@ impl Render for PaletteRender {
         //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         // }
         //
-        let width = 25;
-
-        for y in 0..width {
-            for x in 0..width {
-                let pl = self.panel.get_layer_sprite("2", &format!("pick{}", y * width + x));
-                let cr = d.picker_colors[y * width + x];
+        for y in 0..PICKER_COUNT {
+            for x in 0..PICKER_COUNT {
+                let pl = self
+                    .panel
+                    .get_layer_sprite("2", &format!("pick{}", y * PICKER_COUNT + x));
+                let cr = d.picker_colors[(y * PICKER_COUNT + x) as usize];
                 let color = Color::Professional(cr);
                 pl.set_color_str(0, 0, "  ", color, color);
             }
@@ -246,7 +245,9 @@ impl Render for PaletteRender {
 
         for j in 0..2 {
             for i in 0..60 {
-                let pl = self.panel.get_layer_sprite("2", &format!("hsv_pick{}", (j * 60 + i)));
+                let pl = self
+                    .panel
+                    .get_layer_sprite("2", &format!("hsv_pick{}", (j * 60 + i)));
                 let cr = ColorPro::from_space_f64(HSVA, (j * 60 + i) as f64 * 3.0, 1.0, 1.0, 1.0);
                 let color = Color::Professional(cr);
                 pl.set_color_str(0, 0, " ", color, color);

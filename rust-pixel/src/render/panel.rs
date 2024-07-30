@@ -77,32 +77,11 @@ impl Panel {
         info!("panel init size...{:?}", size);
     }
 
-    // // clear some area...
-    // pub fn clear(&mut self, ctx: &mut Context, area: Rect, sym: &str, fg: Color, bg: Color) {
-    //     let size = ctx.adapter.size();
-    //     self.buffers[0] = Buffer::empty(size);
-    //     self.buffers[1] = Buffer::empty(size);
-    //     let mut cell: Cell = Default::default();
-    //     cell.set_symbol(sym);
-    //     cell.set_fg(fg);
-    //     cell.set_bg(bg);
-    //     let buf = Buffer::filled(area, &cell);
-    //     self.buffers[0].merge(&buf, 255, false);
-    //     ctx.adapter
-    //         .render_buffer(
-    //             &self.buffers[0],
-    //             &self.buffers[1],
-    //             &mut self.layers,
-    //             ctx.stage,
-    //         )
-    //         .unwrap();
-    // }
-
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current]
     }
 
-    fn _add_layer(&mut self, name: &str, is_pixel: bool) {
+    fn add_layer_inner(&mut self, name: &str, is_pixel: bool) {
         let sps = if is_pixel {
             Sprites::new_pixel(name)
         } else {
@@ -114,11 +93,11 @@ impl Panel {
     }
 
     pub fn add_layer(&mut self, name: &str) {
-        self._add_layer(name, false);
+        self.add_layer_inner(name, false);
     }
 
     pub fn add_layer_pixel(&mut self, name: &str) {
-        self._add_layer(name, true);
+        self.add_layer_inner(name, true);
     }
 
     pub fn add_layer_sprite(&mut self, sp: Sprite, layer_name: &str, tag: &str) {
