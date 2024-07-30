@@ -116,7 +116,7 @@ pub trait Adapter {
         &mut self,
         cb: &Buffer,
         pb: &Buffer,
-        ps: &mut Sprites,
+        ps: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String>;
 

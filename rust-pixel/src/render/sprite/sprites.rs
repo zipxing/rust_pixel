@@ -19,13 +19,12 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-/// 文本精灵集合，把一系列Sprite存储在vector中
-/// 可以按照索引偏移直接访问，也可以通过hashmap来按照
-/// tag访问
 /// Set of text sprite, stored in a vector
 /// Sprite can be accessed via offset in the vector or by tag in the hashmap
 pub struct Sprites {
     pub name: String,
+    pub is_pixel: bool,
+    pub is_hidden: bool, 
     pub sprites: Vec<Sprite>,
     pub tag_index: HashMap<String, usize>,
 
@@ -52,10 +51,31 @@ impl Sprites {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
+            is_pixel: false,
+            is_hidden: false,
             sprites: vec![],
             tag_index: HashMap::new(),
             render_index: vec![],
         }
+    }
+
+    pub fn new_pixel(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            is_pixel: true,
+            is_hidden: false,
+            sprites: vec![],
+            tag_index: HashMap::new(),
+            render_index: vec![],
+        }
+    }
+
+    pub fn active(&mut self) {
+        self.is_hidden = false;
+    }
+
+    pub fn deactive(&mut self) {
+        self.is_hidden = true;
     }
 
     pub fn get_max_size(&self) -> PointU16 {
@@ -90,8 +110,6 @@ impl Sprites {
         &mut self.sprites[*idx]
     }
 
-    // 用于获取一个不可变引用，常用于
-    // 从图集中获取一个图用于copy_content
     // to get a non-referencable variable, usually used to
     // copy_content an image from an image set
     pub fn get_by_tag_immut(&self, name: &str) -> &Sprite {
@@ -127,8 +145,7 @@ impl Sprites {
     pub fn render_all(&mut self, am: &mut AssetManager, buffer: &mut Buffer) {
         self.update_render_index();
         for v in &self.render_index {
-            self.sprites[v.0].render(am, buffer);
-            // frame.render_widget(am, &mut self.sprites[v.0]);
+            self.sprites[v.0].render(self.is_pixel, am, buffer);
         }
     }
 }

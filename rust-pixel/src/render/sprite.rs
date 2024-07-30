@@ -102,7 +102,7 @@ macro_rules! asset2sprite {
 }
 
 pub trait Widget {
-    fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer);
+    fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer);
 }
 
 #[derive(Clone)]
@@ -115,10 +115,12 @@ pub struct Sprite {
 }
 
 impl Widget for Sprite {
-    fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer) {
+    fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer) {
         if !self.is_hidden() {
             self.check_asset_request(am);
-            buf.merge(&self.content, self.alpha, true);
+            if !is_pixel {
+                buf.merge(&self.content, self.alpha, true);
+            }
         }
     }
 }

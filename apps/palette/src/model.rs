@@ -16,6 +16,12 @@ pub const MENUX: u16 = 12;
 pub const MENUY: u16 = 0;
 pub const MENUW: u16 = 70;
 pub const GRADIENT_COUNT: usize = 40;
+pub const PICKER_COUNT: u16 = 19;
+pub const ADJX: u16 = 2;
+pub const ADJY: u16 = 2;
+pub const COL_COUNT: u16 = 4;
+pub const ROW_COUNT: u16 = 19;
+pub const C_WIDTH: u16 = 19;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, FromPrimitive)]
@@ -129,12 +135,10 @@ impl Model for PaletteModel {
             &mut self.gradient_colors,
         );
 
-        let width = 25;
-
-        for y in 0..width {
-            for x in 0..width {
-                let rx = (x as f64) / (width as f64);
-                let ry = (y as f64) / (width as f64);
+        for y in 0..PICKER_COUNT {
+            for x in 0..PICKER_COUNT {
+                let rx = (x as f64) / (PICKER_COUNT as f64);
+                let ry = (y as f64) / (PICKER_COUNT as f64);
 
                 let h = 360.0 * rx;
                 let s = 0.6;
@@ -170,19 +174,17 @@ impl Model for PaletteModel {
                     KeyCode::Char('1') => {
                         context.state = PaletteState::NameA as u8;
                         self.switch_state(context, 0);
-                        
-                        // self.data.shuffle();
-                        // self.card = self.data.next();
-                        // event_emit("Palette.RedrawTile");
                     }
                     KeyCode::Char('2') => {
-                        // self.card = self.data.next();
-                        // event_emit("Palette.RedrawTile");
                         context.state = PaletteState::NameB as u8;
                         self.switch_state(context, 1);
                     }
+                    KeyCode::Char('3') => {
+                        context.state = PaletteState::Picker as u8;
+                        self.switch_state(context, 2);
+                    }
                     _ => {
-                        context.state = PaletteState::NameA as u8;
+                        context.state = PaletteState::Picker as u8;
                     }
                 },
                 _ => {}
