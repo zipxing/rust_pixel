@@ -1,3 +1,46 @@
+# 0.4.2
+- Refactor Panel, added layers for rendering
+- Refer to apps/palette render.rs
+```
+impl PaletteRender {
+    pub fn new() -> Self {
+        let mut panel = Panel::new();
+        // creat main layer
+        panel.add_layer("main");
+
+        // background
+        let gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
+        panel.add_layer_sprite(gb, "main", "back");
+
+        // top menu
+        let mb = Sprite::new(MENUX, MENUY, MENUW, 1);
+        panel.add_layer_sprite(mb, "main", "menu");
+
+        ...
+
+        // creat 6 state layers
+        for i in 0..6 {
+            panel.add_layer(&format!("{}", i));
+            if i != 0 {
+                panel.deactive_layer(&format!("{}", i));
+            }
+        }
+        ...
+    }
+
+    pub fn draw_menu<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+
+        // get layer sprite
+        let mb = self.panel.get_layer_sprite("main", "menu");
+        ...
+    }
+```
+- Continue writing palette application
+```
+$ cargo pixel r palette t 
+```
+
 # 0.4.1
 - Refactor Game and Context, added project_path variable
 - Better support for standalone crates using rust_pixel
