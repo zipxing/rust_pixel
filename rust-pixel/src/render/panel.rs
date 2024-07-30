@@ -163,29 +163,10 @@ impl Panel {
 
     pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
         for idx in 0..self.layers.len() {
-            if self.layers[idx].is_hidden {
-                continue;
-            }
-            for idx in 0..self.layers[idx].render_index.len() {
-                let si = self.layers[idx].render_index[idx];
-                let s = &mut self.layers[idx].sprites[si.0];
+            if !self.layers[idx].is_hidden {
                 self.layers[idx]
                     .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
             }
-
-            // if self.layers[idx].is_pixel {
-            //     for idx in 0..self.layers[idx].render_index.len() {
-            //         let si = self.layers[idx].render_index[idx];
-            //         let s = &mut self.layers[idx].sprites[si.0];
-            //         if s.is_hidden() {
-            //             continue;
-            //         }
-            //         s.check_asset_request(&mut ctx.asset_manager);
-            //     }
-            // } else {
-            //     self.layers[idx]
-            //         .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
-            // }
         }
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];

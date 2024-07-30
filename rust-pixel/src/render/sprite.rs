@@ -118,7 +118,7 @@ impl Widget for Sprite {
     fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer) {
         if !self.is_hidden() {
             self.check_asset_request(am);
-            if !!is_pixel {
+            if !is_pixel {
                 buf.merge(&self.content, self.alpha, true);
             }
         }
