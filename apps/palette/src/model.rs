@@ -34,6 +34,7 @@ pub enum PaletteState {
     Smart,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct SelectRange {
     pub value: usize,
     pub max: usize,
@@ -110,9 +111,7 @@ impl PaletteModel {
             }
             PaletteState::NameB => {
                 let idx = 76 + self.select_y.value * self.select_x.max + self.select_x.value;
-                if idx < self.named_colors.len() - 1 {
-                    self.main_color = self.named_colors[idx].1;
-                }
+                self.main_color = self.named_colors[idx].1;
             }
             _ => {}
         }
@@ -120,6 +119,37 @@ impl PaletteModel {
         self.main_color_similar = find_similar_colors(&self.main_color);
         event_emit("Palette.RedrawMainColor");
         event_emit("Palette.RedrawSelect");
+    }
+
+    fn check_range(&self, context: &mut Context) -> bool {
+        match PaletteState::from_usize(context.state as usize).unwrap() {
+            PaletteState::NameB => {
+                let idx = 76 + self.select_y.value * self.select_x.max + self.select_x.value;
+                if idx >= self.named_colors.len() {
+                    return false; 
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    fn movexy(&mut self, mv: &str, context: &mut Context) {
+        let bx = self.select_x.clone();
+        let by = self.select_y.clone();
+        match mv {
+            "w" => {self.select_y.backward();}
+            "s" => {self.select_y.forward();}
+            "a" => {self.select_x.backward();}
+            "d" => {self.select_x.forward();}
+            _ => {}
+        }
+        if !self.check_range(context) {
+            self.select_x = bx.clone();
+            self.select_y = by.clone();
+        } else {
+            self.update_main_color(context);
+        }
     }
 
     fn switch_state(&mut self, context: &mut Context, st: u8) {
@@ -217,23 +247,19 @@ impl Model for PaletteModel {
                         self.switch_state(context, 2);
                     }
                     KeyCode::Char('w') => {
-                        self.select_y.backward();
-                        self.update_main_color(context);
+                        self.movexy("w", context);
                     }
                     KeyCode::Char('s') => {
-                        self.select_y.forward();
-                        self.update_main_color(context);
+                        self.movexy("s", context);
                     }
                     KeyCode::Char('a') => {
-                        self.select_x.backward();
-                        self.update_main_color(context);
+                        self.movexy("a", context);
                     }
                     KeyCode::Char('d') => {
-                        self.select_x.forward();
-                        self.update_main_color(context);
+                        self.movexy("d", context);
                     }
                     _ => {
-                        context.state = PaletteState::Picker as u8;
+                        // context.state = PaletteState::Picker as u8;
                     }
                 },
                 _ => {}
