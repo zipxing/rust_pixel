@@ -87,11 +87,24 @@ impl PaletteRender {
         //     panel.add_sprite(pl, &format!("COLOR{}", co));
         // }
 
+        // creat select cursor layer
+        panel.add_layer("select");
+        let mut pl = Sprite::new(0, 0, 1, 1);
+        pl.set_color_str(0, 0, "@", Color::Red, Color::Black);
+        panel.add_layer_sprite(pl, "select", "cursor");
+
+        event_register("Palette.RedrawSelect", "draw_select");
         event_register("Palette.RedrawMenu", "draw_menu");
         event_register("Palette.RedrawPanel", "draw_panel");
         event_register("Palette.RedrawMainColor", "draw_main_color");
 
         Self { panel }
+    }
+
+    pub fn draw_select<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+        let pl = self.panel.get_layer_sprite("select", "cursor");
+        pl.set_pos(20 + d.select_x.value as u16 * C_WIDTH, 2 + d.select_y.value as u16);
     }
 
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
@@ -257,6 +270,9 @@ impl Render for PaletteRender {
     }
 
     fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+        if event_check("Palette.RedrawSelect", "draw_select") {
+            self.draw_select(context, data);
+        }
         if event_check("Palette.RedrawMenu", "draw_menu") {
             self.draw_menu(context, data);
         }

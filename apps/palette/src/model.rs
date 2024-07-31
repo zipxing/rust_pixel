@@ -1,4 +1,4 @@
-// use log::info;
+use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use palette_lib::{find_similar_colors, gradient, PaletteData, COLORS_WITH_NAME};
@@ -34,6 +34,35 @@ pub enum PaletteState {
     Smart,
 }
 
+pub struct SelectRange {
+    pub value: usize,
+    pub max: usize,
+}
+
+impl SelectRange {
+    pub fn new(v: usize, m: usize) -> Self {
+        Self { value: v, max: m }
+    }
+
+    pub fn forward(&mut self) -> usize {
+        if self.value == self.max - 1 {
+            self.value = 0;
+        } else {
+            self.value += 1;
+        }
+        self.value
+    }
+
+    pub fn backward(&mut self) -> usize {
+        if self.value == 0 {
+            self.value = self.max - 1;
+        } else {
+            self.value -= 1;
+        }
+        self.value
+    }
+}
+
 pub struct PaletteModel {
     pub data: PaletteData,
     pub card: u8,
@@ -44,20 +73,18 @@ pub struct PaletteModel {
     pub gradient_colors: Vec<ColorPro>,
     pub picker_color_hsv: (f64, f64, f64),
     pub picker_colors: Vec<ColorPro>,
-    pub select_x: usize,
-    pub select_x_max: usize,
-    pub select_y: usize,
-    pub select_y_max: usize,
+    pub select_area: SelectRange,
+    pub select_x: SelectRange,
+    pub select_y: SelectRange,
 }
 
 impl PaletteModel {
     pub fn new() -> Self {
-
         let mut ncolors = COLORS_WITH_NAME.clone();
         ncolors.sort_by_key(|nc| (1000.0 - nc.1.brightness() * 1000.0) as i32);
         // ncolors.sort_by_key(|nc| (1000.0 - nc.1.hue() * 1000.0) as i32);
         // ncolors.sort_by_key(|nc| (nc.1.chroma() * 1000.0) as i32);
-        
+
         Self {
             data: PaletteData::new(),
             card: 0,
@@ -68,50 +95,58 @@ impl PaletteModel {
             gradient_colors: vec![],
             picker_color_hsv: (0.0, 1.0, 1.0),
             picker_colors: vec![],
-            select_x: 0,
-            select_x_max: 0,
-            select_y: 0,
-            select_y_max: 0,
+            select_area: SelectRange::new(0, 0),
+            select_x: SelectRange::new(0, 0),
+            select_y: SelectRange::new(0, 0),
         }
     }
 
     fn update_main_color(&mut self, context: &mut Context) {
-        match  PaletteState::from_usize(context.state as usize).unwrap() {
+        match PaletteState::from_usize(context.state as usize).unwrap() {
             PaletteState::NameA => {
-                self.main_color = self.named_colors[self.select_y * self.select_x_max + self.select_x].1;
-            },
+                self.main_color = self.named_colors
+                    [self.select_y.value * self.select_x.max + self.select_x.value]
+                    .1;
+            }
             PaletteState::NameB => {
-                self.main_color = self.named_colors[76 + self.select_y * self.select_x_max + self.select_x].1;
-            },
+                let idx = 76 + self.select_y.value * self.select_x.max + self.select_x.value;
+                if idx < self.named_colors.len() - 1 {
+                    self.main_color = self.named_colors[idx].1;
+                }
+            }
             _ => {}
         }
         // find similar colors by ciede2000...
         self.main_color_similar = find_similar_colors(&self.main_color);
+        event_emit("Palette.RedrawMainColor");
+        event_emit("Palette.RedrawSelect");
     }
 
     fn switch_state(&mut self, context: &mut Context, st: u8) {
         context.state = st;
-        self.select_x = 0;
-        self.select_y = 0;
-        match  PaletteState::from_usize(st as usize).unwrap() {
+        self.select_area.value = 0;
+        self.select_x.value = 0;
+        self.select_y.value = 0;
+        match PaletteState::from_usize(st as usize).unwrap() {
             PaletteState::NameA => {
-                self.select_x_max = 4;
-                self.select_y_max = 19;
+                self.select_area.max = 0;
+                self.select_x.max = COL_COUNT as usize;
+                self.select_y.max = ROW_COUNT as usize;
                 self.update_main_color(context);
-            },
+            }
             PaletteState::NameB => {
-                self.select_x_max = 4;
-                self.select_y_max = 19;
+                self.select_area.max = 0;
+                self.select_x.max = COL_COUNT as usize;
+                self.select_y.max = ROW_COUNT as usize - 3;
                 self.update_main_color(context);
-            },
-            PaletteState::Random => {},
-            PaletteState::Smart => {},
-            PaletteState::Gradient => {},
-            PaletteState::Picker => {},
+            }
+            PaletteState::Random => {}
+            PaletteState::Smart => {}
+            PaletteState::Gradient => {}
+            PaletteState::Picker => {}
         }
         event_emit("Palette.RedrawMenu");
         event_emit("Palette.RedrawPanel");
-        event_emit("Palette.RedrawMainColor");
     }
 }
 
@@ -161,9 +196,7 @@ impl Model for PaletteModel {
             }
         }
 
-        self.update_main_color(context);
-        event_emit("Palette.RedrawMenu");
-        event_emit("Palette.RedrawMainColor");
+        self.switch_state(context, 0);
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
@@ -182,6 +215,22 @@ impl Model for PaletteModel {
                     KeyCode::Char('3') => {
                         context.state = PaletteState::Picker as u8;
                         self.switch_state(context, 2);
+                    }
+                    KeyCode::Char('w') => {
+                        self.select_y.backward();
+                        self.update_main_color(context);
+                    }
+                    KeyCode::Char('s') => {
+                        self.select_y.forward();
+                        self.update_main_color(context);
+                    }
+                    KeyCode::Char('a') => {
+                        self.select_x.backward();
+                        self.update_main_color(context);
+                    }
+                    KeyCode::Char('d') => {
+                        self.select_x.forward();
+                        self.update_main_color(context);
                     }
                     _ => {
                         context.state = PaletteState::Picker as u8;
