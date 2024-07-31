@@ -36,31 +36,71 @@ pub enum PaletteState {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SelectRange {
-    pub value: usize,
-    pub max: usize,
+    pub area_count: usize,
+    pub width: usize,
+    pub height: usize,
+    pub count: usize,
+    pub area: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl SelectRange {
-    pub fn new(v: usize, m: usize) -> Self {
-        Self { value: v, max: m }
+    pub fn new(a: usize, w: usize, h: usize, c: usize) -> Self {
+        Self { 
+            area_count: a,
+            width: w,
+            height: h,
+            count: c,
+            area: 0,
+            x: 0,
+            y: 0,
+        }
     }
 
-    pub fn forward(&mut self) -> usize {
-        if self.value == self.max - 1 {
-            self.value = 0;
+    pub fn forward_x(&mut self) {
+        let count_last_row = self.count % self.width;
+        if self.y == self.height - 1 {
+            if self.x == count_last_row - 1 {
+                self.x = 0;
+            } else {
+                self.x += 1;
+            }
         } else {
-            self.value += 1;
+            if self.x == self.width - 1 {
+                self.x = 0;
+            } else {
+                self.x += 1;
+            }
         }
-        self.value
     }
 
-    pub fn backward(&mut self) -> usize {
-        if self.value == 0 {
-            self.value = self.max - 1;
+    pub fn backward_x(&mut self) {
+        let count_last_row = self.count % self.width;
+        if self.y == self.height - 1 {
+            if self.x == 0 {
+                self.x = count_last_row - 1;
+            } else {
+                self.x -= 1;
+            }
         } else {
-            self.value -= 1;
+            if self.x == 0 {
+                self.x = self.width - 1;
+            } else {
+                self.x -= 1;
+            }
         }
-        self.value
+    }
+
+    pub forward_y(&mut self) {
+        let count_last_col = self.height - 1;
+        let modx = self.count % self.width;
+        let mx = if modx == 0 { self.width } else { modx }; 
+        if self.x >= mx {
+
+
+        }
+
     }
 }
 
@@ -170,10 +210,10 @@ impl PaletteModel {
                 self.select_y.max = ROW_COUNT as usize - 3;
                 self.update_main_color(context);
             }
-            PaletteState::Random => {}
-            PaletteState::Smart => {}
-            PaletteState::Gradient => {}
             PaletteState::Picker => {}
+            PaletteState::Random => {}
+            PaletteState::Gradient => {}
+            PaletteState::Smart => {}
         }
         event_emit("Palette.RedrawMenu");
         event_emit("Palette.RedrawPanel");
