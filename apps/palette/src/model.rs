@@ -199,8 +199,9 @@ impl PaletteModel {
     fn update_main_color(&mut self, context: &mut Context) {
         match PaletteState::from_usize(context.state as usize).unwrap() {
             PaletteState::NameA => {
-                self.main_color =
-                    self.named_colors[self.select.cur().y * self.select.cur().width + self.select.cur().x].1;
+                self.main_color = self.named_colors
+                    [self.select.cur().y * self.select.cur().width + self.select.cur().x]
+                    .1;
             }
             PaletteState::NameB => {
                 let idx = (COL_COUNT * ROW_COUNT) as usize
@@ -238,7 +239,12 @@ impl PaletteModel {
                 self.update_main_color(context);
             }
             PaletteState::Picker => {
-                // self.select = SelectRange::new(2),
+                self.select.clear();
+                let w = (C_WIDTH * COL_COUNT / 2) as usize;
+                let h = ROW_COUNT as usize - 1;
+                self.select.add_range(SelectRange::new(w, h, w * h));
+                self.select.add_range(SelectRange::new(w * 2, 1, w * 2));
+                self.update_main_color(context);
             }
             PaletteState::Random => {}
             PaletteState::Gradient => {}
