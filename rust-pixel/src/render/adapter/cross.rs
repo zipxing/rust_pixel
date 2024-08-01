@@ -223,6 +223,7 @@ pub fn input_events_from_cross(e: &CEvent) -> Option<Event> {
                 CKeyCode::Down => kc = KeyCode::Down,
                 CKeyCode::Left => kc = KeyCode::Left,
                 CKeyCode::Right => kc = KeyCode::Right,
+                CKeyCode::Tab => kc = KeyCode::Tab,
                 _ => {
                     return None;
                 }

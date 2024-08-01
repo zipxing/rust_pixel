@@ -106,11 +106,11 @@ impl PaletteRender {
     pub fn draw_select<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
         let pl = self.panel.get_layer_sprite("select", "cursor");
-        let idx = d.select.y * COL_COUNT as usize + d.select.x + ctx.state as usize * 76;
+        let idx = d.select.cur().y * COL_COUNT as usize + d.select.cur().x + ctx.state as usize * 76;
         let cr = d.named_colors[idx].1;
         let color = Color::Professional(cr);
         pl.set_color_str(0, 0, "", Color::Green, color);
-        pl.set_pos(2 + d.select.x as u16 * C_WIDTH, 2 + d.select.y as u16);
+        pl.set_pos(2 + d.select.cur().x as u16 * C_WIDTH, 2 + d.select.cur().y as u16);
     }
 
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {

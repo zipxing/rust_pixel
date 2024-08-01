@@ -34,35 +34,59 @@ pub enum PaletteState {
     Smart,
 }
 
+#[derive(Debug, Clone)]
+pub struct Select {
+    pub area: usize,
+    pub ranges: Vec<SelectRange>,
+}
+
+impl Select {
+    pub fn new() -> Self {
+        Self {
+            area: 0,
+            ranges: vec![],
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.area = 0;
+        self.ranges.clear();
+    }
+
+    pub fn add_range(&mut self, r: SelectRange) {
+        self.ranges.push(r);
+    }
+
+    pub fn cur(&mut self) -> &mut SelectRange {
+        &mut self.ranges[self.area]
+    }
+
+    pub fn switch_area(&mut self) {
+        if self.ranges.len() == 0 {
+            return;
+        }
+        self.area = (self.area + 1) % self.ranges.len();
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct SelectRange {
-    pub area_count: usize,
     pub width: usize,
     pub height: usize,
     pub count: usize,
-    pub area: usize,
     pub x: usize,
     pub y: usize,
 }
 
 impl SelectRange {
-    pub fn new(a: usize, w: usize, h: usize, c: usize) -> Self {
+    pub fn new(w: usize, h: usize, c: usize) -> Self {
         Self {
-            area_count: a,
             width: w,
             height: h,
             count: c,
-            area: 0,
             x: 0,
             y: 0,
         }
-    }
-
-    pub fn switch_area(&mut self) {
-        if self.area_count == 0 {
-            return;
-        }
-        self.area = (self.area + 1) % self.area_count;
     }
 
     pub fn forward_x(&mut self) {
@@ -148,7 +172,7 @@ pub struct PaletteModel {
     pub gradient_colors: Vec<ColorPro>,
     pub picker_color_hsv: (f64, f64, f64),
     pub picker_colors: Vec<ColorPro>,
-    pub select: SelectRange,
+    pub select: Select,
 }
 
 impl PaletteModel {
@@ -168,7 +192,7 @@ impl PaletteModel {
             gradient_colors: vec![],
             picker_color_hsv: (0.0, 1.0, 1.0),
             picker_colors: vec![],
-            select: SelectRange::new(0, 0, 0, 0),
+            select: Select::new(),
         }
     }
 
@@ -176,12 +200,12 @@ impl PaletteModel {
         match PaletteState::from_usize(context.state as usize).unwrap() {
             PaletteState::NameA => {
                 self.main_color =
-                    self.named_colors[self.select.y * self.select.width + self.select.x].1;
+                    self.named_colors[self.select.cur().y * self.select.cur().width + self.select.cur().x].1;
             }
             PaletteState::NameB => {
                 let idx = (COL_COUNT * ROW_COUNT) as usize
-                    + self.select.y * self.select.width
-                    + self.select.x;
+                    + self.select.cur().y * self.select.cur().width
+                    + self.select.cur().x;
                 self.main_color = self.named_colors[idx].1;
             }
             _ => {}
@@ -196,24 +220,26 @@ impl PaletteModel {
         context.state = st;
         match PaletteState::from_usize(st as usize).unwrap() {
             PaletteState::NameA => {
-                self.select = SelectRange::new(
-                    1,
+                self.select.clear();
+                self.select.add_range(SelectRange::new(
                     COL_COUNT as usize,
                     ROW_COUNT as usize,
                     (COL_COUNT * ROW_COUNT) as usize,
-                );
+                ));
                 self.update_main_color(context);
             }
             PaletteState::NameB => {
-                self.select = SelectRange::new(
-                    1,
+                self.select.clear();
+                self.select.add_range(SelectRange::new(
                     COL_COUNT as usize,
                     ROW_COUNT as usize - 3,
                     self.named_colors.len() - (COL_COUNT * ROW_COUNT) as usize,
-                );
+                ));
                 self.update_main_color(context);
             }
-            PaletteState::Picker => {}
+            PaletteState::Picker => {
+                // self.select = SelectRange::new(2),
+            }
             PaletteState::Random => {}
             PaletteState::Gradient => {}
             PaletteState::Smart => {}
@@ -290,22 +316,22 @@ impl Model for PaletteModel {
                         self.switch_state(context, 2);
                     }
                     KeyCode::Up => {
-                        self.select.backward_y();
+                        self.select.cur().backward_y();
                         self.update_main_color(context);
                     }
                     KeyCode::Down => {
-                        self.select.forward_y();
+                        self.select.cur().forward_y();
                         self.update_main_color(context);
                     }
                     KeyCode::Left => {
-                        self.select.backward_x();
+                        self.select.cur().backward_x();
                         self.update_main_color(context);
                     }
                     KeyCode::Right => {
-                        self.select.forward_x();
+                        self.select.cur().forward_x();
                         self.update_main_color(context);
                     }
-                    KeyCode::Char('n') => {
+                    KeyCode::Tab => {
                         self.select.switch_area();
                         self.update_main_color(context);
                     }
