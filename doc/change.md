@@ -1,3 +1,6 @@
+# 0.4.3
+- Fix cargo pixel r foobar w bug
+
 # 0.4.2
 - Refactor Panel, added layers for rendering
 - Refer to apps/palette render.rs
