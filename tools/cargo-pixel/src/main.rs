@@ -166,7 +166,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 cmds.push(format!("mkdir -p {}", tmpwd));
                 cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
                 cmds.push(format!(
-                    "cp {}/rust-pixel/web-templates/* {}",
+                    "cp {}/web-templates/* {}",
                     ctx.rust_pixel_path, tmpwd
                 ));
                 cmds.push(format!(
