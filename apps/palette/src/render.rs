@@ -46,6 +46,9 @@ impl PaletteRender {
             panel.add_layer_sprite(pl, "main", &format!("simi{}", i));
         }
 
+        let pl = Sprite::new(2, 22, 20, 1);
+        panel.add_layer_sprite(pl, "main", "main_color_str");
+
         // creat 6 state layers
         for i in 0..6 {
             panel.add_layer(&format!("{}", i));
@@ -89,8 +92,7 @@ impl PaletteRender {
 
         // creat select cursor layer
         panel.add_layer("select");
-        let mut pl = Sprite::new(0, 0, 1, 1);
-        pl.set_color_str(0, 0, "@", Color::Red, Color::Black);
+        let pl = Sprite::new(0, 0, 1, 1);
         panel.add_layer_sprite(pl, "select", "cursor");
 
         event_register("Palette.RedrawSelect", "draw_select");
@@ -104,7 +106,11 @@ impl PaletteRender {
     pub fn draw_select<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
         let pl = self.panel.get_layer_sprite("select", "cursor");
-        pl.set_pos(20 + d.select_x.value as u16 * C_WIDTH, 2 + d.select_y.value as u16);
+        let idx = d.select.y * COL_COUNT as usize + d.select.x + ctx.state as usize * 76;
+        let cr = d.named_colors[idx].1;
+        let color = Color::Professional(cr);
+        pl.set_color_str(0, 0, "", Color::Green, color);
+        pl.set_pos(2 + d.select.x as u16 * C_WIDTH, 2 + d.select.y as u16);
     }
 
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
@@ -138,7 +144,7 @@ impl PaletteRender {
                     pl.set_color_str(
                         0,
                         0,
-                        &format!("{:width$}", s, width = C_WIDTH as usize),
+                        &format!(" {:width$}", s, width = C_WIDTH as usize),
                         if cr.is_dark() {
                             Color::White
                         } else {
@@ -163,6 +169,16 @@ impl PaletteRender {
                 Color::Professional(d.main_color),
             );
         }
+
+        let pl = self.panel.get_layer_sprite("main", "main_color_str");
+        let rgb = d.main_color.get_srgba_u8();
+        pl.set_color_str(
+            0,
+            0,
+            &format!("rgb({}, {}, {})      ", rgb.0, rgb.1, rgb.2),
+            Color::White,
+            Color::Black,
+        );
 
         let mut ids: Vec<usize> = vec![];
         ids.push(d.main_color_similar.0);

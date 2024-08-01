@@ -218,12 +218,16 @@ pub fn input_events_from_cross(e: &CEvent) -> Option<Event> {
         CEvent::Key(key) => {
             let kc;
             match key.code {
-                CKeyCode::Char(cc) => kc = cc,
+                CKeyCode::Char(cc) => kc = KeyCode::Char(cc),
+                CKeyCode::Up => kc = KeyCode::Up,
+                CKeyCode::Down => kc = KeyCode::Down,
+                CKeyCode::Left => kc = KeyCode::Left,
+                CKeyCode::Right => kc = KeyCode::Right,
                 _ => {
                     return None;
                 }
             }
-            let cte = KeyEvent::new(KeyCode::Char(kc), KeyModifiers::NONE);
+            let cte = KeyEvent::new(kc, KeyModifiers::NONE);
             return Some(Event::Key(cte));
         }
         CEvent::Mouse(mouse) => {

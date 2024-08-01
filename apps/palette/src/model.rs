@@ -1,4 +1,4 @@
-use log::info;
+// use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use palette_lib::{find_similar_colors, gradient, PaletteData, COLORS_WITH_NAME};
@@ -47,7 +47,7 @@ pub struct SelectRange {
 
 impl SelectRange {
     pub fn new(a: usize, w: usize, h: usize, c: usize) -> Self {
-        Self { 
+        Self {
             area_count: a,
             width: w,
             height: h,
@@ -58,9 +58,16 @@ impl SelectRange {
         }
     }
 
+    pub fn switch_area(&mut self) {
+        if self.area_count == 0 {
+            return;
+        }
+        self.area = (self.area + 1) % self.area_count;
+    }
+
     pub fn forward_x(&mut self) {
         let count_last_row = self.count % self.width;
-        if self.y == self.height - 1 {
+        if self.y == self.height - 1 && count_last_row != 0 {
             if self.x == count_last_row - 1 {
                 self.x = 0;
             } else {
@@ -77,7 +84,7 @@ impl SelectRange {
 
     pub fn backward_x(&mut self) {
         let count_last_row = self.count % self.width;
-        if self.y == self.height - 1 {
+        if self.y == self.height - 1 && count_last_row != 0 {
             if self.x == 0 {
                 self.x = count_last_row - 1;
             } else {
@@ -92,15 +99,42 @@ impl SelectRange {
         }
     }
 
-    pub forward_y(&mut self) {
+    pub fn forward_y(&mut self) {
         let count_last_col = self.height - 1;
         let modx = self.count % self.width;
-        let mx = if modx == 0 { self.width } else { modx }; 
+        let mx = if modx == 0 { self.width } else { modx };
         if self.x >= mx {
-
-
+            if self.y == count_last_col - 1 {
+                self.y = 0;
+            } else {
+                self.y += 1;
+            }
+        } else {
+            if self.y == self.height - 1 {
+                self.y = 0;
+            } else {
+                self.y += 1;
+            }
         }
+    }
 
+    pub fn backward_y(&mut self) {
+        let count_last_col = self.height - 1;
+        let modx = self.count % self.width;
+        let mx = if modx == 0 { self.width } else { modx };
+        if self.x >= mx {
+            if self.y == 0 {
+                self.y = count_last_col - 1;
+            } else {
+                self.y -= 1;
+            }
+        } else {
+            if self.y == 0 {
+                self.y = self.height - 1;
+            } else {
+                self.y -= 1;
+            }
+        }
     }
 }
 
@@ -114,9 +148,7 @@ pub struct PaletteModel {
     pub gradient_colors: Vec<ColorPro>,
     pub picker_color_hsv: (f64, f64, f64),
     pub picker_colors: Vec<ColorPro>,
-    pub select_area: SelectRange,
-    pub select_x: SelectRange,
-    pub select_y: SelectRange,
+    pub select: SelectRange,
 }
 
 impl PaletteModel {
@@ -136,21 +168,20 @@ impl PaletteModel {
             gradient_colors: vec![],
             picker_color_hsv: (0.0, 1.0, 1.0),
             picker_colors: vec![],
-            select_area: SelectRange::new(0, 0),
-            select_x: SelectRange::new(0, 0),
-            select_y: SelectRange::new(0, 0),
+            select: SelectRange::new(0, 0, 0, 0),
         }
     }
 
     fn update_main_color(&mut self, context: &mut Context) {
         match PaletteState::from_usize(context.state as usize).unwrap() {
             PaletteState::NameA => {
-                self.main_color = self.named_colors
-                    [self.select_y.value * self.select_x.max + self.select_x.value]
-                    .1;
+                self.main_color =
+                    self.named_colors[self.select.y * self.select.width + self.select.x].1;
             }
             PaletteState::NameB => {
-                let idx = 76 + self.select_y.value * self.select_x.max + self.select_x.value;
+                let idx = (COL_COUNT * ROW_COUNT) as usize
+                    + self.select.y * self.select.width
+                    + self.select.x;
                 self.main_color = self.named_colors[idx].1;
             }
             _ => {}
@@ -161,53 +192,25 @@ impl PaletteModel {
         event_emit("Palette.RedrawSelect");
     }
 
-    fn check_range(&self, context: &mut Context) -> bool {
-        match PaletteState::from_usize(context.state as usize).unwrap() {
-            PaletteState::NameB => {
-                let idx = 76 + self.select_y.value * self.select_x.max + self.select_x.value;
-                if idx >= self.named_colors.len() {
-                    return false; 
-                }
-            }
-            _ => {}
-        }
-        true
-    }
-
-    fn movexy(&mut self, mv: &str, context: &mut Context) {
-        let bx = self.select_x.clone();
-        let by = self.select_y.clone();
-        match mv {
-            "w" => {self.select_y.backward();}
-            "s" => {self.select_y.forward();}
-            "a" => {self.select_x.backward();}
-            "d" => {self.select_x.forward();}
-            _ => {}
-        }
-        if !self.check_range(context) {
-            self.select_x = bx.clone();
-            self.select_y = by.clone();
-        } else {
-            self.update_main_color(context);
-        }
-    }
-
     fn switch_state(&mut self, context: &mut Context, st: u8) {
         context.state = st;
-        self.select_area.value = 0;
-        self.select_x.value = 0;
-        self.select_y.value = 0;
         match PaletteState::from_usize(st as usize).unwrap() {
             PaletteState::NameA => {
-                self.select_area.max = 0;
-                self.select_x.max = COL_COUNT as usize;
-                self.select_y.max = ROW_COUNT as usize;
+                self.select = SelectRange::new(
+                    1,
+                    COL_COUNT as usize,
+                    ROW_COUNT as usize,
+                    (COL_COUNT * ROW_COUNT) as usize,
+                );
                 self.update_main_color(context);
             }
             PaletteState::NameB => {
-                self.select_area.max = 0;
-                self.select_x.max = COL_COUNT as usize;
-                self.select_y.max = ROW_COUNT as usize - 3;
+                self.select = SelectRange::new(
+                    1,
+                    COL_COUNT as usize,
+                    ROW_COUNT as usize - 3,
+                    self.named_colors.len() - (COL_COUNT * ROW_COUNT) as usize,
+                );
                 self.update_main_color(context);
             }
             PaletteState::Picker => {}
@@ -286,17 +289,25 @@ impl Model for PaletteModel {
                         context.state = PaletteState::Picker as u8;
                         self.switch_state(context, 2);
                     }
-                    KeyCode::Char('w') => {
-                        self.movexy("w", context);
+                    KeyCode::Up => {
+                        self.select.backward_y();
+                        self.update_main_color(context);
                     }
-                    KeyCode::Char('s') => {
-                        self.movexy("s", context);
+                    KeyCode::Down => {
+                        self.select.forward_y();
+                        self.update_main_color(context);
                     }
-                    KeyCode::Char('a') => {
-                        self.movexy("a", context);
+                    KeyCode::Left => {
+                        self.select.backward_x();
+                        self.update_main_color(context);
                     }
-                    KeyCode::Char('d') => {
-                        self.movexy("d", context);
+                    KeyCode::Right => {
+                        self.select.forward_x();
+                        self.update_main_color(context);
+                    }
+                    KeyCode::Char('n') => {
+                        self.select.switch_area();
+                        self.update_main_color(context);
                     }
                     _ => {
                         // context.state = PaletteState::Picker as u8;
