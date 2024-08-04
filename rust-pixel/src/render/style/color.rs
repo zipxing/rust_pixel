@@ -9,7 +9,7 @@ use crossterm::style::Color as CColor;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Color {
     Reset,
     Black,

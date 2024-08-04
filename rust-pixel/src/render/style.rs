@@ -22,7 +22,7 @@ pub use color_pro::*;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    // #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Modifier: u16 {
         const BOLD              = 0b0000_0000_0001;
         const DIM               = 0b0000_0000_0010;
@@ -37,7 +37,7 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Style {
     pub fg: Option<Color>,
     pub bg: Option<Color>,
