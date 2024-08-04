@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use std::f64::consts::PI;
 
-const WHITE: [f64; 3] = [0.950455927, 1.00000, 1.08905775];
+const WHITE: [f64; 3] = [0.9504559270516716, 1.0, 1.0890577507598784];
 const ADAPTED_COEF: f64 = 0.42;
 const ADAPTED_COEF_INV: f64 = 1.0 / ADAPTED_COEF;
 const TAU: f64 = 2.0 * PI;
@@ -14,8 +14,16 @@ const CAT16: [[f64; 3]; 3] = [
 
 const CAT16_INV: [[f64; 3]; 3] = [
     [1.8620678550872327, -1.0112546305316843, 0.14918677544445175],
-    [0.38752654323613717, 0.6214474419314753, -0.008973985167612518],
-    [-0.015841498849333856, -0.03412293802851557, 1.0499644368778496],
+    [
+        0.38752654323613717,
+        0.6214474419314753,
+        -0.008973985167612518,
+    ],
+    [
+        -0.015841498849333856,
+        -0.03412293802851557,
+        1.0499644368778496,
+    ],
 ];
 
 const M1: [[f64; 3]; 3] = [
@@ -24,11 +32,7 @@ const M1: [[f64; 3]; 3] = [
     [460.0, -220.0, -6300.0],
 ];
 
-const SURROUND_MAP: [[f64; 3]; 3] = [
-    [0.8, 0.525, 0.8],
-    [0.9, 0.59, 0.9],
-    [1.0, 0.69, 1.0],
-];
+const SURROUND_MAP: [[f64; 3]; 3] = [[0.8, 0.525, 0.8], [0.9, 0.59, 0.9], [1.0, 0.69, 1.0]];
 
 const HUE_QUAD_MAP: ([f64; 5], [f64; 5], [f64; 5]) = (
     [20.14, 90.00, 164.25, 237.53, 380.14],
@@ -62,11 +66,19 @@ fn interpolate(a: f64, b: f64, t: f64) -> f64 {
 }
 
 fn zdiv(a: f64, b: f64) -> f64 {
-    if b == 0.0 { 0.0 } else { a / b }
+    if b == 0.0 {
+        0.0
+    } else {
+        a / b
+    }
 }
 
 fn constrain(v: f64) -> f64 {
-    if v < 0.0 { v + 360.0 } else { v % 360.0 }
+    if v < 0.0 {
+        v + 360.0
+    } else {
+        v % 360.0
+    }
 }
 
 fn adapt(coords: [f64; 3], fl: f64) -> [f64; 3] {
@@ -113,6 +125,7 @@ fn inv_hue_quadrature(H: f64) -> f64 {
     constrain((Hp * (eii * hi - ei * hii) - 100.0 * hi * eii) / (Hp * (eii - ei) - 100.0 * eii))
 }
 
+#[derive(Debug)]
 struct Environment {
     fl: f64,
     fl_root: f64,
@@ -158,12 +171,16 @@ fn environment(
     let d = if discounting {
         1.0
     } else {
-        f * (1.0 - 1.0 / 3.6 * (-la - 42.0).exp() / 92.0).clamp(0.0, 1.0)
+        f * (1.0 - 1.0 / 3.6 * ((-la - 42.0) / 92.0).exp()).clamp(0.0, 1.0)
     };
     let d_rgb = rgb_w.map(|c| interpolate(1.0, yw / c, d));
     let d_rgb_inv = d_rgb.map(|c| 1.0 / c);
 
-    let rgb_cw = [rgb_w[0] * d_rgb[0], rgb_w[1] * d_rgb[1], rgb_w[2] * d_rgb[2]];
+    let rgb_cw = [
+        rgb_w[0] * d_rgb[0],
+        rgb_w[1] * d_rgb[1],
+        rgb_w[2] * d_rgb[2],
+    ];
     let rgb_aw = adapt(rgb_cw, fl);
     let a_w = nbb * (2.0 * rgb_aw[0] + rgb_aw[1] + 0.05 * rgb_aw[2]);
 
@@ -208,6 +225,7 @@ fn from_cam16(cam16: &Cam16Object, env: &Environment) -> [f64; 3] {
     let cos_h = h_rad.cos();
     let sin_h = h_rad.sin();
 
+
     let j_root = if let Some(J) = cam16.J {
         spow(J, 0.5) * 0.1
     } else {
@@ -224,34 +242,55 @@ fn from_cam16(cam16: &Cam16Object, env: &Environment) -> [f64; 3] {
 
     let t = spow(alpha * spow(1.64 - spow(0.29, env.n), -0.73), 10.0 / 9.0);
 
-    let et = 0.25 * (h_rad.cos() + 2.0 + 3.8);
+    let et = 0.25 * ((h_rad + 2.0).cos() + 3.8);
 
-    let a = env.a_w * spow(j_root, 2.0 / (env.c * env.z));
+    let A = env.a_w * spow(j_root, 2.0 / (env.c * env.z));
 
     let p1 = 50000.0 / 13.0 * env.nc * env.ncb * et;
-    let p2 = a / env.nbb;
+    let p2 = A / env.nbb;
 
     let r = 23.0 * (p2 + 0.305) * zdiv(t, 23.0 * p1 + t * (11.0 * cos_h + 108.0 * sin_h));
     let a = r * cos_h;
     let b = r * sin_h;
 
-    let rgb_c = unadapt(multiply_matrices(M1, [p2, a, b]).map(|c| c / 1403.0), env.fl);
-    let xyz = multiply_matrices(CAT16_INV, [rgb_c[0] * env.d_rgb_inv[0], rgb_c[1] * env.d_rgb_inv[1], rgb_c[2] * env.d_rgb_inv[2]]);
+    let rgb_c = unadapt(
+        multiply_matrices(M1, [p2, a, b]).map(|c| c / 1403.0),
+        env.fl,
+    );
+    let xyz = multiply_matrices(
+        CAT16_INV,
+        [
+            rgb_c[0] * env.d_rgb_inv[0],
+            rgb_c[1] * env.d_rgb_inv[1],
+            rgb_c[2] * env.d_rgb_inv[2],
+        ],
+    );
 
     [xyz[0] / 100.0, xyz[1] / 100.0, xyz[2] / 100.0]
 }
 
 fn to_cam16(xyzd65: [f64; 3], env: &Environment) -> Cam16Object {
     let xyz100 = xyzd65.map(|c| c * 100.0);
-    let rgb_a = adapt(multiply_matrices(CAT16, xyz100).map(|c| c * env.d_rgb[0]), env.fl);
+    let mut tmp: [f64; 3] = [0.0, 0.0, 0.0];
+    let tmpmm = multiply_matrices(CAT16, xyz100);
+    for i in 0..tmpmm.len() {
+        tmp[i] = tmpmm[i] * env.d_rgb[i];
+    }
+    let rgb_a = adapt(tmp, env.fl);
 
     let a = rgb_a[0] + (-12.0 * rgb_a[1] + rgb_a[2]) / 11.0;
     let b = (rgb_a[0] + rgb_a[1] - 2.0 * rgb_a[2]) / 9.0;
     let h_rad = ((b.atan2(a) % TAU) + TAU) % TAU;
 
-    let et = 0.25 * (h_rad.cos() + 2.0 + 3.8);
+    let et = 0.25 * ((h_rad + 2.0).cos() + 3.8);
 
-    let t = 50000.0 / 13.0 * env.nc * env.ncb * zdiv(et * (a * a + b * b).sqrt(), rgb_a[0] + rgb_a[1] + 1.05 * rgb_a[2] + 0.305);
+    let t = 50000.0 / 13.0
+        * env.nc
+        * env.ncb
+        * zdiv(
+            et * (a * a + b * b).sqrt(),
+            rgb_a[0] + rgb_a[1] + 1.05 * rgb_a[2] + 0.305,
+        );
     let alpha = spow(t, 0.9) * spow(1.64 - spow(0.29, env.n), 0.73);
 
     let a = env.nbb * (2.0 * rgb_a[0] + rgb_a[1] + 0.05 * rgb_a[2]);
@@ -268,11 +307,19 @@ fn to_cam16(xyzd65: [f64; 3], env: &Environment) -> Cam16Object {
 
     let h = constrain(h_rad * RAD2DEG);
 
-    let h = hue_quadrature(h);
+    let H = hue_quadrature(h);
 
     let s = 50.0 * spow(env.c * alpha / (env.a_w + 4.0), 0.5);
 
-    Cam16Object { J: Some(j), C: Some(c), h: Some(h), s: Some(s), Q: Some(q), M: Some(m), H: Some(h) }
+    Cam16Object {
+        J: Some(j),
+        C: Some(c),
+        h: Some(h),
+        s: Some(s),
+        Q: Some(q),
+        M: Some(m),
+        H: Some(H),
+    }
 }
 
 #[derive(Debug)]
@@ -288,15 +335,16 @@ struct Cam16Object {
 
 fn main() {
     let viewing_conditions = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
-    
+
+    // [79.10134572991937, 78.2155216870714, 142.22342095435386]
     let cam16 = Cam16Object {
-        J: Some(100.0),
+        J: Some(79.10134572991937),
         C: None,
-        h: Some(209.53),
+        H: None,
         s: None,
         Q: None,
-        M: Some(2.2369),
-        H: None,
+        M: Some(78.2155216870714),
+        h: Some(142.22342095435386),
     };
 
     let xyz = from_cam16(&cam16, &viewing_conditions);
@@ -305,4 +353,3 @@ fn main() {
     let cam16_converted = to_cam16(xyz, &viewing_conditions);
     println!("CAM16: {:?}", cam16_converted);
 }
-
