@@ -1,10 +1,25 @@
 #![allow(non_snake_case)]
 use std::f64::consts::PI;
+use crate::render::style::color_pro::ColorData;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref ENVS: Vec<Environment> = {
+        let v1 = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
+        let v2 = environment(WHITE, 200.0 / PI * from_lstar(50.0), from_lstar(50.0) * 100.0, &SURROUND_MAP[2], false);
+        let mut rv = vec![];
+        rv.push(v1);
+        rv.push(v2);
+        rv
+    };
+}
 
 const WHITE: [f64; 3] = [0.9504559270516716, 1.0, 1.0890577507598784];
 const ADAPTED_COEF: f64 = 0.42;
 const ADAPTED_COEF_INV: f64 = 1.0 / ADAPTED_COEF;
 const TAU: f64 = 2.0 * PI;
+const EPSILON_LSTAR: f64 = 216.0 / 24389.0;
+const KAPPA: f64 = 24389.0 / 27.0;
 
 const CAT16: [[f64; 3]; 3] = [
     [0.401288, 0.650173, -0.051461],
@@ -332,9 +347,6 @@ struct Cam16Object {
     H: Option<f64>,
 }
 
-const EPSILON_LSTAR: f64 = 216.0 / 24389.0;
-const KAPPA: f64 = 24389.0 / 27.0;
-
 fn to_lstar(y: f64) -> f64 {
     let fy = if y > EPSILON_LSTAR {
         y.cbrt()
@@ -425,30 +437,79 @@ fn to_hct(xyz: [f64; 3], env: &Environment) -> [f64; 3] {
     [constrain(cam16.h.unwrap()), cam16.C.unwrap(), t]
 }
 
-fn main() {
-    let viewing_conditions = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
-    let viewing_conditions2 = environment(WHITE, 200.0 / PI * from_lstar(50.0), from_lstar(50.0) * 100.0, &SURROUND_MAP[2], false);
-
-    // [79.10134572991937, 78.2155216870714, 142.22342095435386]
+#[inline(always)]
+pub fn cam16_to_xyz(l: ColorData) -> ColorData {
+    let j = l.v[0];
+    let m = l.v[1];
+    let h = l.v[2];
     let cam16 = Cam16Object {
-        J: Some(79.10134572991937),
+        J: Some(j),
         C: None,
         H: None,
         s: None,
         Q: None,
-        M: Some(78.2155216870714),
-        h: Some(142.22342095435386),
+        M: Some(m),
+        h: Some(h),
     };
-
-    let xyz = from_cam16(&cam16, &viewing_conditions);
-    println!("XYZ: {:?}", xyz);
-
-    let hct = to_hct(xyz, &viewing_conditions2);
-    println!("HCT: {:?}", hct);
-
-    let xyz = from_hct(hct, &viewing_conditions2);
-    println!("XYZ2: {:?}", xyz);
-
-    // let cam16_converted = to_cam16(xyz, &viewing_conditions);
-    // println!("CAM16: {:?}", cam16_converted);
+    let xyz = from_cam16(&cam16, &ENVS[0]);
+    ColorData {
+        v: [xyz[0], xyz[1], xyz[2], l.v[3]],
+    }
 }
+
+#[inline(always)]
+pub fn xyz_to_cam16(l: ColorData) -> ColorData {
+    let x = l.v[0];
+    let y = l.v[1];
+    let z = l.v[2];
+    let cam16 = to_cam16([x, y, z], &ENVS[0]);
+    ColorData {
+        v: [cam16.J.unwrap(), cam16.M.unwrap(), cam16.h.unwrap(), l.v[3]],
+    }
+}
+
+#[inline(always)]
+pub fn hct_to_xyz(l: ColorData) -> ColorData {
+    let hct = [l.v[0], l.v[1], l.v[2]];
+    let xyz = from_hct(hct, &ENVS[1]);
+    ColorData {
+        v: [xyz[0], xyz[1], xyz[2], l.v[3]],
+    }
+}
+
+#[inline(always)]
+pub fn xyz_to_hct(l: ColorData) -> ColorData {
+    let xyz = [l.v[0], l.v[1], l.v[2]];
+    let hct = to_hct(xyz, &ENVS[1]);
+    ColorData {
+        v: [hct[0], hct[1], hct[2], l.v[3]],
+    }
+}
+ 
+// fn main() {
+//     let viewing_conditions = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
+//     let viewing_conditions2 = environment(WHITE, 200.0 / PI * from_lstar(50.0), from_lstar(50.0) * 100.0, &SURROUND_MAP[2], false);
+
+//     // [79.10134572991937, 78.2155216870714, 142.22342095435386]
+//     let cam16 = Cam16Object {
+//         J: Some(79.10134572991937),
+//         C: None,
+//         H: None,
+//         s: None,
+//         Q: None,
+//         M: Some(78.2155216870714),
+//         h: Some(142.22342095435386),
+//     };
+
+//     let xyz = from_cam16(&cam16, &viewing_conditions);
+//     println!("XYZ: {:?}", xyz);
+
+//     let hct = to_hct(xyz, &viewing_conditions2);
+//     println!("HCT: {:?}", hct);
+
+//     let xyz = from_hct(hct, &viewing_conditions2);
+//     println!("XYZ2: {:?}", xyz);
+
+//     // let cam16_converted = to_cam16(xyz, &viewing_conditions);
+//     // println!("CAM16: {:?}", cam16_converted);
+// }

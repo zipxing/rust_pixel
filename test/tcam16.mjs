@@ -1,8 +1,9 @@
 // node tcam16.mjs
 import Color from "./color.mjs";
 let lime = new Color("sRGB", [0, 1, 0], 1.0);
-console.log("aaa", lime.to('cam16-jmh').coords)
-console.log("bbb", lime.to('hct').coords)
+console.log("xyz", lime.to('xyz').coords)
+console.log("cam", lime.to('cam16-jmh'))
+console.log("hct", lime.to('hct').coords)
 // console.log(lime.to('xyz').coords)
 // let lime1 = new Color("cam16-jmh", [79.10134572991937, 78.2155216870714, 142.22342095435386], 1.0);
 // let lxyz = lime1.to('xyz');

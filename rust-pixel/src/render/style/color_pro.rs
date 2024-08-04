@@ -52,7 +52,10 @@ use std::ops::{Index, IndexMut};
 // use log::info;
 use ColorSpace::*;
 
-pub const COLOR_SPACE_COUNT: usize = 11;
+mod hct;
+pub use hct::*;
+
+pub const COLOR_SPACE_COUNT: usize = 13;
 
 #[derive(Debug, Clone, Copy, FromPrimitive)]
 pub enum ColorSpace {
@@ -66,6 +69,8 @@ pub enum ColorSpace {
     LchA,
     OKLabA,
     OKLchA,
+    CAM16A,
+    HCTA,
     XYZA,
 }
 
@@ -231,6 +236,9 @@ impl ColorPro {
         self.set_data(LchA, laba_to_lcha(self[LabA].unwrap()));
         self.set_data(OKLabA, xyz_to_oklaba(xyza));
         self.set_data(OKLchA, oklaba_to_oklcha(self[OKLabA].unwrap()));
+        self.set_data(CAM16A, xyz_to_cam16(xyza));
+        self.set_data(HCTA, xyz_to_hct(xyza));
+        self.set_data(HCTA, oklaba_to_oklcha(self[OKLabA].unwrap()));
         Ok(())
     }
 
@@ -325,6 +333,20 @@ impl ColorPro {
             (xyza, oklaba) = oklcha_to_xyz(oklcha);
             self.set_data(XYZA, xyza);
             self.set_data(OKLabA, oklaba);
+        }
+
+        if let Some(cam16) = self[CAM16A] {
+            let xyza;
+            xyza = cam16_to_xyz(cam16);
+            self.set_data(XYZA, xyza);
+            self.set_data(CAM16A, cam16);
+        }
+
+        if let Some(hct) = self[HCTA] {
+            let xyza;
+            xyza = hct_to_xyz(hct);
+            self.set_data(XYZA, xyza);
+            self.set_data(HCTA, hct);
         }
 
         if self[XYZA] == None {

@@ -3008,7 +3008,7 @@ function toCam16 (xyzd65, env) {
 	const xyz100 = xyzd65.map(c => {
 		return c * 100;
 	});
-    console.log("111111.....", multiplyMatrices(cat16, xyz100));
+    // console.log("111111.....", multiplyMatrices(cat16, xyz100));
 
 	const rgbA = adapt$1(
 		/** @type {[number, number, number]} */
