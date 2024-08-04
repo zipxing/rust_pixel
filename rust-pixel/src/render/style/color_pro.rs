@@ -55,6 +55,13 @@ use ColorSpace::*;
 mod hct;
 pub use hct::*;
 
+pub const WHITE: [f64; 3] = [0.9504559270516716, 1.0, 1.0890577507598784];
+pub const ADAPTED_COEF: f64 = 0.42;
+pub const ADAPTED_COEF_INV: f64 = 1.0 / ADAPTED_COEF;
+pub const TAU: f64 = 2.0 * PI;
+pub const EPSILON_LSTAR: f64 = 216.0 / 24389.0;
+pub const KAPPA: f64 = 24389.0 / 27.0;
+
 pub const COLOR_SPACE_COUNT: usize = 13;
 
 #[derive(Debug, Clone, Copy, FromPrimitive)]
@@ -551,13 +558,14 @@ fn srgba_to_hwba(srgba: ColorData) -> ColorData {
 
 #[inline(always)]
 fn xyz_to_laba(xyza: ColorData) -> ColorData {
-    let epsilon = 0.008856;
-    let kappa = 903.3;
+    let epsilon = EPSILON_LSTAR;
+    let kappa = KAPPA;
 
     // D65 XN YN ZN
-    let xr = xyza.v[0] / 0.95047;
-    let yr = xyza.v[1] / 1.00000;
-    let zr = xyza.v[2] / 1.08883;
+    // 0.9504559270516716, 1.0, 1.0890577507598784
+    let xr = xyza.v[0] / WHITE[0];
+    let yr = xyza.v[1] / WHITE[1];
+    let zr = xyza.v[2] / WHITE[2];
 
     let fx = if xr > epsilon {
         xr.powf(1.0 / 3.0)
@@ -586,8 +594,8 @@ fn xyz_to_laba(xyza: ColorData) -> ColorData {
 
 #[inline(always)]
 fn laba_to_xyz(laba: ColorData) -> ColorData {
-    let epsilon = 0.008856;
-    let kappa = 903.3;
+    let epsilon = EPSILON_LSTAR;
+    let kappa = KAPPA;
 
     let fy = (laba.v[0] + 16.0) / 116.0;
     let fx = laba.v[1] / 500.0 + fy;
@@ -610,9 +618,10 @@ fn laba_to_xyz(laba: ColorData) -> ColorData {
     };
 
     // D65 XN YN ZN
-    let x = xr * 0.95047;
-    let y = yr * 1.00000;
-    let z = zr * 1.08883;
+    // 0.9504559270516716, 1.0, 1.0890577507598784
+    let x = xr * WHITE[0];
+    let y = yr * WHITE[1];
+    let z = zr * WHITE[2];
 
     ColorData {
         v: [x, y, z, laba.v[3]],

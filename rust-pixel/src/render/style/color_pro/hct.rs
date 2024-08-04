@@ -1,25 +1,24 @@
 #![allow(non_snake_case)]
-use std::f64::consts::PI;
-use crate::render::style::color_pro::ColorData;
+use crate::render::style::color_pro::*;
 use lazy_static::lazy_static;
+use std::f64::consts::PI;
 
 lazy_static! {
     static ref ENVS: Vec<Environment> = {
         let v1 = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
-        let v2 = environment(WHITE, 200.0 / PI * from_lstar(50.0), from_lstar(50.0) * 100.0, &SURROUND_MAP[2], false);
+        let v2 = environment(
+            WHITE,
+            200.0 / PI * from_lstar(50.0),
+            from_lstar(50.0) * 100.0,
+            &SURROUND_MAP[2],
+            false,
+        );
         let mut rv = vec![];
         rv.push(v1);
         rv.push(v2);
         rv
     };
 }
-
-const WHITE: [f64; 3] = [0.9504559270516716, 1.0, 1.0890577507598784];
-const ADAPTED_COEF: f64 = 0.42;
-const ADAPTED_COEF_INV: f64 = 1.0 / ADAPTED_COEF;
-const TAU: f64 = 2.0 * PI;
-const EPSILON_LSTAR: f64 = 216.0 / 24389.0;
-const KAPPA: f64 = 24389.0 / 27.0;
 
 const CAT16: [[f64; 3]; 3] = [
     [0.401288, 0.650173, -0.051461],
@@ -485,7 +484,7 @@ pub fn xyz_to_hct(l: ColorData) -> ColorData {
         v: [hct[0], hct[1], hct[2], l.v[3]],
     }
 }
- 
+
 // fn main() {
 //     let viewing_conditions = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
 //     let viewing_conditions2 = environment(WHITE, 200.0 / PI * from_lstar(50.0), from_lstar(50.0) * 100.0, &SURROUND_MAP[2], false);

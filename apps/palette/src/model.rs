@@ -1,4 +1,4 @@
-// use log::info;
+use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use palette_lib::{find_similar_colors, gradient, PaletteData, COLORS_WITH_NAME};
@@ -6,7 +6,7 @@ use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
     game::Model,
-    render::style::{ColorPro, ColorSpace::*},
+    render::style::{COLOR_SPACE_COUNT, ColorSpace, ColorPro, ColorSpace::*},
 };
 use std::any::Any;
 
@@ -261,6 +261,16 @@ impl Model for PaletteModel {
         self.card = self.data.next();
 
         context.state = PaletteState::NameA as u8;
+
+        let ctest = ColorPro::from_space_f64(SRGBA, 0.0, 1.0, 0.0, 1.0);
+        for i in 0..COLOR_SPACE_COUNT {
+            info!(
+                "{}:{:?}",
+                ColorSpace::from_usize(i).unwrap(),
+                ctest.space_matrix[i].unwrap()
+            );
+        }
+
 
         // get gradient colors...
         self.gradient_input_colors = vec![
