@@ -20,6 +20,10 @@ lazy_static! {
     };
 }
 
+const ADAPTED_COEF: f64 = 0.42;
+const ADAPTED_COEF_INV: f64 = 1.0 / ADAPTED_COEF;
+const TAU: f64 = 2.0 * PI;
+
 const CAT16: [[f64; 3]; 3] = [
     [0.401288, 0.650173, -0.051461],
     [-0.250268, 1.204414, 0.045854],

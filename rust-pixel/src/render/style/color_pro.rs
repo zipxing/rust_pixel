@@ -55,10 +55,8 @@ use ColorSpace::*;
 mod hct;
 pub use hct::*;
 
+// 0.3127 / 0.3290  (1.0 - 0.3127 - 0.3290) / 0.3290
 pub const WHITE: [f64; 3] = [0.9504559270516716, 1.0, 1.0890577507598784];
-pub const ADAPTED_COEF: f64 = 0.42;
-pub const ADAPTED_COEF_INV: f64 = 1.0 / ADAPTED_COEF;
-pub const TAU: f64 = 2.0 * PI;
 pub const EPSILON_LSTAR: f64 = 216.0 / 24389.0;
 pub const KAPPA: f64 = 24389.0 / 27.0;
 
