@@ -42,6 +42,25 @@ const HUE_QUAD_MAP: ([f64; 5], [f64; 5], [f64; 5]) = (
 
 const RAD2DEG: f64 = 180.0 / PI;
 const DEG2RAD: f64 = PI / 180.0;
+const EPSILON: f64 = 216.0 / 24389.0;
+const KAPPA: f64 = 24389.0 / 27.0;
+
+fn to_lstar(y: f64) -> f64 {
+    let fy = if y > EPSILON {
+        y.cbrt()
+    } else {
+        (KAPPA * y + 16.0) / 116.0
+    };
+    (116.0 * fy) - 16.0
+}
+
+fn from_lstar(lstar: f64) -> f64 {
+    if lstar > 8.0 {
+        ((lstar + 16.0) / 116.0).powi(3)
+    } else {
+        lstar / KAPPA
+    }
+}
 
 fn spow(x: f64, y: f64) -> f64 {
     x.powf(y)
@@ -334,7 +353,8 @@ struct Cam16Object {
 }
 
 fn main() {
-    let viewing_conditions = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
+    // let viewing_conditions = environment(WHITE, 64.0 / PI * 0.2, 20.0, &SURROUND_MAP[2], false);
+    let viewing_conditions = environment(WHITE, 200.0 / PI * from_lstar(50.0), from_lstar(50.0) * 100.0, &SURROUND_MAP[2], false);
 
     // [79.10134572991937, 78.2155216870714, 142.22342095435386]
     let cam16 = Cam16Object {
