@@ -72,17 +72,15 @@ impl PaletteRender {
         }
 
         // color picker in layer2
-        for y in 0..PICKER_COUNT {
-            for x in 0..PICKER_COUNT {
-                let pl = Sprite::new(ADJX + x * 2, ADJY + y, 2, 1);
-                panel.add_layer_sprite(pl, "2", &format!("pick{}", y * PICKER_COUNT + x));
+        for y in 0..PICKER_COUNT_Y {
+            for x in 0..PICKER_COUNT_X {
+                let pl = Sprite::new(ADJX + x, ADJY + y, 1, 1);
+                panel.add_layer_sprite(pl, "2", &format!("pick{}", y * PICKER_COUNT_X + x));
             }
         }
-        for j in 0..4 {
-            for i in 0..30 {
-                let pl = Sprite::new(45 + i, 9 + j, 1, 1);
-                panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", j * 30 + i));
-            }
+        for i in 0..PICKER_COUNT_X {
+            let pl = Sprite::new(2 + i, 20, 1, 1);
+            panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", i));
         }
 
         // for co in 0..CCOUNT as u16 {
@@ -99,18 +97,21 @@ impl PaletteRender {
         event_register("Palette.RedrawMenu", "draw_menu");
         event_register("Palette.RedrawPanel", "draw_panel");
         event_register("Palette.RedrawMainColor", "draw_main_color");
+        event_register("Palette.RedrawPicker", "draw_picker");
 
         Self { panel }
     }
 
     pub fn draw_select<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        let pl = self.panel.get_layer_sprite("select", "cursor");
-        let idx = d.select.cur().y * COL_COUNT as usize + d.select.cur().x + ctx.state as usize * 76;
-        let cr = d.named_colors[idx].1;
-        let color = Color::Professional(cr);
-        pl.set_color_str(0, 0, "", Color::Green, color);
-        pl.set_pos(2 + d.select.cur().x as u16 * C_WIDTH, 2 + d.select.cur().y as u16);
+        if ctx.state < 2 {
+            let pl = self.panel.get_layer_sprite("select", "cursor");
+            let idx = d.select.cur().y * COL_COUNT as usize + d.select.cur().x + ctx.state as usize * 76;
+            let cr = d.named_colors[idx].1;
+            let color = Color::Professional(cr);
+            pl.set_color_str(0, 0, "", Color::Green, color);
+            pl.set_pos(2 + d.select.cur().x as u16 * C_WIDTH, 2 + d.select.cur().y as u16);
+        }
     }
 
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
@@ -121,6 +122,30 @@ impl PaletteRender {
                 self.panel.deactive_layer(&format!("{}", i));
             } else {
                 self.panel.active_layer(&format!("{}", i));
+            }
+        }
+    }
+
+    pub fn draw_picker<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+        info!("draw_picker....");
+        for y in 0..PICKER_COUNT_Y {
+            for x in 0..PICKER_COUNT_X {
+                let pl = self
+                    .panel
+                    .get_layer_sprite("2", &format!("pick{}", y * PICKER_COUNT_X + x));
+
+                let h = 0.0;
+                let s = 1.0 / PICKER_COUNT_X as f64 * x as f64;
+                let v = 1.0 / PICKER_COUNT_Y as f64 * y as f64;
+
+                info!("hsv.....{:?}", (h, s, v));
+
+                let cr = ColorPro::from_space_f64(HSVA, h, s, 1.0 - v, 1.0);
+
+                let color = Color::Professional(cr);
+                pl.set_color_str(0, 0, "  ", color, color);
+                pl.set_color_str(0, 0, "  ", color, color);
             }
         }
     }
@@ -261,26 +286,13 @@ impl Render for PaletteRender {
         //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         // }
         //
-        for y in 0..PICKER_COUNT {
-            for x in 0..PICKER_COUNT {
-                let pl = self
-                    .panel
-                    .get_layer_sprite("2", &format!("pick{}", y * PICKER_COUNT + x));
-                let cr = d.picker_colors[(y * PICKER_COUNT + x) as usize];
-                let color = Color::Professional(cr);
-                pl.set_color_str(0, 0, "  ", color, color);
-            }
-        }
-
-        for j in 0..2 {
-            for i in 0..60 {
-                let pl = self
-                    .panel
-                    .get_layer_sprite("2", &format!("hsv_pick{}", (j * 60 + i)));
-                let cr = ColorPro::from_space_f64(HSVA, (j * 60 + i) as f64 * 3.0, 1.0, 1.0, 1.0);
-                let color = Color::Professional(cr);
-                pl.set_color_str(0, 0, " ", color, color);
-            }
+        for i in 0..PICKER_COUNT_X {
+            let pl = self
+                .panel
+                .get_layer_sprite("2", &format!("hsv_pick{}", i));
+            let cr = ColorPro::from_space_f64(HSVA, i as f64 * 4.7368421052631575, 1.0, 1.0, 1.0);
+            let color = Color::Professional(cr);
+            pl.set_color_str(0, 0, " ", color, color);
         }
         self.draw_named_colors(context, data);
     }
@@ -297,6 +309,9 @@ impl Render for PaletteRender {
         }
         if event_check("Palette.RedrawMainColor", "draw_main_color") {
             self.draw_main_color(context, data);
+        }
+        if event_check("Palette.RedrawPicker", "draw_picker") {
+            self.draw_picker(context, data);
         }
     }
 

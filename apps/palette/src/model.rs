@@ -16,7 +16,8 @@ pub const MENUX: u16 = 12;
 pub const MENUY: u16 = 0;
 pub const MENUW: u16 = 70;
 pub const GRADIENT_COUNT: usize = 40;
-pub const PICKER_COUNT: u16 = 19;
+pub const PICKER_COUNT_X: u16 = 76;
+pub const PICKER_COUNT_Y: u16 = 18;
 pub const ADJX: u16 = 2;
 pub const ADJY: u16 = 2;
 pub const COL_COUNT: u16 = 4;
@@ -209,6 +210,9 @@ impl PaletteModel {
                     + self.select.cur().x;
                 self.main_color = self.named_colors[idx].1;
             }
+            PaletteState::Picker => {
+                self.main_color = self.named_colors[1].1;
+            }
             _ => {}
         }
         // find similar colors by ciede2000...
@@ -245,6 +249,7 @@ impl PaletteModel {
                 self.select.add_range(SelectRange::new(w, h, w * h));
                 self.select.add_range(SelectRange::new(w * 2, 1, w * 2));
                 self.update_main_color(context);
+                event_emit("Palette.RedrawPicker");
             }
             PaletteState::Random => {}
             PaletteState::Gradient => {}
@@ -271,7 +276,6 @@ impl Model for PaletteModel {
             );
         }
 
-
         // get gradient colors...
         self.gradient_input_colors = vec![
             ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),
@@ -285,10 +289,10 @@ impl Model for PaletteModel {
             &mut self.gradient_colors,
         );
 
-        for y in 0..PICKER_COUNT {
-            for x in 0..PICKER_COUNT {
-                let rx = (x as f64) / (PICKER_COUNT as f64);
-                let ry = (y as f64) / (PICKER_COUNT as f64);
+        for y in 0..PICKER_COUNT_X {
+            for x in 0..PICKER_COUNT_Y {
+                let rx = (x as f64) / (PICKER_COUNT_X as f64);
+                let ry = (y as f64) / (PICKER_COUNT_X as f64);
 
                 let h = 360.0 * rx;
                 let s = 0.6;
