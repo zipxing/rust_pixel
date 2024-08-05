@@ -6,7 +6,7 @@ use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
     game::Model,
-    render::style::{COLOR_SPACE_COUNT, ColorSpace, ColorPro, ColorSpace::*},
+    render::style::{ColorPro, ColorSpace, ColorSpace::*, COLOR_SPACE_COUNT},
 };
 use std::any::Any;
 
@@ -211,7 +211,13 @@ impl PaletteModel {
                 self.main_color = self.named_colors[idx].1;
             }
             PaletteState::Picker => {
-                self.main_color = self.named_colors[1].1;
+                self.main_color = get_pick_color(
+                    self.select.ranges[0].x,
+                    self.select.ranges[0].y,
+                    self.select.ranges[1].x,
+                    0,
+                );
+                info!("picker update main color.......{:?} {:?} {:?}", self.select.ranges[0].x, self.select.ranges[0].y, self.select.ranges[1].x);
             }
             _ => {}
         }
@@ -219,6 +225,7 @@ impl PaletteModel {
         self.main_color_similar = find_similar_colors(&self.main_color);
         event_emit("Palette.RedrawMainColor");
         event_emit("Palette.RedrawSelect");
+        event_emit("Palette.RedrawPicker");
     }
 
     fn switch_state(&mut self, context: &mut Context, st: u8) {
@@ -244,10 +251,10 @@ impl PaletteModel {
             }
             PaletteState::Picker => {
                 self.select.clear();
-                let w = (C_WIDTH * COL_COUNT / 2) as usize;
-                let h = ROW_COUNT as usize - 1;
+                let w = PICKER_COUNT_X as usize;
+                let h = PICKER_COUNT_Y as usize;
                 self.select.add_range(SelectRange::new(w, h, w * h));
-                self.select.add_range(SelectRange::new(w * 2, 1, w * 2));
+                self.select.add_range(SelectRange::new(w * 4, 1, w * 4));
                 self.update_main_color(context);
                 event_emit("Palette.RedrawPicker");
             }
@@ -370,5 +377,17 @@ impl Model for PaletteModel {
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+pub fn get_pick_color(x0: usize, y0: usize, x1: usize, t: usize) -> ColorPro {
+    let h = 360.0 / 4.0 / PICKER_COUNT_X as f64 * x1 as f64;
+    let s = 1.0 / PICKER_COUNT_X as f64 * x0 as f64;
+    let v = 1.0 / PICKER_COUNT_Y as f64 * y0 as f64;
+
+    if t == 0 {
+        ColorPro::from_space_f64(HSVA, h, s, 1.0 - v, 1.0)
+    } else {
+        ColorPro::from_space_f64(HSVA, h, 1.0, 1.0, 1.0)
     }
 }
