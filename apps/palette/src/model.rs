@@ -215,6 +215,10 @@ impl PaletteModel {
         event_emit("Palette.RedrawGradient");
     }
 
+    fn add_gradient_input(&mut self, context: &mut Context) {
+
+    }
+
     fn update_main_color(&mut self, context: &mut Context) {
         match PaletteState::from_usize(context.state as usize).unwrap() {
             PaletteState::NameA => {
@@ -333,7 +337,7 @@ impl Model for PaletteModel {
             ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),
             ColorPro::from_space_f64(SRGBA, 1.0, 1.0, 0.0, 1.0),
             ColorPro::from_space_f64(SRGBA, 0.0, 1.0, 1.0, 1.0),
-            ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.0, 1.0),
+            ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.8, 1.0),
         ];
 
         for y in 0..PICKER_COUNT_X {
@@ -386,6 +390,12 @@ impl Model for PaletteModel {
                         context.state = PaletteState::Gradient as u8;
                         self.switch_state(context, 4);
                         event_emit("Palette.RedrawGradient");
+                    }
+                    KeyCode::Char('a') => {
+                        self.add_gradient_input(context);
+                    }
+                    KeyCode::Char('g') => {
+                        self.del_gradient_input(context);
                     }
                     KeyCode::Char('g') => {
                         self.do_gradient(context);

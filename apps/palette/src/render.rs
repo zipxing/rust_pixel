@@ -228,9 +228,9 @@ impl PaletteRender {
             pl.set_color_str(
                 0,
                 0,
-                "            ",
-                Color::White,
+                "████████",
                 Color::Professional(d.gradient_input_colors[i as usize]),
+                Color::Reset,
             );
         }
         for y in 0..GRADIENT_Y {
