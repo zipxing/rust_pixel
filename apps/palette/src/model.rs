@@ -175,7 +175,7 @@ pub struct PaletteModel {
     pub named_colors: Vec<(&'static str, ColorPro)>,
     pub gradient_input_colors: Vec<ColorPro>,
     pub gradient_colors: Vec<ColorPro>,
-    pub picker_color_hsv: (f64, f64, f64),
+    // pub picker_color_hsv: (f64, f64, f64),
     pub picker_colors: Vec<ColorPro>,
     pub select: Select,
 }
@@ -195,7 +195,7 @@ impl PaletteModel {
             named_colors: ncolors,
             gradient_input_colors: vec![],
             gradient_colors: vec![],
-            picker_color_hsv: (0.0, 1.0, 1.0),
+            // picker_color_hsv: (0.0, 1.0, 1.0),
             picker_colors: vec![],
             select: Select::new(),
         }
