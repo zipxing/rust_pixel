@@ -95,10 +95,16 @@ impl PaletteRender {
             panel.add_layer_sprite(pl, "4", &format!("hsv_pick{}", i));
         }
 
-        // for co in 0..CCOUNT as u16 {
-        //     let pl = Sprite::new(ADJX + co * 2, ADJY - 1, 2, 1);
-        //     panel.add_sprite(pl, &format!("COLOR{}", co));
-        // }
+        for i in 0..GRADIENT_INPUT_COUNT {
+            let pl = Sprite::new(60, i as u16 + ADJY, 8, 1);
+            panel.add_layer_sprite(pl, "4", &format!("gi_input{}", i));
+        }
+        for y in 0..GRADIENT_Y {
+            for x in 0..GRADIENT_X {
+                let pl = Sprite::new(67 + ADJX, y as u16 + ADJY, 9, 1);
+                panel.add_layer_sprite(pl, "4", &format!("gi{}", y * GRADIENT_X + x));
+            }
+        }
 
         // creat select cursor layer
         panel.add_layer("select");
@@ -111,6 +117,7 @@ impl PaletteRender {
         event_register("Palette.RedrawPanel", "draw_panel");
         event_register("Palette.RedrawMainColor", "draw_main_color");
         event_register("Palette.RedrawPicker", "draw_picker");
+        event_register("Palette.RedrawGradient", "draw_gradient");
 
         Self { panel }
     }
@@ -204,6 +211,39 @@ impl PaletteRender {
                 self.panel.deactive_layer(&format!("{}", i));
             } else {
                 self.panel.active_layer(&format!("{}", i));
+            }
+        }
+    }
+
+    pub fn draw_gradient<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+        if ctx.state != PaletteState::Gradient as u8 {
+            return;
+        }
+        for i in 0..GRADIENT_INPUT_COUNT {
+            let pl = self.panel.get_layer_sprite("4", &format!("gi_input{}", i));
+            if i >= d.gradient_input_colors.len() as u16 {
+                break;
+            }
+            pl.set_color_str(
+                0,
+                0,
+                "            ",
+                Color::White,
+                Color::Professional(d.gradient_input_colors[i as usize]),
+            );
+        }
+        for y in 0..GRADIENT_Y {
+            for x in 0..GRADIENT_X {
+                let idx = y * GRADIENT_X + x;
+                let pl = self.panel.get_layer_sprite("4", &format!("gi{}", idx));
+                pl.set_color_str(
+                    0,
+                    0,
+                    "            ",
+                    Color::White,
+                    Color::Professional(d.gradient_colors[idx as usize]),
+                );
             }
         }
     }
@@ -372,6 +412,7 @@ impl Render for PaletteRender {
         let d = data.as_any().downcast_mut::<PaletteModel>().unwrap();
         let gb = self.panel.get_layer_sprite("main", "back");
         asset2sprite!(gb, context, "back.txt");
+
         // for co in 0..CCOUNT {
         //     let gb = self.panel.get_sprite(&format!("COLOR{}", co));
         //     let (r, g, b, a) = d.gradient_colors[co].get_srgba_u8();
@@ -379,6 +420,7 @@ impl Render for PaletteRender {
         //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         // }
         //
+        
         self.draw_named_colors(context, data);
     }
 
@@ -397,6 +439,9 @@ impl Render for PaletteRender {
         }
         if event_check("Palette.RedrawPicker", "draw_picker") {
             self.draw_picker(context, data);
+        }
+        if event_check("Palette.RedrawGradient", "draw_gradient") {
+            self.draw_gradient(context, data);
         }
     }
 
