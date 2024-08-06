@@ -16,6 +16,7 @@ pub const MENUX: u16 = 12;
 pub const MENUY: u16 = 0;
 pub const MENUW: u16 = 70;
 pub const GRADIENT_COUNT: usize = 40;
+pub const PICKER_COUNT_X_GRADIENT: u16 = 57;
 pub const PICKER_COUNT_X: u16 = 76;
 pub const PICKER_COUNT_Y: u16 = 18;
 pub const ADJX: u16 = 2;
@@ -212,13 +213,27 @@ impl PaletteModel {
             }
             PaletteState::Picker => {
                 self.main_color = get_pick_color(
+                    PICKER_COUNT_X as usize,
                     self.select.ranges[0].x,
                     self.select.ranges[0].y,
                     self.select.ranges[1].x,
                     0,
                 );
-                info!("picker update main color.......{:?} {:?} {:?}", self.select.ranges[0].x, self.select.ranges[0].y, self.select.ranges[1].x);
             }
+            PaletteState::Gradient => match self.select.area {
+                0..=1 => {
+                    self.main_color = get_pick_color(
+                        PICKER_COUNT_X_GRADIENT as usize,
+                        self.select.ranges[0].x,
+                        self.select.ranges[0].y,
+                        self.select.ranges[1].x,
+                        0,
+                    );
+                }
+                2 => {}
+                3 => {}
+                _ => {}
+            },
             _ => {}
         }
         // find similar colors by ciede2000...
@@ -259,7 +274,17 @@ impl PaletteModel {
                 event_emit("Palette.RedrawPicker");
             }
             PaletteState::Random => {}
-            PaletteState::Gradient => {}
+            PaletteState::Gradient => {
+                self.select.clear();
+                let w = PICKER_COUNT_X_GRADIENT as usize;
+                let h = PICKER_COUNT_Y as usize;
+                self.select.add_range(SelectRange::new(w, h, w * h));
+                self.select.add_range(SelectRange::new(w * 4, 1, w * 4));
+                self.select.add_range(SelectRange::new(5, 1, 5));
+                self.select.add_range(SelectRange::new(5, 4, 20));
+                self.update_main_color(context);
+                event_emit("Palette.RedrawPicker");
+            }
             PaletteState::Smart => {}
         }
         event_emit("Palette.RedrawMenu");
@@ -342,6 +367,10 @@ impl Model for PaletteModel {
                         context.state = PaletteState::Picker as u8;
                         self.switch_state(context, 2);
                     }
+                    KeyCode::Char('5') => {
+                        context.state = PaletteState::Gradient as u8;
+                        self.switch_state(context, 4);
+                    }
                     KeyCode::Up => {
                         self.select.cur().backward_y();
                         self.update_main_color(context);
@@ -380,9 +409,9 @@ impl Model for PaletteModel {
     }
 }
 
-pub fn get_pick_color(x0: usize, y0: usize, x1: usize, t: usize) -> ColorPro {
-    let h = 360.0 / 4.0 / PICKER_COUNT_X as f64 * x1 as f64;
-    let s = 1.0 / PICKER_COUNT_X as f64 * x0 as f64;
+pub fn get_pick_color(width: usize, x0: usize, y0: usize, x1: usize, t: usize) -> ColorPro {
+    let h = 360.0 / 4.0 / width as f64 * x1 as f64;
+    let s = 1.0 / width as f64 * x0 as f64;
     let v = 1.0 / PICKER_COUNT_Y as f64 * y0 as f64;
 
     if t == 0 {
