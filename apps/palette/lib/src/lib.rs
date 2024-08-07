@@ -5,7 +5,7 @@
 use lazy_static::lazy_static;
 use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorScale, ColorSpace::*, Fraction};
 use rust_pixel::util::Rand;
-// use log::info;
+use log::info;
 
 static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 139] = [
     ("aliceblue", 240, 248, 255),
@@ -177,13 +177,17 @@ pub fn find_similar_colors(color: &ColorPro) -> (usize, usize, usize) {
 
 pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<ColorPro>) {
     let color_count = colors.len();
+    output_colors.clear();
+    if color_count < 2 {
+        return;
+    }
     let mut color_scale = ColorScale::empty();
 
     for (i, color) in colors.into_iter().enumerate() {
         let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
         color_scale.add_stop(*color, position);
     }
-    // info!("color_stop.....{:?}", color_scale);
+    info!("color_stop.....{:?}", color_scale);
     for i in 0..gcount {
         let position = Fraction::from(i as f64 / (gcount as f64 - 1.0));
         let color = color_scale

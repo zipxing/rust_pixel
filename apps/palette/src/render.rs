@@ -222,28 +222,35 @@ impl PaletteRender {
         }
         for i in 0..GRADIENT_INPUT_COUNT {
             let pl = self.panel.get_layer_sprite("4", &format!("gi_input{}", i));
-            if i >= d.gradient_input_colors.len() as u16 {
-                break;
+            if i < d.gradient_input_colors.len() as u16 {
+                pl.set_hidden(false);
+                pl.set_color_str(
+                    0,
+                    0,
+                    "████████",
+                    Color::Professional(d.gradient_input_colors[i as usize]),
+                    Color::Reset,
+                );
+            } else {
+                pl.set_hidden(true);
             }
-            pl.set_color_str(
-                0,
-                0,
-                "████████",
-                Color::Professional(d.gradient_input_colors[i as usize]),
-                Color::Reset,
-            );
         }
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
                 let idx = y * GRADIENT_X + x;
                 let pl = self.panel.get_layer_sprite("4", &format!("gi{}", idx));
-                pl.set_color_str(
-                    0,
-                    0,
-                    "            ",
-                    Color::White,
-                    Color::Professional(d.gradient_colors[idx as usize]),
-                );
+                if idx < d.gradient_colors.len() as u16 {
+                    pl.set_hidden(false);
+                    pl.set_color_str(
+                        0,
+                        0,
+                        "            ",
+                        Color::White,
+                        Color::Professional(d.gradient_colors[idx as usize]),
+                    );
+                } else {
+                    pl.set_hidden(true);
+                }
             }
         }
     }
@@ -266,7 +273,8 @@ impl PaletteRender {
                     &format!("pick{}", y * PICKER_COUNT_X + x),
                 );
 
-                let cr = get_pick_color(w as usize, x as usize, y as usize, d.select.ranges[1].x, 0);
+                let cr =
+                    get_pick_color(w as usize, x as usize, y as usize, d.select.ranges[1].x, 0);
 
                 let color = Color::Professional(cr);
                 pl.set_color_str(0, 0, "  ", color, color);
@@ -420,7 +428,7 @@ impl Render for PaletteRender {
         //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
         // }
         //
-        
+
         self.draw_named_colors(context, data);
     }
 

@@ -175,7 +175,6 @@ pub struct PaletteModel {
     pub named_colors: Vec<(&'static str, ColorPro)>,
     pub gradient_input_colors: Vec<ColorPro>,
     pub gradient_colors: Vec<ColorPro>,
-    // pub picker_color_hsv: (f64, f64, f64),
     pub picker_colors: Vec<ColorPro>,
     pub select: Select,
 }
@@ -195,7 +194,6 @@ impl PaletteModel {
             named_colors: ncolors,
             gradient_input_colors: vec![],
             gradient_colors: vec![],
-            // picker_color_hsv: (0.0, 1.0, 1.0),
             picker_colors: vec![],
             select: Select::new(),
         }
@@ -216,7 +214,32 @@ impl PaletteModel {
     }
 
     fn add_gradient_input(&mut self, context: &mut Context) {
+        if context.state != PaletteState::Gradient as u8 {
+            return;
+        }
+        if self.gradient_input_colors.len() >= GRADIENT_INPUT_COUNT as usize {
+            return;
+        }
+        let nc = get_pick_color(
+            PICKER_COUNT_X_GRADIENT as usize,
+            self.select.ranges[0].x,
+            self.select.ranges[0].y,
+            self.select.ranges[1].x,
+            0,
+        );
+        self.gradient_input_colors.push(nc);
+        self.do_gradient(context);
+    }
 
+    fn del_gradient_input(&mut self, context: &mut Context) {
+        if context.state != PaletteState::Gradient as u8 {
+            return;
+        }
+        if self.gradient_input_colors.len() == 0 {
+            return;
+        }
+        self.gradient_input_colors.pop();
+        self.do_gradient(context);
     }
 
     fn update_main_color(&mut self, context: &mut Context) {
@@ -302,9 +325,17 @@ impl PaletteModel {
                 self.select.add_range(SelectRange::new(w, h, w * h));
                 self.select.add_range(SelectRange::new(w * 4, 1, w * 4));
                 // gradient input ...
-                self.select.add_range(SelectRange::new(GRADIENT_INPUT_COUNT as usize, 1, GRADIENT_INPUT_COUNT as usize));
+                self.select.add_range(SelectRange::new(
+                    GRADIENT_INPUT_COUNT as usize,
+                    1,
+                    GRADIENT_INPUT_COUNT as usize,
+                ));
                 // gradient ...
-                self.select.add_range(SelectRange::new(GRADIENT_X as usize, GRADIENT_Y as usize, GRADIENT_COUNT as usize));
+                self.select.add_range(SelectRange::new(
+                    GRADIENT_X as usize,
+                    GRADIENT_Y as usize,
+                    GRADIENT_COUNT as usize,
+                ));
                 self.update_main_color(context);
                 self.do_gradient(context);
                 event_emit("Palette.RedrawPicker");
@@ -394,7 +425,7 @@ impl Model for PaletteModel {
                     KeyCode::Char('a') => {
                         self.add_gradient_input(context);
                     }
-                    KeyCode::Char('g') => {
+                    KeyCode::Char('d') => {
                         self.del_gradient_input(context);
                     }
                     KeyCode::Char('g') => {
