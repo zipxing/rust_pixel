@@ -33,7 +33,7 @@ pub const ROW_COUNT: u16 = 19;
 pub const C_WIDTH: u16 = 19;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
 pub enum PaletteState {
     NameA,
     NameB,

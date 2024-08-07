@@ -101,7 +101,6 @@ impl PaletteRender {
             let pl = Sprite::new(2 + i, 20, 1, 1);
             panel.add_layer_sprite(pl, "4", &format!("hsv_pick{}", i));
         }
-
         for i in 0..GRADIENT_INPUT_COUNT {
             let pl = Sprite::new(60, i as u16 + ADJY, 8, 1);
             panel.add_layer_sprite(pl, "4", &format!("gi_input{}", i));
@@ -131,82 +130,101 @@ impl PaletteRender {
 
     pub fn draw_select<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        if ctx.state < 2 {
-            let pl = self.panel.get_layer_sprite("select", "cursor0");
-            let idx =
-                d.select.cur().y * COL_COUNT as usize + d.select.cur().x + ctx.state as usize * 76;
-            let cr = d.named_colors[idx].1;
-            let color = Color::Professional(cr);
-            pl.set_color_str(0, 0, "", Color::Green, color);
-            pl.set_pos(
-                2 + d.select.cur().x as u16 * C_WIDTH,
-                2 + d.select.cur().y as u16,
-            );
-            for i in 1..5 {
-                let pl = self
-                    .panel
-                    .get_layer_sprite("select", &format!("cursor{}", i));
-                pl.set_hidden(true);
+        let state = PaletteState::from_usize(ctx.state as usize).unwrap();
+        match state {
+            PaletteState::NameA | PaletteState::NameB => {
+                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let idx = d.select.cur().y * COL_COUNT as usize
+                    + d.select.cur().x
+                    + ctx.state as usize * 76;
+                let cr = d.named_colors[idx].1;
+                let color = Color::Professional(cr);
+                pl.set_color_str(0, 0, "", Color::Green, color);
+                pl.set_pos(
+                    2 + d.select.cur().x as u16 * C_WIDTH,
+                    2 + d.select.cur().y as u16,
+                );
+                for i in 1..5 {
+                    let pl = self
+                        .panel
+                        .get_layer_sprite("select", &format!("cursor{}", i));
+                    pl.set_hidden(true);
+                }
             }
-        }
-        if ctx.state == 2 || ctx.state == 4 {
-            let pl = self.panel.get_layer_sprite("select", "cursor0");
-            let idx = d.select.area;
-            pl.set_color_str(0, 0, "", Color::Green, Color::Black);
-            pl.set_pos(1, idx as u16 * 18 + 2);
-            let pl = self.panel.get_layer_sprite("select", "cursor1");
-            let cr = get_pick_color(
-                if ctx.state == 2 {
-                    PICKER_COUNT_X as usize
+            PaletteState::Picker | PaletteState::Gradient => {
+                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let idx = d.select.area;
+                pl.set_color_str(0, 0, "", Color::Green, Color::Black);
+                if state == PaletteState::Picker {
+                    pl.set_pos(1, idx as u16 * 18 + 2);
                 } else {
-                    PICKER_COUNT_X_GRADIENT as usize
-                },
-                d.select.ranges[0].x,
-                d.select.ranges[0].y,
-                d.select.ranges[1].x,
-                0,
-            );
-            pl.set_color_str(
-                0,
-                0,
-                "∙",
-                if cr.is_dark() {
-                    Color::White
-                } else {
-                    Color::Black
-                },
-                Color::Professional(cr),
-            );
-            pl.set_pos(
-                d.select.ranges[0].x as u16 + 2,
-                d.select.ranges[0].y as u16 + 2,
-            );
-            pl.set_hidden(false);
-            let pl = self.panel.get_layer_sprite("select", "cursor2");
-            let cr = get_pick_color(
-                if ctx.state == 2 {
-                    PICKER_COUNT_X as usize
-                } else {
-                    PICKER_COUNT_X_GRADIENT as usize
-                },
-                d.select.ranges[0].x,
-                d.select.ranges[0].y,
-                d.select.ranges[1].x,
-                1,
-            );
-            pl.set_color_str(
-                0,
-                0,
-                "∙",
-                if cr.is_dark() {
-                    Color::White
-                } else {
-                    Color::Black
-                },
-                Color::Professional(cr),
-            );
-            pl.set_pos((d.select.ranges[1].x / 4) as u16 + 2, 20);
-            pl.set_hidden(false);
+                    if idx < 3 {
+                        pl.set_pos(
+                            1 + idx as u16 / 2 * (PICKER_COUNT_X_GRADIENT + 1),
+                            idx as u16 % 2 * 18 + 2,
+                        );
+                    } else {
+                        pl.set_pos(
+                            PICKER_COUNT_X_GRADIENT + 11,
+                            (idx - 1) as u16 % 2 * 18 + 2,
+                        );
+                    }
+                }
+                let pl = self.panel.get_layer_sprite("select", "cursor1");
+                let cr = get_pick_color(
+                    if ctx.state == 2 {
+                        PICKER_COUNT_X as usize
+                    } else {
+                        PICKER_COUNT_X_GRADIENT as usize
+                    },
+                    d.select.ranges[0].x,
+                    d.select.ranges[0].y,
+                    d.select.ranges[1].x,
+                    0,
+                );
+                pl.set_color_str(
+                    0,
+                    0,
+                    "∙",
+                    if cr.is_dark() {
+                        Color::White
+                    } else {
+                        Color::Black
+                    },
+                    Color::Professional(cr),
+                );
+                pl.set_pos(
+                    d.select.ranges[0].x as u16 + 2,
+                    d.select.ranges[0].y as u16 + 2,
+                );
+                pl.set_hidden(false);
+                let pl = self.panel.get_layer_sprite("select", "cursor2");
+                let cr = get_pick_color(
+                    if ctx.state == 2 {
+                        PICKER_COUNT_X as usize
+                    } else {
+                        PICKER_COUNT_X_GRADIENT as usize
+                    },
+                    d.select.ranges[0].x,
+                    d.select.ranges[0].y,
+                    d.select.ranges[1].x,
+                    1,
+                );
+                pl.set_color_str(
+                    0,
+                    0,
+                    "∙",
+                    if cr.is_dark() {
+                        Color::White
+                    } else {
+                        Color::Black
+                    },
+                    Color::Professional(cr),
+                );
+                pl.set_pos((d.select.ranges[1].x / 4) as u16 + 2, 20);
+                pl.set_hidden(false);
+            }
+            _ => {}
         }
     }
 
@@ -348,7 +366,7 @@ impl PaletteRender {
         pl.set_color_str(
             0,
             0,
-            &format!("{:width$}", &get_color_info(d.main_color, 0), width=18),
+            &format!("{:width$}", &get_color_info(d.main_color, 0), width = 18),
             Color::DarkGray,
             Color::Black,
         );
@@ -361,7 +379,11 @@ impl PaletteRender {
                 pl.set_color_str(
                     0,
                     0,
-                    &format!("{:width$}", &get_color_info(d.main_color, i * 2 + j + 1), width=18),
+                    &format!(
+                        "{:width$}",
+                        &get_color_info(d.main_color, i * 2 + j + 1),
+                        width = 18
+                    ),
                     Color::DarkGray,
                     Color::Black,
                 );
