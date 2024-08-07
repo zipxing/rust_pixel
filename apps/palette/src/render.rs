@@ -49,6 +49,13 @@ impl PaletteRender {
         let pl = Sprite::new(2, 22, 20, 1);
         panel.add_layer_sprite(pl, "main", "main_color_str");
 
+        for i in 0..MAIN_COLOR_MSG_Y {
+            for j in 0..MAIN_COLOR_MSG_X {
+                let pl = Sprite::new(j * 20 + 20, 24 + i, 20, 1);
+                panel.add_layer_sprite(pl, "main", &format!("main_color_str{}", i * 2 + j));
+            }
+        }
+
         // creat 6 state layers
         for i in 0..6 {
             panel.add_layer(&format!("{}", i));
@@ -341,10 +348,25 @@ impl PaletteRender {
         pl.set_color_str(
             0,
             0,
-            &format!("rgb({}, {}, {})      ", rgb.0, rgb.1, rgb.2),
-            Color::White,
+            &format!("{:width$}", &get_color_info(d.main_color, 0), width=18),
+            Color::DarkGray,
             Color::Black,
         );
+
+        for i in 0..MAIN_COLOR_MSG_Y {
+            for j in 0..MAIN_COLOR_MSG_X {
+                let pl = self
+                    .panel
+                    .get_layer_sprite("main", &format!("main_color_str{}", i * 2 + j));
+                pl.set_color_str(
+                    0,
+                    0,
+                    &format!("{:width$}", &get_color_info(d.main_color, i * 2 + j + 1), width=18),
+                    Color::DarkGray,
+                    Color::Black,
+                );
+            }
+        }
 
         let mut ids: Vec<usize> = vec![];
         ids.push(d.main_color_similar.0);

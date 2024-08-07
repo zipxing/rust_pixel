@@ -1,7 +1,9 @@
 use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use palette_lib::{find_similar_colors, gradient, PaletteData, COLORS_WITH_NAME};
+use palette_lib::{
+    find_similar_colors, gradient, PaletteData, COLORS_WITH_NAME, COLORS_WITH_NAME_RGB_INDEX,
+};
 use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
@@ -22,6 +24,8 @@ pub const GRADIENT_COUNT: u16 = GRADIENT_X * GRADIENT_Y;
 pub const PICKER_COUNT_X_GRADIENT: u16 = 57;
 pub const PICKER_COUNT_X: u16 = 76;
 pub const PICKER_COUNT_Y: u16 = 18;
+pub const MAIN_COLOR_MSG_X: u16 = 2;
+pub const MAIN_COLOR_MSG_Y: u16 = 6;
 pub const ADJX: u16 = 2;
 pub const ADJY: u16 = 2;
 pub const COL_COUNT: u16 = 4;
@@ -478,5 +482,18 @@ pub fn get_pick_color(width: usize, x0: usize, y0: usize, x1: usize, t: usize) -
         ColorPro::from_space_f64(HSVA, h, s, 1.0 - v, 1.0)
     } else {
         ColorPro::from_space_f64(HSVA, h, 1.0, 1.0, 1.0)
+    }
+}
+
+pub fn get_color_info(c: ColorPro, idx: u16) -> String {
+    match idx {
+        0 => {
+            if let Some(cp) = COLORS_WITH_NAME_RGB_INDEX.get(&c.get_srgba_u8()) {
+                COLORS_WITH_NAME[*cp].0.to_string()
+            } else {
+                "#FFFFFF".to_string()
+            }
+        }
+        _ => "".to_string(),
     }
 }

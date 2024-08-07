@@ -5,6 +5,7 @@
 use lazy_static::lazy_static;
 use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorScale, ColorSpace::*, Fraction};
 use rust_pixel::util::Rand;
+use std::collections::HashMap;
 use log::info;
 
 static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 139] = [
@@ -158,6 +159,14 @@ lazy_static! {
         }
         ncolors
     };
+    pub static ref COLORS_WITH_NAME_RGB_INDEX: HashMap<(u8, u8, u8, u8), usize> = {
+        let mut rgb_index = HashMap::new();
+        for (i, sc) in COLORS_WITH_NAME.iter().enumerate() {
+            let rgb = sc.1.get_srgba_u8();
+            rgb_index.insert(rgb, i);
+        }
+        rgb_index
+    }; 
 }
 
 pub fn find_similar_colors(color: &ColorPro) -> (usize, usize, usize) {
