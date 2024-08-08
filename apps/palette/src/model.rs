@@ -99,6 +99,9 @@ impl SelectRange {
     }
 
     pub fn forward_x(&mut self) {
+        if self.width == 0 || self.count == 0 {
+            return;
+        }
         let count_last_row = self.count % self.width;
         if self.y == self.height - 1 && count_last_row != 0 {
             if self.x == count_last_row - 1 {
@@ -116,6 +119,9 @@ impl SelectRange {
     }
 
     pub fn backward_x(&mut self) {
+        if self.width == 0 || self.count == 0 {
+            return;
+        }
         let count_last_row = self.count % self.width;
         if self.y == self.height - 1 && count_last_row != 0 {
             if self.x == 0 {
@@ -133,6 +139,9 @@ impl SelectRange {
     }
 
     pub fn forward_y(&mut self) {
+        if self.height == 0 || self.count == 0 {
+            return;
+        }
         let count_last_col = self.height - 1;
         let modx = self.count % self.width;
         let mx = if modx == 0 { self.width } else { modx };
@@ -152,6 +161,9 @@ impl SelectRange {
     }
 
     pub fn backward_y(&mut self) {
+        if self.height == 0 || self.count == 0 {
+            return;
+        }
         let count_last_col = self.height - 1;
         let modx = self.count % self.width;
         let mx = if modx == 0 { self.width } else { modx };
@@ -213,6 +225,11 @@ impl PaletteModel {
             GRADIENT_COUNT as usize,
             &mut self.gradient_colors,
         );
+        self.select.ranges[3] = SelectRange::new(
+                1,
+                self.gradient_colors.len() as usize,
+                self.gradient_colors.len() as usize,
+        );
         self.update_main_color(context);
         event_emit("Palette.RedrawGradient");
     }
@@ -232,6 +249,11 @@ impl PaletteModel {
             0,
         );
         self.gradient_input_colors.push(nc);
+        self.select.ranges[2] = SelectRange::new(
+                1,
+                self.gradient_input_colors.len() as usize,
+                self.gradient_input_colors.len() as usize,
+        );
         self.do_gradient(context);
     }
 
@@ -243,6 +265,11 @@ impl PaletteModel {
             return;
         }
         self.gradient_input_colors.pop();
+        self.select.ranges[2] = SelectRange::new(
+                1,
+                self.gradient_input_colors.len() as usize,
+                self.gradient_input_colors.len() as usize,
+        );
         self.do_gradient(context);
     }
 
@@ -278,8 +305,16 @@ impl PaletteModel {
                         0,
                     );
                 }
-                2 => {}
-                3 => {}
+                2 => {
+                    if self.gradient_input_colors.len() != 0 {
+                        self.main_color = self.gradient_input_colors[self.select.ranges[2].y];
+                    }
+                }
+                3 => {
+                    if self.gradient_colors.len() != 0 {
+                        self.main_color = self.gradient_colors[self.select.ranges[3].y];
+                    }
+                }
                 _ => {}
             },
             _ => {}
@@ -330,9 +365,9 @@ impl PaletteModel {
                 self.select.add_range(SelectRange::new(w * 4, 1, w * 4));
                 // gradient input ...
                 self.select.add_range(SelectRange::new(
-                    GRADIENT_INPUT_COUNT as usize,
                     1,
-                    GRADIENT_INPUT_COUNT as usize,
+                    self.gradient_input_colors.len() as usize,
+                    self.gradient_input_colors.len() as usize,
                 ));
                 // gradient ...
                 self.select.add_range(SelectRange::new(
@@ -441,6 +476,7 @@ impl Model for PaletteModel {
                     }
                     KeyCode::Down => {
                         self.select.cur().forward_y();
+                        info!("down.......!!!!!!!!");
                         self.update_main_color(context);
                     }
                     KeyCode::Left => {

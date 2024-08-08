@@ -171,6 +171,52 @@ impl PaletteRender {
                         pl.set_pos(PICKER_COUNT_X_GRADIENT + 11, (idx - 1) as u16 % 2 * 18 + 2);
                     }
                 }
+                if state == PaletteState::Gradient {
+                    let pl = self.panel.get_layer_sprite("select", "cursor3");
+                    if d.gradient_input_colors.len() != 0 {
+                        let cr = d.gradient_input_colors[d.select.ranges[2].y];
+                        pl.set_color_str(
+                            0,
+                            0,
+                            "∙",
+                            if cr.is_dark() {
+                                Color::White
+                            } else {
+                                Color::Black
+                            },
+                            Color::Professional(cr),
+                        );
+                        pl.set_pos(
+                            d.select.ranges[2].x as u16 + 3 + PICKER_COUNT_X_GRADIENT,
+                            d.select.ranges[2].y as u16 + 2,
+                        );
+                        pl.set_hidden(false);
+                    } else {
+                        pl.set_hidden(true);
+                    }
+                    let pl = self.panel.get_layer_sprite("select", "cursor4");
+                    if d.gradient_colors.len() != 0 {
+                        let cr = d.gradient_colors[d.select.ranges[3].y];
+                        pl.set_color_str(
+                            0,
+                            0,
+                            "∙",
+                            if cr.is_dark() {
+                                Color::White
+                            } else {
+                                Color::Black
+                            },
+                            Color::Professional(cr),
+                        );
+                        pl.set_pos(
+                            d.select.ranges[3].x as u16 + 12 + PICKER_COUNT_X_GRADIENT,
+                            d.select.ranges[3].y as u16 + 2,
+                        );
+                        pl.set_hidden(false);
+                    } else {
+                        pl.set_hidden(true);
+                    }
+                }
                 let pl = self.panel.get_layer_sprite("select", "cursor1");
                 let cr = get_pick_color(
                     if ctx.state == 2 {
