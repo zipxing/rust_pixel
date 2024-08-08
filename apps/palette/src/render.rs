@@ -46,13 +46,17 @@ impl PaletteRender {
             panel.add_layer_sprite(pl, "main", &format!("simi{}", i));
         }
 
-        let pl = Sprite::new(2, 22, 20, 1);
+        let pl = Sprite::new(2, 22, 40, 1);
         panel.add_layer_sprite(pl, "main", "main_color_str");
 
         for i in 0..MAIN_COLOR_MSG_Y {
             for j in 0..MAIN_COLOR_MSG_X {
-                let pl = Sprite::new(j * 20 + 20, 24 + i, 20, 1);
-                panel.add_layer_sprite(pl, "main", &format!("main_color_str{}", i * 2 + j));
+                let pl = Sprite::new(j * 20 + 22, 23 + i, 40, 1);
+                panel.add_layer_sprite(
+                    pl,
+                    "main",
+                    &format!("main_color_str{}", i * MAIN_COLOR_MSG_X + j),
+                );
             }
         }
 
@@ -164,10 +168,7 @@ impl PaletteRender {
                             idx as u16 % 2 * 18 + 2,
                         );
                     } else {
-                        pl.set_pos(
-                            PICKER_COUNT_X_GRADIENT + 11,
-                            (idx - 1) as u16 % 2 * 18 + 2,
-                        );
+                        pl.set_pos(PICKER_COUNT_X_GRADIENT + 11, (idx - 1) as u16 % 2 * 18 + 2);
                     }
                 }
                 let pl = self.panel.get_layer_sprite("select", "cursor1");
@@ -373,18 +374,23 @@ impl PaletteRender {
 
         for i in 0..MAIN_COLOR_MSG_Y {
             for j in 0..MAIN_COLOR_MSG_X {
-                let pl = self
-                    .panel
-                    .get_layer_sprite("main", &format!("main_color_str{}", i * 2 + j));
+                let pl = self.panel.get_layer_sprite(
+                    "main",
+                    &format!("main_color_str{}", i * MAIN_COLOR_MSG_X + j),
+                );
                 pl.set_color_str(
                     0,
                     0,
                     &format!(
                         "{:width$}",
-                        &get_color_info(d.main_color, i * 2 + j + 1),
+                        &get_color_info(d.main_color, i * MAIN_COLOR_MSG_X + j + 1),
                         width = 18
                     ),
-                    Color::DarkGray,
+                    if i % 2 == 0 {
+                        Color::Rgba(125, 130, 130, 255)
+                    } else {
+                        Color::Rgba(132, 132, 127, 255)
+                    },
                     Color::Black,
                 );
             }

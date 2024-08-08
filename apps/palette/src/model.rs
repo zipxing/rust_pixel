@@ -24,8 +24,8 @@ pub const GRADIENT_COUNT: u16 = GRADIENT_X * GRADIENT_Y;
 pub const PICKER_COUNT_X_GRADIENT: u16 = 57;
 pub const PICKER_COUNT_X: u16 = 76;
 pub const PICKER_COUNT_Y: u16 = 18;
-pub const MAIN_COLOR_MSG_X: u16 = 2;
-pub const MAIN_COLOR_MSG_Y: u16 = 6;
+pub const MAIN_COLOR_MSG_X: u16 = 1;
+pub const MAIN_COLOR_MSG_Y: u16 = 8;
 pub const ADJX: u16 = 2;
 pub const ADJY: u16 = 2;
 pub const COL_COUNT: u16 = 4;
@@ -488,11 +488,26 @@ pub fn get_pick_color(width: usize, x0: usize, y0: usize, x1: usize, t: usize) -
 pub fn get_color_info(c: ColorPro, idx: u16) -> String {
     match idx {
         0 => {
-            if let Some(cp) = COLORS_WITH_NAME_RGB_INDEX.get(&c.get_srgba_u8()) {
-                COLORS_WITH_NAME[*cp].0.to_string()
+            let rgb = c.get_srgba_u8();
+            if let Some(cp) = COLORS_WITH_NAME_RGB_INDEX.get(&rgb) {
+                format!(
+                    "#{:02X}{:02X}{:02X} {:20}",
+                    rgb.0,
+                    rgb.1,
+                    rgb.2,
+                    COLORS_WITH_NAME[*cp].0.to_string(),
+                )
             } else {
-                "#FFFFFF".to_string()
+                format!("#{:02X}{:02X}{:02X}", rgb.0, rgb.1, rgb.2)
             }
+        }
+        1..=8 => {
+            let display_space = [2, 4, 6, 7, 8, 9, 11, 12];
+            format!(
+                "{} :{:?}",
+                ColorSpace::from_usize(display_space[idx as usize - 1]).unwrap(),
+                c.space_matrix[idx as usize].unwrap()
+            )
         }
         _ => "".to_string(),
     }

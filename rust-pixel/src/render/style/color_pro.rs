@@ -81,7 +81,8 @@ pub enum ColorSpace {
 
 impl fmt::Display for ColorSpace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        let css = ["rgb", "lrgb", "cmyk", "hsl", "hsv", "hwb", "lab", "lch", "oklab", "oklch", "cam16", "hct", "xyz"];
+        write!(f, "{:5}", css[*self as usize])
     }
 }
 
@@ -94,8 +95,8 @@ impl fmt::Debug for ColorData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:.6} {:.6} {:.6} {:.6}",
-            self.v[0], self.v[1], self.v[2], self.v[3]
+            "{:8.3} {:8.3} {:8.3}",
+            self.v[0], self.v[1], self.v[2]
         )
     }
 }
