@@ -35,8 +35,15 @@ RustPixel implements game loops, a Model/Render common pattern, and a messaging 
 **Install iTerm2 & Nerd Font**
 
 For better terminal display, you need to install [iTerm2] and set it to dark background mode. 
+```
+Settings... > Profiles > Colors > Color presets... > Dark Background
+```
 
 You also need to install DroidSansMono Nerd Font.
+```
+curl -sS https://webi.sh/nerdfont | sh
+Settings... > Profiles > Text > Font > DroidSansMono Nerd Font
+```
 
 [iTerm2]: https://iterm2.com/
 
