@@ -33,9 +33,15 @@ RustPixel implements game loops, a Model/Render common pattern, and a messaging 
 --- MacOS ---
 
 **Install iTerm2**
-For better terminal display, you need to install [iTerm2] and set it to dark background mode. You also need to install DroidSansMono Nerd Font.
+
+For better terminal display, you need to install [iTerm2] and set it to dark background mode. 
 
 [iTerm2]: https://iterm2.com/
+
+**Install Nerd Font**
+
+You also need to install DroidSansMono Nerd Font.
+
 
 **Install brew**
 ``` 
