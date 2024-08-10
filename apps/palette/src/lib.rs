@@ -1,5 +1,6 @@
 mod model;
 mod render;
+mod select;
 
 use crate::{model::PaletteModel, render::PaletteRender};
 use rust_pixel::game::Game;

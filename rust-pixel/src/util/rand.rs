@@ -1,3 +1,6 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022~2024
+
 use rand::seq::SliceRandom;
 use rand_xoshiro::{
     rand_core::{RngCore, SeedableRng},

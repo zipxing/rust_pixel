@@ -72,7 +72,7 @@ impl PaletteRender {
         for i in 0..2 {
             for row in 0..ROW_COUNT {
                 for col in 0..COL_COUNT {
-                    let pl = Sprite::new(ADJX + col * C_WIDTH, ADJY + row, C_WIDTH, 1);
+                    let pl = Sprite::new(ADJX + col * C_WIDTH + 1, ADJY + row, C_WIDTH - 1, 1);
                     let idx = (ROW_COUNT * COL_COUNT * i + row * COL_COUNT + col) as usize;
                     if idx >= COLORS_WITH_NAME.len() {
                         break;
@@ -151,8 +151,7 @@ impl PaletteRender {
                     + d.select.cur().x
                     + ctx.state as usize * 76;
                 let cr = d.named_colors[idx].1;
-                let color = Color::Professional(cr);
-                pl.set_color_str(0, 0, "", Color::Green, color);
+                pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 pl.set_pos(
                     2 + d.select.cur().x as u16 * C_WIDTH,
                     2 + d.select.cur().y as u16,
@@ -428,7 +427,7 @@ impl PaletteRender {
                     pl.set_color_str(
                         0,
                         0,
-                        &format!(" {:width$}", s, width = C_WIDTH as usize),
+                        &format!("{:width$}", s, width = C_WIDTH as usize - 1),
                         if cr.is_dark() {
                             Color::White
                         } else {
