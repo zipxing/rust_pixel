@@ -29,7 +29,7 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into FFI and WASM.
 
-#### !!! Special reminder !!!
+#### !!! SPECIAL REMINDER !!!
 If you have previously installed an old version before 4.0, you need to re-deploy the cargo-pixel tool.
 Otherwise, terminal mode will not run...
 ```
