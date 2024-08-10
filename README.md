@@ -31,6 +31,8 @@ RustPixel implements game loops, a Model/Render common pattern, and a messaging 
 
 #### !!! Special reminder !!!
 If you have previously installed an old version before 4.0, you need to re-deploy the cargo-pixel tool.
+
+Otherwise, terminal mode will not run...
 ```
 $ cargo install --path tools/cargo-pixel --root ~/.cargo
 ```
