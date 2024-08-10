@@ -1,3 +1,6 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022~2024
+
 #![allow(non_snake_case)]
 use crate::render::style::color_pro::*;
 use lazy_static::lazy_static;

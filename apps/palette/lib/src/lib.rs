@@ -3,7 +3,7 @@
 //
 #![allow(dead_code)]
 use lazy_static::lazy_static;
-use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorScale, ColorSpace::*, Fraction};
+use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorGradient, ColorSpace::*, Fraction};
 use rust_pixel::util::Rand;
 use std::collections::HashMap;
 use log::info;
@@ -190,7 +190,7 @@ pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<C
     if color_count < 2 {
         return;
     }
-    let mut color_scale = ColorScale::empty();
+    let mut color_scale = ColorGradient::empty();
 
     for (i, color) in colors.into_iter().enumerate() {
         let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
