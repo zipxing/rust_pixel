@@ -39,13 +39,14 @@ For better terminal display, you need to install [iTerm2] and set it to dark bac
 Settings... > Profiles > Colors > Color presets... > Dark Background
 ```
 
-You also need to install DroidSansMono Nerd Font.
+You also need to install [DroidSansMono Nerd Font].
 ```
 curl -sS https://webi.sh/nerdfont | sh
 Settings... > Profiles > Text > Font > DroidSansMono Nerd Font
 ```
 
 [iTerm2]: https://iterm2.com/
+[DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
 
 **Install brew**
 ``` 
