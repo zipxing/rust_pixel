@@ -2,7 +2,8 @@ use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use palette_lib::{
-    find_similar_colors, gradient, PaletteData, COLORS_WITH_NAME, COLORS_WITH_NAME_RGB_INDEX,
+    find_similar_colors, gradient, random, PaletteData, COLORS_WITH_NAME,
+    COLORS_WITH_NAME_RGB_INDEX,
 };
 use rust_pixel::{
     context::Context,
@@ -17,6 +18,8 @@ pub const PALETTEH: u16 = 40;
 pub const MENUX: u16 = 12;
 pub const MENUY: u16 = 0;
 pub const MENUW: u16 = 70;
+pub const RANDOM_X: u16 = 4;
+pub const RANDOM_Y: u16 = 5;
 pub const GRADIENT_X: u16 = 1;
 pub const GRADIENT_Y: u16 = 19;
 pub const GRADIENT_INPUT_COUNT: u16 = 5;
@@ -191,6 +194,7 @@ pub struct PaletteModel {
     pub named_colors: Vec<(&'static str, ColorPro)>,
     pub gradient_input_colors: Vec<ColorPro>,
     pub gradient_colors: Vec<ColorPro>,
+    pub random_colors: Vec<ColorPro>,
     pub picker_colors: Vec<ColorPro>,
     pub select: Select,
 }
@@ -210,9 +214,21 @@ impl PaletteModel {
             named_colors: ncolors,
             gradient_input_colors: vec![],
             gradient_colors: vec![],
+            random_colors: vec![],
             picker_colors: vec![],
             select: Select::new(),
         }
+    }
+
+    fn do_random(&mut self, context: &mut Context) {
+        if context.state != PaletteState::Random as u8 {
+            return;
+        }
+        random(
+            RANDOM_X as usize * RANDOM_Y as usize,
+            &mut self.data.rand,
+            &mut self.random_colors,
+        );
     }
 
     fn do_gradient(&mut self, context: &mut Context) {
@@ -226,9 +242,9 @@ impl PaletteModel {
             &mut self.gradient_colors,
         );
         self.select.ranges[3] = SelectRange::new(
-                1,
-                self.gradient_colors.len() as usize,
-                self.gradient_colors.len() as usize,
+            1,
+            self.gradient_colors.len() as usize,
+            self.gradient_colors.len() as usize,
         );
         self.update_main_color(context);
         event_emit("Palette.RedrawGradient");
@@ -250,9 +266,9 @@ impl PaletteModel {
         );
         self.gradient_input_colors.push(nc);
         self.select.ranges[2] = SelectRange::new(
-                1,
-                self.gradient_input_colors.len() as usize,
-                self.gradient_input_colors.len() as usize,
+            1,
+            self.gradient_input_colors.len() as usize,
+            self.gradient_input_colors.len() as usize,
         );
         self.do_gradient(context);
     }
@@ -266,9 +282,9 @@ impl PaletteModel {
         }
         self.gradient_input_colors.pop();
         self.select.ranges[2] = SelectRange::new(
-                1,
-                self.gradient_input_colors.len() as usize,
-                self.gradient_input_colors.len() as usize,
+            1,
+            self.gradient_input_colors.len() as usize,
+            self.gradient_input_colors.len() as usize,
         );
         self.do_gradient(context);
     }
@@ -294,6 +310,10 @@ impl PaletteModel {
                     self.select.ranges[1].x,
                     0,
                 );
+            }
+            PaletteState::Random => {
+                self.main_color = self.random_colors
+                    [self.select.cur().y * self.select.cur().width + self.select.cur().x];
             }
             PaletteState::Gradient => match self.select.area {
                 0..=1 => {
@@ -356,7 +376,15 @@ impl PaletteModel {
                 self.update_main_color(context);
                 event_emit("Palette.RedrawPicker");
             }
-            PaletteState::Random => {}
+            PaletteState::Random => {
+                self.select.clear();
+                let w = RANDOM_X as usize;
+                let h = RANDOM_Y as usize;
+                self.select.add_range(SelectRange::new(w, h, w * h));
+                self.do_random(context);
+                self.update_main_color(context);
+                event_emit("Palette.RedrawRandom");
+            }
             PaletteState::Gradient => {
                 self.select.clear();
                 let w = PICKER_COUNT_X_GRADIENT as usize;
@@ -375,8 +403,8 @@ impl PaletteModel {
                     GRADIENT_Y as usize,
                     GRADIENT_COUNT as usize,
                 ));
-                self.update_main_color(context);
                 self.do_gradient(context);
+                self.update_main_color(context);
                 event_emit("Palette.RedrawPicker");
             }
             PaletteState::Smart => {}
@@ -445,20 +473,19 @@ impl Model for PaletteModel {
             match e {
                 Event::Key(key) => match key.code {
                     KeyCode::Char('1') => {
-                        context.state = PaletteState::NameA as u8;
-                        self.switch_state(context, 0);
+                        self.switch_state(context, PaletteState::NameA as u8);
                     }
                     KeyCode::Char('2') => {
-                        context.state = PaletteState::NameB as u8;
-                        self.switch_state(context, 1);
+                        self.switch_state(context, PaletteState::NameB as u8);
                     }
                     KeyCode::Char('3') => {
-                        context.state = PaletteState::Picker as u8;
-                        self.switch_state(context, 2);
+                        self.switch_state(context, PaletteState::Picker as u8);
+                    }
+                    KeyCode::Char('4') => {
+                        self.switch_state(context, PaletteState::Random as u8);
                     }
                     KeyCode::Char('5') => {
-                        context.state = PaletteState::Gradient as u8;
-                        self.switch_state(context, 4);
+                        self.switch_state(context, PaletteState::Gradient as u8);
                         event_emit("Palette.RedrawGradient");
                     }
                     KeyCode::Char('a') => {

@@ -94,6 +94,14 @@ impl PaletteRender {
             panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", i));
         }
 
+        // color random in layer 3
+        for y in 0..RANDOM_Y {
+            for x in 0..RANDOM_X {
+                let pl = Sprite::new(ADJX + x * C_WIDTH + 1, ADJY + y, C_WIDTH - 1, 1);
+                panel.add_layer_sprite(pl, "3", &format!("random{}", y * RANDOM_X + x));
+            }
+        }
+
         // color picker in layer4
         for y in 0..PICKER_COUNT_Y {
             for x in 0..PICKER_COUNT_X_GRADIENT {
@@ -128,6 +136,7 @@ impl PaletteRender {
         event_register("Palette.RedrawMainColor", "draw_main_color");
         event_register("Palette.RedrawPicker", "draw_picker");
         event_register("Palette.RedrawGradient", "draw_gradient");
+        event_register("Palette.RedrawRandom", "draw_random");
 
         Self { panel }
     }
@@ -144,6 +153,23 @@ impl PaletteRender {
                 let cr = d.named_colors[idx].1;
                 let color = Color::Professional(cr);
                 pl.set_color_str(0, 0, "", Color::Green, color);
+                pl.set_pos(
+                    2 + d.select.cur().x as u16 * C_WIDTH,
+                    2 + d.select.cur().y as u16,
+                );
+                for i in 1..5 {
+                    let pl = self
+                        .panel
+                        .get_layer_sprite("select", &format!("cursor{}", i));
+                    pl.set_hidden(true);
+                }
+            }
+            PaletteState::Random => {
+                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let idx = d.select.cur().y * RANDOM_X as usize
+                    + d.select.cur().x;
+                let cr = d.random_colors[idx];
+                pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 pl.set_pos(
                     2 + d.select.cur().x as u16 * C_WIDTH,
                     2 + d.select.cur().y as u16,
@@ -323,6 +349,26 @@ impl PaletteRender {
                 } else {
                     pl.set_hidden(true);
                 }
+            }
+        }
+    }
+
+    pub fn draw_random<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
+        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+        if ctx.state != 3 {
+            return;
+        }
+        for y in 0..RANDOM_Y {
+            for x in 0..RANDOM_X {
+                let i = y * RANDOM_X + x;
+                let pl = self.panel.get_layer_sprite("3", &format!("random{}", i));
+                pl.set_color_str(
+                    0,
+                    0,
+                    &format!(" {:width$}", " ", width = C_WIDTH as usize - 1),
+                    Color::Reset,
+                    Color::Professional(d.random_colors[i as usize]),
+                );
             }
         }
     }
@@ -546,6 +592,9 @@ impl Render for PaletteRender {
         }
         if event_check("Palette.RedrawGradient", "draw_gradient") {
             self.draw_gradient(context, data);
+        }
+        if event_check("Palette.RedrawRandom", "draw_random") {
+            self.draw_random(context, data);
         }
     }
 

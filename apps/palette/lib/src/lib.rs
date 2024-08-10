@@ -3,10 +3,12 @@
 //
 #![allow(dead_code)]
 use lazy_static::lazy_static;
-use rust_pixel::render::style::{delta_e_ciede2000, ColorPro, ColorGradient, ColorSpace::*, Fraction};
+use log::info;
+use rust_pixel::render::style::{
+    delta_e_ciede2000, ColorData, ColorGradient, ColorPro, ColorSpace::*, Fraction,
+};
 use rust_pixel::util::Rand;
 use std::collections::HashMap;
-use log::info;
 
 static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 139] = [
     ("aliceblue", 240, 248, 255),
@@ -166,7 +168,7 @@ lazy_static! {
             rgb_index.insert(rgb, i);
         }
         rgb_index
-    }; 
+    };
 }
 
 pub fn find_similar_colors(color: &ColorPro) -> (usize, usize, usize) {
@@ -203,6 +205,17 @@ pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<C
             .sample(position, OKLchA)
             .expect("gradient color");
         let cp = ColorPro::from_space(OKLchA, color);
+        output_colors.push(cp);
+    }
+}
+
+pub fn random(count: usize, rnd: &mut Rand, output_colors: &mut Vec<ColorPro>) {
+    output_colors.clear();
+    for _i in 0..count {
+        let h = 360.0 * rnd.gen_range(0.0, 1.0);
+        let s = 0.2 + 0.6 * rnd.gen_range(0.0, 1.0);
+        let l = 0.3 + 0.4 * rnd.gen_range(0.0, 1.0);
+        let cp = ColorPro::from_space(HSLA, ColorData { v: [h, s, l, 1.0] });
         output_colors.push(cp);
     }
 }

@@ -52,24 +52,31 @@ use std::ops::{Index, IndexMut};
 // use log::info;
 use ColorSpace::*;
 
+/// google hct color_space
 mod hct;
 use hct::*;
 
+/// rgba, linear_rgba color_space
 mod rgb;
 use rgb::*;
 
+/// hsv, hsl, hwa
 mod hsv;
 use hsv::*;
 
+/// lab, lch, oklab, oklch
 mod lab;
 use lab::*;
 
+/// cmyk
 mod cmyk;
 use cmyk::*;
 
+/// color delta_e 
 mod delta;
 pub use delta::*;
 
+/// color gradient
 mod gradient;
 pub use gradient::*;
 
