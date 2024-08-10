@@ -17,6 +17,11 @@
 [FAQ]: doc/faq.md
 [TODO]: doc/todo.md
 
+#### If you have previously installed an old version before 4.0, you need to redeploy the cargo-pixel tool.
+```
+$ cargo install --path tools/cargo-pixel --root ~/.cargo
+```
+
 RustPixel is a **2D game engine** & **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
 It is suitable for creating **2D pixel-style games** and developing **terminal applications**.<br>
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
