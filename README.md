@@ -17,7 +17,8 @@
 [FAQ]: doc/faq.md
 [TODO]: doc/todo.md
 
-##### If you have previously installed an old version before 4.0, you need to redeploy the cargo-pixel tool.
+##### !!! Special reminder !!!
+If you have previously installed an old version before 4.0, you need to redeploy the cargo-pixel tool.
 ```
 $ cargo install --path tools/cargo-pixel --root ~/.cargo
 ```
