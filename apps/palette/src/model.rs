@@ -1,6 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+use crate::select::*;
 use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -15,7 +16,6 @@ use rust_pixel::{
     render::style::{ColorPro, ColorSpace, ColorSpace::*, COLOR_SPACE_COUNT},
 };
 use std::any::Any;
-use crate::select::*;
 
 pub const PALETTEW: u16 = 80;
 pub const PALETTEH: u16 = 40;
@@ -449,7 +449,10 @@ pub fn get_color_info(c: ColorPro, idx: u16) -> String {
                     COLORS_WITH_NAME[*cp].0.to_string(),
                 )
             } else {
-                format!("#{:02X}{:02X}{:02X}", rgb.0, rgb.1, rgb.2)
+                format!(
+                    "#{:02X}{:02X}{:02X} {},{},{} {:20}",
+                    rgb.0, rgb.1, rgb.2, rgb.0, rgb.1, rgb.2, " "
+                )
             }
         }
         1..=8 => {
