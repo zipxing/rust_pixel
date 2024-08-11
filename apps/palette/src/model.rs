@@ -187,7 +187,7 @@ impl PaletteModel {
                     0,
                 );
             }
-            PaletteState::Random => {
+            PaletteState::Random | PaletteState::Golden => {
                 self.main_color = self.random_colors
                     [self.select.cur().y * self.select.cur().width + self.select.cur().x];
             }
@@ -213,7 +213,6 @@ impl PaletteModel {
                 }
                 _ => {}
             },
-            _ => {}
         }
         // find similar colors by ciede2000...
         self.main_color_similar = find_similar_colors(&self.main_color);
