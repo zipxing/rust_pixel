@@ -390,7 +390,6 @@ impl Model for PaletteModel {
                     }
                     KeyCode::Down => {
                         self.select.cur().forward_y();
-                        info!("down.......!!!!!!!!");
                         self.update_main_color(context);
                     }
                     KeyCode::Left => {
@@ -441,7 +440,10 @@ pub fn get_color_info(c: ColorPro, idx: u16) -> String {
             let rgb = c.get_srgba_u8();
             if let Some(cp) = COLORS_WITH_NAME_RGB_INDEX.get(&rgb) {
                 format!(
-                    "#{:02X}{:02X}{:02X} {:20}",
+                    "#{:02X}{:02X}{:02X} {},{},{} {:20}",
+                    rgb.0,
+                    rgb.1,
+                    rgb.2,
                     rgb.0,
                     rgb.1,
                     rgb.2,
