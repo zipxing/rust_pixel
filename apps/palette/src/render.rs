@@ -109,7 +109,7 @@ impl PaletteRender {
         // color random in layer 3
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
-                let pl = Sprite::new(ADJX + x * C_WIDTH + 1, ADJY + y, C_WIDTH - 1, 1);
+                let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y * 2, RANDOM_W - 1, 1);
                 panel.add_layer_sprite(pl, "3", &format!("random{}", y * RANDOM_X + x));
             }
         }
@@ -117,7 +117,7 @@ impl PaletteRender {
         // color golden in layer 5
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
-                let pl = Sprite::new(ADJX + x * C_WIDTH + 1, ADJY + y, C_WIDTH - 1, 1);
+                let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y * 2, RANDOM_W - 1, 1);
                 panel.add_layer_sprite(pl, "5", &format!("random{}", y * RANDOM_X + x));
             }
         }
@@ -190,7 +190,7 @@ impl PaletteRender {
                 let cr = d.random_colors[idx];
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 pl.set_pos(
-                    2 + d.select.cur().x as u16 * C_WIDTH,
+                    1 + d.select.cur().x as u16 * RANDOM_W,
                     2 + d.select.cur().y as u16,
                 );
                 for i in 1..5 {
