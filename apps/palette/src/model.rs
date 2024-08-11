@@ -5,7 +5,7 @@ use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use palette_lib::{
-    find_similar_colors, gradient, random, PaletteData, COLORS_WITH_NAME,
+    find_similar_colors, golden, gradient, random, PaletteData, COLORS_WITH_NAME,
     COLORS_WITH_NAME_RGB_INDEX,
 };
 use rust_pixel::{
@@ -23,7 +23,7 @@ pub const MENUX: u16 = 12;
 pub const MENUY: u16 = 0;
 pub const MENUW: u16 = 70;
 pub const RANDOM_X: u16 = 4;
-pub const RANDOM_Y: u16 = 5;
+pub const RANDOM_Y: u16 = 3;
 pub const GRADIENT_X: u16 = 1;
 pub const GRADIENT_Y: u16 = 19;
 pub const GRADIENT_INPUT_COUNT: u16 = 8;
@@ -47,7 +47,7 @@ pub enum PaletteState {
     Picker,
     Random,
     Gradient,
-    Smart,
+    Golden,
 }
 
 pub struct PaletteModel {
@@ -89,6 +89,17 @@ impl PaletteModel {
             return;
         }
         random(
+            RANDOM_X as usize * RANDOM_Y as usize,
+            &mut self.data.rand,
+            &mut self.random_colors,
+        );
+    }
+
+    fn do_golden(&mut self, context: &mut Context) {
+        if context.state != PaletteState::Golden as u8 {
+            return;
+        }
+        golden(
             RANDOM_X as usize * RANDOM_Y as usize,
             &mut self.data.rand,
             &mut self.random_colors,
@@ -271,7 +282,15 @@ impl PaletteModel {
                 self.update_main_color(context);
                 event_emit("Palette.RedrawPicker");
             }
-            PaletteState::Smart => {}
+            PaletteState::Golden => {
+                self.select.clear();
+                let w = RANDOM_X as usize;
+                let h = RANDOM_Y as usize;
+                self.select.add_range(SelectRange::new(w, h, w * h));
+                self.do_golden(context);
+                self.update_main_color(context);
+                event_emit("Palette.RedrawRandom");
+            }
         }
         event_emit("Palette.RedrawMenu");
         event_emit("Palette.RedrawPanel");
@@ -352,6 +371,9 @@ impl Model for PaletteModel {
                         self.switch_state(context, PaletteState::Gradient as u8);
                         event_emit("Palette.RedrawGradient");
                     }
+                    KeyCode::Char('6') => {
+                        self.switch_state(context, PaletteState::Golden as u8);
+                    }
                     KeyCode::Char('a') => {
                         self.add_gradient_input(context);
                     }
@@ -430,10 +452,11 @@ pub fn get_color_info(c: ColorPro, idx: u16) -> String {
         }
         1..=8 => {
             let display_space = [2, 4, 6, 7, 8, 9, 11, 12];
+            let cidx = display_space[idx as usize - 1];
             format!(
                 "{} :{:?}",
-                ColorSpace::from_usize(display_space[idx as usize - 1]).unwrap(),
-                c.space_matrix[idx as usize].unwrap()
+                ColorSpace::from_usize(cidx).unwrap(),
+                c.space_matrix[cidx].unwrap()
             )
         }
         _ => "".to_string(),

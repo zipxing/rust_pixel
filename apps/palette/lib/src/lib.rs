@@ -220,6 +220,20 @@ pub fn random(count: usize, rnd: &mut Rand, output_colors: &mut Vec<ColorPro>) {
     }
 }
 
+pub fn golden(count: usize, rnd: &mut Rand, output_colors: &mut Vec<ColorPro>) {
+    output_colors.clear();
+    let golden = 0.618034f64;
+    let mut h = rnd.gen_range(0.0, 1.0);
+    let s = 0.5;
+    let v = 0.95;
+    for _i in 0..count {
+        h += golden;
+        h %= 1.0;
+        let cp = ColorPro::from_space(HSVA, ColorData { v: [h * 360.0, s, v, 1.0] });
+        output_colors.push(cp);
+    }
+}
+
 pub struct PaletteData {
     pub rand: Rand,
     pub pool: Vec<u8>,

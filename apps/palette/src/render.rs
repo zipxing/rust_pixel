@@ -61,10 +61,22 @@ impl PaletteRender {
         }
 
         // creat 6 state layers
+        let help_msg = [
+            "← ↑ → ↓ : select named colors",
+            "← ↑ → ↓ : select named colors",
+            "h : hsv picker     r : rgb picker     tab ← ↑ → ↓ : change value",
+            "← ↑ → ↓ : select random colors",
+            "a : add input color  d : delete input color  tab ← ↑ → ↓ : change value",
+            "← ↑ → ↓ : select PHI(golden ratio) colors",
+        ];
         for i in 0..6 {
-            panel.add_layer(&format!("{}", i));
+            let ls = format!("{}", i);
+            panel.add_layer(&ls);
+            let mut pl = Sprite::new(ADJX + 1, ADJY + 30, C_WIDTH * 4, 1);
+            pl.set_color_str(0, 0, help_msg[i], Color::Gray, Color::Reset);
+            panel.add_layer_sprite(pl, &ls, "help_msg");
             if i != 0 {
-                panel.deactive_layer(&format!("{}", i));
+                panel.deactive_layer(&ls);
             }
         }
 
@@ -99,6 +111,14 @@ impl PaletteRender {
             for x in 0..RANDOM_X {
                 let pl = Sprite::new(ADJX + x * C_WIDTH + 1, ADJY + y, C_WIDTH - 1, 1);
                 panel.add_layer_sprite(pl, "3", &format!("random{}", y * RANDOM_X + x));
+            }
+        }
+
+        // color golden in layer 5
+        for y in 0..RANDOM_Y {
+            for x in 0..RANDOM_X {
+                let pl = Sprite::new(ADJX + x * C_WIDTH + 1, ADJY + y, C_WIDTH - 1, 1);
+                panel.add_layer_sprite(pl, "5", &format!("random{}", y * RANDOM_X + x));
             }
         }
 
@@ -163,7 +183,7 @@ impl PaletteRender {
                     pl.set_hidden(true);
                 }
             }
-            PaletteState::Random => {
+            PaletteState::Random | PaletteState::Golden => {
                 let pl = self.panel.get_layer_sprite("select", "cursor0");
                 let idx = d.select.cur().y * RANDOM_X as usize
                     + d.select.cur().x;
@@ -241,6 +261,14 @@ impl PaletteRender {
                     } else {
                         pl.set_hidden(true);
                     }
+                } else {
+                    for i in 3..5 {
+                    let pl = self
+                        .panel
+                        .get_layer_sprite("select", &format!("cursor{}", i));
+                    pl.set_hidden(true);
+                }
+
                 }
                 let pl = self.panel.get_layer_sprite("select", "cursor1");
                 let cr = get_pick_color(
@@ -296,7 +324,6 @@ impl PaletteRender {
                 pl.set_pos((d.select.ranges[1].x / 4) as u16 + 2, 20);
                 pl.set_hidden(false);
             }
-            _ => {}
         }
     }
 
@@ -354,13 +381,14 @@ impl PaletteRender {
 
     pub fn draw_random<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        if ctx.state != 3 {
+        if ctx.state != 3 && ctx.state != 5 {
             return;
         }
+        let ls = format!("{}", ctx.state);
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
                 let i = y * RANDOM_X + x;
-                let pl = self.panel.get_layer_sprite("3", &format!("random{}", i));
+                let pl = self.panel.get_layer_sprite(&ls, &format!("random{}", i));
                 pl.set_color_str(
                     0,
                     0,
@@ -518,33 +546,34 @@ impl PaletteRender {
         let mb = self.panel.get_layer_sprite("main", "menu");
         let cst = ctx.state as usize;
         let mut xoff = 0u16;
+        let mcolor = [240, 120, 235, 0, 7, 120];
         if cst == 0 {
-            mb.set_color_str(xoff, 0, "", Color::Indexed(236), Color::Indexed(120));
+            mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[0]), Color::Indexed(mcolor[1]));
         } else {
-            mb.set_color_str(xoff, 0, "", Color::Indexed(8), Color::Indexed(236));
+            mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[2]), Color::Indexed(mcolor[0]));
         }
         for i in 0..6 {
             let fg = if cst == i {
-                Color::Indexed(0)
+                Color::Indexed(mcolor[3])
             } else {
-                Color::Indexed(7)
+                Color::Indexed(mcolor[4])
             };
             let bg = if cst == i {
-                Color::Indexed(120)
+                Color::Indexed(mcolor[1])
             } else {
-                Color::Indexed(236)
+                Color::Indexed(mcolor[0])
             };
             let menu_str = &format!(" {} {:?} ", i + 1, PaletteState::from_usize(i).unwrap());
             if cst == i {
-                mb.set_color_str(xoff, 0, "", Color::Indexed(236), bg);
+                mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[0]), bg);
             }
             xoff += 1;
             mb.set_color_str(xoff, 0, menu_str, fg, bg);
             xoff += menu_str.len() as u16;
             if cst == i {
-                mb.set_color_str(xoff, 0, "", bg, Color::Indexed(236));
+                mb.set_color_str(xoff, 0, "", bg, Color::Indexed(mcolor[0]));
             } else {
-                mb.set_color_str(xoff, 0, "", Color::Indexed(8), bg);
+                mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[2]), bg);
             }
         }
     }
