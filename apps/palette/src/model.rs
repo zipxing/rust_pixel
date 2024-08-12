@@ -53,6 +53,15 @@ pub enum PaletteState {
     Golden,
 }
 
+pub enum MouseArea {
+    Menu(u16), // x
+    Named(u16, u16), // x, y
+    Picker(u16, u16, u16, u16),  // picker type, area, x, y
+    Random(u16, u16), // x, y
+    Gradient(u16, u16, u16), // area, x, y
+    Golden(u16, u16), // x, y
+}
+
 pub struct PaletteModel {
     pub data: PaletteData,
     pub card: u8,
@@ -85,6 +94,10 @@ impl PaletteModel {
             picker_colors: vec![],
             select: Select::new(),
         }
+    }
+
+    fn mouse_in(&self, x: u16, y: u16) -> Option<MouseArea> {
+        None
     }
 
     fn do_random(&mut self, context: &mut Context) {
@@ -378,6 +391,39 @@ impl Model for PaletteModel {
         let es = context.input_events.clone();
         for e in &es {
             match e {
+                Event::Mouse(mou) => match self.mouse_in(mou.column, mou.row) {
+                    Some(MouseArea::Menu(i)) => {
+                        self.switch_state(context, PaletteState::from_usize(i as usize).unwrap());
+                    }
+                    Some(MouseArea::Named(a, b)) => {
+                        self.select.cur().x = a as usize;
+                        self.select.cur().y = b as usize;
+                        self.update_main_color(context);
+                    }
+                    Some(MouseArea::Picker(_a, b, c, d)) => {
+                        self.select.area = b as usize;
+                        self.select.ranges[b as usize].x = c as usize;
+                        self.select.ranges[b as usize].y = d as usize;
+                        self.update_main_color(context);
+                    }
+                    Some(MouseArea::Random(a, b)) => {
+                        self.select.cur().x = a as usize;
+                        self.select.cur().y = b as usize;
+                        self.update_main_color(context);
+                    }
+                    Some(MouseArea::Gradient(b, c, d)) => {
+                        self.select.area = b as usize;
+                        self.select.ranges[b as usize].x = c as usize;
+                        self.select.ranges[b as usize].y = d as usize;
+                        self.update_main_color(context);
+                    }
+                    Some(MouseArea::Golden(a, b)) => {
+                        self.select.cur().x = a as usize;
+                        self.select.cur().y = b as usize;
+                        self.update_main_color(context);
+                    }
+                    _ => {}
+                },
                 Event::Key(key) => match key.code {
                     KeyCode::Char('1') => {
                         self.switch_state(context, NameA);
@@ -404,7 +450,6 @@ impl Model for PaletteModel {
                     }
                     KeyCode::Char('5') => {
                         self.switch_state(context, Golden);
-                        event_emit("Palette.RedrawGradient");
                     }
                     KeyCode::Char('a') => {
                         self.add_gradient_input(context);
