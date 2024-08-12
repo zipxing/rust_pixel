@@ -11,7 +11,7 @@ use palette_lib::{
 };
 use rust_pixel::{
     context::Context,
-    event::{event_emit, Event, KeyCode},
+    event::{event_emit, Event, KeyCode, MouseButton, MouseEventKind::*},
     game::Model,
     render::style::{ColorPro, ColorSpace, ColorSpace::*, COLOR_SPACE_COUNT},
 };
@@ -54,12 +54,12 @@ pub enum PaletteState {
 }
 
 pub enum MouseArea {
-    Menu(u16), // x
-    Named(u16, u16), // x, y
-    Picker(u16, u16, u16, u16),  // picker type, area, x, y
-    Random(u16, u16), // x, y
-    Gradient(u16, u16, u16), // area, x, y
-    Golden(u16, u16), // x, y
+    Menu(u16),                  // x
+    Named(u16, u16),            // x, y
+    Picker(u16, u16, u16, u16), // picker type, area, x, y
+    Random(u16, u16),           // x, y
+    Gradient(u16, u16, u16),    // area, x, y
+    Golden(u16, u16),           // x, y
 }
 
 pub struct PaletteModel {
@@ -97,6 +97,23 @@ impl PaletteModel {
     }
 
     fn mouse_in(&self, x: u16, y: u16) -> Option<MouseArea> {
+        // Menu(u16)
+        if y == 0 {
+            let menuidx = match x {
+                0..=22 => 0,
+                23..=33 => 1,
+                34..=44 => 2,
+                45..=57 => 3,
+                58.. => 4,
+            };
+            return Some(MouseArea::Menu(menuidx));
+        }
+        // Named(u16, u16),            // x, y
+        // Picker(u16, u16, u16, u16), // picker type, area, x, y
+        // Random(u16, u16),           // x, y
+        // Gradient(u16, u16, u16),    // area, x, y
+        // Golden(u16, u16),           // x, y
+        info!("mouse...x{}, y{}", x, y);
         None
     }
 
@@ -391,39 +408,46 @@ impl Model for PaletteModel {
         let es = context.input_events.clone();
         for e in &es {
             match e {
-                Event::Mouse(mou) => match self.mouse_in(mou.column, mou.row) {
-                    Some(MouseArea::Menu(i)) => {
-                        self.switch_state(context, PaletteState::from_usize(i as usize).unwrap());
+                Event::Mouse(mou) => {
+                    if mou.kind == Up(MouseButton::Left) {
+                        match self.mouse_in(mou.column, mou.row) {
+                            Some(MouseArea::Menu(i)) => {
+                                self.switch_state(
+                                    context,
+                                    PaletteState::from_usize(i as usize).unwrap(),
+                                );
+                            }
+                            Some(MouseArea::Named(a, b)) => {
+                                self.select.cur().x = a as usize;
+                                self.select.cur().y = b as usize;
+                                self.update_main_color(context);
+                            }
+                            Some(MouseArea::Picker(_a, b, c, d)) => {
+                                self.select.area = b as usize;
+                                self.select.ranges[b as usize].x = c as usize;
+                                self.select.ranges[b as usize].y = d as usize;
+                                self.update_main_color(context);
+                            }
+                            Some(MouseArea::Random(a, b)) => {
+                                self.select.cur().x = a as usize;
+                                self.select.cur().y = b as usize;
+                                self.update_main_color(context);
+                            }
+                            Some(MouseArea::Gradient(b, c, d)) => {
+                                self.select.area = b as usize;
+                                self.select.ranges[b as usize].x = c as usize;
+                                self.select.ranges[b as usize].y = d as usize;
+                                self.update_main_color(context);
+                            }
+                            Some(MouseArea::Golden(a, b)) => {
+                                self.select.cur().x = a as usize;
+                                self.select.cur().y = b as usize;
+                                self.update_main_color(context);
+                            }
+                            _ => {}
+                        }
                     }
-                    Some(MouseArea::Named(a, b)) => {
-                        self.select.cur().x = a as usize;
-                        self.select.cur().y = b as usize;
-                        self.update_main_color(context);
-                    }
-                    Some(MouseArea::Picker(_a, b, c, d)) => {
-                        self.select.area = b as usize;
-                        self.select.ranges[b as usize].x = c as usize;
-                        self.select.ranges[b as usize].y = d as usize;
-                        self.update_main_color(context);
-                    }
-                    Some(MouseArea::Random(a, b)) => {
-                        self.select.cur().x = a as usize;
-                        self.select.cur().y = b as usize;
-                        self.update_main_color(context);
-                    }
-                    Some(MouseArea::Gradient(b, c, d)) => {
-                        self.select.area = b as usize;
-                        self.select.ranges[b as usize].x = c as usize;
-                        self.select.ranges[b as usize].y = d as usize;
-                        self.update_main_color(context);
-                    }
-                    Some(MouseArea::Golden(a, b)) => {
-                        self.select.cur().x = a as usize;
-                        self.select.cur().y = b as usize;
-                        self.update_main_color(context);
-                    }
-                    _ => {}
-                },
+                }
                 Event::Key(key) => match key.code {
                     KeyCode::Char('1') => {
                         self.switch_state(context, NameA);
