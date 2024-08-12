@@ -219,7 +219,7 @@ impl PaletteRender {
                 let bcs = [Color::Red, Color::Green, Color::Blue];
                 for i in 0..3 {
                     let pl = self.panel.get_layer_sprite("select", &format!("cursor{}", i+1));
-                    pl.set_color_str(0, 0, "∙", Color::White, bcs[i]);
+                    pl.set_color_str(0, 0, "∙", Color::Black, bcs[i]);
                     let x = d.select.ranges[i].x;
                     pl.set_pos((x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + 2, 9 + i as u16 * 2);
                     pl.set_hidden(false);
@@ -591,7 +591,7 @@ impl PaletteRender {
             Golden => 4,
         };
         let mut xoff = 0u16;
-        let mcolor = [240, 120, 235, 0, 7, 120];
+        let mcolor = [237, 120, 245, 0, 7, 120];
         if cst == 0 {
             mb.set_color_str(
                 xoff,
