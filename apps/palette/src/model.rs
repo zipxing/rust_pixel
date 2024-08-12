@@ -96,7 +96,8 @@ impl PaletteModel {
         }
     }
 
-    fn mouse_in(&self, x: u16, y: u16) -> Option<MouseArea> {
+    fn mouse_in(&self, ctx: &Context, x: u16, y: u16) -> Option<MouseArea> {
+        let st = PaletteState::from_usize(ctx.state as usize).unwrap();
         // Menu(u16)
         if y == 0 {
             let menuidx = match x {
@@ -107,6 +108,10 @@ impl PaletteModel {
                 58.. => 4,
             };
             return Some(MouseArea::Menu(menuidx));
+        }
+        match st {
+            NameA | NameB => {}
+            _ => {}
         }
         // Named(u16, u16),            // x, y
         // Picker(u16, u16, u16, u16), // picker type, area, x, y
@@ -410,7 +415,7 @@ impl Model for PaletteModel {
             match e {
                 Event::Mouse(mou) => {
                     if mou.kind == Up(MouseButton::Left) {
-                        match self.mouse_in(mou.column, mou.row) {
+                        match self.mouse_in(context, mou.column, mou.row) {
                             Some(MouseArea::Menu(i)) => {
                                 self.switch_state(
                                     context,
