@@ -16,6 +16,7 @@ use rust_pixel::{
     render::style::{ColorPro, ColorSpace, ColorSpace::*, COLOR_SPACE_COUNT},
 };
 use std::any::Any;
+use PaletteState::*;
 
 pub const PALETTEW: u16 = 80;
 pub const PALETTEH: u16 = 40;
@@ -45,7 +46,8 @@ pub const C_WIDTH: u16 = 19;
 pub enum PaletteState {
     NameA,
     NameB,
-    Picker,
+    PickerA,
+    PickerB,
     Random,
     Gradient,
     Golden,
@@ -86,7 +88,7 @@ impl PaletteModel {
     }
 
     fn do_random(&mut self, context: &mut Context) {
-        if context.state != PaletteState::Random as u8 {
+        if context.state != Random as u8 {
             return;
         }
         random(
@@ -97,7 +99,7 @@ impl PaletteModel {
     }
 
     fn do_golden(&mut self, context: &mut Context) {
-        if context.state != PaletteState::Golden as u8 {
+        if context.state != Golden as u8 {
             return;
         }
         golden(
@@ -108,7 +110,7 @@ impl PaletteModel {
     }
 
     fn do_gradient(&mut self, context: &mut Context) {
-        if context.state != PaletteState::Gradient as u8 {
+        if context.state != Gradient as u8 {
             return;
         }
         info!("do gradient..........");
@@ -127,7 +129,7 @@ impl PaletteModel {
     }
 
     fn add_gradient_input(&mut self, context: &mut Context) {
-        if context.state != PaletteState::Gradient as u8 {
+        if context.state != Gradient as u8 {
             return;
         }
         if self.gradient_input_colors.len() >= GRADIENT_INPUT_COUNT as usize {
@@ -150,7 +152,7 @@ impl PaletteModel {
     }
 
     fn del_gradient_input(&mut self, context: &mut Context) {
-        if context.state != PaletteState::Gradient as u8 {
+        if context.state != Gradient as u8 {
             return;
         }
         if self.gradient_input_colors.len() == 0 {
@@ -167,18 +169,18 @@ impl PaletteModel {
 
     fn update_main_color(&mut self, context: &mut Context) {
         match PaletteState::from_usize(context.state as usize).unwrap() {
-            PaletteState::NameA => {
+            NameA => {
                 self.main_color = self.named_colors
                     [self.select.cur().y * self.select.cur().width + self.select.cur().x]
                     .1;
             }
-            PaletteState::NameB => {
+            NameB => {
                 let idx = (COL_COUNT * ROW_COUNT) as usize
                     + self.select.cur().y * self.select.cur().width
                     + self.select.cur().x;
                 self.main_color = self.named_colors[idx].1;
             }
-            PaletteState::Picker => {
+            PickerA => {
                 self.main_color = get_pick_color(
                     PICKER_COUNT_X as usize,
                     self.select.ranges[0].x,
@@ -187,11 +189,24 @@ impl PaletteModel {
                     0,
                 );
             }
-            PaletteState::Random | PaletteState::Golden => {
+            PickerB => {
+                info!(
+                    "r...{}g...{}b...{}",
+                    self.select.ranges[0].x, self.select.ranges[1].x, self.select.ranges[2].x
+                );
+                self.main_color = get_pick_color(
+                    PICKER_COUNT_X as usize,
+                    self.select.ranges[0].x,
+                    self.select.ranges[1].x,
+                    self.select.ranges[2].x,
+                    2,
+                );
+            }
+            Random | Golden => {
                 self.main_color = self.random_colors
                     [self.select.cur().y * self.select.cur().width + self.select.cur().x];
             }
-            PaletteState::Gradient => match self.select.area {
+            Gradient => match self.select.area {
                 0..=1 => {
                     self.main_color = get_pick_color(
                         PICKER_COUNT_X_GRADIENT as usize,
@@ -221,10 +236,10 @@ impl PaletteModel {
         event_emit("Palette.RedrawPicker");
     }
 
-    fn switch_state(&mut self, context: &mut Context, st: u8) {
-        context.state = st;
-        match PaletteState::from_usize(st as usize).unwrap() {
-            PaletteState::NameA => {
+    fn switch_state(&mut self, context: &mut Context, st: PaletteState) {
+        context.state = st as u8;
+        match st {
+            NameA => {
                 self.select.clear();
                 self.select.add_range(SelectRange::new(
                     COL_COUNT as usize,
@@ -233,7 +248,7 @@ impl PaletteModel {
                 ));
                 self.update_main_color(context);
             }
-            PaletteState::NameB => {
+            NameB => {
                 self.select.clear();
                 self.select.add_range(SelectRange::new(
                     COL_COUNT as usize,
@@ -242,7 +257,7 @@ impl PaletteModel {
                 ));
                 self.update_main_color(context);
             }
-            PaletteState::Picker => {
+            PickerA => {
                 self.select.clear();
                 let w = PICKER_COUNT_X as usize;
                 let h = PICKER_COUNT_Y as usize;
@@ -251,7 +266,15 @@ impl PaletteModel {
                 self.update_main_color(context);
                 event_emit("Palette.RedrawPicker");
             }
-            PaletteState::Random => {
+            PickerB => {
+                self.select.clear();
+                self.select.add_range(SelectRange::new(256, 1, 256));
+                self.select.add_range(SelectRange::new(256, 1, 256));
+                self.select.add_range(SelectRange::new(256, 1, 256));
+                self.update_main_color(context);
+                event_emit("Palette.RedrawPicker");
+            }
+            Random => {
                 self.select.clear();
                 let w = RANDOM_X as usize;
                 let h = RANDOM_Y as usize;
@@ -260,7 +283,7 @@ impl PaletteModel {
                 self.update_main_color(context);
                 event_emit("Palette.RedrawRandom");
             }
-            PaletteState::Gradient => {
+            Gradient => {
                 self.select.clear();
                 let w = PICKER_COUNT_X_GRADIENT as usize;
                 let h = PICKER_COUNT_Y as usize;
@@ -282,7 +305,7 @@ impl PaletteModel {
                 self.update_main_color(context);
                 event_emit("Palette.RedrawPicker");
             }
-            PaletteState::Golden => {
+            Golden => {
                 self.select.clear();
                 let w = RANDOM_X as usize;
                 let h = RANDOM_Y as usize;
@@ -321,6 +344,7 @@ impl Model for PaletteModel {
             ColorPro::from_space_f64(SRGBA, 1.0, 0.0, 0.8, 1.0),
         ];
 
+        // init hsv picker
         for y in 0..PICKER_COUNT_X {
             for x in 0..PICKER_COUNT_Y {
                 let rx = (x as f64) / (PICKER_COUNT_X as f64);
@@ -347,7 +371,7 @@ impl Model for PaletteModel {
             }
         }
 
-        self.switch_state(context, 0);
+        self.switch_state(context, NameA);
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
@@ -356,23 +380,31 @@ impl Model for PaletteModel {
             match e {
                 Event::Key(key) => match key.code {
                     KeyCode::Char('1') => {
-                        self.switch_state(context, PaletteState::NameA as u8);
+                        self.switch_state(context, NameA);
+                    }
+                    KeyCode::Char('n') => {
+                        if context.state == NameA as u8 {
+                            self.switch_state(context, NameB);
+                        } else if context.state == NameB as u8 {
+                            self.switch_state(context, NameA);
+                        } else if context.state == PickerA as u8 {
+                            self.switch_state(context, PickerB);
+                        } else if context.state == PickerB as u8 {
+                            self.switch_state(context, PickerA);
+                        }
                     }
                     KeyCode::Char('2') => {
-                        self.switch_state(context, PaletteState::NameB as u8);
+                        self.switch_state(context, PickerA);
                     }
                     KeyCode::Char('3') => {
-                        self.switch_state(context, PaletteState::Picker as u8);
+                        self.switch_state(context, Random);
                     }
                     KeyCode::Char('4') => {
-                        self.switch_state(context, PaletteState::Random as u8);
+                        self.switch_state(context, Gradient);
                     }
                     KeyCode::Char('5') => {
-                        self.switch_state(context, PaletteState::Gradient as u8);
+                        self.switch_state(context, Golden);
                         event_emit("Palette.RedrawGradient");
-                    }
-                    KeyCode::Char('6') => {
-                        self.switch_state(context, PaletteState::Golden as u8);
                     }
                     KeyCode::Char('a') => {
                         self.add_gradient_input(context);
@@ -426,10 +458,14 @@ pub fn get_pick_color(width: usize, x0: usize, y0: usize, x1: usize, t: usize) -
     let s = 1.0 / width as f64 * x0 as f64;
     let v = 1.0 / PICKER_COUNT_Y as f64 * y0 as f64;
 
-    if t == 0 {
-        ColorPro::from_space_f64(HSVA, h, s, 1.0 - v, 1.0)
-    } else {
-        ColorPro::from_space_f64(HSVA, h, 1.0, 1.0, 1.0)
+    let r = x0 as f64;
+    let g = y0 as f64;
+    let b = x1 as f64;
+
+    match t {
+        0 => ColorPro::from_space_f64(HSVA, h, s, 1.0 - v, 1.0),
+        1 => ColorPro::from_space_f64(HSVA, h, 1.0, 1.0, 1.0),
+        2.. => ColorPro::from_space_f64(SRGBA, r / 255.0, g / 255.0, b / 255.0, 1.0),
     }
 }
 

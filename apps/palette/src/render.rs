@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+use crate::model::PaletteState::*;
 use crate::model::*;
 use log::info;
 use num_traits::FromPrimitive;
@@ -60,16 +61,17 @@ impl PaletteRender {
             }
         }
 
-        // creat 6 state layers
+        // creat 7 state layers
         let help_msg = [
             "← ↑ → ↓ : select named colors",
             "← ↑ → ↓ : select named colors",
+            "h : hsv picker     r : rgb picker     tab ← ↑ → ↓ : change value",
             "h : hsv picker     r : rgb picker     tab ← ↑ → ↓ : change value",
             "← ↑ → ↓ : select random colors",
             "a : add input color  d : delete input color  tab ← ↑ → ↓ : change value",
             "← ↑ → ↓ : select PHI(golden ratio) colors",
         ];
-        for i in 0..6 {
+        for i in 0..7 {
             let ls = format!("{}", i);
             panel.add_layer(&ls);
             let mut pl = Sprite::new(ADJX + 1, ADJY + 30, C_WIDTH * 4, 1);
@@ -106,41 +108,51 @@ impl PaletteRender {
             panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", i));
         }
 
-        // color random in layer 3
-        for y in 0..RANDOM_Y {
-            for x in 0..RANDOM_X {
-                let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y, RANDOM_W - 1, 1);
-                panel.add_layer_sprite(pl, "3", &format!("random{}", y * RANDOM_X + x));
+        // color picker in layer3
+        let pcs = [Color::Red, Color::Green, Color::Blue];
+        for y in 0..3 {
+            for x in 0..PICKER_COUNT_X {
+                let mut pl = Sprite::new(2 + x, 9 + y * 2, 1, 1);
+                pl.set_color_str(0, 0, " ", Color::Reset, pcs[y as usize]);
+                panel.add_layer_sprite(pl, "3", &format!("rgb_pick_{}_{}", y, x));
             }
         }
 
-        // color golden in layer 5
+        // color random in layer 4
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
                 let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y, RANDOM_W - 1, 1);
-                panel.add_layer_sprite(pl, "5", &format!("random{}", y * RANDOM_X + x));
+                panel.add_layer_sprite(pl, "4", &format!("random{}", y * RANDOM_X + x));
             }
         }
 
-        // color picker in layer4
+        // color golden in layer 6
+        for y in 0..RANDOM_Y {
+            for x in 0..RANDOM_X {
+                let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y, RANDOM_W - 1, 1);
+                panel.add_layer_sprite(pl, "6", &format!("random{}", y * RANDOM_X + x));
+            }
+        }
+
+        // color picker in layer 5
         for y in 0..PICKER_COUNT_Y {
             for x in 0..PICKER_COUNT_X_GRADIENT {
                 let pl = Sprite::new(ADJX + x, ADJY + y, 1, 1);
-                panel.add_layer_sprite(pl, "4", &format!("pick{}", y * PICKER_COUNT_X + x));
+                panel.add_layer_sprite(pl, "5", &format!("pick{}", y * PICKER_COUNT_X + x));
             }
         }
         for i in 0..PICKER_COUNT_X_GRADIENT {
             let pl = Sprite::new(2 + i, 20, 1, 1);
-            panel.add_layer_sprite(pl, "4", &format!("hsv_pick{}", i));
+            panel.add_layer_sprite(pl, "5", &format!("hsv_pick{}", i));
         }
         for i in 0..GRADIENT_INPUT_COUNT {
             let pl = Sprite::new(60, i as u16 + ADJY, 8, 1);
-            panel.add_layer_sprite(pl, "4", &format!("gi_input{}", i));
+            panel.add_layer_sprite(pl, "5", &format!("gi_input{}", i));
         }
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
                 let pl = Sprite::new(67 + ADJX, y as u16 + ADJY, 9, 1);
-                panel.add_layer_sprite(pl, "4", &format!("gi{}", y * GRADIENT_X + x));
+                panel.add_layer_sprite(pl, "5", &format!("gi{}", y * GRADIENT_X + x));
             }
         }
 
@@ -165,7 +177,7 @@ impl PaletteRender {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
         let state = PaletteState::from_usize(ctx.state as usize).unwrap();
         match state {
-            PaletteState::NameA | PaletteState::NameB => {
+            NameA | NameB => {
                 let pl = self.panel.get_layer_sprite("select", "cursor0");
                 let idx = d.select.cur().y * COL_COUNT as usize
                     + d.select.cur().x
@@ -183,10 +195,9 @@ impl PaletteRender {
                     pl.set_hidden(true);
                 }
             }
-            PaletteState::Random | PaletteState::Golden => {
+            Random | Golden => {
                 let pl = self.panel.get_layer_sprite("select", "cursor0");
-                let idx = d.select.cur().y * RANDOM_X as usize
-                    + d.select.cur().x;
+                let idx = d.select.cur().y * RANDOM_X as usize + d.select.cur().x;
                 let cr = d.random_colors[idx];
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 pl.set_pos(
@@ -200,11 +211,25 @@ impl PaletteRender {
                     pl.set_hidden(true);
                 }
             }
-            PaletteState::Picker | PaletteState::Gradient => {
+            PickerB => {
                 let pl = self.panel.get_layer_sprite("select", "cursor0");
                 let idx = d.select.area;
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
-                if state == PaletteState::Picker {
+                pl.set_pos(1, 9 + idx as u16 * 2);
+                let bcs = [Color::Red, Color::Green, Color::Blue];
+                for i in 0..3 {
+                    let pl = self.panel.get_layer_sprite("select", &format!("cursor{}", i+1));
+                    pl.set_color_str(0, 0, "∙", Color::White, bcs[i]);
+                    let x = d.select.ranges[i].x;
+                    pl.set_pos((x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + 2, 9 + i as u16 * 2);
+                    pl.set_hidden(false);
+                }
+            }
+            PickerA | Gradient => {
+                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let idx = d.select.area;
+                pl.set_color_str(0, 0, "", Color::Green, Color::Black);
+                if state == PickerA {
                     pl.set_pos(1, idx as u16 * 18 + 2);
                 } else {
                     if idx < 3 {
@@ -216,7 +241,7 @@ impl PaletteRender {
                         pl.set_pos(PICKER_COUNT_X_GRADIENT + 11, (idx - 1) as u16 % 2 * 18 + 2);
                     }
                 }
-                if state == PaletteState::Gradient {
+                if state == Gradient {
                     let pl = self.panel.get_layer_sprite("select", "cursor3");
                     if d.gradient_input_colors.len() != 0 {
                         let cr = d.gradient_input_colors[d.select.ranges[2].y];
@@ -263,12 +288,11 @@ impl PaletteRender {
                     }
                 } else {
                     for i in 3..5 {
-                    let pl = self
-                        .panel
-                        .get_layer_sprite("select", &format!("cursor{}", i));
-                    pl.set_hidden(true);
-                }
-
+                        let pl = self
+                            .panel
+                            .get_layer_sprite("select", &format!("cursor{}", i));
+                        pl.set_hidden(true);
+                    }
                 }
                 let pl = self.panel.get_layer_sprite("select", "cursor1");
                 let cr = get_pick_color(
@@ -330,7 +354,7 @@ impl PaletteRender {
     pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
         info!("draw_panel_clear....");
-        for i in 0..6 {
+        for i in 0..7 {
             if i != ctx.state as usize {
                 self.panel.deactive_layer(&format!("{}", i));
             } else {
@@ -341,11 +365,11 @@ impl PaletteRender {
 
     pub fn draw_gradient<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        if ctx.state != PaletteState::Gradient as u8 {
+        if ctx.state != Gradient as u8 {
             return;
         }
         for i in 0..GRADIENT_INPUT_COUNT {
-            let pl = self.panel.get_layer_sprite("4", &format!("gi_input{}", i));
+            let pl = self.panel.get_layer_sprite("5", &format!("gi_input{}", i));
             if i < d.gradient_input_colors.len() as u16 {
                 pl.set_hidden(false);
                 pl.set_color_str(
@@ -362,7 +386,7 @@ impl PaletteRender {
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
                 let idx = y * GRADIENT_X + x;
-                let pl = self.panel.get_layer_sprite("4", &format!("gi{}", idx));
+                let pl = self.panel.get_layer_sprite("5", &format!("gi{}", idx));
                 if idx < d.gradient_colors.len() as u16 {
                     pl.set_hidden(false);
                     pl.set_color_str(
@@ -381,7 +405,7 @@ impl PaletteRender {
 
     pub fn draw_random<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        if ctx.state != 3 && ctx.state != 5 {
+        if ctx.state != 4 && ctx.state != 6 {
             return;
         }
         let ls = format!("{}", ctx.state);
@@ -402,37 +426,51 @@ impl PaletteRender {
 
     pub fn draw_picker<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-        if ctx.state != 2 && ctx.state != 4 {
-            return;
-        }
-        let w = if ctx.state == 2 {
-            PICKER_COUNT_X
-        } else {
-            PICKER_COUNT_X_GRADIENT
-        };
-        info!("draw_picker....w={}", w);
-        for y in 0..PICKER_COUNT_Y {
-            for x in 0..w {
-                let pl = self.panel.get_layer_sprite(
-                    &format!("{}", ctx.state),
-                    &format!("pick{}", y * PICKER_COUNT_X + x),
-                );
+        let state = PaletteState::from_usize(ctx.state as usize).unwrap();
+        match state {
+            PickerA | Gradient => {
+                let w = if ctx.state == 2 {
+                    PICKER_COUNT_X
+                } else {
+                    PICKER_COUNT_X_GRADIENT
+                };
+                for y in 0..PICKER_COUNT_Y {
+                    for x in 0..w {
+                        let pl = self.panel.get_layer_sprite(
+                            &format!("{}", ctx.state),
+                            &format!("pick{}", y * PICKER_COUNT_X + x),
+                        );
 
-                let cr =
-                    get_pick_color(w as usize, x as usize, y as usize, d.select.ranges[1].x, 0);
+                        let cr = get_pick_color(
+                            w as usize,
+                            x as usize,
+                            y as usize,
+                            d.select.ranges[1].x,
+                            0,
+                        );
 
-                let color = Color::Professional(cr);
-                pl.set_color_str(0, 0, "  ", color, color);
-                pl.set_color_str(0, 0, "  ", color, color);
+                        let color = Color::Professional(cr);
+                        pl.set_color_str(0, 0, "  ", color, color);
+                        pl.set_color_str(0, 0, "  ", color, color);
+                    }
+                }
+                for i in 0..w {
+                    let pl = self
+                        .panel
+                        .get_layer_sprite(&format!("{}", ctx.state), &format!("hsv_pick{}", i));
+                    let cr = ColorPro::from_space_f64(
+                        HSVA,
+                        i as f64 * (360.0 / w as f64),
+                        1.0,
+                        1.0,
+                        1.0,
+                    );
+                    let color = Color::Professional(cr);
+                    pl.set_color_str(0, 0, " ", color, color);
+                }
             }
-        }
-        for i in 0..w {
-            let pl = self
-                .panel
-                .get_layer_sprite(&format!("{}", ctx.state), &format!("hsv_pick{}", i));
-            let cr = ColorPro::from_space_f64(HSVA, i as f64 * (360.0 / w as f64), 1.0, 1.0, 1.0);
-            let color = Color::Professional(cr);
-            pl.set_color_str(0, 0, " ", color, color);
+            PickerB => {}
+            _ => {}
         }
     }
 
@@ -543,16 +581,42 @@ impl PaletteRender {
 
     pub fn draw_menu<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
         let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+        let state = PaletteState::from_usize(ctx.state as usize).unwrap();
         let mb = self.panel.get_layer_sprite("main", "menu");
-        let cst = ctx.state as usize;
+        let cst = match state {
+            NameA | NameB => 0,
+            PickerA | PickerB => 1,
+            Random => 2,
+            Gradient => 3,
+            Golden => 4,
+        };
         let mut xoff = 0u16;
         let mcolor = [240, 120, 235, 0, 7, 120];
         if cst == 0 {
-            mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[0]), Color::Indexed(mcolor[1]));
+            mb.set_color_str(
+                xoff,
+                0,
+                "",
+                Color::Indexed(mcolor[0]),
+                Color::Indexed(mcolor[1]),
+            );
         } else {
-            mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[2]), Color::Indexed(mcolor[0]));
+            mb.set_color_str(
+                xoff,
+                0,
+                "",
+                Color::Indexed(mcolor[2]),
+                Color::Indexed(mcolor[0]),
+            );
         }
-        for i in 0..6 {
+        let menu_title = [
+            " 1 Named ",
+            " 2 Picker ",
+            " 3 Random ",
+            " 4 Gradient ",
+            " 5 Golden ",
+        ];
+        for i in 0..5 {
             let fg = if cst == i {
                 Color::Indexed(mcolor[3])
             } else {
@@ -563,7 +627,7 @@ impl PaletteRender {
             } else {
                 Color::Indexed(mcolor[0])
             };
-            let menu_str = &format!(" {} {:?} ", i + 1, PaletteState::from_usize(i).unwrap());
+            let menu_str = &menu_title[i as usize];
             if cst == i {
                 mb.set_color_str(xoff, 0, "", Color::Indexed(mcolor[0]), bg);
             }
