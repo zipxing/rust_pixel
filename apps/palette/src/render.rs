@@ -655,14 +655,6 @@ impl Render for PaletteRender {
         let gb = self.panel.get_layer_sprite("main", "back");
         asset2sprite!(gb, context, "back.txt");
 
-        // for co in 0..CCOUNT {
-        //     let gb = self.panel.get_sprite(&format!("COLOR{}", co));
-        //     let (r, g, b, a) = d.gradient_colors[co].get_srgba_u8();
-        //     let cr = Color::Rgba(r, g, b, 255);
-        //     gb.set_color_str(0, 0, &format!("{:10}", " "), Color::White, cr);
-        // }
-        //
-
         self.draw_named_colors(context, data);
     }
 

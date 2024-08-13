@@ -96,7 +96,7 @@ impl PaletteModel {
         }
     }
 
-    fn mouse_in(&self, ctx: &Context, x: u16, y: u16) -> Option<MouseArea> {
+    fn mouse_in(&mut self, ctx: &Context, x: u16, y: u16) -> Option<MouseArea> {
         let st = PaletteState::from_usize(ctx.state as usize).unwrap();
         // Menu(u16)
         if y == 0 {
@@ -110,14 +110,89 @@ impl PaletteModel {
             return Some(MouseArea::Menu(menuidx));
         }
         match st {
-            NameA | NameB => {}
-            _ => {}
+            // Named(u16, u16),            // x, y
+            NameA | NameB => {
+                let a = (x - 2) / C_WIDTH;
+                let b = y - 2;
+                if (b as usize * self.select.cur().width + a as usize) < self.select.cur().count {
+                    return Some(MouseArea::Named(a, b));
+                }
+            }
+            // Picker(u16, u16, u16, u16), // picker type, area, x, y
+            PickerA => {
+                let a = 0;
+                let c = x - 2;
+                let d = y - 2;
+                if y >= 2 && y < 20 && x >= 2 && x <= 77 {
+                    let b = 0;
+                    return Some(MouseArea::Picker(a, b, c, d));
+                }
+                if y == 20 && x >= 2 && x <= 77 {
+                    let b = 1;
+                    return Some(MouseArea::Picker(a, b, c, 0));
+                }
+            }
+            PickerB => {
+                let a = 1;
+                let c = x - 2;
+                if y == 9 && x >= 2 && x <= 77 {
+                    return Some(MouseArea::Picker(a, 0, c, 0));
+                }
+                if y == 11 && x >= 2 && x <= 77 {
+                    return Some(MouseArea::Picker(a, 1, c, 0));
+                }
+                if y == 13 && x >= 2 && x <= 77 {
+                    return Some(MouseArea::Picker(a, 2, c, 0));
+                }
+            }
+            // Random(u16, u16),           // x, y
+            Random => {
+                if y >= 2 && y <= 5 && x >= 1 && x <= 78 {
+                    let a = (x - 1) / RANDOM_W;
+                    let b = y - 2;
+                    return Some(MouseArea::Random(a, b));
+                }
+            }
+            // Golden(u16, u16),           // x, y
+            Golden => {
+                if y >= 2 && y <= 5 && x >= 1 && x <= 78 {
+                    let a = (x - 1) / RANDOM_W;
+                    let b = y - 2;
+                    return Some(MouseArea::Golden(a, b));
+                }
+            }
+            // Gradient(u16, u16, u16),    // area, x, y
+            Gradient => {
+                if y >= 2 && y <= 19 && x >= 2 && x <= 58 {
+                    let a = 0;
+                    let b = x - 2;
+                    let c = y - 2;
+                    return Some(MouseArea::Gradient(a, b, c));
+                }
+                if y == 20 && x >= 2 && x <= 58 {
+                    let a = 1;
+                    let b = x - 2;
+                    let c = 0;
+                    return Some(MouseArea::Gradient(a, b, c));
+                }
+                if y >= 2 && y <= 9 && x >= 60 && x <= 67 {
+                    let a = 2;
+                    let b = 0;
+                    let c = y - 2;
+                    if (c as usize) < self.select.ranges[2].count {
+                        return Some(MouseArea::Gradient(a, b, c));
+                    }
+                }
+                if y >= 2 && y <= 20 && x >= 69 && x <= 77 {
+                    let a = 3;
+                    let b = 0;
+                    let c = y - 2;
+                    if (c as usize) < self.select.ranges[3].count {
+                        return Some(MouseArea::Gradient(a, b, c));
+                    }
+                }
+            }
         }
-        // Named(u16, u16),            // x, y
-        // Picker(u16, u16, u16, u16), // picker type, area, x, y
-        // Random(u16, u16),           // x, y
-        // Gradient(u16, u16, u16),    // area, x, y
-        // Golden(u16, u16),           // x, y
         info!("mouse...x{}, y{}", x, y);
         None
     }
@@ -417,10 +492,8 @@ impl Model for PaletteModel {
                     if mou.kind == Up(MouseButton::Left) {
                         match self.mouse_in(context, mou.column, mou.row) {
                             Some(MouseArea::Menu(i)) => {
-                                self.switch_state(
-                                    context,
-                                    PaletteState::from_usize(i as usize).unwrap(),
-                                );
+                                let sts = [NameA, PickerA, Random, Gradient, Golden];
+                                self.switch_state(context, sts[i as usize]);
                             }
                             Some(MouseArea::Named(a, b)) => {
                                 self.select.cur().x = a as usize;
@@ -513,7 +586,6 @@ impl Model for PaletteModel {
                         // context.state = PaletteState::Picker as u8;
                     }
                 },
-                _ => {}
             }
         }
         context.input_events.clear();
