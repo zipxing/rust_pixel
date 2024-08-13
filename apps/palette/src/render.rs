@@ -63,13 +63,13 @@ impl PaletteRender {
 
         // creat 7 state layers
         let help_msg = [
-            "← ↑ → ↓ : select named colors    n : colors list 2",
-            "← ↑ → ↓ : select named colors    n : colors list 1",
-            "tab : switch select area   ← ↑ → ↓ : change value   n : rgb picker",
-            "tab : switch select area   ← ↑ → ↓ : change value   n : hsv picker",
-            "← ↑ → ↓ : select random colors",
+            "← ↑ → ↓ mouse : select named colors    n : colors list 2",
+            "← ↑ → ↓ mouse : select named colors    n : colors list 1",
+            "tab : switch select area   ← ↑ → ↓ mouse : change value   n : rgb picker",
+            "tab : switch select area   ← ↑ → ↓ mouse : change value   n : hsv picker",
+            "← ↑ → ↓ mouse : select random colors",
             "a : add input color  d : delete input color  tab ← ↑ → ↓ : change value",
-            "← ↑ → ↓ : select PHI(golden ratio) colors",
+            "← ↑ → ↓ mouse : select PHI(golden ratio) colors",
         ];
         for i in 0..7 {
             let ls = format!("{}", i);
