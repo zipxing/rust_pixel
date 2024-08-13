@@ -1,3 +1,9 @@
+# 0.4.4
+- Palette tool work
+```
+cargo pixel r palette t -r
+```
+
 # 0.4.3
 - Fix cargo pixel r foobar w bug
 
