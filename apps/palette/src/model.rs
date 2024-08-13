@@ -110,7 +110,7 @@ impl PaletteModel {
             return Some(MouseArea::Menu(menuidx));
         }
         match st {
-            // Named(u16, u16),            // x, y
+            // Named(u16, u16) x, y
             NameA | NameB => {
                 let a = (x - 2) / C_WIDTH;
                 let b = y - 2;
@@ -118,7 +118,7 @@ impl PaletteModel {
                     return Some(MouseArea::Named(a, b));
                 }
             }
-            // Picker(u16, u16, u16, u16), // picker type, area, x, y
+            // Picker(u16, u16, u16, u16) picker type, area, x, y
             PickerA => {
                 let a = 0;
                 let c = x - 2;
@@ -129,23 +129,22 @@ impl PaletteModel {
                 }
                 if y == 20 && x >= 2 && x <= 77 {
                     let b = 1;
-                    return Some(MouseArea::Picker(a, b, c, 0));
+                    return Some(MouseArea::Picker(a, b, (c as f64 * 4.0) as u16, 0));
                 }
             }
             PickerB => {
-                let a = 1;
-                let c = x - 2;
+                let c = ((x - 1) as f64 / PICKER_COUNT_X as f64 * 255.0) as u16;
                 if y == 9 && x >= 2 && x <= 77 {
-                    return Some(MouseArea::Picker(a, 0, c, 0));
+                    return Some(MouseArea::Picker(1, 0, c, 0));
                 }
                 if y == 11 && x >= 2 && x <= 77 {
-                    return Some(MouseArea::Picker(a, 1, c, 0));
+                    return Some(MouseArea::Picker(1, 1, c, 0));
                 }
                 if y == 13 && x >= 2 && x <= 77 {
-                    return Some(MouseArea::Picker(a, 2, c, 0));
+                    return Some(MouseArea::Picker(1, 2, c, 0));
                 }
             }
-            // Random(u16, u16),           // x, y
+            // Random(u16, u16) x, y
             Random => {
                 if y >= 2 && y <= 5 && x >= 1 && x <= 78 {
                     let a = (x - 1) / RANDOM_W;
@@ -153,7 +152,7 @@ impl PaletteModel {
                     return Some(MouseArea::Random(a, b));
                 }
             }
-            // Golden(u16, u16),           // x, y
+            // Golden(u16, u16) x, y
             Golden => {
                 if y >= 2 && y <= 5 && x >= 1 && x <= 78 {
                     let a = (x - 1) / RANDOM_W;
@@ -161,34 +160,22 @@ impl PaletteModel {
                     return Some(MouseArea::Golden(a, b));
                 }
             }
-            // Gradient(u16, u16, u16),    // area, x, y
+            // Gradient(u16, u16, u16) area, x, y
             Gradient => {
                 if y >= 2 && y <= 19 && x >= 2 && x <= 58 {
-                    let a = 0;
-                    let b = x - 2;
-                    let c = y - 2;
-                    return Some(MouseArea::Gradient(a, b, c));
+                    return Some(MouseArea::Gradient(0, x - 2, y - 2));
                 }
                 if y == 20 && x >= 2 && x <= 58 {
-                    let a = 1;
-                    let b = x - 2;
-                    let c = 0;
-                    return Some(MouseArea::Gradient(a, b, c));
+                    return Some(MouseArea::Gradient(1, ((x - 2) as f64 * 4.0) as u16, 0));
                 }
                 if y >= 2 && y <= 9 && x >= 60 && x <= 67 {
-                    let a = 2;
-                    let b = 0;
-                    let c = y - 2;
-                    if (c as usize) < self.select.ranges[2].count {
-                        return Some(MouseArea::Gradient(a, b, c));
+                    if ((y - 2) as usize) < self.select.ranges[2].count {
+                        return Some(MouseArea::Gradient(2, 0, y - 2));
                     }
                 }
                 if y >= 2 && y <= 20 && x >= 69 && x <= 77 {
-                    let a = 3;
-                    let b = 0;
-                    let c = y - 2;
-                    if (c as usize) < self.select.ranges[3].count {
-                        return Some(MouseArea::Gradient(a, b, c));
+                    if ((y - 2) as usize) < self.select.ranges[3].count {
+                        return Some(MouseArea::Gradient(3, 0, y - 2));
                     }
                 }
             }
