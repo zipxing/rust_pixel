@@ -26,7 +26,6 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 - Graphical Mode (Web): Similar to the SDL2 mode, but the core logic is compiled into WASM and rendered using **WebGL** and **JavaScript** (refer to rust-pixel/web-template/pixel.js).
 
 ![demo](./screen-shot/demo.png)
-![palette](./screen-shot/palette.gif)
 
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into FFI and WASM.
 
@@ -126,7 +125,13 @@ $ cargo pixel r myapp s
 ```
 
 RustPixel also includes several tools:
-1. tedit: Used to edit character art assets, example:
+1. palette: A terminal-ui tool to generate, analyze, convert and manipulate colors.
+```
+    $ cargo pixel r palette t -r
+```
+ ![palette](./screen-shot/palette.gif)
+
+2. tedit: Used to edit character art assets, example:
 ``` 
     term mode
     $ cargo pixel r tedit term assets/screen-shot/tedit.txt
@@ -137,13 +142,13 @@ RustPixel also includes several tools:
  ![tedit_t](./screen-shot/tedit_term.png)
  ![tedit_s](./screen-shot/tedit_sdl.png)
 
-2. tpetii: Used to convert regular images into PETSCII character art, example:
+3. tpetii: Used to convert regular images into PETSCII character art, example:
 ```
     $ cargo pixel r tpetii t assets/fire.png 40 40 -r > assets/fire.pix
     -r : build tpetii in release mode for high performance
 ```
 
-3. Script to automatically convert gif images into PETSCII animations (ssf)
+4. Script to automatically convert gif images into PETSCII animations (ssf)
 ```
     $ cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25 
 ```

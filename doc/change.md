@@ -3,6 +3,7 @@
 ```
 cargo pixel r palette t -r
 ```
+ ![palette](./screen-shot/palette.gif)
 
 # 0.4.3
 - Fix cargo pixel r foobar w bug
