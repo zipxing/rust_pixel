@@ -8,7 +8,7 @@ use deltae::*;
 use lab::Lab;
 use std::env;
 use std::path::Path;
-use rust_pixel::render::style::COLOR_RGB;
+use rust_pixel::render::style::ANSI_COLOR_RGB;
 
 type Image = Vec<Vec<u8>>;
 struct RGB {
@@ -185,7 +185,7 @@ fn find_best_color(color: RGB) -> usize {
     let mut min_mse = f32::MAX;
     let mut best_match = 0;
 
-    for (i, pcolor) in COLOR_RGB.iter().enumerate() {
+    for (i, pcolor) in ANSI_COLOR_RGB.iter().enumerate() {
         let pcrgb = RGB {
             r: pcolor[0],
             g: pcolor[1],
