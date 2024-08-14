@@ -21,7 +21,7 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 web-sys = "0.3.4"
 wasm-logger = "0.2.0"
-rust_pixel = { path = "../../rust-pixel" }
+rust_pixel = { path = "../../rust-pixel", default-features = false }
 
 [features]
 sdl = ["rust_pixel/sdl"]
