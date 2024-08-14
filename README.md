@@ -226,3 +226,5 @@ The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calli
 
 and so on ... ...
 
+[Markdown - Summary](#Installation-Guide)
+
