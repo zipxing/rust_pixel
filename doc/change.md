@@ -1,3 +1,6 @@
+# 0.4.5
+- Update cargo.toml fix rustdoc bug...
+
 # 0.4.4
 - Palette tool work
 ```
