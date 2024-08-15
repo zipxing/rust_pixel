@@ -265,9 +265,9 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     exec_cmd("cp -r games/template tmp/pixel_game_template");
 
     if is_standalone {
-        exec_cmd("cp games/template/stand-alone/Cargo.toml tmp/pixel_game_template/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/LibCargo.toml tmp/pixel_game_template/lib/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/pixel.toml tmp/pixel_game_template/pixel.toml");
+        exec_cmd("cp games/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml");
+        exec_cmd("cp games/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
+        exec_cmd("cp games/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml");
         exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
     }
 
