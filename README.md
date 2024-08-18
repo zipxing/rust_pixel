@@ -89,7 +89,7 @@ cd rust_pixel
 cargo install --path tools/cargo-pixel --root ~/.cargo
 ``` 
 
-#### Usage Instructions
+### Usage Instructions
 ``` 
 cd rust_pixel
 cargo pixel run snake term            #Run the snake game in terminal mode
@@ -143,7 +143,7 @@ cargo pixel r tpetii t assets/fire.png 40 40 -r > assets/fire.pix
 cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25 
 ```
 
-#### Demo games
+### Demo games
 1. snake: A snake game with a cool PETSCII animations
 ```
 #graphical mode
