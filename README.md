@@ -27,13 +27,6 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into FFI and WASM.
 
-#### !!! SPECIAL REMINDER !!!
-If you have previously installed an old version before 4.0, you need to re-deploy the cargo-pixel tool.
-Otherwise, terminal mode will not run...
-```
-cargo install --path tools/cargo-pixel --root ~/.cargo
-```
-
 #### Installation Guide
 --- MacOS ---
 
@@ -41,13 +34,13 @@ cargo install --path tools/cargo-pixel --root ~/.cargo
 
 For better terminal display, you need to install [iTerm2] and set it to dark background mode. 
 ```
-Settings... > Profiles > Colors > Color presets... > Dark Background
+#iTerm2 : Settings... > Profiles > Colors > Color presets... > Dark Background
 ```
 
 You also need to install [DroidSansMono Nerd Font].
 ```
 curl -sS https://webi.sh/nerdfont | sh
-Settings... > Profiles > Text > Font > DroidSansMono Nerd Font
+#iTerm2 : Settings... > Profiles > Text > Font > DroidSansMono Nerd Font
 ```
 
 [iTerm2]: https://iterm2.com/
