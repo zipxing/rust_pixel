@@ -27,7 +27,7 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 
 RustPixel implements game loops, a Model/Render common pattern, and a messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into FFI and WASM.
 
-###### Installation Guide(MacOS)
+### Installation Guide(MacOS)
 
 **Install iTerm2 & Nerd Font**
 
