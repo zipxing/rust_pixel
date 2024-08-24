@@ -33,23 +33,20 @@ The main steps of the installation process are as follows:
 - Install [DroidSansMono Nerd Font] & setup terminal
 - Install dependent libraries and softwares
 - Install **Rust** and **Wasm-pack**
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"            # For sh/bash/zsh/ash/dash/pdksh
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-```
-- Clone **RustPixel** and deploy **cargo-pixel** 
-``` 
-git clone https://github.com/zipxing/rust_pixel
-cd rust_pixel
-cargo install --path tools/cargo-pixel --root ~/.cargo
-``` 
+
 The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | &nbsp;&nbsp;[Linux]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows]
 
 [MacOS]: doc/mac.md
 [Linux]: doc/linux.md
 [Windows]: doc/win.md
 [DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
+
+Next, you should clone **RustPixel** and deploy **cargo-pixel** tool:
+``` 
+git clone https://github.com/zipxing/rust_pixel
+cd rust_pixel
+cargo install --path tools/cargo-pixel --root ~/.cargo
+``` 
 
 ### Usage Instructions
 ``` 
