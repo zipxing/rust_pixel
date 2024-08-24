@@ -1,25 +1,18 @@
-# MacOS install guide
+# Windows(win11-wsl2-ubuntu) install guide
 
-**Install iTerm2 & Nerd Font**
-
-For better terminal display, you need to install [iTerm2] and set it to dark background mode. 
+**Install wsl2 and ubuntu**
 ```
-#iTerm2 : Settings... > Profiles > Colors > Color presets... > Dark Background
+wsl --install
 ```
+then open windows terminal with ubuntu.
 
-You also need to install [DroidSansMono Nerd Font].
+
+**Install Nerd Font**
+
 ```
 curl -sS https://webi.sh/nerdfont | sh
-#iTerm2 : Settings... > Profiles > Text > Font > DroidSansMono Nerd Font
+Terminal: Preferences > Text > Custom font > DroidSansMono Nerd Font
 ```
-
-[iTerm2]: https://iterm2.com/
-[DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
-
-**Install brew**
-``` 
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-``` 
 
 **Install rust**
 ``` 
@@ -34,24 +27,14 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
 **Install some dependent libraries and software**
 ``` 
-brew install ffmpeg            # Used to convert gif to ssf sequence frame files(.ssf)
-brew install sdl2
-brew install sdl2_image
-brew install sdl2_gfx
-brew install sdl2_ttf
-brew install sdl2_mixer
+sudo apt update
+sudo apt-get install git
+sudo apt-get install gcc
+sudo apt-get install ffmpeg            # Used to convert gif to ssf sequence frame files(.ssf)
+sudo apt-get install libsdl2-dev
+sudo apt-get install libsdl2-image-dev
+sudo apt-get install libsdl2-gfx-dev
 ``` 
-
-Tips: Missing path in LIBRARY_PATH environment variable<br>
-The Homebrew package manager symlinks library to the directory /usr/local/lib. <br>
-To use these libraries with Rust, you need to add it to the LIBRARY_PATH environment variable. <br>
-The command echo $LIBRARY_PATH will tell you if /usr/local/lib is added. <br>
-If it is missing, add the following to the ~/.bash_profile configuration file:
-```
-export LIBRARY_PATH="$LIBRARY_PATH:/usr/local/lib"
-```
-This will add the directory to the environment variable each time you start up a new Terminal window.
-
 
 **Download RustPixel and deploy cargo-pixel**
 ``` 
