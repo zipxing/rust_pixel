@@ -30,14 +30,12 @@ RustPixel implements game loops, a Model/Render common pattern, and a messaging 
 ### Installation Guide
 
 The main steps of the installation process are as follows:
-
-- Install [DroidSansMono Nerd Font] and setup terminal
-- Install rust and wasm-pack
+- Install [DroidSansMono Nerd Font] & setup terminal
+- Install **Rust** and **Wasm-pack**
 - Install dependent libraries and softwares
-- Clone RustPixel and deploy cargo-pixel 
+- Clone **RustPixel** and deploy **cargo-pixel** 
 
-But there may be slight differences depending on the operating system, the detailed steps for each operating system are as follows:
-
+The detailed steps for each operating system are as follows:
 [MacOS]&nbsp;&nbsp; | &nbsp;&nbsp;[Linux]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows]
 
 [MacOS]: doc/mac.md
