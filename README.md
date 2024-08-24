@@ -43,6 +43,7 @@ But there may be slight differences depending on the operating system, the detai
 [MacOS]: doc/mac.md
 [Linux]: doc/linux.md
 [Windows]: doc/win.md
+[DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
 
 ### Usage Instructions
 ``` 
