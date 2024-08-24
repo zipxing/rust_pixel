@@ -36,6 +36,7 @@ The main steps of the installation process are as follows:
 - Clone **RustPixel** and deploy **cargo-pixel** 
 
 The detailed steps for each operating system are as follows:
+
 [MacOS]&nbsp;&nbsp; | &nbsp;&nbsp;[Linux]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows]
 
 [MacOS]: doc/mac.md
