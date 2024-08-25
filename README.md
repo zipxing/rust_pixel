@@ -74,13 +74,13 @@ cargo pixel r myapp s
 ```
 
 RustPixel also includes several tools:
-1. palette: A terminal-ui tool to generate, analyze, convert and manipulate colors.
+1. **palette**: A terminal-ui tool to generate, analyze, convert and manipulate colors.
 ```
 cargo pixel r palette t -r
 ```
  ![palette](./screen-shot/palette.gif)
 
-2. tedit: Used to edit character art assets, example:
+2. **tedit**: Used to edit character art assets, example:
 ``` 
 #term mode
 cargo pixel r tedit term assets/screen-shot/tedit.txt
@@ -91,7 +91,7 @@ cargo pixel r tedit sdl assets/screen-shot/tedit.pix
  ![tedit_t](./screen-shot/tedit_term.png)
  ![tedit_s](./screen-shot/tedit_sdl.png)
 
-3. tpetii: Used to convert regular images into PETSCII character art, example:
+3. **tpetii**: Used to convert regular images into PETSCII character art, example:
 ```
 cargo pixel r tpetii t assets/a.png -r > assets/a.pix
 cargo pixel r tedit s assets/a.pix
@@ -103,7 +103,7 @@ cargo pixel r tedit s assets/lion.pix
  ![tpetii_1](./screen-shot/a.png)
  ![tpetii_2](./screen-shot/lion.png)
 
-4. Script to automatically convert gif images into PETSCII animations (ssf)
+4. Script to automatically **convert gif images into PETSCII animations (.ssf)**
 ```
 cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25 
 ```
