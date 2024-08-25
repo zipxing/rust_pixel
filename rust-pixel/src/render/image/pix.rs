@@ -46,8 +46,17 @@ impl Asset for PixAsset {
         let mut texid: u8 = 0;
         let mut lineidx = 0;
         //info!("begin load_pix....");
+        let mut start: bool = false;
         for line in reader.lines() {
             let l = line.unwrap();
+            // skip garbage lines...
+            if !start {
+                if !l.starts_with("width") {
+                    continue;
+                } else {
+                    start = true;
+                }
+            }
             //info!("load_pix line={}", l);
             if lineidx == 0 {
                 for cap in re.captures_iter(&l) {
