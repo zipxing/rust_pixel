@@ -264,6 +264,34 @@ impl PaletteModel {
         self.do_gradient(context);
     }
 
+    fn update_select_by_main_color(&mut self, context: &mut Context, mc: ColorPro) {
+        self.main_color = mc;
+
+        match PaletteState::from_usize(context.state as usize).unwrap() {
+            NameA => {}
+            NameB => {}
+            PickerA => {
+                let hsv = mc[HSVA].unwrap().v; 
+                self.select.ranges[0].x = (hsv[1] * PICKER_COUNT_X as f64) as usize;
+                self.select.ranges[0].y = ((1.0 - hsv[2]) * PICKER_COUNT_Y as f64) as usize;
+                self.select.ranges[1].x = (hsv[0] * PICKER_COUNT_X as f64 / 90.0) as usize;
+            }
+            PickerB => {
+                let rgb = mc[SRGBA].unwrap().v;
+                self.select.ranges[0].x = (rgb[0] * 255.0) as usize;
+                self.select.ranges[1].x = (rgb[1] * 255.0) as usize;
+                self.select.ranges[2].x = (rgb[2] * 255.0) as usize;
+            }
+            Random | Golden => {}
+            Gradient => {}
+        }
+        // find similar colors by ciede2000...
+        self.main_color_similar = find_similar_colors(&self.main_color);
+        event_emit("Palette.RedrawMainColor");
+        event_emit("Palette.RedrawSelect");
+        event_emit("Palette.RedrawPicker");
+    }
+
     fn update_main_color(&mut self, context: &mut Context) {
         match PaletteState::from_usize(context.state as usize).unwrap() {
             NameA => {
@@ -523,9 +551,17 @@ impl Model for PaletteModel {
                         } else if context.state == NameB as u8 {
                             self.switch_state(context, NameA);
                         } else if context.state == PickerA as u8 {
+                            // backup main_color
+                            let mc = self.main_color;
                             self.switch_state(context, PickerB);
+                            // set select value by backup_main_color
+                            self.update_select_by_main_color(context, mc);
                         } else if context.state == PickerB as u8 {
+                            // backup main_color
+                            let mc = self.main_color;
                             self.switch_state(context, PickerA);
+                            // set select value by backup_main_color
+                            self.update_select_by_main_color(context, mc);
                         }
                     }
                     KeyCode::Char('2') => {
@@ -598,7 +634,7 @@ pub fn get_pick_color(width: usize, x0: usize, y0: usize, x1: usize, t: usize) -
     match t {
         0 => ColorPro::from_space_f64(HSVA, h, s, 1.0 - v, 1.0),
         1 => ColorPro::from_space_f64(HSVA, h, 1.0, 1.0, 1.0),
-        2.. => ColorPro::from_space_f64(SRGBA, r / 255.0, g / 255.0, b / 255.0, 1.0),
+        _ => ColorPro::from_space_f64(SRGBA, r / 255.0, g / 255.0, b / 255.0, 1.0),
     }
 }
 
