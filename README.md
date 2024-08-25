@@ -93,9 +93,15 @@ cargo pixel r tedit sdl assets/screen-shot/tedit.pix
 
 3. tpetii: Used to convert regular images into PETSCII character art, example:
 ```
-cargo pixel r tpetii t assets/fire.png 40 40 -r > assets/fire.pix
-# -r : build tpetii in release mode for high performance
+cargo pixel r tpetii t assets/a.png -r > assets/a.pix
+cargo pixel r tedit s assets/a.pix
 ```
+```
+cargo pixel r tpetii t assets/lion.png 40 40 -r > assets/lion.pix
+cargo pixel r tedit s assets/lion.pix
+```
+ ![tpetii_1](./screen-shot/a.png)
+ ![tpetii_2](./screen-shot/lion.png)
 
 4. Script to automatically convert gif images into PETSCII animations (ssf)
 ```
