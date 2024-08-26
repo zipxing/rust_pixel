@@ -22,8 +22,18 @@ fn main() {
     let mut height: u32 = 25;
     let mut is_petii: bool = false;
     let input_image_path;
+    let mut cx: u32; 
+    let mut cy: u32;
+    let mut cw: u32;
+    let mut ch: u32;
+
+    cx = u32::MAX;
+    cy = u32::MAX;
+    cw = u32::MAX;
+    ch = u32::MAX;
 
     let args: Vec<String> = env::args().collect();
+
     match args.len() {
         2 => {
             input_image_path = Path::new(&args[1]);
@@ -39,13 +49,29 @@ fn main() {
             height = args[3].parse().unwrap();
             is_petii = args[4].parse().unwrap();
         }
+        9 => {
+            input_image_path = Path::new(&args[1]);
+            width = args[2].parse().unwrap();
+            height = args[3].parse().unwrap();
+            is_petii = args[4].parse().unwrap();
+            cx = args[5].parse().unwrap();
+            cy = args[6].parse().unwrap();
+            cw = args[7].parse().unwrap();
+            ch = args[8].parse().unwrap();
+            // threhold = args[9].parse().unwrap();
+        }
         _ => {
             println!("Usage: tpetii <image file path> [<width>] [<height>] [<is_petscii>]");
             return;
         }
     }
 
-    let img = image::open(&input_image_path).expect("Failed to open the input image");
+    let mut img = image::open(&input_image_path).expect("Failed to open the input image");
+
+    if cx != u32::MAX {
+        img = img.crop(cx, cy, cw, ch);
+        img.save("out0.png").unwrap();
+    }
 
     let resized_img =
         img.resize_exact(width * 8, height * 8, image::imageops::FilterType::Lanczos3);
@@ -53,6 +79,7 @@ fn main() {
     let gray_img = resized_img.clone().into_luma8();
     //gray_img.save("out2.png").unwrap();
 
+    // up petscii images...
     let vcs = gen_charset_images(false);
 
     // texture=255 表示每个点拥有自己的texture
@@ -60,9 +87,6 @@ fn main() {
     println!("width={},height={},texture=255", width, height);
     for i in 0..height {
         for j in 0..width {
-            //if j == 1 && i == 0 {
-            //    println!("break");
-            //}
             let block_at = get_block_at(&gray_img, j, i);
             let block_color = get_block_color(&resized_img, j, i);
             let bc = find_best_color(block_color);
@@ -167,9 +191,6 @@ fn find_best_match(input_image: &Image, char_images: &[Image], is_petii: bool) -
     let mut best_match = 0;
 
     for (i, char_image) in char_images.iter().enumerate() {
-        //if i == 77 {
-        //    println!("break");
-        //}
         let mse = calculate_mse(input_image, char_image, is_petii);
 
         if mse < min_mse {
@@ -211,7 +232,7 @@ fn calc_eigenvector(img: &Image, is_petii: bool) -> Vec<i32> {
             if is_petii {
                 // 提取已有petscii art图片
                 // p = if img[y][x] == 0 { 0i32 } else { 1i32 };
-                p = if img[y][x] < 26 { 0i32 } else { 1i32 };
+                p = if img[y][x] < 180 { 0i32 } else { 1i32 };
             } else {
                 // 提取普通图片
                 p = img[y][x] as i32;
