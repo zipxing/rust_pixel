@@ -1,16 +1,17 @@
 // https://github.com/JuliaPoo/AsciiArtist
 // https://github.com/EgonOlsen71/petsciiator
 
-use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 mod c64;
 use c64::{C64LOW, C64UP};
 use deltae::*;
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use lab::Lab;
+use rust_pixel::render::style::ANSI_COLOR_RGB;
+use std::collections::HashMap;
 use std::env;
 use std::path::Path;
-use rust_pixel::render::style::ANSI_COLOR_RGB;
 
-type Image = Vec<Vec<u8>>;
+type Image8x8 = Vec<Vec<u8>>;
 struct RGB {
     r: u8,
     g: u8,
@@ -22,7 +23,7 @@ fn main() {
     let mut height: u32 = 25;
     let mut is_petii: bool = false;
     let input_image_path;
-    let mut cx: u32; 
+    let mut cx: u32;
     let mut cy: u32;
     let mut cw: u32;
     let mut ch: u32;
@@ -58,7 +59,6 @@ fn main() {
             cy = args[6].parse().unwrap();
             cw = args[7].parse().unwrap();
             ch = args[8].parse().unwrap();
-            // threhold = args[9].parse().unwrap();
         }
         _ => {
             println!("Usage: tpetii <image file path> [<width>] [<height>] [<is_petscii>]");
@@ -70,29 +70,38 @@ fn main() {
 
     if cx != u32::MAX {
         img = img.crop(cx, cy, cw, ch);
-        img.save("out0.png").unwrap();
+        img.save("tmp/out0.png").unwrap();
     }
-
     let resized_img =
         img.resize_exact(width * 8, height * 8, image::imageops::FilterType::Lanczos3);
-    //resized_img.save("out1.png").unwrap();
+    resized_img.save("tmp/out1.png").unwrap();
     let gray_img = resized_img.clone().into_luma8();
-    //gray_img.save("out2.png").unwrap();
+    gray_img.save("tmp/out2.png").unwrap();
 
     // up petscii images...
     let vcs = gen_charset_images(false);
+    count_img_colors(&resized_img, width * 8, height * 8);
 
     // texture=255 表示每个点拥有自己的texture
     // 这种方式更灵活，但数据量会稍大
     println!("width={},height={},texture=255", width, height);
     for i in 0..height {
         for j in 0..width {
-            let block_at = get_block_at(&gray_img, j, i);
-            let block_color = get_block_color(&resized_img, j, i);
-            let bc = find_best_color(block_color);
-            let bm = find_best_match(&block_at, &vcs, is_petii);
-            // 每个点的texture设置为1
-            print!("{},{},1 ", bm, bc,);
+            if !is_petii {
+                let block_at = get_block_at(&gray_img, j, i);
+                let block_color = get_block_color(&resized_img, j, i);
+                let bc = find_best_color(block_color);
+                let bm = find_best_match(&block_at, &vcs, is_petii);
+                // 每个点的texture设置为1
+                print!("{},{},1 ", bm, bc,);
+            } else {
+                let block_at = get_block_at(&gray_img, j, i);
+                let bm = find_best_match(&block_at, &vcs, is_petii);
+                let block_color = get_block_color(&resized_img, j, i);
+                let bc = find_best_color(block_color);
+                // 每个点的texture设置为1
+                print!("{},{},1 ", bm, bc,);
+            }
         }
         println!("");
     }
@@ -114,7 +123,8 @@ fn color_distance(e1: &RGB, e2: &RGB) -> f32 {
     *DeltaE::new(&lab1, &lab2, DE2000).value()
 }
 
-fn gen_charset_images(low_up: bool) -> Vec<Image> {
+/// generate 256 petscii image with 0 and 255
+fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
     let data = if low_up { &C64LOW } else { &C64UP };
     let mut vcs = vec![vec![vec![0u8; 8]; 8]; 256];
 
@@ -132,6 +142,25 @@ fn gen_charset_images(low_up: bool) -> Vec<Image> {
         }
     }
     vcs
+}
+
+fn count_img_colors(img: &DynamicImage, w: u32, h: u32) {
+    let mut cc: HashMap<u32, u32> = HashMap::new();
+    for i in 0..h {
+        for j in 0..w {
+            let p = img.get_pixel(j, i);
+            let k: u32 = ((p[0] as u32) << 24)
+                + ((p[1] as u32) << 16)
+                + ((p[2] as u32) << 8)
+                + (p[3] as u32);
+            *cc.entry(k).or_insert(0) += 1;
+        }
+    }
+    let mut cv: Vec<_> = cc.iter().collect();
+    cv.sort_by(|a, b| b.1.cmp(a.1));
+    for c in cv {
+        println!("cc..{:x}", c.0);
+    }
 }
 
 fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
@@ -169,7 +198,7 @@ fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
     }
 }
 
-fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image {
+fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image8x8 {
     let mut block = vec![vec![0u8; 8]; 8];
 
     for i in 0..8usize {
@@ -186,7 +215,7 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image
     block
 }
 
-fn find_best_match(input_image: &Image, char_images: &[Image], is_petii: bool) -> usize {
+fn find_best_match(input_image: &Image8x8, char_images: &[Image8x8], is_petii: bool) -> usize {
     let mut min_mse = f64::MAX;
     let mut best_match = 0;
 
@@ -223,16 +252,28 @@ fn find_best_color(color: RGB) -> usize {
     best_match
 }
 
-fn calc_eigenvector(img: &Image, is_petii: bool) -> Vec<i32> {
+fn calc_eigenvector(img: &Image8x8, is_petii: bool) -> Vec<i32> {
     let mut v = vec![0i32; 10];
+    let mut min = u8::MAX;
+    let mut max = 0u8;
+    for x in 0..8 {
+        for y in 0..8 {
+            let p = img[y][x];
+            if p > max {
+                max = p;
+            }
+            if p < min {
+                min = p;
+            }
+        }
+    }
 
     for x in 0..8 {
         for y in 0..8 {
             let p;
             if is_petii {
-                // 提取已有petscii art图片
-                // p = if img[y][x] == 0 { 0i32 } else { 1i32 };
-                p = if img[y][x] < 180 { 0i32 } else { 1i32 };
+                // 提取已有petscii art图片,首先进行二值化
+                p = if img[y][x] <= min { 0i32 } else { 1i32 };
             } else {
                 // 提取普通图片
                 p = img[y][x] as i32;
@@ -273,7 +314,7 @@ fn calc_eigenvector(img: &Image, is_petii: bool) -> Vec<i32> {
     v
 }
 
-fn calculate_mse(img1: &Image, img2: &Image, is_petii: bool) -> f64 {
+fn calculate_mse(img1: &Image8x8, img2: &Image8x8, is_petii: bool) -> f64 {
     let mut mse = 0.0f64;
     let v1 = calc_eigenvector(img1, is_petii);
     let v2 = calc_eigenvector(img2, is_petii);
