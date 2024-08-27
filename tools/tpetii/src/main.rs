@@ -107,6 +107,7 @@ fn main() {
     }
 }
 
+// get color distance
 fn color_distance(e1: &RGB, e2: &RGB) -> f32 {
     let l1 = Lab::from_rgb(&[e1.r, e1.g, e1.b]);
     let l2 = Lab::from_rgb(&[e2.r, e2.g, e2.b]);
@@ -123,7 +124,7 @@ fn color_distance(e1: &RGB, e2: &RGB) -> f32 {
     *DeltaE::new(&lab1, &lab2, DE2000).value()
 }
 
-/// generate 256 petscii image with 0 and 255
+// generate 256 petscii image with 0 and 255
 fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
     let data = if low_up { &C64LOW } else { &C64UP };
     let mut vcs = vec![vec![vec![0u8; 8]; 8]; 256];
@@ -144,6 +145,7 @@ fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
     vcs
 }
 
+// find background colors...
 fn count_img_colors(img: &DynamicImage, w: u32, h: u32) {
     let mut cc: HashMap<u32, u32> = HashMap::new();
     for i in 0..h {
@@ -163,6 +165,7 @@ fn count_img_colors(img: &DynamicImage, w: u32, h: u32) {
     }
 }
 
+// get block average color(for not petscii image) 
 fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
     let mut r = 0u32;
     let mut g = 0u32;
