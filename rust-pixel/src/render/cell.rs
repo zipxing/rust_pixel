@@ -21,6 +21,7 @@ use crate::render::style::{Color, Modifier, Style};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use lazy_static::lazy_static;
+use log::info;
 
 lazy_static! {
     /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64l.png
@@ -168,7 +169,13 @@ impl Cell {
 
     pub fn push_history(&mut self) {
         #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
-        self.draw_history.push(self.get_cell_info());
+        {
+            // let ci = self.get_cell_info();
+            // if ci.0 == 46 || ci.0 == 28 {
+            //     info!("EEEEEEEEEEEE...{} hislen..{:?}", ci.0, self.draw_history);
+            // }
+            self.draw_history.push(self.get_cell_info());
+        }
     }
 
     pub fn reset(&mut self) {

@@ -210,6 +210,7 @@ impl Buffer {
 
             // Reset following cells if multi-width (they would be hidden by the grapheme),
             for i in index + 1..index + width {
+                info!("reset.....................");
                 self.content[i].reset();
             }
             index += width;
@@ -244,7 +245,9 @@ impl Buffer {
 
     #[allow(unused_variables)]
     pub fn copy_cell(&mut self, pos_self: usize, other: &Buffer, alpha: u8, pos_other: usize) {
-        self.content[pos_self] = other.content[pos_other].clone();
+        self.content[pos_self].symbol = other.content[pos_other].symbol.clone();
+        self.content[pos_self].bg = other.content[pos_other].bg;
+        self.content[pos_self].fg = other.content[pos_other].fg;
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let fc = self.content[pos_self].fg.get_rgba();
@@ -297,7 +300,6 @@ impl Buffer {
         let area = self.area.union(other.area);
         let cell: Cell = Default::default();
         self.content.resize(area.area() as usize, cell.clone());
-
         if !fast {
             let size = self.area.area() as usize;
             for i in (0..size).rev() {
@@ -310,7 +312,6 @@ impl Buffer {
                 }
             }
         }
-
         let size = other.area.area() as usize;
         for i in 0..size {
             let (x, y) = other.pos_of(i);
