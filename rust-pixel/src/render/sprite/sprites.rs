@@ -12,7 +12,7 @@ use crate::{
     util::PointU16,
 };
 use crate::render::sprite::Widget;
-use log::info;
+// use log::info;
 use std::{
     cmp::Reverse,
     collections::HashMap,

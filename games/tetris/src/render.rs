@@ -285,12 +285,12 @@ impl Render for TetrisRender {
     }
 
     fn handle_event<G: Model>(&mut self, _context: &mut Context, data: &mut G, _dt: f32) {
-        // if event_check("Tetris.RedrawNext", "redraw_next") {
-        //     self.redraw_next(data);
-        // }
-        // if event_check("Tetris.RedrawHold", "redraw_hold") {
-        //     self.redraw_hold(data);
-        // }
+        if event_check("Tetris.RedrawNext", "redraw_next") {
+            self.redraw_next(data);
+        }
+        if event_check("Tetris.RedrawHold", "redraw_hold") {
+            self.redraw_hold(data);
+        }
     }
 
     fn handle_timer<G: Model>(&mut self, _context: &mut Context, _data: &mut G, _dt: f32) {}

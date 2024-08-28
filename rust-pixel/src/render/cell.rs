@@ -21,7 +21,7 @@ use crate::render::style::{Color, Modifier, Style};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use lazy_static::lazy_static;
-use log::info;
+// use log::info;
 
 lazy_static! {
     /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64l.png

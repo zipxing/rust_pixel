@@ -16,7 +16,7 @@ use crate::{
     util::{PointF32, Rect},
 };
 use bitflags::bitflags;
-use log::info;
+// use log::info;
 // use std::f32;
 
 mod sprites;
