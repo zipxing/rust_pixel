@@ -182,7 +182,8 @@ impl Cell {
 
     #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
     pub fn is_blank(&self) -> bool {
-        (self.symbol == " " || self.symbol == cellsym(32)) && self.bg == Color::Reset 
+        false
+        // (self.symbol == " " || self.symbol == cellsym(32)) && self.bg == Color::Reset 
     }
 
     #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
