@@ -262,9 +262,6 @@ where
     for (i, cell) in buf.content.iter().enumerate() {
         for sh in &cell.draw_history {
             let (s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, sh, 0, 0, false);
-            // if texidx == 2 && symidx == 28 {
-            //     info!("CATCH IT@@@@@@@@@@@@ {:?}", cell.draw_history);
-            // }
             let fc = sh.2.get_rgba();
             f(&fc, s1, s2, texidx, symidx);
         }

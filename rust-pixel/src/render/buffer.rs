@@ -210,7 +210,6 @@ impl Buffer {
 
             // Reset following cells if multi-width (they would be hidden by the grapheme),
             for i in index + 1..index + width {
-                info!("reset.....................");
                 self.content[i].reset();
             }
             index += width;

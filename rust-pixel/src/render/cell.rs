@@ -170,10 +170,6 @@ impl Cell {
     pub fn push_history(&mut self) {
         #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
         {
-            // let ci = self.get_cell_info();
-            // if ci.0 == 46 || ci.0 == 28 {
-            //     info!("EEEEEEEEEEEE...{} hislen..{:?}", ci.0, self.draw_history);
-            // }
             self.draw_history.push(self.get_cell_info());
         }
     }
@@ -189,8 +185,8 @@ impl Cell {
 
     #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
     pub fn is_blank(&self) -> bool {
-        false
         // (self.symbol == " " || self.symbol == cellsym(32)) && self.bg == Color::Reset 
+        false
     }
 
     #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]

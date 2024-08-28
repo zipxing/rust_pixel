@@ -119,9 +119,7 @@ impl Widget for Sprite {
         if !self.is_hidden() {
             self.check_asset_request(am);
             if !is_pixel {
-                // info!("333 before merge....content_len...{:?}", buf.content);
                 buf.merge(&self.content, self.alpha, true);
-                // info!("333 after merge....content_len...{:?}", buf.content);
             }
         }
     }
