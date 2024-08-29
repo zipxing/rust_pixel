@@ -163,11 +163,13 @@ impl Panel {
     }
 
     pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
-        self.update_render_index();
-        for idx in &self.render_index {
-            if !self.layers[idx.0].is_hidden {
-                self.layers[idx.0]
-                    .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+        if ctx.stage > LOGO_FRAME {
+            self.update_render_index();
+            for idx in &self.render_index {
+                if !self.layers[idx.0].is_hidden {
+                    self.layers[idx.0]
+                        .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                }
             }
         }
         let cb = &self.buffers[self.current];
@@ -179,6 +181,7 @@ impl Panel {
 
         // Swap buffers
         if ctx.stage > LOGO_FRAME {
+            info!("swap buffer reset.....");
             self.buffers[1 - self.current].reset();
             self.current = 1 - self.current;
         }
