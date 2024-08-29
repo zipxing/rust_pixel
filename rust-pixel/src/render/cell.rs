@@ -9,13 +9,6 @@
 //! for how to use cell
 //! get_cell_info to get the basic info of a cell
 //!
-//! To support opacity in graphical mode, a draw_history attribute is appended to each cell
-//! to store the symbol and color list.
-//! Symbol and color are pushed to draw_history,
-//! everytime when a sprite is merged to the main buffer.
-//! During rendering, cell is rendered according to its opacity order first to render_texture,
-//! and later render_text displays on the canvas
-//! Please refer to the merge and blit and push_history method
 
 use crate::render::style::{Color, Modifier, Style};
 use serde::{Deserialize, Serialize};
@@ -109,7 +102,6 @@ pub struct Cell {
     pub fg: Color,
     pub bg: Color,
     pub modifier: Modifier,
-    pub draw_history: Vec<CellInfo>,
 }
 
 impl Cell {
@@ -167,26 +159,18 @@ impl Cell {
             .add_modifier(self.modifier)
     }
 
-    pub fn push_history(&mut self) {
-        #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
-        {
-            self.draw_history.push(self.get_cell_info());
-        }
-    }
-
     pub fn reset(&mut self) {
         self.symbol.clear();
         self.symbol.push(' ');
         self.fg = Color::Reset;
         self.bg = Color::Reset;
         self.modifier = Modifier::empty();
-        self.draw_history.clear();
     }
 
     #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
     pub fn is_blank(&self) -> bool {
-        // (self.symbol == " " || self.symbol == cellsym(32)) && self.bg == Color::Reset 
-        false
+        let bg = u8::from(self.bg);
+        (self.symbol == " " || self.symbol == cellsym(32)) && (bg == 0 || bg == 1)
     }
 
     #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
@@ -202,7 +186,6 @@ impl Default for Cell {
             fg: Color::Reset,
             bg: Color::Reset,
             modifier: Modifier::empty(),
-            draw_history: vec![],
         }
     }
 }

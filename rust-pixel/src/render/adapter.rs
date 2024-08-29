@@ -5,7 +5,7 @@
 use crate::render::style::Color;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::util::{
-    Rand, {PointI32, ARect},
+    Rand, {ARect, PointI32},
 };
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::LOGO_FRAME;
@@ -14,21 +14,19 @@ use crate::{
     render::{buffer::Buffer, sprite::Sprites},
     util::Rect,
 };
+// use log::info;
 use std::any::Any;
 use std::time::Duration;
-// use log::info;
 
 // add more files to this list when needed
 // max 255 textures
 // merge l,u,e1,e2 to a complete image
 //
 // c64l.png  c64u.png    -->  c64.png
-// c64e1.png c64e2.png 
+// c64e1.png c64e2.png
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-pub const PIXEL_TEXTURE_FILES: [&'static str; 1] = [
-    "assets/pix/c64.png",
-];
+pub const PIXEL_TEXTURE_FILES: [&'static str; 1] = ["assets/pix/c64.png"];
 
 pub const PIXEL_SYM_WIDTH: f32 = 16.0;
 pub const PIXEL_SYM_HEIGHT: f32 = 16.0;
@@ -260,11 +258,10 @@ where
     F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
 {
     for (i, cell) in buf.content.iter().enumerate() {
-        for sh in &cell.draw_history {
-            let (s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, sh, 0, 0, false);
-            let fc = sh.2.get_rgba();
-            f(&fc, s1, s2, texidx, symidx);
-        }
+        let sh = cell.get_cell_info();
+        let (s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, &sh, 0, 0, false);
+        let fc = sh.2.get_rgba();
+        f(&fc, s1, s2, texidx, symidx);
     }
 }
 
@@ -347,19 +344,19 @@ where
                 r = (stage as u8).saturating_mul(10);
                 g = (stage as u8).saturating_mul(10);
                 b = (stage as u8).saturating_mul(10);
-                a = 255; 
+                a = 255;
                 s2.x = s2.x + randadj;
             } else if stage <= sg as u32 * 2 {
                 r = fc.0;
                 g = fc.1;
                 b = fc.2;
-                a = 255; 
+                a = 255;
             } else {
                 let cc = (stage as u8 - sg as u8 * 2).saturating_mul(10);
                 r = fc.0.saturating_sub(cc);
                 g = fc.1.saturating_sub(cc);
                 b = fc.2.saturating_sub(cc);
-                a = 255; 
+                a = 255;
             }
             f(&(r, g, b, a), s1, s2, texidx, symidx);
         }

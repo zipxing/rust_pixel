@@ -47,7 +47,7 @@ impl SnakeRender {
 
         // Main screen sprite...
         let mut l = Sprite::new(0, 0, (SNAKEW + 2) as u16, (SNAKEH + 2) as u16);
-        l.set_alpha(160);
+        // l.set_alpha(160);
         l.set_color_str(
             20,
             0,
@@ -56,7 +56,7 @@ impl SnakeRender {
             Color::Reset,
         );
         t.add_sprite(l, "SNAKE-BORDER");
-        t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
+        t.add_pixel_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
         t.add_sprite(
             Sprite::new(0, (SNAKEH + 3) as u16, SNAKEW as u16, 1u16),
             "SNAKE-MSG",
@@ -88,7 +88,7 @@ impl SnakeRender {
         let d = model.as_any().downcast_ref::<SnakeModel>().unwrap();
         let ml = self.panel.get_sprite("SNAKE-MSG");
         ml.set_default_str("snake");
-        let l = self.panel.get_sprite("SNAKE");
+        let l = self.panel.get_pixel_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {
             for j in 0..SNAKEW {
