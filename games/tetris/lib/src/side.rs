@@ -439,6 +439,8 @@ impl TetrisCell {
                 self.core.attack[1] = self.core.block_index;
                 self.stat.clear_lines += self.core.full_row_count as i32;
                 let fs: [i64; 4] = [50, 150, 300, 500];
+                //thread 'main' panicked at games/tetris/lib/src/side.rs:443:32: 
+                //index out of bounds: the len is 4 but the index is 4
                 self.stat
                     .add_score(fs[(self.core.full_row_count - 1) as usize]);
                 let mut fv: Vec<i8> = vec!();

@@ -81,9 +81,9 @@ impl TetrisRender {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         match c {
             0 => {
-                c1 = " ";
+                c1 = cellsym(28);
                 fg = Color::Reset;
-                bg = Color::Reset;
+                bg = Color::Indexed(2);
             }
             11 => {
                 c1 = cellsym(160);

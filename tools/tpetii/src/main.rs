@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
+// gray 8x8 image...
 type Image8x8 = Vec<Vec<u8>>;
 struct RGB {
     r: u8,
@@ -19,19 +20,14 @@ struct RGB {
 }
 
 fn main() {
+    let input_image_path;
     let mut width: u32 = 40;
     let mut height: u32 = 25;
     let mut is_petii: bool = false;
-    let input_image_path;
-    let mut cx: u32;
-    let mut cy: u32;
-    let mut cw: u32;
-    let mut ch: u32;
-
-    cx = u32::MAX;
-    cy = u32::MAX;
-    cw = u32::MAX;
-    ch = u32::MAX;
+    let mut cx: u32 = u32::MAX;
+    let mut cy: u32 = u32::MAX;
+    let mut cw: u32 = u32::MAX;
+    let mut ch: u32 = u32::MAX;
 
     let args: Vec<String> = env::args().collect();
 
@@ -80,7 +76,12 @@ fn main() {
 
     // up petscii images...
     let vcs = gen_charset_images(false);
-    let back = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
+    // find background gray value...
+    let bret = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
+    let back = bret.0;
+    let back_rgb = bret.1;
+    println!("back...{} back_rgb...{}", back, back_rgb);
+
 
     // texture=255 表示每个点拥有自己的texture
     // 这种方式更灵活，但数据量会稍大
@@ -97,8 +98,7 @@ fn main() {
             } else {
                 let block_at = get_block_at(&gray_img, j, i);
                 let bm = find_best_match(&block_at, &vcs, back, is_petii);
-                let block_color = get_block_color(&resized_img, j, i);
-                let bc = find_best_color(block_color);
+                let bc = get_petii_block_color(&resized_img, j, i, back_rgb);
                 // 每个点的texture设置为1
                 print!("{},{},1 ", bm, bc,);
             }
@@ -146,7 +146,12 @@ fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
 }
 
 // find background colors...
-fn count_img_colors(img: &DynamicImage, image: &ImageBuffer<Luma<u8>, Vec<u8>>, w: u32, h: u32) -> u8 {
+fn count_img_colors(
+    img: &DynamicImage,
+    image: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    w: u32,
+    h: u32,
+) -> (u8, u32) {
     // (first_x, first_y, count)
     let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
     for i in 0..h {
@@ -160,18 +165,53 @@ fn count_img_colors(img: &DynamicImage, image: &ImageBuffer<Luma<u8>, Vec<u8>>, 
         }
     }
     let mut cv: Vec<_> = cc.iter().collect();
-    cv.sort_by(|a, b| (&a.1.2).cmp(&b.1.2));
-    let bx = cv[0].1.0;
-    let by = cv[0].1.1;
+    cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
+    let bx = cv[0].1 .0;
+    let by = cv[0].1 .1;
+    let bc = cv[0].0;
     // for c in cv {
     //     println!("cc..{:x} {:?}", c.0, c.1);
     // }
+    // for i in 0..h {
+    //     for j in 0..w {
+    //         print!("{:?} ", image.get_pixel(j, i).0[0]);
+    //     }
+    //     println!("");
+    // }
     let gray = image.get_pixel(bx, by).0[0];
     // println!("gray..{}", gray);
-    gray
+    (gray, *bc)
 }
 
-// get block average color(for not petscii image) 
+// get petscii block color
+fn get_petii_block_color(image: &DynamicImage, x: u32, y: u32, back_rgb: u32) -> usize {
+    let mut rgb = None;
+    for i in 0..8usize {
+        for j in 0..8usize {
+            let pixel_x = x * 8 + j as u32;
+            let pixel_y = y * 8 + i as u32;
+            if pixel_x < image.width() && pixel_y < image.height() {
+                let p = image.get_pixel(pixel_x, pixel_y);
+                let k: u32 = ((p[0] as u32) << 24)
+                    + ((p[1] as u32) << 16)
+                    + ((p[2] as u32) << 8)
+                    + (p[3] as u32);
+                if k != back_rgb {
+                    rgb = Some(p);
+                    break;
+                }
+            }
+        }
+    }
+    if rgb != None {
+        let p = rgb.unwrap();
+        find_best_color(RGB{r: p[0], g: p[1], b: p[2]})
+    } else {
+        0
+    }
+}
+
+// get block average color(for not petscii image)
 fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
     let mut r = 0u32;
     let mut g = 0u32;
@@ -224,12 +264,18 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image
     block
 }
 
-fn find_best_match(input_image: &Image8x8, char_images: &[Image8x8], back: u8, is_petii: bool) -> usize {
+fn find_best_match(
+    input_image: &Image8x8,
+    char_images: &[Image8x8],
+    back: u8,
+    is_petii: bool,
+) -> usize {
     let mut min_mse = f64::MAX;
     let mut best_match = 0;
 
     for (i, char_image) in char_images.iter().enumerate() {
         let mse = calculate_mse(input_image, char_image, back, is_petii);
+        // println!("i..{} mse..{}", i, mse);
 
         if mse < min_mse {
             min_mse = mse;
@@ -261,21 +307,28 @@ fn find_best_color(color: RGB) -> usize {
     best_match
 }
 
-fn calc_eigenvector(img: &Image8x8, back:u8, is_petii: bool) -> Vec<i32> {
+fn calc_eigenvector(img: &Image8x8, back: u8, is_petii: bool, is_source: bool) -> Vec<i32> {
     let mut v = vec![0i32; 10];
     let mut min = u8::MAX;
     let mut max = 0u8;
-    for x in 0..8 {
-        for y in 0..8 {
-            let mut p = img[y][x];
-            if p == back {
-                p = 10;
-            }
-            if p > max {
-                max = p;
-            }
-            if p < min {
-                min = p;
+    let mut include_back = false;
+
+    // find min & max gray value...
+    if is_petii {
+        for x in 0..8 {
+            for y in 0..8 {
+                let p = img[y][x];
+                if !include_back {
+                    if p == back {
+                        include_back = true;
+                    }
+                }
+                if p > max {
+                    max = p;
+                }
+                if p < min {
+                    min = p;
+                }
             }
         }
     }
@@ -285,11 +338,12 @@ fn calc_eigenvector(img: &Image8x8, back:u8, is_petii: bool) -> Vec<i32> {
             let p;
             if is_petii {
                 // 提取已有petscii art图片,首先进行二值化
-                let mut iyx = img[y][x];
-                if img[y][x] == back {
-                    iyx = 10;
+                let iyx = img[y][x];
+                if !is_source {
+                    p = if iyx == back { 0i32 } else { 1i32 };
+                } else {
+                    p = if iyx == 0 { 0i32 } else { 1i32 };
                 }
-                p = if iyx <= min { 0i32 } else { 1i32 };
             } else {
                 // 提取普通图片
                 p = img[y][x] as i32;
@@ -330,10 +384,12 @@ fn calc_eigenvector(img: &Image8x8, back:u8, is_petii: bool) -> Vec<i32> {
     v
 }
 
-fn calculate_mse(img1: &Image8x8, img2: &Image8x8, back:u8, is_petii: bool) -> f64 {
+fn calculate_mse(img1: &Image8x8, img2: &Image8x8, back: u8, is_petii: bool) -> f64 {
     let mut mse = 0.0f64;
-    let v1 = calc_eigenvector(img1, back, is_petii);
-    let v2 = calc_eigenvector(img2, back, is_petii);
+    let v1 = calc_eigenvector(img1, back, is_petii, false);
+    let v2 = calc_eigenvector(img2, back, is_petii, true);
+    // println!("input......{:?}", v1);
+    // println!("petii......{:?}", v2);
     for i in 0..10usize {
         mse += ((v1[i] - v2[i]) * (v1[i] - v2[i])) as f64;
     }

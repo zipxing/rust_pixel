@@ -16,6 +16,7 @@ use crate::{
 };
 use std::any::Any;
 use std::time::Duration;
+// use log::info;
 
 // add more files to this list when needed
 // max 255 textures
