@@ -331,43 +331,55 @@ fn find_best_color(color: RGB) -> usize {
 
 fn calc_eigenvector(img: &Image8x8, back: u8, is_petii: bool, is_source: bool) -> Vec<i32> {
     let mut v = vec![0i32; 10];
-    // let mut min = u8::MAX;
-    // let mut max = 0u8;
-    // let mut include_back = false;
+    let mut min = u8::MAX;
+    let mut max = 0u8;
+    let mut include_back = false;
 
-    // // find min & max gray value...
-    // if is_petii {
-    //     for x in 0..8 {
-    //         for y in 0..8 {
-    //             let p = img[y][x];
-    //             if !include_back {
-    //                 if p == back {
-    //                     include_back = true;
-    //                 }
-    //             }
-    //             if p > max {
-    //                 max = p;
-    //             }
-    //             if p < min {
-    //                 min = p;
-    //             }
-    //         }
-    //     }
-    // }
+    // find min & max gray value...
+    if is_petii {
+        for x in 0..8 {
+            for y in 0..8 {
+                let p = img[y][x];
+                if !include_back {
+                    if p == back {
+                        include_back = true;
+                    }
+                }
+                if p > max {
+                    max = p;
+                }
+                if p < min {
+                    min = p;
+                }
+            }
+        }
+    }
 
     for x in 0..8 {
         for y in 0..8 {
             let p;
             if is_petii {
-                // 提取已有petscii art图片,首先进行二值化
+                // gray image8x8 binarization...
                 let iyx = img[y][x];
-                if !is_source {
-                    p = if iyx == back { 0i32 } else { 1i32 };
-                } else {
+                if is_source {
+                    // for petscii source...
                     p = if iyx == 0 { 0i32 } else { 1i32 };
+                } else {
+                    if include_back {
+                        // if block include back colors...
+                        p = if iyx == back { 0i32 } else { 1i32 };
+                    } else {
+                        if min == max {
+                            // if only 1 color...
+                            p = 1i32;
+                        } else {
+                            // min to 0 and max to 1...
+                            p = if iyx == min { 0i32 } else { 1i32 };
+                        }
+                    }
                 }
             } else {
-                // 提取普通图片
+                // normal image...
                 p = img[y][x] as i32;
             }
 
