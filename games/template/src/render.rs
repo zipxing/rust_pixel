@@ -36,8 +36,6 @@ impl TemplateRender {
         let mut gb = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
         gb.set_alpha(30);
         panel.add_sprite(gb, "back");
-        let gb2 = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
-        panel.add_pixel_sprite(gb2, "back2");
         panel.add_sprite(Sprite::new(0, 0, CARDW as u16, CARDH as u16), "t0");
 
         // msg...
@@ -89,13 +87,6 @@ impl Render for TemplateRender {
         {
             let gb = self.panel.get_sprite("back");
             asset2sprite!(gb, context, "back.txt");
-        }
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        {
-            let gb = self.panel.get_sprite("back");
-            asset2sprite!(gb, context, "1.pix");
-            let gb2 = self.panel.get_pixel_sprite("back2");
-            asset2sprite!(gb2, context, "5.pix");
         }
     }
 

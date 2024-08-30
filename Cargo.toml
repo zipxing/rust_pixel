@@ -9,6 +9,8 @@ exclude = [
     'games/template/wasm',
     'apps/palette/ffi',
     'apps/palette/wasm',
+    'games/petview/ffi',
+    'games/petview/wasm',
 ]
 members = [
     'rust-pixel',
