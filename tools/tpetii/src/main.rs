@@ -80,7 +80,7 @@ fn main() {
     let bret = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
     let back = bret.0;
     let back_rgb = bret.1;
-    println!("back...{} back_rgb...{}", back, back_rgb);
+    println!("back...{} back_rgb...{:x}", back, back_rgb);
 
 
     // texture=255 表示每个点拥有自己的texture
@@ -97,6 +97,9 @@ fn main() {
                 print!("{},{},1 ", bm, bc,);
             } else {
                 let block_at = get_block_at(&gray_img, j, i);
+                // if j == 5 && i == 0 {
+                //     println!("block50...{:?}", block_at);
+                // }
                 let bm = find_best_match(&block_at, &vcs, back, is_petii);
                 let bc = get_petii_block_color(&resized_img, j, i, back_rgb);
                 // 每个点的texture设置为1
@@ -161,7 +164,7 @@ fn count_img_colors(
                 + ((p[1] as u32) << 16)
                 + ((p[2] as u32) << 8)
                 + (p[3] as u32);
-            (*cc.entry(k).or_insert((i, j, 0))).2 += 1;
+            (*cc.entry(k).or_insert((j, i, 0))).2 += 1;
         }
     }
     let mut cv: Vec<_> = cc.iter().collect();
@@ -309,29 +312,29 @@ fn find_best_color(color: RGB) -> usize {
 
 fn calc_eigenvector(img: &Image8x8, back: u8, is_petii: bool, is_source: bool) -> Vec<i32> {
     let mut v = vec![0i32; 10];
-    let mut min = u8::MAX;
-    let mut max = 0u8;
-    let mut include_back = false;
+    // let mut min = u8::MAX;
+    // let mut max = 0u8;
+    // let mut include_back = false;
 
-    // find min & max gray value...
-    if is_petii {
-        for x in 0..8 {
-            for y in 0..8 {
-                let p = img[y][x];
-                if !include_back {
-                    if p == back {
-                        include_back = true;
-                    }
-                }
-                if p > max {
-                    max = p;
-                }
-                if p < min {
-                    min = p;
-                }
-            }
-        }
-    }
+    // // find min & max gray value...
+    // if is_petii {
+    //     for x in 0..8 {
+    //         for y in 0..8 {
+    //             let p = img[y][x];
+    //             if !include_back {
+    //                 if p == back {
+    //                     include_back = true;
+    //                 }
+    //             }
+    //             if p > max {
+    //                 max = p;
+    //             }
+    //             if p < min {
+    //                 min = p;
+    //             }
+    //         }
+    //     }
+    // }
 
     for x in 0..8 {
         for y in 0..8 {
