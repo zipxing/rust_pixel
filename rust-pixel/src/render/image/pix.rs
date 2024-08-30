@@ -39,11 +39,13 @@ impl Asset for PixAsset {
 
         let reader = BufReader::new(&self.base.raw_data[..]);
         let re = Regex::new(r"width=(\d+),height=(\d+),texture=(\d+)").unwrap();
+        let re_v2 = Regex::new(r"width=(\d+),height=(\d+),texture=(\d+),back=(\d+)").unwrap();
         let rel0 = Regex::new(r"(\d+),(\d+)(.*?)").unwrap();
         let rel1 = Regex::new(r"(\d+),(\d+),(\d+)(.*?)").unwrap();
         let mut width: u16;
         let mut height: u16;
         let mut texid: u8 = 0;
+        let mut back: u8 = 0;
         let mut lineidx = 0;
         //info!("begin load_pix....");
         let mut start: bool = false;
@@ -59,14 +61,28 @@ impl Asset for PixAsset {
             }
             //info!("load_pix line={}", l);
             if lineidx == 0 {
-                for cap in re.captures_iter(&l) {
-                    width = cap[1].parse::<u16>().unwrap();
-                    height = cap[2].parse::<u16>().unwrap();
-                    texid = cap[3].parse::<u8>().unwrap();
-                    info!("w..{} h..{} l..{}", width, height, texid);
-                    let size = Rect::new(0, 0, width, height);
-                    sp.resize(size);
+                if re_v2.is_match(&l) {
+                    for cap in re_v2.captures_iter(&l) {
+                        width = cap[1].parse::<u16>().unwrap();
+                        height = cap[2].parse::<u16>().unwrap();
+                        texid = cap[3].parse::<u8>().unwrap();
+                        back = cap[4].parse::<u8>().unwrap();
+                        info!("w..{} h..{} l..{} back..{}", width, height, texid, back);
+                        let size = Rect::new(0, 0, width, height);
+                        sp.resize(size);
+                    }
                 }
+                if re.is_match(&l) {
+                    for cap in re.captures_iter(&l) {
+                        width = cap[1].parse::<u16>().unwrap();
+                        height = cap[2].parse::<u16>().unwrap();
+                        texid = cap[3].parse::<u8>().unwrap();
+                        info!("w..{} h..{} l..{}", width, height, texid);
+                        let size = Rect::new(0, 0, width, height);
+                        sp.resize(size);
+                    }
+                }
+                info!("back....{}", back);
             } else {
                 let mut col = 0;
                 if texid < 255 {

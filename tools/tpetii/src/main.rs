@@ -80,12 +80,27 @@ fn main() {
     let bret = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
     let back = bret.0;
     let back_rgb = bret.1;
-    println!("back...{} back_rgb...{:x}", back, back_rgb);
+    let back256 = find_best_color(RGB {
+        r: (back_rgb >> 24) as u8,
+        g: (back_rgb >> 16) as u8,
+        b: (back_rgb >> 8) as u8,
+    });
 
+    // println!(
+    //     "back...{} back_rgb...{:x} back256...{}",
+    //     back, back_rgb, back256
+    // );
 
     // texture=255 表示每个点拥有自己的texture
     // 这种方式更灵活，但数据量会稍大
-    println!("width={},height={},texture=255", width, height);
+    if !is_petii {
+        println!("width={},height={},texture=255", width, height);
+    } else {
+        println!(
+            "width={},height={},texture=255,back={}",
+            width, height, back256
+        );
+    }
     for i in 0..height {
         for j in 0..width {
             if !is_petii {
@@ -208,7 +223,11 @@ fn get_petii_block_color(image: &DynamicImage, x: u32, y: u32, back_rgb: u32) ->
     }
     if rgb != None {
         let p = rgb.unwrap();
-        find_best_color(RGB{r: p[0], g: p[1], b: p[2]})
+        find_best_color(RGB {
+            r: p[0],
+            g: p[1],
+            b: p[2],
+        })
     } else {
         0
     }
