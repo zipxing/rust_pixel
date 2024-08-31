@@ -24,101 +24,60 @@ fn main() {
     let mut width: u32 = 40;
     let mut height: u32 = 25;
     let mut is_petii: bool = false;
-    let mut cx: u32 = u32::MAX;
-    let mut cy: u32 = u32::MAX;
-    let mut cw: u32 = u32::MAX;
-    let mut ch: u32 = u32::MAX;
 
     let args: Vec<String> = env::args().collect();
 
     match args.len() {
-        2 => {
-            input_image_path = Path::new(&args[1]);
-        }
-        4 => {
-            input_image_path = Path::new(&args[1]);
-            width = args[2].parse().unwrap();
-            height = args[3].parse().unwrap();
-        }
-        5 => {
-            input_image_path = Path::new(&args[1]);
-            width = args[2].parse().unwrap();
-            height = args[3].parse().unwrap();
-            is_petii = args[4].parse().unwrap();
-        }
-        9 => {
-            input_image_path = Path::new(&args[1]);
-            width = args[2].parse().unwrap();
-            height = args[3].parse().unwrap();
-            is_petii = args[4].parse().unwrap();
-            cx = args[5].parse().unwrap();
-            cy = args[6].parse().unwrap();
-            cw = args[7].parse().unwrap();
-            ch = args[8].parse().unwrap();
-        }
+        2 | 4 | 5 | 9 => {}
         _ => {
             println!("Usage: tpetii <image file path> [<width>] [<height>] [<is_petscii>]");
             return;
         }
     }
-
+    input_image_path = Path::new(&args[1]);
     let mut img = image::open(&input_image_path).expect("Failed to open the input image");
-
-    if cx != u32::MAX {
+    if args.len() > 2 {
+        width = args[2].parse().unwrap();
+        height = args[3].parse().unwrap();
+    }
+    if args.len() > 4 {
+        is_petii = args[4].parse().unwrap();
+    }
+    if args.len() == 9 {
+        let cx = args[5].parse().unwrap();
+        let cy = args[6].parse().unwrap();
+        let cw = args[7].parse().unwrap();
+        let ch = args[8].parse().unwrap();
         img = img.crop(cx, cy, cw, ch);
         img.save("tmp/out0.png").unwrap();
     }
+
     let resized_img =
         img.resize_exact(width * 8, height * 8, image::imageops::FilterType::Lanczos3);
     resized_img.save("tmp/out1.png").unwrap();
     let gray_img = resized_img.clone().into_luma8();
     gray_img.save("tmp/out2.png").unwrap();
 
-    // up petscii images...
+    // get petscii images...
     let vcs = gen_charset_images(false);
-    // find background gray value...
+
+    // find background color...
     let bret = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
-    let back = bret.0;
+    let back_gray = bret.0;
     let back_rgb = bret.1;
-    let back256 = find_best_color(RGB {
-        r: (back_rgb >> 24) as u8,
-        g: (back_rgb >> 16) as u8,
-        b: (back_rgb >> 8) as u8,
-    });
 
-    // println!(
-    //     "back...{} back_rgb...{:x} back256...{}",
-    //     back, back_rgb, back256
-    // );
-
-    // texture=255 表示每个点拥有自己的texture
-    // 这种方式更灵活，但数据量会稍大
-    if !is_petii {
-        println!("width={},height={},texture=255", width, height);
-    } else {
-        println!(
-            "width={},height={},texture=255,back={}",
-            width, height, back256
-        );
-    }
+    println!("width={},height={},texture=255", width, height);
     for i in 0..height {
         for j in 0..width {
+            let block_at = get_block_at(&gray_img, j, i);
+            let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
             if !is_petii {
-                let block_at = get_block_at(&gray_img, j, i);
                 let block_color = get_block_color(&resized_img, j, i);
                 let bc = find_best_color(block_color);
-                let bm = find_best_match(&block_at, &vcs, back, is_petii);
-                // 每个点的texture设置为1
                 print!("{},{},1 ", bm, bc,);
             } else {
-                let block_at = get_block_at(&gray_img, j, i);
-                // if j == 5 && i == 0 {
-                //     println!("block50...{:?}", block_at);
-                // }
-                let bm = find_best_match(&block_at, &vcs, back, is_petii);
-                let bc = get_petii_block_color(&resized_img, j, i, back_rgb);
-                // 每个点的texture设置为1
-                print!("{},{},1 ", bm, bc,);
+                let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb);
+                print!("{},{},{},1 ", bm, bc.0, bc.1);
             }
         }
         println!("");
@@ -202,8 +161,14 @@ fn count_img_colors(
 }
 
 // get petscii block color
-fn get_petii_block_color(image: &DynamicImage, x: u32, y: u32, back_rgb: u32) -> usize {
-    let mut rgb = None;
+fn get_petii_block_color(
+    image: &DynamicImage,
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    x: u32,
+    y: u32,
+    back_rgb: u32,
+) -> (usize, usize) {
+    let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
     for i in 0..8usize {
         for j in 0..8usize {
             let pixel_x = x * 8 + j as u32;
@@ -214,22 +179,60 @@ fn get_petii_block_color(image: &DynamicImage, x: u32, y: u32, back_rgb: u32) ->
                     + ((p[1] as u32) << 16)
                     + ((p[2] as u32) << 8)
                     + (p[3] as u32);
-                if k != back_rgb {
-                    rgb = Some(p);
-                    break;
-                }
+                cc.entry(k).or_insert((pixel_x, pixel_y));
             }
         }
     }
-    if rgb != None {
-        let p = rgb.unwrap();
-        find_best_color(RGB {
-            r: p[0],
-            g: p[1],
-            b: p[2],
-        })
+    let cv: Vec<_> = cc.iter().collect();
+    let mut include_back = false;
+    let clen = cv.len();
+    for c in &cv {
+        if *c.0 == back_rgb {
+            include_back = true;
+        }
+    }
+    let mut ret = None;
+    if include_back {
+        if clen == 1 {
+            ret = Some((back_rgb, back_rgb));
+            // println!("<B>{:?}", ret);
+        } else if clen == 2 {
+            let mut r = (back_rgb, back_rgb);
+            if *cv[0].0 != back_rgb {
+                r.1 = *cv[0].0;
+            } 
+            if *cv[1].0 != back_rgb {
+                r.1 = *cv[1].0;
+            } 
+            ret = Some(r);
+            // println!("<B,F>{:?}", ret);
+        } else {
+            println!("ERROR!!!");
+        }
     } else {
-        0
+        if clen == 1 {
+            ret = Some((*cv[0].0, *cv[0].0));
+            // println!("<F>{:?}", ret);
+        } else if clen == 2 {
+            let g0 = img.get_pixel(cv[0].1.0, cv[0].1.1).0[0];
+            let g1 = img.get_pixel(cv[1].1.0, cv[1].1.1).0[0];
+            if g0 <= g1 {
+                ret = Some((*cv[0].0, *cv[1].0));
+            } else {
+                ret = Some((*cv[1].0, *cv[0].0));
+            }
+            // println!("<F1,F2>{:?}", ret);
+        } else {
+            println!("ERROR2!!!");
+        }
+    }
+    match ret {
+        Some(r) => {
+            (find_best_color_u32(r.0), find_best_color_u32(r.1))
+        }
+        _ => {
+            (0, 0)
+        }
     }
 }
 
@@ -306,6 +309,14 @@ fn find_best_match(
     }
 
     best_match
+}
+
+fn find_best_color_u32(c: u32) -> usize {
+    find_best_color(RGB{
+        r: (c >> 24) as u8,
+        g: (c >> 16) as u8,
+        b: (c >> 8) as u8,
+    })
 }
 
 fn find_best_color(color: RGB) -> usize {

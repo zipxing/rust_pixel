@@ -3,9 +3,10 @@
 
 //! Implements load/save of image files in pix format
 //!
-//! pix file stores the ascii art images in graphical mode, saving the cell sequence row by row
-//! cell: char sym index, fore- and background colors (background color is used to mark texture in graphical mode)
+//! pix file stores the petscii art images in graphical mode, saving the cell sequence row by row
+//! cell: symbol index, fore-color, texture_id 
 //! $ cat assets/snake/back.pix
+//!
 
 use crate::{
     asset::{Asset, AssetBase},
@@ -39,13 +40,12 @@ impl Asset for PixAsset {
 
         let reader = BufReader::new(&self.base.raw_data[..]);
         let re = Regex::new(r"width=(\d+),height=(\d+),texture=(\d+)").unwrap();
-        let re_v2 = Regex::new(r"width=(\d+),height=(\d+),texture=(\d+),back=(\d+)").unwrap();
         let rel0 = Regex::new(r"(\d+),(\d+)(.*?)").unwrap();
         let rel1 = Regex::new(r"(\d+),(\d+),(\d+)(.*?)").unwrap();
+        let rel1_v2 = Regex::new(r"(\d+),(\d+),(\d+),(\d+)(.*?)").unwrap();
         let mut width: u16;
         let mut height: u16;
         let mut texid: u8 = 0;
-        let mut back: u8 = 0;
         let mut lineidx = 0;
         //info!("begin load_pix....");
         let mut start: bool = false;
@@ -61,17 +61,6 @@ impl Asset for PixAsset {
             }
             //info!("load_pix line={}", l);
             if lineidx == 0 {
-                if re_v2.is_match(&l) {
-                    for cap in re_v2.captures_iter(&l) {
-                        width = cap[1].parse::<u16>().unwrap();
-                        height = cap[2].parse::<u16>().unwrap();
-                        texid = cap[3].parse::<u8>().unwrap();
-                        back = cap[4].parse::<u8>().unwrap();
-                        info!("w..{} h..{} l..{} back..{}", width, height, texid, back);
-                        let size = Rect::new(0, 0, width, height);
-                        sp.resize(size);
-                    }
-                }
                 if re.is_match(&l) {
                     for cap in re.captures_iter(&l) {
                         width = cap[1].parse::<u16>().unwrap();
@@ -82,7 +71,6 @@ impl Asset for PixAsset {
                         sp.resize(size);
                     }
                 }
-                info!("back....{}", back);
             } else {
                 let mut col = 0;
                 if texid < 255 {
@@ -100,19 +88,39 @@ impl Asset for PixAsset {
                         col += 1;
                     }
                 } else {
-                    for cap in rel1.captures_iter(&l) {
-                        let idx = cap[1].parse::<u8>().unwrap();
-                        let fgc = cap[2].parse::<u8>().unwrap();
-                        let bgc = cap[3].parse::<u8>().unwrap();
-                        sp.set_str(
-                            col,
-                            lineidx - 1,
-                            cellsym(idx),
-                            Style::default()
-                                .fg(Color::Indexed(fgc))
-                                .bg(Color::Indexed(bgc)),
-                        );
-                        col += 1;
+                    if rel1_v2.is_match(&l) {
+                        for cap in rel1_v2.captures_iter(&l) {
+                            let idx = cap[1].parse::<u8>().unwrap();
+                            let _gc = cap[2].parse::<u8>().unwrap();
+                            let fgc = cap[3].parse::<u8>().unwrap();
+                            let bgc = cap[4].parse::<u8>().unwrap();
+                            sp.set_str(
+                                col,
+                                lineidx - 1,
+                                cellsym(idx),
+                                Style::default()
+                                    .fg(Color::Indexed(fgc))
+                                    .bg(Color::Indexed(bgc)),
+                            );
+                            col += 1;
+                        }
+                    } else {
+                        if rel1.is_match(&l) {
+                            for cap in rel1.captures_iter(&l) {
+                                let idx = cap[1].parse::<u8>().unwrap();
+                                let fgc = cap[2].parse::<u8>().unwrap();
+                                let bgc = cap[3].parse::<u8>().unwrap();
+                                sp.set_str(
+                                    col,
+                                    lineidx - 1,
+                                    cellsym(idx),
+                                    Style::default()
+                                        .fg(Color::Indexed(fgc))
+                                        .bg(Color::Indexed(bgc)),
+                                );
+                                col += 1;
+                            }
+                        }
                     }
                 }
             }
