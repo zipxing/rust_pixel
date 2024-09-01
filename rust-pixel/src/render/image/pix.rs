@@ -77,13 +77,14 @@ impl Asset for PixAsset {
                     for cap in rel0.captures_iter(&l) {
                         let idx = cap[1].parse::<u8>().unwrap();
                         let fgc = cap[2].parse::<u8>().unwrap();
-                        sp.set_str(
+                        sp.set_str_tex(
                             col,
                             lineidx - 1,
                             cellsym(idx),
                             Style::default()
                                 .fg(Color::Indexed(fgc))
                                 .bg(Color::Indexed(texid)),
+                            texid,
                         );
                         col += 1;
                     }
@@ -91,16 +92,17 @@ impl Asset for PixAsset {
                     if rel1_v2.is_match(&l) {
                         for cap in rel1_v2.captures_iter(&l) {
                             let idx = cap[1].parse::<u8>().unwrap();
-                            let _gc = cap[2].parse::<u8>().unwrap();
-                            let fgc = cap[3].parse::<u8>().unwrap();
+                            let fgc = cap[2].parse::<u8>().unwrap();
+                            let tex = cap[3].parse::<u8>().unwrap();
                             let bgc = cap[4].parse::<u8>().unwrap();
-                            sp.set_str(
+                            sp.set_str_tex(
                                 col,
                                 lineidx - 1,
                                 cellsym(idx),
                                 Style::default()
                                     .fg(Color::Indexed(fgc))
                                     .bg(Color::Indexed(bgc)),
+                                tex,
                             );
                             col += 1;
                         }
@@ -110,13 +112,14 @@ impl Asset for PixAsset {
                                 let idx = cap[1].parse::<u8>().unwrap();
                                 let fgc = cap[2].parse::<u8>().unwrap();
                                 let bgc = cap[3].parse::<u8>().unwrap();
-                                sp.set_str(
+                                sp.set_str_tex(
                                     col,
                                     lineidx - 1,
                                     cellsym(idx),
                                     Style::default()
                                         .fg(Color::Indexed(fgc))
                                         .bg(Color::Indexed(bgc)),
+                                    bgc,
                                 );
                                 col += 1;
                             }
@@ -145,7 +148,7 @@ impl Asset for PixAsset {
             let line =
                 &content.content[(row * width + x1) as usize..(row * width + x2 + 1) as usize];
             for (_i, cell) in line.iter().enumerate() {
-                let (idx, _, _) = cell.get_cell_info();
+                let (idx, _, _, _) = cell.get_cell_info();
                 let _ = write!(ptr, "{},{},{} ", idx, u8::from(cell.fg), u8::from(cell.bg));
             }
             let _ = write!(ptr, "\n");

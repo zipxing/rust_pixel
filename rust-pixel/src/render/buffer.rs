@@ -152,22 +152,36 @@ impl Buffer {
         self.set_str(0, 0, string, Style::default());
     }
 
-    //相对坐标, 游戏精灵里，用这个来设置内容比较方便
+    //relative pos in game sprite, easier to set content
+    pub fn set_str_tex<S>(&mut self, x: u16, y: u16, string: S, style: Style, tex: u8)
+    where
+        S: AsRef<str>,
+    {
+        self.set_stringn(x + self.area.x, y + self.area.y, string, usize::MAX, style, tex);
+    }
+
     //relative pos in game sprite, easier to set content
     pub fn set_str<S>(&mut self, x: u16, y: u16, string: S, style: Style)
     where
         S: AsRef<str>,
     {
-        self.set_stringn(x + self.area.x, y + self.area.y, string, usize::MAX, style);
+        self.set_stringn(x + self.area.x, y + self.area.y, string, usize::MAX, style, 0);
     }
 
-    //绝对坐标
+    //absolute pos
+    pub fn set_string_tex<S>(&mut self, x: u16, y: u16, string: S, style: Style, tex: u8)
+    where
+        S: AsRef<str>,
+    {
+        self.set_stringn(x, y, string, usize::MAX, style, tex);
+    }
+
     //absolute pos
     pub fn set_string<S>(&mut self, x: u16, y: u16, string: S, style: Style)
     where
         S: AsRef<str>,
     {
-        self.set_stringn(x, y, string, usize::MAX, style);
+        self.set_stringn(x, y, string, usize::MAX, style, 0);
     }
 
     pub fn set_stringn<S>(
@@ -177,6 +191,7 @@ impl Buffer {
         string: S,
         width: usize,
         style: Style,
+        tex: u8,
     ) -> (u16, u16)
     where
         S: AsRef<str>,
@@ -198,6 +213,7 @@ impl Buffer {
 
             self.content[index].set_symbol(s);
             self.content[index].set_style(style);
+            self.content[index].set_texture(tex);
 
             // Reset following cells if multi-width (they would be hidden by the grapheme),
             for i in index + 1..index + width {

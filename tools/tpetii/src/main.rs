@@ -77,7 +77,8 @@ fn main() {
                 print!("{},{},1 ", bm, bc,);
             } else {
                 let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb);
-                print!("{},{},{},1 ", bm, bc.0, bc.1);
+                // sym, fg, tex, bg
+                print!("{},{},1,{} ", bm, bc.1, bc.0);
             }
         }
         println!("");

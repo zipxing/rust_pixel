@@ -46,8 +46,8 @@ lazy_static! {
 }
 
 
-/// sym_index, texture_index, fg_color_index
-pub type CellInfo = (u8, u8, Color);
+/// sym_index, texture_index, fg_color, bg_color
+pub type CellInfo = (u8, u8, Color, Color);
 
 /// returns a cellsym char by index
 ///
@@ -102,6 +102,7 @@ pub struct Cell {
     pub fg: Color,
     pub bg: Color,
     pub modifier: Modifier,
+    pub tex: u8,
 }
 
 impl Cell {
@@ -121,12 +122,17 @@ impl Cell {
     ///
     /// sym_index, texture_index, fg_color_index
     pub fn get_cell_info(&self) -> CellInfo {
-        (cellinfo(&self.symbol), u8::from(self.bg), self.fg)
+        (cellinfo(&self.symbol), self.tex, self.fg, self.bg)
     }
 
     pub fn set_char(&mut self, ch: char) -> &mut Cell {
         self.symbol.clear();
         self.symbol.push(ch);
+        self
+    }
+
+    pub fn set_texture(&mut self, tex: u8) -> &mut Cell {
+        self.tex = tex;
         self
     }
 
@@ -186,6 +192,7 @@ impl Default for Cell {
             fg: Color::Reset,
             bg: Color::Reset,
             modifier: Modifier::empty(),
+            tex: 0,
         }
     }
 }

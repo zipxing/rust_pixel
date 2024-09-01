@@ -2,7 +2,6 @@
 // Only support graphics mode!!!
 //
 use crate::model::TowerModel;
-use rust_pixel::render::cell::cellsym;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -163,12 +162,12 @@ impl TowerRender {
                     if i % 3 == 0 && j % 3 == 0 {
                         sym = 102u8;
                     }
-                    l.set_color_str(
+                    l.set_graph_sym(
                         j as u16,
                         i as u16,
-                        cellsym(sym),
+                        0,
+                        sym,
                         Color::Indexed(235),
-                        Color::Reset,
                     );
                 }
             }

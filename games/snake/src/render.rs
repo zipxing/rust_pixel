@@ -56,7 +56,10 @@ impl SnakeRender {
             Color::Reset,
         );
         t.add_sprite(l, "SNAKE-BORDER");
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         t.add_pixel_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
         t.add_sprite(
             Sprite::new(0, (SNAKEH + 3) as u16, SNAKEW as u16, 1u16),
             "SNAKE-MSG",
@@ -88,6 +91,9 @@ impl SnakeRender {
         let d = model.as_any().downcast_ref::<SnakeModel>().unwrap();
         let ml = self.panel.get_sprite("SNAKE-MSG");
         ml.set_default_str("snake");
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        let l = self.panel.get_sprite("SNAKE");
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let l = self.panel.get_pixel_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {

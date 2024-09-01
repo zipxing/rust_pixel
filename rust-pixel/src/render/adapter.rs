@@ -236,7 +236,8 @@ where
         let ph = s.content.area.height;
 
         for (i, cell) in s.content.content.iter().enumerate() {
-            let sh = &cell.get_cell_info();
+            let sh_with_back = &cell.get_cell_info();
+            let sh = &(sh_with_back.0, sh_with_back.1, sh_with_back.2);
             let (s1, s2, texidx, symidx) = render_helper(pw, rx, ry, i, sh, px, py, false);
             let x = i % pw as usize;
             let y = i / pw as usize;
@@ -258,7 +259,8 @@ where
     F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
 {
     for (i, cell) in buf.content.iter().enumerate() {
-        let sh = cell.get_cell_info();
+        let sh_with_back = cell.get_cell_info();
+        let sh = &(sh_with_back.0, sh_with_back.1, sh_with_back.2);
         let (s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, &sh, 0, 0, false);
         let fc = sh.2.get_rgba();
         f(&fc, s1, s2, texidx, symidx);

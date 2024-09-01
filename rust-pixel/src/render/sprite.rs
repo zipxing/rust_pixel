@@ -161,13 +161,14 @@ impl Sprite {
 
     /// set graphic model symbol(texture:texture_id, index:sym) at (x,y) with fgcolor... 
     pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
-        self.content.set_str(
+        self.content.set_str_tex(
             x,
             y,
             cellsym(sym),
             Style::default()
                 .fg(f)
-                .bg(Color::Indexed(texture_id)),
+                .bg(Color::Reset),
+            texture_id
         );
     }
 
@@ -344,13 +345,14 @@ impl Sprite {
             let sym = syms[p.2 as usize];
             if let Some(s) = sym {
                 if x < self.content.area.width && y < self.content.area.height {
-                    self.content.set_str(
+                    self.content.set_str_tex(
                         x,
                         y,
                         cellsym(s),
                         Style::default()
                             .fg(Color::Indexed(fg_color))
                             .bg(Color::Indexed(bg_color)),
+                        bg_color,
                     );
                 }
             }

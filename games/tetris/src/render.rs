@@ -2,8 +2,6 @@ use crate::model::TetrisModel;
 use tetris_lib::constant::*;
 //use std::fs::File;
 //use std::io::Write;
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-use rust_pixel::render::cell::cellsym;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -71,39 +69,49 @@ impl TetrisRender {
             Color::LightMagenta,
             Color::LightCyan,
         ];
+
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let c1: &str;
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let c2: &str;
-        let fg: Color;
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let bg: Color;
+
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        let c1: u8;
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        let tex: u8;
+
+        let fg: Color;
+
         let l = self.panel.get_sprite(sname);
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         match c {
             0 => {
-                c1 = cellsym(32);
+                c1 = 32;
                 fg = Color::Reset;
-                bg = Color::Reset;
+                tex = 0;
             }
             11 => {
-                c1 = cellsym(160);
+                c1 = 160;
                 fg = Color::Indexed(240);
-                bg = Color::Reset;
+                tex = 0;
             }
             20 => {
-                c1 = cellsym(102);
+                c1 = 102;
                 fg = Color::Indexed(242);
-                bg = Color::Red;
+                tex = 1;
             }
             30 => {
-                c1 = cellsym(83);
+                c1 = 83;
                 fg = Color::Indexed(231);
-                bg = Color::Red;
+                tex = 1;
             }
             _ => {
-                c1 = cellsym(207);
+                c1 = 207;
                 fg = cv[(c % 100) as usize % cv.len()];
-                bg = Color::Red;
+                tex = 1;
             }
         }
 
@@ -143,7 +151,7 @@ impl TetrisRender {
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         if x < HENG && y < ZONG {
-            l.set_color_str(x, y, c1, fg, bg);
+            l.set_graph_sym(x, y, tex, c1, fg);
         }
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         if x < HENG * 2 && y < ZONG {
