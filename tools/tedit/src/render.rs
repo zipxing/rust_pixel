@@ -550,7 +550,6 @@ impl Render for TeditRender {
         }
 
         /*
-        //捕捉Esc序列到文件...用于调试
         self.panelf.rewind();
         self.panelf.draw(|f| {
             f.render_widget(self.sprites.get("COLOR"));
