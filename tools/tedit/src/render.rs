@@ -234,11 +234,12 @@ impl TeditRender {
         for i in 0..SYMH as usize - 2 {
             for j in 0..SYMW as usize {
                 let sidx = SYMBOL_SDL_LOW[i * SYMW as usize + j];
-                cl.content.set_str(
+                cl.content.set_str_tex(
                     1 + j as u16,
                     i as u16 + 1,
                     cellsym(sidx as u8),
                     Style::default().fg(Color::White).bg(Color::Indexed(0)),
+                    0,
                 );
             }
         }
@@ -387,13 +388,14 @@ impl TeditRender {
                         ((i * (SYMW - 2) as usize + j - 1) as u8, Color::White)
                     }
                 };
-                sb.content.set_str(
+                sb.content.set_str_tex(
                     1 + j as u16,
                     i as u16 + 1,
                     cellsym(sidx as u8),
                     Style::default()
                         .fg(fc)
                         .bg(Color::Indexed(d.sym_tab_idx)),
+                    d.sym_tab_idx
                 );
             }
         }

@@ -236,52 +236,55 @@ impl Sprite {
         };
         if borders.intersects(Borders::LEFT) {
             for y in 0..self.content.area.height {
-                self.content.set_str(0, y, SYMBOL_LINE[lineidx[0]], style);
+                self.content.set_str_tex(0, y, SYMBOL_LINE[lineidx[0]], style, 1);
             }
         }
         if borders.intersects(Borders::TOP) {
             for x in 0..self.content.area.width {
-                self.content.set_str(x, 0, SYMBOL_LINE[lineidx[1]], style);
+                self.content.set_str_tex(x, 0, SYMBOL_LINE[lineidx[1]], style, 1);
             }
         }
         if borders.intersects(Borders::RIGHT) {
             let x = self.content.area.width - 1;
             for y in 0..self.content.area.height {
-                self.content.set_str(x, y, SYMBOL_LINE[lineidx[0]], style);
+                self.content.set_str_tex(x, y, SYMBOL_LINE[lineidx[0]], style, 1);
             }
         }
         if borders.intersects(Borders::BOTTOM) {
             let y = self.content.area.height - 1;
             for x in 0..self.content.area.width {
-                self.content.set_str(x, y, SYMBOL_LINE[lineidx[1]], style);
+                self.content.set_str_tex(x, y, SYMBOL_LINE[lineidx[1]], style, 1);
             }
         }
         if borders.contains(Borders::RIGHT | Borders::BOTTOM) {
-            self.content.set_str(
+            self.content.set_str_tex(
                 self.content.area.width - 1,
                 self.content.area.height - 1,
                 SYMBOL_LINE[lineidx[4]],
                 style,
+                1
             );
         }
         if borders.contains(Borders::RIGHT | Borders::TOP) {
-            self.content.set_str(
+            self.content.set_str_tex(
                 self.content.area.width - 1,
                 0,
                 SYMBOL_LINE[lineidx[2]],
                 style,
+                1,
             );
         }
         if borders.contains(Borders::LEFT | Borders::BOTTOM) {
-            self.content.set_str(
+            self.content.set_str_tex(
                 0,
                 self.content.area.height - 1,
                 SYMBOL_LINE[lineidx[5]],
                 style,
+                1,
             );
         }
         if borders.contains(Borders::LEFT | Borders::TOP) {
-            self.content.set_str(0, 0, SYMBOL_LINE[lineidx[3]], style);
+            self.content.set_str_tex(0, 0, SYMBOL_LINE[lineidx[3]], style, 1);
         }
     }
 
