@@ -79,7 +79,7 @@ pub fn cellsym(idx: u8) -> &'static str {
 /// get index idx from a symbol string
 /// return idx, if it is a unicode char
 /// otherwise get index from CELL_SYM_MAP
-pub fn cellinfo(symbol: &String) -> u8 {
+fn symidx(symbol: &String) -> u8 {
     let sbts = symbol.as_bytes();
     if sbts.len() == 3 {
         //判断是unicode数学符号
@@ -120,9 +120,9 @@ impl Cell {
     ///
     /// refers to the flush method in panel.rs
     ///
-    /// sym_index, texture_index, fg_color_index
+    /// sym_index, texture_index, fg_color, bg_color
     pub fn get_cell_info(&self) -> CellInfo {
-        (cellinfo(&self.symbol), self.tex, self.fg, self.bg)
+        (symidx(&self.symbol), self.tex, self.fg, self.bg)
     }
 
     pub fn set_char(&mut self, ch: char) -> &mut Cell {

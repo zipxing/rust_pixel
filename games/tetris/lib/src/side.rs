@@ -266,7 +266,6 @@ impl TetrisCell {
         self.core.full_row_count = 0;
     }
 
-    //计算空洞，每列行高，等用于AI的数据
     //calc empty blocks, height of each row for AI uses
     pub fn update_colholetop(&mut self, gxs: u8, gxe: u8) {
         let mc = &mut self.core;
@@ -295,7 +294,6 @@ impl TetrisCell {
         }
     }
 
-    //直落
     //fall
     pub fn fall(&mut self, blocks: &[i8]) {
         while self.move_block(Move::DropDown, false) != MoveRet::ReachBottom {
@@ -307,7 +305,6 @@ impl TetrisCell {
         self.make_shadow();
     }
 
-    //用于预先绘制下落到底部的虚影，用于更好的瞄准
     //draw the shadow while falling down, for better aiming
     pub fn make_shadow(&mut self) {
         let tmp = self.core;
@@ -353,7 +350,6 @@ impl TetrisCell {
 
     fn reach_bottom(&mut self, dir: Move, ai: bool, blk: i8, cx: i8, cy: i8, z: i8) -> MoveRet {
         if dir == Move::Down {
-            //普通下落（非直落）还没粘住的情况
             //normal fall
             if !self.need_stable {
                 if timer_stage(&format!("pre-stable{}", self.index)) == 0 {
@@ -414,7 +410,6 @@ impl TetrisCell {
             }
         }
 
-        //如果有满行，设置full_rows_count
         //if the row is full, set full_rows_count
         if self.core.full_row_count > 0 {
             if !ai {
@@ -439,7 +434,7 @@ impl TetrisCell {
                 self.core.attack[1] = self.core.block_index;
                 self.stat.clear_lines += self.core.full_row_count as i32;
                 let fs: [i64; 4] = [50, 150, 300, 500];
-                //thread 'main' panicked at games/tetris/lib/src/side.rs:443:32: 
+                //TODO: thread 'main' panicked at games/tetris/lib/src/side.rs:443:32: 
                 //index out of bounds: the len is 4 but the index is 4
                 self.stat
                     .add_score(fs[(self.core.full_row_count - 1) as usize]);
