@@ -147,10 +147,6 @@ pub const COLOR_PATTERN: [u16; 270] = [
 pub const TITLE_COLOR: Color = Color::Indexed(222);
 pub const MENUFG_COLOR: Color = Color::Indexed(253);
 #[cfg(not(feature = "sdl"))]
-pub const BORDER_BG: Color = Color::Indexed(0);
-#[cfg(feature = "sdl")]
-pub const BORDER_BG: Color = Color::Indexed(1);
-#[cfg(not(feature = "sdl"))]
 pub const MENUBG_COLOR: Color = Color::Indexed(236);
 #[cfg(feature = "sdl")]
 pub const MENUBG_COLOR: Color = Color::Indexed(0);
@@ -170,7 +166,7 @@ impl TeditRender {
         l.set_border(
             Borders::ALL,
             BorderType::Rounded,
-            Style::default().fg(Color::DarkGray).bg(BORDER_BG),
+            Style::default().fg(Color::DarkGray).bg(Color::Reset),
         );
         l.content.set_str(
             7,
@@ -213,7 +209,7 @@ impl TeditRender {
         cl.set_border(
             Borders::ALL,
             BorderType::Rounded,
-            Style::default().fg(Color::DarkGray).bg(BORDER_BG),
+            Style::default().fg(Color::DarkGray).bg(Color::Reset),
         );
         cl.content.set_str(
             6,
@@ -256,7 +252,7 @@ impl TeditRender {
         elb.set_border(
             Borders::ALL,
             BorderType::Rounded,
-            Style::default().fg(Color::DarkGray).bg(BORDER_BG),
+            Style::default().fg(Color::DarkGray).bg(Color::Reset),
         );
         elb.content.set_str(
             EDITW / 2 - 2,
@@ -394,7 +390,7 @@ impl TeditRender {
                     cellsym(sidx as u8),
                     Style::default()
                         .fg(fc)
-                        .bg(Color::Indexed(d.sym_tab_idx)),
+                        .bg(Color::Reset),
                     d.sym_tab_idx
                 );
             }

@@ -354,7 +354,7 @@ impl Sprite {
                         cellsym(s),
                         Style::default()
                             .fg(Color::Indexed(fg_color))
-                            .bg(Color::Indexed(bg_color)),
+                            .bg(Color::Reset),
                         bg_color,
                     );
                 }

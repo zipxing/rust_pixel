@@ -257,6 +257,10 @@ impl Buffer {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let fc = other.content[pos_other].fg.get_rgba();
+            if other.content[pos_other].bg != Color::Reset {
+                let bc = other.content[pos_other].bg.get_rgba();
+                self.content[pos_self].bg = Color::Rgba(bc.0, bc.1, bc.2, alpha);
+            } 
             self.content[pos_self].fg = Color::Rgba(fc.0, fc.1, fc.2, alpha);
         }
     }

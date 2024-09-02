@@ -334,15 +334,29 @@ impl Adapter for SdlAdapter {
 
                 let rx = self.base.ratio_x;
                 let ry = self.base.ratio_y;
-                let mut rfunc =
-                    |fc: &(u8, u8, u8, u8), s1: ARect, s2: ARect, texidx: usize, _symidx: usize| {
-                        let tx = &mut texs[texidx / 4];
-                        let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-                        let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-                        tx.set_color_mod(fc.0, fc.1, fc.2);
-                        tx.set_alpha_mod(fc.3);
-                        tc.copy(tx, ss1, ss2).unwrap();
-                    };
+
+                // border & main_buffer...
+                let mut rfunc = |fc: &(u8, u8, u8, u8),
+                                 bc: &Option<(u8, u8, u8, u8)>,
+                                 s0: ARect,
+                                 s1: ARect,
+                                 s2: ARect,
+                                 texidx: usize,
+                                 _symidx: usize| {
+                    let tx = &mut texs[texidx / 4];
+                    let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
+                    let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
+                    let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
+                    if let Some(bgc) = bc {
+                        tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+                        tx.set_alpha_mod(bgc.3);
+                        tc.copy(tx, ss0, ss2).unwrap();
+                    }
+                    tx.set_color_mod(fc.0, fc.1, fc.2);
+                    tx.set_alpha_mod(fc.3);
+                    tc.copy(tx, ss1, ss2).unwrap();
+                };
+
                 if stage > LOGO_FRAME {
                     render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
                     render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
@@ -352,11 +366,17 @@ impl Adapter for SdlAdapter {
                                 &mut pixel_sprites[idx],
                                 rx,
                                 ry,
-                                |fc, s1, s2, texidx, _symidx, angle, ccp| {
+                                |fc, bc, s0, s1, s2, texidx, _symidx, angle, ccp| {
                                     let tx = &mut texs[texidx / 4];
+                                    let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
                                     let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
                                     let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
                                     let cccp = SPoint::new(ccp.x, ccp.y);
+                                    if let Some(bgc) = bc {
+                                        tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+                                        tx.set_alpha_mod(bgc.3);
+                                        tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false).unwrap();
+                                    }
                                     tx.set_color_mod(fc.0, fc.1, fc.2);
                                     tx.set_alpha_mod(fc.3);
                                     tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();

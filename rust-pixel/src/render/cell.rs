@@ -17,7 +17,7 @@ use lazy_static::lazy_static;
 // use log::info;
 
 lazy_static! {
-    /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64l.png
+    /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64.png
     /// instead of using unicode chars
     /// Some common chars a-Z and tabs are preset in SDL_SYM_MAP,
     /// for easier set of latin letters using set_str in SDL mode
@@ -82,7 +82,6 @@ pub fn cellsym(idx: u8) -> &'static str {
 fn symidx(symbol: &String) -> u8 {
     let sbts = symbol.as_bytes();
     if sbts.len() == 3 {
-        //判断是unicode数学符号
         if sbts[0] == 0xe2 && (sbts[1] >> 2 == 0x22) {
             let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
             return idx as u8;

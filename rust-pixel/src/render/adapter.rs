@@ -186,11 +186,11 @@ fn render_helper(
     rx: f32,
     ry: f32,
     i: usize,
-    sh: &(u8, u8, Color),
+    sh: &(u8, u8, Color, Color),
     px: u16,
     py: u16,
     is_border: bool,
-) -> (ARect, ARect, usize, usize) {
+) -> (ARect, ARect, ARect, usize, usize) {
     let w = PIXEL_SYM_WIDTH as i32;
     let h = PIXEL_SYM_HEIGHT as i32;
     let dstx = i as u16 % cell_w;
@@ -199,8 +199,16 @@ fn render_helper(
     let tx = if sh.1 < tex_count { sh.1 as usize } else { 1 };
     let srcy = sh.0 as u32 / w as u32 + (tx as u32 / 2u32) * w as u32;
     let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
+    let bsrcy = 160u32 / w as u32 + (1u32 / 2u32) * w as u32;
+    let bsrcx = 160u32 % w as u32 + (1u32 % 2u32) * w as u32;
 
     (
+        ARect {
+            x: (w + 1) * bsrcx as i32,
+            y: (h + 1) * bsrcy as i32,
+            w: w as u32,
+            h: h as u32,
+        },
         ARect {
             x: (w + 1) * srcx as i32,
             y: (h + 1) * srcy as i32,
@@ -221,7 +229,7 @@ fn render_helper(
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize, f64, PointI32),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize, f64, PointI32),
 {
     // sort by render_weight...
     pixel_spt.update_render_index();
@@ -236,9 +244,8 @@ where
         let ph = s.content.area.height;
 
         for (i, cell) in s.content.content.iter().enumerate() {
-            let sh_with_back = &cell.get_cell_info();
-            let sh = &(sh_with_back.0, sh_with_back.1, sh_with_back.2);
-            let (s1, s2, texidx, symidx) = render_helper(pw, rx, ry, i, sh, px, py, false);
+            let sh = &cell.get_cell_info();
+            let (s0, s1, s2, texidx, symidx) = render_helper(pw, rx, ry, i, sh, px, py, false);
             let x = i % pw as usize;
             let y = i / pw as usize;
             // center point ...
@@ -248,7 +255,15 @@ where
             };
             let mut fc = sh.2.get_rgba();
             fc.3 = s.alpha;
-            f(&fc, s1, s2, texidx, symidx, s.angle, ccp);
+            let bc;
+            if sh.3 != Color::Reset {
+                let mut brgba = sh.3.get_rgba();
+                brgba.3 = s.alpha;
+                bc = Some(brgba);
+            } else {
+                bc = None;
+            }
+            f(&fc, &bc, s0, s1, s2, texidx, symidx, s.angle, ccp);
         }
     }
 }
@@ -256,25 +271,31 @@ where
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
 {
     for (i, cell) in buf.content.iter().enumerate() {
-        let sh_with_back = cell.get_cell_info();
-        let sh = &(sh_with_back.0, sh_with_back.1, sh_with_back.2);
-        let (s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, &sh, 0, 0, false);
+        // symidx, texidx, fg, bg
+        let sh = cell.get_cell_info();
+        let (s0, s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, &sh, 0, 0, false);
         let fc = sh.2.get_rgba();
-        f(&fc, s1, s2, texidx, symidx);
+        let bc;
+        if sh.3 != Color::Reset {
+            bc = Some(sh.3.get_rgba());
+        } else {
+            bc = None;
+        }
+        f(&fc, &bc, s0, s1, s2, texidx, symidx);
     }
 }
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_border<F>(cell_w: u16, cell_h: u16, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
 {
-    let sh_top = (102u8, 1u8, Color::Indexed(7));
-    let sh_other = (24u8, 2u8, Color::Indexed(7));
-    let sh_close = (214u8, 1u8, Color::Indexed(7));
+    let sh_top = (102u8, 1u8, Color::Indexed(7), Color::Reset);
+    let sh_other = (24u8, 2u8, Color::Indexed(7), Color::Reset);
+    let sh_close = (214u8, 1u8, Color::Indexed(7), Color::Reset);
 
     for n in 0..cell_h as usize + 2 {
         for m in 0..cell_w as usize + 2 {
@@ -291,7 +312,7 @@ where
             } else {
                 rsh = &sh_other;
             }
-            let (s1, s2, texidx, symidx) = render_helper(
+            let (s0, s1, s2, texidx, symidx) = render_helper(
                 cell_w + 2,
                 rx,
                 ry,
@@ -302,7 +323,8 @@ where
                 true,
             );
             let fc = rsh.2.get_rgba();
-            f(&fc, s1, s2, texidx, symidx);
+            let bc = None;
+            f(&fc, &bc, s0, s1, s2, texidx, symidx);
         }
     }
 }
@@ -320,7 +342,7 @@ where
             let symw = PIXEL_SYM_WIDTH / rx;
             let symh = PIXEL_SYM_HEIGHT / ry;
 
-            let (s1, mut s2, texidx, symidx) = render_helper(
+            let (_s0, s1, mut s2, texidx, symidx) = render_helper(
                 PIXEL_LOGO_WIDTH as u16,
                 rx,
                 ry,
@@ -329,6 +351,7 @@ where
                     PIXEL_LOGO[sci * 3],
                     PIXEL_LOGO[sci * 3 + 2],
                     Color::Indexed(PIXEL_LOGO[sci * 3 + 1]),
+                    Color::Reset,
                 ),
                 spw as u16 / 2 - (PIXEL_LOGO_WIDTH as f32 / 2.0 * symw) as u16,
                 sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,

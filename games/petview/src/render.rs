@@ -43,8 +43,8 @@ impl Render for PetviewRender {
 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
-            let gb = self.panel.get_sprite("back");
-            asset2sprite!(gb, context, "1.pix");
+            // let gb = self.panel.get_sprite("back");
+            // asset2sprite!(gb, context, "1.pix");
             let gb2 = self.panel.get_pixel_sprite("back2");
             // asset2sprite!(gb2, context, "5.pix");
             asset2sprite!(gb2, context, "8.pix");

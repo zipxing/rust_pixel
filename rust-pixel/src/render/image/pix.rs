@@ -83,7 +83,7 @@ impl Asset for PixAsset {
                             cellsym(idx),
                             Style::default()
                                 .fg(Color::Indexed(fgc))
-                                .bg(Color::Indexed(texid)),
+                                .bg(Color::Reset),
                             texid,
                         );
                         col += 1;
@@ -117,8 +117,7 @@ impl Asset for PixAsset {
                                     lineidx - 1,
                                     cellsym(idx),
                                     Style::default()
-                                        .fg(Color::Indexed(fgc))
-                                        .bg(Color::Indexed(bgc)),
+                                        .fg(Color::Indexed(fgc)),
                                     bgc,
                                 );
                                 col += 1;
