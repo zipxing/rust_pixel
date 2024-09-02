@@ -4,8 +4,8 @@ use rust_pixel::{context::Context, event::event_emit, game::Model};
 use std::any::Any;
 use petview_lib::PetviewData;
 
-pub const PETVIEWW: u16 = 80;
-pub const PETVIEWH: u16 = 40;
+pub const PETVIEWW: u16 = 50;
+pub const PETVIEWH: u16 = 30;
 
 #[repr(u8)]
 enum PetviewState {
