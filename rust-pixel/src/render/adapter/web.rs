@@ -31,6 +31,11 @@ pub struct WebCell {
     pub g: u32,
     pub b: u32,
     pub a: u32,
+    pub back: u32,
+    pub br: u32,
+    pub bg: u32,
+    pub bb: u32,
+    pub ba: u32,
     pub texsym: u32,
     pub x: i32,
     pub y: i32,
@@ -62,6 +67,11 @@ impl WebAdapter {
         g: u8,
         b: u8,
         a: u8,
+        has_back: bool,
+        br: u8,
+        bg: u8,
+        bb: u8,
+        ba: u8,
         texidx: usize,
         symidx: usize,
         s: ARect,
@@ -73,6 +83,15 @@ impl WebAdapter {
         wc.g = g as u32;
         wc.b = b as u32;
         wc.a = a as u32;
+        if has_back {
+            wc.back = 1;
+            wc.br = br as u32;
+            wc.bg = bg as u32;
+            wc.bb = bb as u32;
+            wc.ba = ba as u32;
+        } else {
+            wc.back = 0;
+        }
         let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
         let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
         wc.texsym = y * 32u32 + x;
@@ -155,6 +174,11 @@ impl Adapter for WebAdapter {
                     tmp.1,
                     tmp.2,
                     tmp.3,
+                    false,
+                    0,
+                    0,
+                    0,
+                    0,
                     tmp.4,
                     tmp.5,
                     tmp.6,
@@ -170,23 +194,47 @@ impl Adapter for WebAdapter {
         let rx = self.base.ratio_x;
         let ry = self.base.ratio_y;
         let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         _bc: &Option<(u8, u8, u8, u8)>,
+                         bc: &Option<(u8, u8, u8, u8)>,
                          _s0: ARect,
                          _s1: ARect,
                          s2: ARect,
                          texidx: usize,
                          symidx: usize| {
-            self.push_web_buffer(
-                fc.0,
-                fc.1,
-                fc.2,
-                fc.3,
-                texidx,
-                symidx,
-                s2,
-                0.0,
-                &PointI32 { x: 0, y: 0 },
-            );
+            if let Some(bgc) = bc {
+                self.push_web_buffer(
+                    fc.0,
+                    fc.1,
+                    fc.2,
+                    fc.3,
+                    true,
+                    bgc.0,
+                    bgc.1,
+                    bgc.2,
+                    bgc.3,
+                    texidx,
+                    symidx,
+                    s2,
+                    0.0,
+                    &PointI32 { x: 0, y: 0 },
+                );
+            } else {
+                self.push_web_buffer(
+                    fc.0,
+                    fc.1,
+                    fc.2,
+                    fc.3,
+                    false,
+                    0,
+                    0,
+                    0,
+                    0,
+                    texidx,
+                    symidx,
+                    s2,
+                    0.0,
+                    &PointI32 { x: 0, y: 0 },
+                );
+            }
         };
         render_border(cw, ch, rx, ry, &mut rfunc);
         if stage > LOGO_FRAME {
@@ -199,10 +247,18 @@ impl Adapter for WebAdapter {
                         &mut pixel_sprites[idx],
                         rx,
                         ry,
-                        |fc, _bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
-                            self.push_web_buffer(
-                                fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2, angle, &ccp,
-                            );
+                        |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
+                            if let Some(bgc) = bc {
+                                self.push_web_buffer(
+                                    fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3,
+                                    texidx, symidx, s2, angle, &ccp,
+                                );
+                            } else {
+                                self.push_web_buffer(
+                                    fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2,
+                                    angle, &ccp,
+                                );
+                            }
                         },
                     );
                 }
