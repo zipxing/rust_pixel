@@ -1,15 +1,16 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! RustPixel is a rust 2d mini-game engine.
-//! It is ideal for fast prototyping of 2d pixel style games
-//! it is also a perfect choice for developing and debugging CPU-heavy game core algorithms
+//! RustPixel is a 2D game engine & rapid prototyping tools supporting both text and graphical rendering modes.
+//! It is suitable for creating 2D pixel-style games and developing terminal applications.
+//! it is also a perfect choice for developing and debugging CPU-heavy core algorithms
 //! You can compile your core algorithms to ffi or wasm libs, and used by other gaming
 //! frontend or backend
 //!
-//! It supports two rendering mode: text mode and graphical mode.
-//! Text mode runs in a terminal.
-//! Graphical mode supports SDL running in a OS window or wasm on a webpage.
+//! Text Mode: Built with crossterm, runs in the terminal, and uses ASCII & Unicode Emoji for drawing.
+//! Graphical Mode (SDL2): Built with SDL2, using PETSCII & custom graphical symbols for rendering.
+//! Graphical Mode (Web): Similar to the SDL2 mode, but the core logic is compiled into WASM and 
+//! rendered using WebGL and JavaScript (refer to rust-pixel/web-template/pixel.js).
 //!
 //! In RustPixel, game scenes are rendered using individual Cell and managed by Buffer
 //!
@@ -21,7 +22,7 @@
 //! or wasm libs.
 
 /// framerate per second, set to moderate number to save CPUs
-pub const GAME_FRAME: u32 = 60;
+pub const GAME_FRAME: u32 = 36;
 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -30,7 +31,7 @@ pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
 /// disjoint-set data structure, astar
 pub mod algorithm;
 
-/// resource manager, supporting async load to better compatible with wasm web mode
+/// resource manager, supporting async load to better compatible with wasm mode
 #[cfg(not(feature = "base"))]
 pub mod asset;
 
@@ -58,7 +59,7 @@ pub mod log;
 
 /// Render module, it supports two rendering mode: text mode and graphical mode.
 /// adapter: render adapter interface (crossterm, sdl, web).
-/// cell: a bse drawing unit i.e. a character.
+/// cell: a base drawing unit i.e. a character.
 /// buffer: a vector comprised of cells, managing screen buffer.
 /// sprite: basic drawing component, encapsulating further the buffer.
 /// style: define drawing attributes such as fore- and back-ground colors.
