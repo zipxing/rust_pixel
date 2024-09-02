@@ -169,20 +169,25 @@ impl Adapter for WebAdapter {
         let ch = self.base.cell_h;
         let rx = self.base.ratio_x;
         let ry = self.base.ratio_y;
-        let mut rfunc =
-            |fc: &(u8, u8, u8, u8), _s1: ARect, s2: ARect, texidx: usize, symidx: usize| {
-                self.push_web_buffer(
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
-                );
-            };
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         _bc: &Option<(u8, u8, u8, u8)>,
+                         _s0: ARect,
+                         _s1: ARect,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize| {
+            self.push_web_buffer(
+                fc.0,
+                fc.1,
+                fc.2,
+                fc.3,
+                texidx,
+                symidx,
+                s2,
+                0.0,
+                &PointI32 { x: 0, y: 0 },
+            );
+        };
         render_border(cw, ch, rx, ry, &mut rfunc);
         if stage > LOGO_FRAME {
             render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
@@ -194,7 +199,7 @@ impl Adapter for WebAdapter {
                         &mut pixel_sprites[idx],
                         rx,
                         ry,
-                        |fc, _s1, s2, texidx, symidx, angle, ccp| {
+                        |fc, _bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
                             self.push_web_buffer(
                                 fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2, angle, &ccp,
                             );
