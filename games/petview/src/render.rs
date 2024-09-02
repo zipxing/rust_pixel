@@ -25,7 +25,7 @@ impl PetviewRender {
         let mut gb = Sprite::new(0, 0, PETVIEWW, PETVIEWH);
         gb.set_alpha(230);
         panel.add_sprite(gb, "back");
-        let gb2 = Sprite::new(0, 0, PETVIEWW, PETVIEWH);
+        let gb2 = Sprite::new(100, 50, PETVIEWW, PETVIEWH);
         panel.add_pixel_sprite(gb2, "back2");
 
         timer_register("PetView.Timer", 1.2, "pet_timer");
