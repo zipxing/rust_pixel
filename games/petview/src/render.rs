@@ -59,7 +59,7 @@ impl Render for PetviewRender {
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             {
                 let gb2 = self.panel.get_pixel_sprite("back2");
-                asset2sprite!(gb2, context, &format!("{}.pix", (context.stage / 13 % 13) + 1));
+                asset2sprite!(gb2, context, &format!("{}.pix", (context.stage / 13 % 18) + 1));
             }
             timer_fire("PetView.Timer", 1);
         }

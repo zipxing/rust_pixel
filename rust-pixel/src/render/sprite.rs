@@ -142,7 +142,7 @@ impl Sprite {
         self.alpha = a;
     }
 
-    /// set string content at (x,y) with fg/bg color... 
+    /// set string content at (x,y) with fg/bg color...
     pub fn set_color_str<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
     where
         S: AsRef<str>,
@@ -151,7 +151,7 @@ impl Sprite {
             .set_str(x, y, string, Style::default().fg(f).bg(b));
     }
 
-    /// set string content at (0,0) with default style... 
+    /// set string content at (0,0) with default style...
     pub fn set_default_str<S>(&mut self, string: S)
     where
         S: AsRef<str>,
@@ -159,16 +159,14 @@ impl Sprite {
         self.content.set_str(0, 0, string, Style::default());
     }
 
-    /// set graphic model symbol(texture:texture_id, index:sym) at (x,y) with fgcolor... 
+    /// set graphic model symbol(texture:texture_id, index:sym) at (x,y) with fgcolor...
     pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
         self.content.set_str_tex(
             x,
             y,
             cellsym(sym),
-            Style::default()
-                .fg(f)
-                .bg(Color::Reset),
-            texture_id
+            Style::default().fg(f).bg(Color::Reset),
+            texture_id,
         );
     }
 
@@ -236,24 +234,28 @@ impl Sprite {
         };
         if borders.intersects(Borders::LEFT) {
             for y in 0..self.content.area.height {
-                self.content.set_str_tex(0, y, SYMBOL_LINE[lineidx[0]], style, 1);
+                self.content
+                    .set_str_tex(0, y, SYMBOL_LINE[lineidx[0]], style, 1);
             }
         }
         if borders.intersects(Borders::TOP) {
             for x in 0..self.content.area.width {
-                self.content.set_str_tex(x, 0, SYMBOL_LINE[lineidx[1]], style, 1);
+                self.content
+                    .set_str_tex(x, 0, SYMBOL_LINE[lineidx[1]], style, 1);
             }
         }
         if borders.intersects(Borders::RIGHT) {
             let x = self.content.area.width - 1;
             for y in 0..self.content.area.height {
-                self.content.set_str_tex(x, y, SYMBOL_LINE[lineidx[0]], style, 1);
+                self.content
+                    .set_str_tex(x, y, SYMBOL_LINE[lineidx[0]], style, 1);
             }
         }
         if borders.intersects(Borders::BOTTOM) {
             let y = self.content.area.height - 1;
             for x in 0..self.content.area.width {
-                self.content.set_str_tex(x, y, SYMBOL_LINE[lineidx[1]], style, 1);
+                self.content
+                    .set_str_tex(x, y, SYMBOL_LINE[lineidx[1]], style, 1);
             }
         }
         if borders.contains(Borders::RIGHT | Borders::BOTTOM) {
@@ -262,7 +264,7 @@ impl Sprite {
                 self.content.area.height - 1,
                 SYMBOL_LINE[lineidx[4]],
                 style,
-                1
+                1,
             );
         }
         if borders.contains(Borders::RIGHT | Borders::TOP) {
@@ -284,7 +286,8 @@ impl Sprite {
             );
         }
         if borders.contains(Borders::LEFT | Borders::TOP) {
-            self.content.set_str_tex(0, 0, SYMBOL_LINE[lineidx[3]], style, 1);
+            self.content
+                .set_str_tex(0, 0, SYMBOL_LINE[lineidx[3]], style, 1);
         }
     }
 
