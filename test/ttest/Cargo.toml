@@ -10,4 +10,5 @@ unicode-segmentation = "1.2"
 bevy_ecs = "0.10.1"
 rand = "0.8"
 itertools = "0.10.3"
+glam = "0.29"
 
