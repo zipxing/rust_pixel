@@ -1,9 +1,13 @@
 use glow::HasContext;
+use glow::NativeBuffer;
+use glow::NativeFramebuffer;
+use glow::NativeTexture;
+use glow::NativeVertexArray;
 use glutin::ContextBuilder;
 use std::env;
 
-const WIDTH: u32 = 40;
-const HEIGHT: u32 = 40;
+const WIDTH: u32 = 400;
+const HEIGHT: u32 = 200;
 
 fn check_gl_error(gl: &glow::Context, label: &str) {
     unsafe {
@@ -11,7 +15,7 @@ fn check_gl_error(gl: &glow::Context, label: &str) {
         if error != glow::NO_ERROR {
             println!("OpenGL Error [{}]: {:?}", label, error);
         } else {
-            println!("No OpenGL Error [{}]", label);
+            // println!("No OpenGL Error [{}]", label);
         }
     }
 }
@@ -70,10 +74,9 @@ fn main() {
     }
 }
 
-fn create_shaders(gl: &glow::Context) -> glow::Program {
-    unsafe {
-        // 顶点着色器和片段着色器代码
-        let vertex_shader_source = r#"
+unsafe fn create_shaders(gl: &glow::Context) -> glow::Program {
+    // 顶点着色器和片段着色器代码
+    let vertex_shader_source = r#"
             #version 330
             in vec2 a_position;
             in vec2 a_tex_coord;
@@ -84,7 +87,7 @@ fn create_shaders(gl: &glow::Context) -> glow::Program {
             }
         "#;
 
-        let fragment_shader_source = r#"
+    let fragment_shader_source = r#"
             #version 330
             in vec2 v_tex_coord;
             uniform sampler2D u_texture;
@@ -94,32 +97,162 @@ fn create_shaders(gl: &glow::Context) -> glow::Program {
             }
         "#;
 
-        // 创建并编译着色器程序
-        let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
-        gl.shader_source(vertex_shader, vertex_shader_source);
-        gl.compile_shader(vertex_shader);
-        check_gl_error(gl, "Vertex Shader Compile");
-        assert!(gl.get_shader_compile_status(vertex_shader), "Vertex shader compilation failed");
+    // 创建并编译着色器程序
+    let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
+    gl.shader_source(vertex_shader, vertex_shader_source);
+    gl.compile_shader(vertex_shader);
+    check_gl_error(gl, "Vertex Shader Compile");
+    assert!(
+        gl.get_shader_compile_status(vertex_shader),
+        "Vertex shader compilation failed"
+    );
 
-        let fragment_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
-        gl.shader_source(fragment_shader, fragment_shader_source);
-        gl.compile_shader(fragment_shader);
-        check_gl_error(gl, "Fragment Shader Compile");
-        assert!(gl.get_shader_compile_status(fragment_shader), "Fragment shader compilation failed");
+    let fragment_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
+    gl.shader_source(fragment_shader, fragment_shader_source);
+    gl.compile_shader(fragment_shader);
+    check_gl_error(gl, "Fragment Shader Compile");
+    assert!(
+        gl.get_shader_compile_status(fragment_shader),
+        "Fragment shader compilation failed"
+    );
 
-        let program = gl.create_program().unwrap();
-        gl.attach_shader(program, vertex_shader);
-        gl.attach_shader(program, fragment_shader);
-        gl.link_program(program);
-        check_gl_error(gl, "Program Link");
-        assert!(gl.get_program_link_status(program), "Shader program linking failed");
+    let program = gl.create_program().unwrap();
+    gl.attach_shader(program, vertex_shader);
+    gl.attach_shader(program, fragment_shader);
+    gl.link_program(program);
+    check_gl_error(gl, "Program Link");
+    assert!(
+        gl.get_program_link_status(program),
+        "Shader program linking failed"
+    );
 
-        // 删除着色器
-        gl.delete_shader(vertex_shader);
-        gl.delete_shader(fragment_shader);
+    // 删除着色器
+    gl.delete_shader(vertex_shader);
+    gl.delete_shader(fragment_shader);
 
-        program
+    program
+}
+
+unsafe fn create_buffers(
+    gl: &glow::Context,
+    program: glow::Program,
+) -> (NativeVertexArray, NativeBuffer, NativeBuffer) {
+    let vertices: [f32; 16] = [
+        -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
+    ];
+    let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
+    let vao = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao));
+
+    let vertex_buffer = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+    gl.buffer_data_u8_slice(
+        glow::ARRAY_BUFFER,
+        &vertices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let index_buffer = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+    gl.buffer_data_u8_slice(
+        glow::ELEMENT_ARRAY_BUFFER,
+        &indices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let pos_attrib = gl.get_attrib_location(program, "a_position").unwrap();
+    let tex_attrib = gl.get_attrib_location(program, "a_tex_coord").unwrap();
+    gl.enable_vertex_attrib_array(pos_attrib);
+    gl.enable_vertex_attrib_array(tex_attrib);
+
+    gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
+    gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
+
+    check_gl_error(gl, "Buffer Creation");
+    (vao, vertex_buffer, index_buffer)
+}
+
+unsafe fn create_render_texture(
+    gl: &glow::Context,
+    headless: bool,
+) -> (Option<NativeTexture>, Option<NativeFramebuffer>) {
+    if headless {
+        // **创建帧缓冲区并绑定** 在上传纹理之前
+        let render_texture = gl.create_texture().unwrap();
+        let framebuffer = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+        check_gl_error(&gl, "Framebuffer Bind");
+
+        gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA as i32,
+            WIDTH as i32,
+            HEIGHT as i32,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            None,
+        );
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(render_texture),
+            0,
+        );
+        check_gl_error(&gl, "Attach Render Texture to Framebuffer");
+
+        if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+            panic!("Framebuffer is not complete");
+        }
+        (Some(render_texture), Some(framebuffer))
+    } else {
+        (None, None)
     }
+}
+
+unsafe fn create_texture(gl: &glow::Context, img_width: u32, img_height: u32, img_raw: &[u8]) -> NativeTexture {
+    // 纹理上传：将 PNG 图像上传到 OpenGL
+    let texture = gl.create_texture().unwrap();
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_MIN_FILTER,
+        glow::LINEAR as i32,
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_MAG_FILTER,
+        glow::LINEAR as i32,
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_WRAP_S,
+        glow::CLAMP_TO_EDGE as i32,
+    );
+    gl.tex_parameter_i32(
+        glow::TEXTURE_2D,
+        glow::TEXTURE_WRAP_T,
+        glow::CLAMP_TO_EDGE as i32,
+    );
+
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::RGBA as i32,
+        img_width as i32,
+        img_height as i32,
+        0,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        Some(img_raw),
+    );
+    check_gl_error(&gl, "Upload Texture Data");
+
+    texture
 }
 
 fn render(
@@ -144,131 +277,21 @@ fn render(
         // 创建着色器程序
         let program = create_shaders(&gl);
 
-        // 顶点数据和索引
-        let vertices: [f32; 16] = [
-            -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
-        ];
+        let (v, b1, b2) = create_buffers(&gl, program);
 
-        let indices: [u32; 6] = [
-            0, 1, 2, // 三角形 1
-            2, 3, 0, // 三角形 2
-        ];
+        let (render_texture, framebuffer) = create_render_texture(&gl, headless);
 
-        let vao = gl.create_vertex_array().unwrap();
-        gl.bind_vertex_array(Some(vao));
-        check_gl_error(&gl, "VAO Bind");
-
-        let vertex_buffer = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            &vertices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
-        check_gl_error(&gl, "Vertex Buffer Data");
-
-        let index_buffer = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            &indices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
-        check_gl_error(&gl, "Index Buffer Data");
-
-        let pos_attrib = gl.get_attrib_location(program, "a_position").unwrap();
-        let tex_attrib = gl.get_attrib_location(program, "a_tex_coord").unwrap();
-        gl.enable_vertex_attrib_array(pos_attrib);
-        gl.enable_vertex_attrib_array(tex_attrib);
-        check_gl_error(&gl, "Enable Vertex Attribs");
-
-        gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
-        gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
-        check_gl_error(&gl, "Set Vertex Attrib Pointers");
-
-        let (render_texture, framebuffer) = if headless {
-            // **创建帧缓冲区并绑定** 在上传纹理之前
-            let render_texture = gl.create_texture().unwrap();
-            let framebuffer = gl.create_framebuffer().unwrap();
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
-            check_gl_error(&gl, "Framebuffer Bind");
-
-            gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA as i32,
-                WIDTH as i32,
-                HEIGHT as i32,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                None,
-            );
-            gl.framebuffer_texture_2d(
-                glow::FRAMEBUFFER,
-                glow::COLOR_ATTACHMENT0,
-                glow::TEXTURE_2D,
-                Some(render_texture),
-                0,
-            );
-            check_gl_error(&gl, "Attach Render Texture to Framebuffer");
-
-            if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
-                panic!("Framebuffer is not complete");
-            }
-            (Some(render_texture), Some(framebuffer))
-        } else {
-            (None, None)
-        };
-
-        // 纹理上传：将 PNG 图像上传到 OpenGL
-        let texture = gl.create_texture().unwrap();
-        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_S,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_T,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGBA as i32,
-            img_width as i32,
-            img_height as i32,
-            0,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            Some(img_raw),
-        );
-        check_gl_error(&gl, "Upload Texture Data");
+        let texture = create_texture(&gl, img_width, img_height, img_raw);
 
         gl.active_texture(glow::TEXTURE0);
         gl.bind_texture(glow::TEXTURE_2D, Some(texture));
         gl.use_program(Some(program));
         check_gl_error(&gl, "Use Program and Bind Texture");
-
         gl.uniform_1_i32(gl.get_uniform_location(program, "u_texture").as_ref(), 0);
         check_gl_error(&gl, "Set Uniform");
 
         // 渲染到帧缓冲区
-        gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32); // 设置视口为帧缓冲区大小
+        // gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32); // 设置视口为帧缓冲区大小
         gl.clear(glow::COLOR_BUFFER_BIT);
         check_gl_error(&gl, "Clear Framebuffer");
         gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
@@ -291,9 +314,9 @@ fn render(
         }
 
         // 清理资源
-        gl.delete_vertex_array(vao);
-        gl.delete_buffer(vertex_buffer);
-        gl.delete_buffer(index_buffer);
+        gl.delete_vertex_array(v);
+        gl.delete_buffer(b1);
+        gl.delete_buffer(b2);
         gl.delete_program(program);
         gl.delete_texture(texture);
         if render_texture != None {
