@@ -70,25 +70,8 @@ fn main() {
     }
 }
 
-fn render(
-    context: &glutin::Context<glutin::PossiblyCurrent>,
-    img_raw: &[u8],
-    img_width: u32,
-    img_height: u32,
-    headless: bool,
-) {
-    let gl =
-        unsafe { glow::Context::from_loader_function(|s| context.get_proc_address(s) as *const _) };
-
+fn create_shaders(gl: &glow::Context) -> glow::Program {
     unsafe {
-        // 设置视口
-        gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
-        check_gl_error(&gl, "Viewport");
-
-        gl.clear_color(0.0, 0.0, 0.0, 1.0);
-        //gl.clear(glow::COLOR_BUFFER_BIT);
-        check_gl_error(&gl, "Clear Screen");
-
         // 顶点着色器和片段着色器代码
         let vertex_shader_source = r#"
             #version 330
@@ -111,43 +94,55 @@ fn render(
             }
         "#;
 
-        // 编译并链接着色器程序
+        // 创建并编译着色器程序
         let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
         gl.shader_source(vertex_shader, vertex_shader_source);
         gl.compile_shader(vertex_shader);
-        check_gl_error(&gl, "Vertex Shader Compile");
-        if !gl.get_shader_compile_status(vertex_shader) {
-            panic!(
-                "Vertex shader compilation failed: {}",
-                gl.get_shader_info_log(vertex_shader)
-            );
-        }
+        check_gl_error(gl, "Vertex Shader Compile");
+        assert!(gl.get_shader_compile_status(vertex_shader), "Vertex shader compilation failed");
 
         let fragment_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
         gl.shader_source(fragment_shader, fragment_shader_source);
         gl.compile_shader(fragment_shader);
-        check_gl_error(&gl, "Fragment Shader Compile");
-        if !gl.get_shader_compile_status(fragment_shader) {
-            panic!(
-                "Fragment shader compilation failed: {}",
-                gl.get_shader_info_log(fragment_shader)
-            );
-        }
+        check_gl_error(gl, "Fragment Shader Compile");
+        assert!(gl.get_shader_compile_status(fragment_shader), "Fragment shader compilation failed");
 
         let program = gl.create_program().unwrap();
         gl.attach_shader(program, vertex_shader);
         gl.attach_shader(program, fragment_shader);
         gl.link_program(program);
-        check_gl_error(&gl, "Program Link");
-        if !gl.get_program_link_status(program) {
-            panic!(
-                "Shader program linking failed: {}",
-                gl.get_program_info_log(program)
-            );
-        }
+        check_gl_error(gl, "Program Link");
+        assert!(gl.get_program_link_status(program), "Shader program linking failed");
 
+        // 删除着色器
         gl.delete_shader(vertex_shader);
         gl.delete_shader(fragment_shader);
+
+        program
+    }
+}
+
+fn render(
+    context: &glutin::Context<glutin::PossiblyCurrent>,
+    img_raw: &[u8],
+    img_width: u32,
+    img_height: u32,
+    headless: bool,
+) {
+    let gl =
+        unsafe { glow::Context::from_loader_function(|s| context.get_proc_address(s) as *const _) };
+
+    unsafe {
+        // 设置视口
+        gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+        check_gl_error(&gl, "Viewport");
+
+        gl.clear_color(0.0, 0.0, 0.0, 1.0);
+        //gl.clear(glow::COLOR_BUFFER_BIT);
+        check_gl_error(&gl, "Clear Screen");
+
+        // 创建着色器程序
+        let program = create_shaders(&gl);
 
         // 顶点数据和索引
         let vertices: [f32; 16] = [
