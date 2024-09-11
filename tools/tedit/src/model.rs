@@ -2,14 +2,9 @@ use rust_pixel::event::{Event, KeyCode, MouseButton, MouseEventKind::*};
 //use log::info;
 #[cfg(feature = "sdl")]
 use crate::render::{SYMBOL_SDL, SYMBOL_SDL_LOW};
-use std::any::Any;
 #[cfg(feature = "sdl")]
 use rust_pixel::render::adapter::PIXEL_TEXTURE_FILES;
-use rust_pixel::{
-    context::Context,
-    event::event_emit,
-    game::Model,
-};
+use rust_pixel::{context::Context, event::event_emit, game::Model};
 
 pub const COLORW: u16 = 18;
 pub const COLORH: u16 = 15;
@@ -200,8 +195,4 @@ impl Model for TeditModel {
     fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }

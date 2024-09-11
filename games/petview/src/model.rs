@@ -1,8 +1,7 @@
 use rust_pixel::event::Event;
 // use log::info;
-use rust_pixel::{context::Context, event::event_emit, game::Model};
-use std::any::Any;
 use petview_lib::PetviewData;
+use rust_pixel::{context::Context, event::event_emit, game::Model};
 
 pub const PETVIEWW: u16 = 50;
 pub const PETVIEWH: u16 = 30;
@@ -47,8 +46,4 @@ impl Model for PetviewModel {
     fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }
-

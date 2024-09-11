@@ -1,15 +1,14 @@
-use rust_pixel::event::{Event, MouseButton, MouseEventKind::*};
 use log::info;
-use std::any::Any;
-use std::collections::HashMap;
-use std::fmt;
+use rust_pixel::event::{Event, MouseButton, MouseEventKind::*};
 use rust_pixel::{
+    algorithm::union_find::{UnionFind, UF},
     context::Context,
     event::{event_check, event_emit, timer_fire, timer_register, timer_set_time},
     game::Model,
-    algorithm::union_find::{UnionFind, UF},
     util::Rand,
 };
+use std::collections::HashMap;
+use std::fmt;
 
 pub const NROW: usize = 5;
 pub const NCOL: usize = 5;
@@ -609,9 +608,5 @@ impl Model for CityModel {
 
     fn handle_timer(&mut self, ctx: &mut Context, _dt: f32) {
         self.timer_process(ctx);
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 }

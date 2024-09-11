@@ -15,7 +15,6 @@ use rust_pixel::{
     game::Model,
     render::style::{ColorPro, ColorSpace, ColorSpace::*, COLOR_SPACE_COUNT},
 };
-use std::any::Any;
 use PaletteState::*;
 
 pub const PALETTEW: u16 = 80;
@@ -271,7 +270,7 @@ impl PaletteModel {
             NameA => {}
             NameB => {}
             PickerA => {
-                let hsv = mc[HSVA].unwrap().v; 
+                let hsv = mc[HSVA].unwrap().v;
                 self.select.ranges[0].x = (hsv[1] * PICKER_COUNT_X as f64) as usize;
                 self.select.ranges[0].y = ((1.0 - hsv[2]) * PICKER_COUNT_Y as f64) as usize;
                 self.select.ranges[1].x = (hsv[0] * PICKER_COUNT_X as f64 / 90.0) as usize;
@@ -617,9 +616,6 @@ impl Model for PaletteModel {
     fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }
 
 pub fn get_pick_color(width: usize, x0: usize, y0: usize, x1: usize, t: usize) -> ColorPro {

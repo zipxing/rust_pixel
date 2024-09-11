@@ -36,7 +36,9 @@ impl PetviewRender {
 }
 
 impl Render for PetviewRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+    type Model = PetviewModel;
+
+    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context
             .adapter
             .init(PETVIEWW + 2, PETVIEWH, 1.0, 1.0, "petview".to_string());
@@ -52,20 +54,24 @@ impl Render for PetviewRender {
         }
     }
 
-    fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {}
+    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {}
 
-    fn handle_timer<G: Model>(&mut self, context: &mut Context, _model: &mut G, _dt: f32) {
+    fn handle_timer(&mut self, context: &mut Context, _model: &mut Self::Model, _dt: f32) {
         if event_check("PetView.Timer", "pet_timer") {
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             {
                 let gb2 = self.panel.get_pixel_sprite("back2");
-                asset2sprite!(gb2, context, &format!("{}.pix", (context.stage / 13 % 20) + 1));
+                asset2sprite!(
+                    gb2,
+                    context,
+                    &format!("{}.pix", (context.stage / 13 % 20) + 1)
+                );
             }
             timer_fire("PetView.Timer", 1);
         }
     }
 
-    fn draw<G: Model>(&mut self, ctx: &mut Context, data: &mut G, dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
         self.panel.draw(ctx).unwrap();
     }
 }

@@ -27,8 +27,8 @@ impl TemplateRender {
             for i in 0..15 {
                 let mut pl = Sprite::new(4, 6, 1, 1);
                 pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(14));
-                pl.set_alpha(255 - 15*(15 - i));
-                panel.add_pixel_sprite(pl, &format!("PL{}", i+1));
+                pl.set_alpha(255 - 15 * (15 - i));
+                panel.add_pixel_sprite(pl, &format!("PL{}", i + 1));
             }
         }
 
@@ -52,9 +52,7 @@ impl TemplateRender {
         Self { panel }
     }
 
-    pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<TemplateModel>().unwrap();
-
+    pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut TemplateModel) {
         let l = self.panel.get_sprite("t0");
 
         // make asset identifier...
@@ -76,7 +74,9 @@ impl TemplateRender {
 }
 
 impl Render for TemplateRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+    type Model = TemplateModel;
+
+    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context
             .adapter
             .init(TEMPLATEW + 2, TEMPLATEH, 1.0, 1.0, "template".to_string());
@@ -90,15 +90,15 @@ impl Render for TemplateRender {
         }
     }
 
-    fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("Template.RedrawTile", "draw_tile") {
             self.draw_tile(context, data);
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
+    fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
-    fn draw<G: Model>(&mut self, ctx: &mut Context, data: &mut G, dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
         // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
@@ -106,8 +106,9 @@ impl Render for TemplateRender {
             let ss = &mut self.panel.get_sprite("back");
             asset2sprite!(ss, ctx, "1.ssf", (ctx.stage / 3) as usize, 40, 1);
             for i in 0..15 {
-                let pl = &mut self.panel.get_pixel_sprite(&format!("PL{}", i+1));
-                d.bezier.advance_and_maybe_reverse(dt as f64 * 0.1 + 0.01 * i as f64);
+                let pl = &mut self.panel.get_pixel_sprite(&format!("PL{}", i + 1));
+                d.bezier
+                    .advance_and_maybe_reverse(dt as f64 * 0.1 + 0.01 * i as f64);
                 let kf_now = d.bezier.now_strict().unwrap();
                 pl.set_pos(kf_now.x as u16, kf_now.y as u16);
                 let c = ((ctx.stage / 10) % 255) as u8;

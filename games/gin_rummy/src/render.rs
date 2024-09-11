@@ -5,10 +5,10 @@ use rust_pixel::{
     asset2sprite,
     context::Context,
     event::{event_check, event_register},
-    game::{Model, Render},
+    game::Render,
+    render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
-    render::panel::Panel,
 };
 
 pub struct GinRummyRender {
@@ -38,13 +38,10 @@ impl GinRummyRender {
 
         event_register("GinRummy.RedrawTile", "draw_tile");
 
-        Self {
-            panel: t,
-        }
+        Self { panel: t }
     }
 
-    pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<GinRummyModel>().unwrap();
+    pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut GinRummyModel) {
         let ts = [&d.cards_a, &d.cards_b];
         let msg = ["msgred", "msgblack"];
         let mut pv = vec![];
@@ -102,22 +99,24 @@ impl GinRummyRender {
 }
 
 impl Render for GinRummyRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _dat: &mut G) {
+    type Model = GinRummyModel;
+
+    fn init(&mut self, context: &mut Context, _dat: &mut Self::Model) {
         context
             .adapter
             .init(65, 25, 1.0, 1.0, "gin_rummy".to_string());
         self.panel.init(context);
     }
 
-    fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("GinRummy.RedrawTile", "draw_tile") {
             self.draw_tile(context, data);
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
+    fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
-    fn draw<G: Model>(&mut self, ctx: &mut Context, _data: &mut G, _dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {
         self.panel.draw(ctx).unwrap();
     }
 }

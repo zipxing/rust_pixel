@@ -1,9 +1,8 @@
+use keyframe::{functions::*, AnimationSequence};
 use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::util::PointF32;
-use keyframe::{functions::*, AnimationSequence};
 // use log::info;
 use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
-use std::any::Any;
 use template_lib::TemplateData;
 
 pub const CARDW: usize = 7;
@@ -41,7 +40,10 @@ impl Model for TemplateModel {
             PointF32 { x: 10.0, y: 30.0 },
             PointF32 { x: 210.0, y: 450.0 },
             PointF32 { x: 110.0, y: 150.0 },
-            PointF32 { x: 1200.0, y: 150.0 },
+            PointF32 {
+                x: 1200.0,
+                y: 150.0,
+            },
             PointF32 {
                 x: TEMPLATEW as f32 * 16.0,
                 y: TEMPLATEH as f32 * 16.0,
@@ -91,8 +93,4 @@ impl Model for TemplateModel {
     fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }
-
