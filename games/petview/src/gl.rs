@@ -4,10 +4,128 @@ use glow::NativeFramebuffer;
 use glow::NativeTexture;
 use glow::NativeVertexArray;
 use glutin::ContextBuilder;
-use std::env;
 
-const WIDTH: u32 = 30;
-const HEIGHT: u32 = 30;
+pub struct GlTransition {
+    gl: glow::Context,
+    program: glow::Program,
+    texture1: glow::NativeTexture,
+    texture2: glow::NativeTexture,
+    headless: bool,
+}
+
+impl GlTransition {
+    fn new(width: u32, height: u32, img_raw: &[u8], img_raw2: &[u8], headless: bool) -> Self {
+        // let img_raw = img_data1.into();
+        // let img_raw2 = img_data2.into();
+
+        let el = glutin::event_loop::EventLoop::new();
+        if headless {
+            let size = glutin::dpi::PhysicalSize::new(width, height);
+            let context = ContextBuilder::new()
+                .with_gl_debug_flag(true)
+                .build_headless(&el, size)
+                .expect("Failed to create headless context");
+            let window_context = unsafe { context.make_current().unwrap() };
+            let gl = unsafe {
+                glow::Context::from_loader_function(|s| {
+                    window_context.get_proc_address(s) as *const _
+                })
+            };
+            unsafe {
+                // 创建着色器、缓冲区和纹理 (仅初始化一次)
+                let program = create_shaders(&gl);
+                let (vao, vertex_buffer, index_buffer) = create_buffers(&gl, program);
+                let (render_texture, framebuffer) = create_render_texture(&gl, width, height, headless);
+                let texture1 = create_texture(&gl, width, height, &img_raw);
+                let texture2 = create_texture(&gl, width, height, &img_raw2);
+                return Self {
+                    gl,
+                    program,
+                    texture1,
+                    texture2,
+                    headless,
+                };
+                // for _ in 0..3 {
+                //     render_frame(&gl, program, texture1, texture2, headless);
+                // }
+                // cleanup(
+                //     &gl,
+                //     program,
+                //     vao,
+                //     vertex_buffer,
+                //     index_buffer,
+                //     texture1,
+                //     texture2,
+                //     render_texture,
+                //     framebuffer,
+                // );
+            }
+        } else {
+            let window_builder = glutin::window::WindowBuilder::new()
+                .with_title("OpenGL with Glow")
+                .with_inner_size(glutin::dpi::PhysicalSize::new(width, height));
+
+            let context = ContextBuilder::new()
+                .with_gl_debug_flag(true)
+                .build_windowed(window_builder, &el)
+                .expect("Failed to create windowed context");
+            let window_context = unsafe { context.make_current().unwrap() };
+            let gl = unsafe {
+                glow::Context::from_loader_function(|s| {
+                    window_context.get_proc_address(s) as *const _
+                })
+            };
+            // 创建着色器、缓冲区和纹理 (仅初始化一次)
+            let program = unsafe { create_shaders(&gl) };
+            let (vao, vertex_buffer, index_buffer) = unsafe { create_buffers(&gl, program) };
+            let texture1 = unsafe { create_texture(&gl, width, height, &img_raw) };
+            let texture2 = unsafe { create_texture(&gl, width, height, &img_raw2) };
+            return Self {
+                    gl,
+                    program,
+                    texture1,
+                    texture2,
+                    headless,
+            };
+
+            // // 事件循环
+            // el.run(move |event, _, control_flow| {
+            //     *control_flow = glutin::event_loop::ControlFlow::Wait;
+
+            //     match event {
+            //         glutin::event::Event::WindowEvent { event, .. } => match event {
+            //             glutin::event::WindowEvent::CloseRequested => {
+            //                 *control_flow = glutin::event_loop::ControlFlow::Exit;
+            //                 // 在程序退出时清理资源
+            //                 unsafe {
+            //                     cleanup(
+            //                         &gl,
+            //                         program,
+            //                         vao,
+            //                         vertex_buffer,
+            //                         index_buffer,
+            //                         texture1,
+            //                         texture2,
+            //                         None,
+            //                         None,
+            //                     );
+            //                 }
+            //             }
+            //             _ => (),
+            //         },
+            //         glutin::event::Event::MainEventsCleared => {
+            //             // 每帧渲染
+            //             unsafe {
+            //                 render_frame(&gl, program, texture1, texture2, headless);
+            //             }
+            //             window_context.swap_buffers().unwrap();
+            //         }
+            //         _ => (),
+            //     }
+            // });
+        };
+    }
+}
 
 fn check_gl_error(gl: &glow::Context, label: &str) {
     unsafe {
@@ -18,124 +136,16 @@ fn check_gl_error(gl: &glow::Context, label: &str) {
     }
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let headless = args.contains(&"--headless".to_string());
-
-    // 初始化第一个图像数据
-    let img = image::open("from.png").expect("Failed to load image");
-    let img_data = img.to_rgba8();
-    let img_width = img.width();
-    let img_height = img.height();
-    println!("img data({}x{}) len = {}", img_width, img_height, img_data.len());
-    let img_raw = img_data.into_raw();
-
-    // 初始化第二个图像数据
-    let img2 = image::open("to.png").expect("Failed to load second image");
-    let img_data2 = img2.to_rgba8();
-    let img_width2 = img2.width();
-    let img_height2 = img2.height();
-    let img_raw2 = img_data2.into_raw();
-
-    let el = glutin::event_loop::EventLoop::new();
-
-    if headless {
-        let size = glutin::dpi::PhysicalSize::new(WIDTH, HEIGHT);
-        let context = ContextBuilder::new()
-            .with_gl_debug_flag(true)
-            .build_headless(&el, size)
-            .expect("Failed to create headless context");
-        let window_context = unsafe { context.make_current().unwrap() };
-        let gl = unsafe {
-            glow::Context::from_loader_function(|s| window_context.get_proc_address(s) as *const _)
-        };
-        unsafe {
-            // 创建着色器、缓冲区和纹理 (仅初始化一次)
-            let program = create_shaders(&gl);
-            let (vao, vertex_buffer, index_buffer) = create_buffers(&gl, program);
-            let (render_texture, framebuffer) = create_render_texture(&gl, headless);
-            let texture1 = create_texture(&gl, img_width, img_height, &img_raw);
-            let texture2 = create_texture(&gl, img_width2, img_height2, &img_raw2);
-            for _ in 0..3 {
-                render_frame(&gl, program, texture1, texture2, headless);
-            }
-            cleanup(
-                &gl,
-                program,
-                vao,
-                vertex_buffer,
-                index_buffer,
-                texture1,
-                texture2,
-                render_texture,
-                framebuffer,
-            );
-        }
-    } else {
-        let window_builder = glutin::window::WindowBuilder::new()
-            .with_title("OpenGL with Glow")
-            .with_inner_size(glutin::dpi::PhysicalSize::new(WIDTH, HEIGHT));
-
-        let context = ContextBuilder::new()
-            .with_gl_debug_flag(true)
-            .build_windowed(window_builder, &el)
-            .expect("Failed to create windowed context");
-        let window_context = unsafe { context.make_current().unwrap() };
-        let gl = unsafe {
-            glow::Context::from_loader_function(|s| window_context.get_proc_address(s) as *const _)
-        };
-        // 创建着色器、缓冲区和纹理 (仅初始化一次)
-        let program = unsafe { create_shaders(&gl) };
-        let (vao, vertex_buffer, index_buffer) = unsafe { create_buffers(&gl, program) };
-        let texture1 = unsafe { create_texture(&gl, img_width, img_height, &img_raw) };
-        let texture2 = unsafe { create_texture(&gl, img_width2, img_height2, &img_raw2) };
-
-        // 事件循环
-        el.run(move |event, _, control_flow| {
-            *control_flow = glutin::event_loop::ControlFlow::Wait;
-
-            match event {
-                glutin::event::Event::WindowEvent { event, .. } => match event {
-                    glutin::event::WindowEvent::CloseRequested => {
-                        *control_flow = glutin::event_loop::ControlFlow::Exit;
-                        // 在程序退出时清理资源
-                        unsafe {
-                            cleanup(
-                                &gl,
-                                program,
-                                vao,
-                                vertex_buffer,
-                                index_buffer,
-                                texture1,
-                                texture2,
-                                None,
-                                None,
-                            );
-                        }
-                    }
-                    _ => (),
-                },
-                glutin::event::Event::MainEventsCleared => {
-                    // 每帧渲染
-                    unsafe {
-                        render_frame(&gl, program, texture1, texture2, headless);
-                    }
-                    window_context.swap_buffers().unwrap();
-                }
-                _ => (),
-            }
-        });
-    };
-}
-
 unsafe fn render_frame(
     gl: &glow::Context,
     program: glow::Program,
     texture1: glow::NativeTexture,
     texture2: glow::NativeTexture,
+    width: u32,
+    height: u32,
     headless: bool,
 ) {
-    gl.viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+    gl.viewport(0, 0, width as i32, height as i32);
     // 使用已有的着色器和纹理进行渲染
     gl.clear_color(0.0, 0.0, 0.0, 1.0);
     gl.clear(glow::COLOR_BUFFER_BIT);
@@ -155,12 +165,12 @@ unsafe fn render_frame(
     gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
 
     if headless {
-        let mut pixels = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+        let mut pixels = vec![0u8; width as usize * height as usize * 4];
         gl.read_pixels(
             0,
             0,
-            WIDTH as i32,
-            HEIGHT as i32,
+            width as i32,
+            height as i32,
             glow::RGBA,
             glow::UNSIGNED_BYTE,
             glow::PixelPackData::Slice(&mut pixels),
@@ -218,6 +228,8 @@ unsafe fn create_shaders(gl: &glow::Context) -> glow::Program {
 
 unsafe fn create_render_texture(
     gl: &glow::Context,
+    width: u32,
+    height: u32,
     headless: bool,
 ) -> (Option<NativeTexture>, Option<NativeFramebuffer>) {
     if headless {
@@ -232,8 +244,8 @@ unsafe fn create_render_texture(
             glow::TEXTURE_2D,
             0,
             glow::RGBA as i32,
-            WIDTH as i32,
-            HEIGHT as i32,
+            width as i32,
+            height as i32,
             0,
             glow::RGBA,
             glow::UNSIGNED_BYTE,

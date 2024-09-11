@@ -18,6 +18,8 @@ wasm-bindgen = "0.2.92"
 keyframe = "=1.1.1"
 wasm-bindgen-futures = "0.4.42"
 web-sys = "0.3.4"
+glow = "0.11"
+glutin = "0.28"
 petview_lib = { path = "./lib" }
 rust_pixel = { path = "../../rust-pixel", default-features = false }
 
