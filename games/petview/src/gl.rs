@@ -6,18 +6,15 @@ use glow::NativeVertexArray;
 use glutin::ContextBuilder;
 
 pub struct GlTransition {
-    gl: glow::Context,
-    program: glow::Program,
-    texture1: glow::NativeTexture,
-    texture2: glow::NativeTexture,
-    headless: bool,
+    pub gl: glow::Context,
+    pub program: glow::Program,
+    pub texture1: glow::NativeTexture,
+    pub texture2: glow::NativeTexture,
+    pub headless: bool,
 }
 
 impl GlTransition {
-    fn new(width: u32, height: u32, img_raw: &[u8], img_raw2: &[u8], headless: bool) -> Self {
-        // let img_raw = img_data1.into();
-        // let img_raw2 = img_data2.into();
-
+    pub fn new(width: u32, height: u32, img_raw: &[u8], img_raw2: &[u8], headless: bool) -> Self {
         let el = glutin::event_loop::EventLoop::new();
         if headless {
             let size = glutin::dpi::PhysicalSize::new(width, height);
@@ -35,7 +32,8 @@ impl GlTransition {
                 // 创建着色器、缓冲区和纹理 (仅初始化一次)
                 let program = create_shaders(&gl);
                 let (vao, vertex_buffer, index_buffer) = create_buffers(&gl, program);
-                let (render_texture, framebuffer) = create_render_texture(&gl, width, height, headless);
+                let (render_texture, framebuffer) =
+                    create_render_texture(&gl, width, height, headless);
                 let texture1 = create_texture(&gl, width, height, &img_raw);
                 let texture2 = create_texture(&gl, width, height, &img_raw2);
                 return Self {
@@ -45,20 +43,6 @@ impl GlTransition {
                     texture2,
                     headless,
                 };
-                // for _ in 0..3 {
-                //     render_frame(&gl, program, texture1, texture2, headless);
-                // }
-                // cleanup(
-                //     &gl,
-                //     program,
-                //     vao,
-                //     vertex_buffer,
-                //     index_buffer,
-                //     texture1,
-                //     texture2,
-                //     render_texture,
-                //     framebuffer,
-                // );
             }
         } else {
             let window_builder = glutin::window::WindowBuilder::new()
@@ -81,17 +65,16 @@ impl GlTransition {
             let texture1 = unsafe { create_texture(&gl, width, height, &img_raw) };
             let texture2 = unsafe { create_texture(&gl, width, height, &img_raw2) };
             return Self {
-                    gl,
-                    program,
-                    texture1,
-                    texture2,
-                    headless,
+                gl,
+                program,
+                texture1,
+                texture2,
+                headless,
             };
 
             // // 事件循环
             // el.run(move |event, _, control_flow| {
             //     *control_flow = glutin::event_loop::ControlFlow::Wait;
-
             //     match event {
             //         glutin::event::Event::WindowEvent { event, .. } => match event {
             //             glutin::event::WindowEvent::CloseRequested => {
@@ -124,6 +107,20 @@ impl GlTransition {
             //     }
             // });
         };
+    }
+
+    pub fn render_frame(self: &mut Self, w: u32, h: u32) {
+        unsafe {
+            render_frame(
+                &self.gl,
+                self.program,
+                self.texture1,
+                self.texture2,
+                w,
+                h,
+                self.headless,
+            );
+        }
     }
 }
 
