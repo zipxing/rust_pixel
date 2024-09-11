@@ -6,8 +6,8 @@ use glow::NativeVertexArray;
 use glutin::ContextBuilder;
 use std::env;
 
-const WIDTH: u32 = 20;
-const HEIGHT: u32 = 15;
+const WIDTH: u32 = 300;
+const HEIGHT: u32 = 300;
 
 fn check_gl_error(gl: &glow::Context, label: &str) {
     unsafe {
