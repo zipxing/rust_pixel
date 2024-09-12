@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use crate::model::{PetviewModel, PETVIEWH, PETVIEWW};
+use crate::gl::GlTransition;
 use log::info;
 use rust_pixel::{
     asset::AssetType,
@@ -15,6 +16,7 @@ use rust_pixel::{
 
 pub struct PetviewRender {
     pub panel: Panel,
+    pub glt: GlTransition,
 }
 
 impl PetviewRender {
@@ -27,11 +29,12 @@ impl PetviewRender {
         panel.add_sprite(gb, "back");
         let gb2 = Sprite::new(100, 50, PETVIEWW, PETVIEWH);
         panel.add_pixel_sprite(gb2, "back2");
+        let glt = GlTransition::new(40, 25);
 
         timer_register("PetView.Timer", 1.2, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
-        Self { panel }
+        Self { panel, glt }
     }
 }
 

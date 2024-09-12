@@ -1,125 +1,96 @@
-use glow::HasContext;
-use glow::NativeBuffer;
-use glow::NativeFramebuffer;
-use glow::NativeTexture;
-use glow::NativeVertexArray;
+use glow::{
+    HasContext, NativeBuffer, NativeFramebuffer, NativeTexture, NativeVertexArray, Program,
+};
 use glutin::ContextBuilder;
 
 pub struct GlTransition {
     pub gl: glow::Context,
-    pub program: glow::Program,
-    pub texture1: glow::NativeTexture,
-    pub texture2: glow::NativeTexture,
-    pub headless: bool,
+    pub program: Program,
+    pub vao: NativeVertexArray,
+    pub vbuf: NativeBuffer,
+    pub ibuf: NativeBuffer,
+    pub rt: NativeTexture,
+    pub fbuf: NativeFramebuffer,
+    pub texture1: Option<NativeTexture>,
+    pub texture2: Option<NativeTexture>,
+    pub pixels: Vec<u8>,
 }
 
 impl GlTransition {
-    pub fn new(width: u32, height: u32, img_raw: &[u8], img_raw2: &[u8], headless: bool) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
+        // create headless context...
         let el = glutin::event_loop::EventLoop::new();
-        if headless {
-            let size = glutin::dpi::PhysicalSize::new(width, height);
-            let context = ContextBuilder::new()
-                .with_gl_debug_flag(true)
-                .build_headless(&el, size)
-                .expect("Failed to create headless context");
-            let window_context = unsafe { context.make_current().unwrap() };
-            let gl = unsafe {
-                glow::Context::from_loader_function(|s| {
-                    window_context.get_proc_address(s) as *const _
-                })
-            };
-            unsafe {
-                // 创建着色器、缓冲区和纹理 (仅初始化一次)
-                let program = create_shaders(&gl);
-                let (vao, vertex_buffer, index_buffer) = create_buffers(&gl, program);
-                let (render_texture, framebuffer) =
-                    create_render_texture(&gl, width, height, headless);
-                let texture1 = create_texture(&gl, width, height, &img_raw);
-                let texture2 = create_texture(&gl, width, height, &img_raw2);
-                return Self {
-                    gl,
-                    program,
-                    texture1,
-                    texture2,
-                    headless,
-                };
-            }
-        } else {
-            let window_builder = glutin::window::WindowBuilder::new()
-                .with_title("OpenGL with Glow")
-                .with_inner_size(glutin::dpi::PhysicalSize::new(width, height));
+        let size = glutin::dpi::PhysicalSize::new(width, height);
+        let context = ContextBuilder::new()
+            .with_gl_debug_flag(true)
+            .build_headless(&el, size)
+            .expect("Failed to create headless context");
 
-            let context = ContextBuilder::new()
-                .with_gl_debug_flag(true)
-                .build_windowed(window_builder, &el)
-                .expect("Failed to create windowed context");
-            let window_context = unsafe { context.make_current().unwrap() };
-            let gl = unsafe {
-                glow::Context::from_loader_function(|s| {
-                    window_context.get_proc_address(s) as *const _
-                })
-            };
-            // 创建着色器、缓冲区和纹理 (仅初始化一次)
-            let program = unsafe { create_shaders(&gl) };
-            let (vao, vertex_buffer, index_buffer) = unsafe { create_buffers(&gl, program) };
-            let texture1 = unsafe { create_texture(&gl, width, height, &img_raw) };
-            let texture2 = unsafe { create_texture(&gl, width, height, &img_raw2) };
-            return Self {
+        unsafe {
+            let window_context = context.make_current().unwrap();
+            let gl = glow::Context::from_loader_function(|s| {
+                window_context.get_proc_address(s) as *const _
+            });
+            // create shaders and buffers...
+            let program = create_shaders(&gl);
+            let (vao, vbuf, ibuf) = create_buffers(&gl, program);
+            let (rt, fbuf) = create_render_texture(&gl, width, height);
+            let texture1 = None;
+            let texture2 = None;
+            Self {
                 gl,
                 program,
+                vao,
+                vbuf,
+                ibuf,
+                rt,
+                fbuf,
                 texture1,
                 texture2,
-                headless,
-            };
-
-            // // 事件循环
-            // el.run(move |event, _, control_flow| {
-            //     *control_flow = glutin::event_loop::ControlFlow::Wait;
-            //     match event {
-            //         glutin::event::Event::WindowEvent { event, .. } => match event {
-            //             glutin::event::WindowEvent::CloseRequested => {
-            //                 *control_flow = glutin::event_loop::ControlFlow::Exit;
-            //                 // 在程序退出时清理资源
-            //                 unsafe {
-            //                     cleanup(
-            //                         &gl,
-            //                         program,
-            //                         vao,
-            //                         vertex_buffer,
-            //                         index_buffer,
-            //                         texture1,
-            //                         texture2,
-            //                         None,
-            //                         None,
-            //                     );
-            //                 }
-            //             }
-            //             _ => (),
-            //         },
-            //         glutin::event::Event::MainEventsCleared => {
-            //             // 每帧渲染
-            //             unsafe {
-            //                 render_frame(&gl, program, texture1, texture2, headless);
-            //             }
-            //             window_context.swap_buffers().unwrap();
-            //         }
-            //         _ => (),
-            //     }
-            // });
-        };
+                pixels: vec![],
+            }
+        }
     }
 
-    pub fn render_frame(self: &mut Self, w: u32, h: u32) {
+    // call if u want update texture...
+    pub fn set_texture(&mut self, w: u32, h: u32, img1: &[u8], img2: &[u8]) {
         unsafe {
-            render_frame(
-                &self.gl,
-                self.program,
-                self.texture1,
-                self.texture2,
-                w,
-                h,
-                self.headless,
-            );
+            if let Some(texture1) = self.texture1 {
+                self.gl.delete_texture(texture1);
+            }
+            if let Some(texture2) = self.texture2 {
+                self.gl.delete_texture(texture2);
+            }
+            self.texture1 = Some(create_texture(&self.gl, w, h, &img1));
+            self.texture2 = Some(create_texture(&self.gl, w, h, &img2));
+        }
+    }
+
+    // render and output pixels data...
+    pub fn render_frame(&mut self, w: u32, h: u32) {
+        unsafe {
+            if let (Some(t1), Some(t2)) = (self.texture1, self.texture2) {
+                self.pixels = render_frame(&self.gl, self.program, t1, t2, w, h);
+            }
+        }
+    }
+
+    // clean handle...
+    pub fn clean(&mut self) {
+        unsafe {
+            if let (Some(t1), Some(t2)) = (self.texture1, self.texture2) {
+                cleanup(
+                    &self.gl,
+                    self.program,
+                    self.vao,
+                    self.vbuf,
+                    self.ibuf,
+                    t1,
+                    t2,
+                    self.rt,
+                    self.fbuf,
+                );
+            }
         }
     }
 }
@@ -140,40 +111,35 @@ unsafe fn render_frame(
     texture2: glow::NativeTexture,
     width: u32,
     height: u32,
-    headless: bool,
-) {
+) -> Vec<u8> {
     gl.viewport(0, 0, width as i32, height as i32);
-    // 使用已有的着色器和纹理进行渲染
     gl.clear_color(0.0, 0.0, 0.0, 1.0);
     gl.clear(glow::COLOR_BUFFER_BIT);
 
     gl.use_program(Some(program));
 
-    // 绑定第一个纹理
     gl.active_texture(glow::TEXTURE0);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture1));
     gl.uniform_1_i32(gl.get_uniform_location(program, "u_texture1").as_ref(), 0);
 
-    // 绑定第二个纹理
     gl.active_texture(glow::TEXTURE1);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture2));
     gl.uniform_1_i32(gl.get_uniform_location(program, "u_texture2").as_ref(), 1);
 
     gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
 
-    if headless {
-        let mut pixels = vec![0u8; width as usize * height as usize * 4];
-        gl.read_pixels(
-            0,
-            0,
-            width as i32,
-            height as i32,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            glow::PixelPackData::Slice(&mut pixels),
-        );
-        println!("pixel {:?}", pixels);
-    }
+    let mut pixels = vec![0u8; width as usize * height as usize * 4];
+    gl.read_pixels(
+        0,
+        0,
+        width as i32,
+        height as i32,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        glow::PixelPackData::Slice(&mut pixels),
+    );
+    // println!("pixel {:?}", pixels);
+    pixels
 }
 
 unsafe fn create_shaders(gl: &glow::Context) -> glow::Program {
@@ -227,43 +193,37 @@ unsafe fn create_render_texture(
     gl: &glow::Context,
     width: u32,
     height: u32,
-    headless: bool,
-) -> (Option<NativeTexture>, Option<NativeFramebuffer>) {
-    if headless {
-        // **创建帧缓冲区并绑定** 在上传纹理之前
-        let render_texture = gl.create_texture().unwrap();
-        let framebuffer = gl.create_framebuffer().unwrap();
-        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
-        check_gl_error(&gl, "Framebuffer Bind");
+) -> (NativeTexture, NativeFramebuffer) {
+    let render_texture = gl.create_texture().unwrap();
+    let framebuffer = gl.create_framebuffer().unwrap();
+    gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+    check_gl_error(&gl, "Framebuffer Bind");
 
-        gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGBA as i32,
-            width as i32,
-            height as i32,
-            0,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            None,
-        );
-        gl.framebuffer_texture_2d(
-            glow::FRAMEBUFFER,
-            glow::COLOR_ATTACHMENT0,
-            glow::TEXTURE_2D,
-            Some(render_texture),
-            0,
-        );
-        check_gl_error(&gl, "Attach Render Texture to Framebuffer");
+    gl.bind_texture(glow::TEXTURE_2D, Some(render_texture));
+    gl.tex_image_2d(
+        glow::TEXTURE_2D,
+        0,
+        glow::RGBA as i32,
+        width as i32,
+        height as i32,
+        0,
+        glow::RGBA,
+        glow::UNSIGNED_BYTE,
+        None,
+    );
+    gl.framebuffer_texture_2d(
+        glow::FRAMEBUFFER,
+        glow::COLOR_ATTACHMENT0,
+        glow::TEXTURE_2D,
+        Some(render_texture),
+        0,
+    );
+    check_gl_error(&gl, "Attach Render Texture to Framebuffer");
 
-        if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
-            panic!("Framebuffer is not complete");
-        }
-        (Some(render_texture), Some(framebuffer))
-    } else {
-        (None, None)
+    if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+        panic!("Framebuffer is not complete");
     }
+    (render_texture, framebuffer)
 }
 
 unsafe fn create_buffers(
@@ -357,8 +317,8 @@ unsafe fn cleanup(
     index_buffer: glow::NativeBuffer,
     texture1: glow::NativeTexture,
     texture2: glow::NativeTexture,
-    rt: Option<NativeTexture>,
-    fb: Option<NativeFramebuffer>,
+    rt: NativeTexture,
+    fb: NativeFramebuffer,
 ) {
     gl.delete_vertex_array(vao);
     gl.delete_buffer(vertex_buffer);
@@ -366,10 +326,6 @@ unsafe fn cleanup(
     gl.delete_program(program);
     gl.delete_texture(texture1);
     gl.delete_texture(texture2);
-    if rt != None {
-        gl.delete_texture(rt.unwrap());
-    }
-    if fb != None {
-        gl.delete_framebuffer(fb.unwrap());
-    }
+    gl.delete_texture(rt);
+    gl.delete_framebuffer(fb);
 }

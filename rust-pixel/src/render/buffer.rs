@@ -102,6 +102,22 @@ impl Buffer {
         &self.content
     }
 
+    pub fn get_data(&self) -> Vec<u8> {
+        let mut dat = vec![];
+        for c in &self.content {
+            let ci = c.get_cell_info();
+            dat.push(ci.0);
+            dat.push(ci.1);
+            dat.push(u8::from(ci.2));
+            dat.push(u8::from(ci.3));
+        }
+        dat
+    }
+
+    pub fn set_data(&mut self, dat: &[u8], w: u16, h: u16) {
+
+    }
+
     pub fn area(&self) -> &Rect {
         &self.area
     }
