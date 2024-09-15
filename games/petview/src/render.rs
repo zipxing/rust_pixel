@@ -17,6 +17,7 @@ use rust_pixel::{
 pub struct PetviewRender {
     pub panel: Panel,
     pub glt: GlTransition,
+    pub progress: f32,
 }
 
 impl PetviewRender {
@@ -35,10 +36,10 @@ impl PetviewRender {
 
         let glt = GlTransition::new(40, 25);
 
-        timer_register("PetView.Timer", 1.2, "pet_timer");
+        timer_register("PetView.Timer", 0.2, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
-        Self { panel, glt }
+        Self { panel, glt, progress: 0.0}
     }
 }
 
@@ -50,14 +51,29 @@ impl Render for PetviewRender {
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "1.pix");
+        let img1 = p1.content.get_rgba_image();
+
+        let p2 = self.panel.get_pixel_sprite("petimg2");
+        asset2sprite!(p2, ctx, "2.pix");
+        let img2 = p2.content.get_rgba_image();
+        info!("image...{:#?} {:#?}", img1, img2);
+
+        self.glt.set_texture(&img1, &img2);
     }
 
     fn handle_event<G: Model>(&mut self, ctx: &mut Context, data: &mut G, _dt: f32) {}
 
     fn handle_timer<G: Model>(&mut self, ctx: &mut Context, _model: &mut G, _dt: f32) {
         if event_check("PetView.Timer", "pet_timer") {
-            let p1 = self.panel.get_pixel_sprite("petimg1");
-            asset2sprite!(p1, ctx, &format!("{}.pix", (ctx.stage / 13 % 20) + 1));
+            let p1 = self.panel.get_pixel_sprite("petimg2");
+            self.glt.render_frame(self.progress);
+            info!("pixels...{:?}", self.glt.pixels);
+            p1.content.set_rgba_image(&self.glt.pixels, 40, 25);
+            self.progress += 0.03;
+            if self.progress >= 1.0 {
+                self.progress = 0.0;
+            }
+            // asset2sprite!(p1, ctx, &format!("{}.pix", (ctx.stage / 13 % 20) + 1));
             timer_fire("PetView.Timer", 1);
         }
     }

@@ -33,8 +33,34 @@ impl GlTransition {
             let gl = glow::Context::from_loader_function(|s| {
                 window_context.get_proc_address(s) as *const _
             });
+
+
+            let fs = r#"
+#define DEG2RAD 0.03926990816987241548078304229099 // 1/180*PI
+uniform float rotation = 6;
+uniform float scale = 1.2;
+uniform float ratio = 0.5;
+vec4 transition(vec2 uv) {
+  float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
+  float angleOffset = progress < 0.5 ? mix(0.0, rotation * DEG2RAD, phase) : mix(-rotation * DEG2RAD, 0.0, phase);
+  float newScale = progress < 0.5 ? mix(1.0, scale, phase) : mix(scale, 1.0, phase);
+
+  vec2 center = vec2(0, 0);
+
+  vec2 assumedCenter = vec2(0.5, 0.5);
+  vec2 p = (uv.xy - vec2(0.5, 0.5)) / newScale * vec2(ratio, 1.0);
+
+  float angle = atan(p.y, p.x) + angleOffset;
+  float dist = distance(center, p);
+  p.x = cos(angle) * dist / ratio + 0.5;
+  p.y = sin(angle) * dist + 0.5;
+  vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
+
+  return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
+}"#;
+
             // create shaders and buffers...
-            let program = create_shaders(&gl);
+            let program = create_shaders(&gl, fs);
             let (vao, vbuf, ibuf) = create_buffers(&gl, program);
             let (rt, fbuf) = create_render_texture(&gl, width, height);
             let texture1 = None;
@@ -73,12 +99,12 @@ impl GlTransition {
     }
 
     // render and output pixels data...
-    pub fn render_frame(&mut self) {
+    pub fn render_frame(&mut self, p: f32) {
         unsafe {
             let w = self.width;
             let h = self.height;
             if let (Some(t1), Some(t2)) = (self.texture1, self.texture2) {
-                self.pixels = render_frame(&self.gl, self.program, t1, t2, w, h);
+                self.pixels = render_frame(&self.gl, self.program, t1, t2, w, h, p);
             }
         }
     }
@@ -119,6 +145,7 @@ unsafe fn render_frame(
     texture2: glow::NativeTexture,
     width: u32,
     height: u32,
+    progress: f32,
 ) -> Vec<u8> {
     gl.viewport(0, 0, width as i32, height as i32);
     gl.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -133,6 +160,10 @@ unsafe fn render_frame(
     gl.active_texture(glow::TEXTURE1);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture2));
     gl.uniform_1_i32(gl.get_uniform_location(program, "u_texture2").as_ref(), 1);
+
+    // 设置progress
+    let lb = gl.get_uniform_location(program, "progress");
+    gl.uniform_1_f32(lb.as_ref(), progress);
 
     gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
 
@@ -150,47 +181,30 @@ unsafe fn render_frame(
     pixels
 }
 
-unsafe fn create_shaders(gl: &glow::Context) -> glow::Program {
+unsafe fn create_shaders(gl: &glow::Context, fssrc: &str) -> glow::Program {
     let vertex_shader_source = r#"
-        #version 330
-        in vec2 a_position;
-        in vec2 a_tex_coord;
-        out vec2 v_tex_coord;
-        void main() {
-            v_tex_coord = vec2(a_tex_coord.x, 1.0 - a_tex_coord.y);
-            gl_Position = vec4(a_position, 0.0, 1.0);
-        }
+            #version 330 core
+            layout(location = 0) in vec2 aPos;
+            layout(location = 1) in vec2 aTexCoord;
+            out vec2 TexCoord;
+            void main() {
+                gl_Position = vec4(aPos, 0.0, 1.0);
+                TexCoord = aTexCoord;
+            }
     "#;
 
-    let fragment_shader_source = r#"
-        #version 330
-        in vec2 v_tex_coord;
-        uniform sampler2D u_texture1;
-        uniform sampler2D u_texture2;
-        uniform float bounces;
-        uniform float progress;
-        const float PI = 3.14159265358;
-
-        vec4 getToColor(vec2  uv){
-            return texture2D(u_texture1, uv);
-        }
-        vec4 getFromColor(vec2 uv){
-            return texture2D(u_texture2, uv);
-        }
-        vec4 transition (vec2 uv) {
-            float time = progress;
-            float stime = sin(time * PI / 2.);
-            float phase = time * PI * bounces;
-            float y = (abs(cos(phase))) * (1.0 - stime);
-            float d = uv.y - y;
-            vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
-            vec4 to = getToColor(uv);
-            return mix( to, from, step(d, 0.0) );
-        }
-        void main() {
-            gl_FragColor =  transition(v_TexCoord);
-        }
-    "#;
+    let fragment_shader_source = &format!(r#"
+            #version 330 core
+            out vec4 FragColor;
+            in vec2 TexCoord;
+            uniform sampler2D texture1;
+            uniform sampler2D texture2;
+            uniform float progress;
+            vec4 getFromColor(vec2 uv) {{ return texture(texture1, uv); }}
+            vec4 getToColor(vec2 uv) {{ return texture(texture2, uv); }}
+            {}
+            void main() {{ FragColor =  transition(TexCoord); }}
+    "#, fssrc);
 
     let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
     gl.shader_source(vertex_shader, vertex_shader_source);
@@ -200,7 +214,12 @@ unsafe fn create_shaders(gl: &glow::Context) -> glow::Program {
     let fragment_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
     gl.shader_source(fragment_shader, fragment_shader_source);
     gl.compile_shader(fragment_shader);
-    assert!(gl.get_shader_compile_status(fragment_shader));
+    if !gl.get_shader_compile_status(fragment_shader) {
+        panic!(
+            "Fragment shader compilation failed: {}",
+            gl.get_shader_info_log(fragment_shader)
+        );
+    }
 
     let program = gl.create_program().unwrap();
     gl.attach_shader(program, vertex_shader);
@@ -279,8 +298,8 @@ unsafe fn create_buffers(
         glow::STATIC_DRAW,
     );
 
-    let pos_attrib = gl.get_attrib_location(program, "a_position").unwrap();
-    let tex_attrib = gl.get_attrib_location(program, "a_tex_coord").unwrap();
+    let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
+    let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
     gl.enable_vertex_attrib_array(pos_attrib);
     gl.enable_vertex_attrib_array(tex_attrib);
 

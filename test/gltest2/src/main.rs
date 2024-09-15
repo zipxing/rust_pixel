@@ -118,16 +118,137 @@ impl Renderer {
                 uniform sampler2D texture1;
                 uniform sampler2D texture2;
                 uniform float progress;
-                const float PI = 3.14159265358;
+                vec4 getFromColor(vec2 uv) { return texture(texture1, uv); }
+                vec4 getToColor(vec2 uv) { return texture(texture2, uv); }
+
+// // Author: Woohyun Kim
+// // License: MIT
+
+// uniform float edge_thickness = 0.001;
+// uniform float edge_brightness = 8.0;
+
+// vec4 detectEdgeColor(vec3[9] c) {
+//   /* adjacent texel array for texel c[4]
+//     036
+//     147
+//     258
+//   */
+//   vec3 dx = 2.0 * abs(c[7]-c[1]) + abs(c[2] - c[6]) + abs(c[8] - c[0]);
+// 	vec3 dy = 2.0 * abs(c[3]-c[5]) + abs(c[6] - c[8]) + abs(c[0] - c[2]);
+//   float delta = length(0.25 * (dx + dy) * 0.5);
+// 	return vec4(clamp(edge_brightness * delta, 0.0, 1.0) * c[4], 1.0);
+// }
+
+// vec4 getFromEdgeColor(vec2 uv) {
+// 	vec3 c[9];
+// 	for (int i=0; i < 3; ++i) for (int j=0; j < 3; ++j)
+// 	{
+// 	  vec4 color = getFromColor(uv + edge_thickness * vec2(i-1,j-1));
+//     c[3*i + j] = color.rgb;
+// 	}
+// 	return detectEdgeColor(c);
+// }
+
+// vec4 getToEdgeColor(vec2 uv) {
+// 	vec3 c[9];
+// 	for (int i=0; i < 3; ++i) for (int j=0; j < 3; ++j)
+// 	{
+// 	  vec4 color = getToColor(uv + edge_thickness * vec2(i-1,j-1));
+//     c[3*i + j] = color.rgb;
+// 	}
+// 	return detectEdgeColor(c);
+// }
+
+// vec4 transition (vec2 uv) {
+//   vec4 start = mix(getFromColor(uv), getFromEdgeColor(uv), clamp(2.0 * progress, 0.0, 1.0));
+//   vec4 end = mix(getToEdgeColor(uv), getToColor(uv), clamp(2.0 * (progress - 0.5), 0.0, 1.0));
+//   return mix(
+//     start,
+//     end,
+//     progress
+//   );
+// }
+
+// Author: Zeh Fernando
+// License: MIT
+
+// Definitions --------
+#define DEG2RAD 0.03926990816987241548078304229099 // 1/180*PI
+
+
+// Transition parameters --------
+
+// In degrees
+uniform float rotation = 6;
+
+// Multiplier
+uniform float scale = 1.2;
+
+uniform float ratio = 0.5;
+
+
+// The code proper --------
+
+vec4 transition(vec2 uv) {
+  // Massage parameters
+  float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
+  float angleOffset = progress < 0.5 ? mix(0.0, rotation * DEG2RAD, phase) : mix(-rotation * DEG2RAD, 0.0, phase);
+  float newScale = progress < 0.5 ? mix(1.0, scale, phase) : mix(scale, 1.0, phase);
+
+  vec2 center = vec2(0, 0);
+
+  // Calculate the source point
+  vec2 assumedCenter = vec2(0.5, 0.5);
+  vec2 p = (uv.xy - vec2(0.5, 0.5)) / newScale * vec2(ratio, 1.0);
+
+  // This can probably be optimized (with distance())
+  float angle = atan(p.y, p.x) + angleOffset;
+  float dist = distance(center, p);
+  p.x = cos(angle) * dist / ratio + 0.5;
+  p.y = sin(angle) * dist + 0.5;
+  vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
+
+  // Finally, apply the color
+  return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
+}
+
+                // uniform int bars = 30;
+                // uniform float amplitude = 2;
+                // uniform float noise = 0.1;
+                // uniform float frequency = 0.5;
+                // uniform float dripScale = 0.5;
+                // float rand(int num) {
+                //     return fract(mod(float(num) * 67123.313, 12.0) * sin(float(num) * 10.3) * cos(float(num)));
+                // }
+                // float wave(int num) {
+                //   float fn = float(num) * frequency * 0.1 * float(bars);
+                //   return cos(fn * 0.5) * cos(fn * 0.13) * sin((fn+10.0) * 0.3) / 2.0 + 0.5;
+                // }
+                // float drip(int num) {
+                //   return sin(float(num) / float(bars - 1) * 3.141592) * dripScale;
+                // }
+                // float pos(int num) {
+                //   return (noise == 0.0 ? wave(num) : mix(wave(num), rand(num), noise)) + (dripScale == 0.0 ? 0.0 : drip(num));
+                // }
+                // vec4 transition(vec2 uv) {
+                //   int bar = int(uv.x * (float(bars)));
+                //   float scale = 1.0 + pos(bar) * amplitude;
+                //   float phase = progress * scale;
+                //   float posY = uv.y / vec2(1.0).y;
+                //   vec2 p;
+                //   vec4 c;
+                //   if (phase + posY < 1.0) {
+                //     p = vec2(uv.x, uv.y + mix(0.0, vec2(1.0).y, phase)) / vec2(1.0).xy;
+                //     c = getFromColor(p);
+                //   } else {
+                //     p = uv.xy / vec2(1.0).xy;
+                //     c = getToColor(p);
+                //   }
+                //   return c;
+                // }
+
                 void main() {
-                    float time = progress;
-                    float stime = sin(time * PI / 2.);
-                    float phase = time * PI * 6.0;
-                    float y = (abs(cos(phase))) * (1.0 - stime);
-                    float d = TexCoord.y - y;
-                    vec4 color1 = texture(texture1, TexCoord);
-                    vec4 color2 = texture(texture2, TexCoord);
-                    FragColor = mix(color1, color2, step(d, 0.0));
+                    FragColor = transition(TexCoord);
                 }
             "#;
 
