@@ -48,7 +48,11 @@
 //! texture0(assets/c64l.png). May have display issues if set to another texture.
 //!
 #[allow(unused_imports)]
-use crate::{render::cell::Cell, render::style::{Style, Color}, util::Rect};
+use crate::{
+    render::cell::{cellsym, Cell},
+    render::style::{Color, Style},
+    util::Rect,
+};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
@@ -102,9 +106,10 @@ impl Buffer {
         &self.content
     }
 
-    pub fn get_data(&self) -> Vec<u8> {
+    pub fn get_rgba_image(&self) -> Vec<u8> {
         let mut dat = vec![];
         for c in &self.content {
+            // sym tex fg bg
             let ci = c.get_cell_info();
             dat.push(ci.0);
             dat.push(ci.1);
@@ -114,8 +119,19 @@ impl Buffer {
         dat
     }
 
-    pub fn set_data(&mut self, dat: &[u8], w: u16, h: u16) {
-
+    pub fn set_rgba_image(&mut self, dat: &[u8], w: u16, h: u16) {
+        self.resize(Rect::new(0, 0, w, h));
+        let mut idx = 0;
+        for i in 0..h {
+            for j in 0..w {
+                self.content[(i * w + j) as usize]
+                    .set_symbol(cellsym(dat[idx]))
+                    .set_texture(dat[idx + 1])
+                    .set_fg(Color::Indexed(dat[idx + 2]))
+                    .set_bg(Color::Indexed(dat[idx + 3]));
+                idx += 4;
+            }
+        }
     }
 
     pub fn area(&self) -> &Rect {
@@ -173,7 +189,14 @@ impl Buffer {
     where
         S: AsRef<str>,
     {
-        self.set_stringn(x + self.area.x, y + self.area.y, string, usize::MAX, style, tex);
+        self.set_stringn(
+            x + self.area.x,
+            y + self.area.y,
+            string,
+            usize::MAX,
+            style,
+            tex,
+        );
     }
 
     //relative pos in game sprite, easier to set content
@@ -181,7 +204,14 @@ impl Buffer {
     where
         S: AsRef<str>,
     {
-        self.set_stringn(x + self.area.x, y + self.area.y, string, usize::MAX, style, 0);
+        self.set_stringn(
+            x + self.area.x,
+            y + self.area.y,
+            string,
+            usize::MAX,
+            style,
+            0,
+        );
     }
 
     //absolute pos
@@ -276,7 +306,7 @@ impl Buffer {
             if other.content[pos_other].bg != Color::Reset {
                 let bc = other.content[pos_other].bg.get_rgba();
                 self.content[pos_self].bg = Color::Rgba(bc.0, bc.1, bc.2, alpha);
-            } 
+            }
             self.content[pos_self].fg = Color::Rgba(fc.0, fc.1, fc.2, alpha);
         }
     }

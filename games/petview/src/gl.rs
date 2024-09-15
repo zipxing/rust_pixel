@@ -11,6 +11,8 @@ pub struct GlTransition {
     pub ibuf: NativeBuffer,
     pub rt: NativeTexture,
     pub fbuf: NativeFramebuffer,
+    pub width: u32,
+    pub height: u32,
     pub texture1: Option<NativeTexture>,
     pub texture2: Option<NativeTexture>,
     pub pixels: Vec<u8>,
@@ -45,6 +47,8 @@ impl GlTransition {
                 ibuf,
                 rt,
                 fbuf,
+                width,
+                height,
                 texture1,
                 texture2,
                 pixels: vec![],
@@ -53,7 +57,7 @@ impl GlTransition {
     }
 
     // call if u want update texture...
-    pub fn set_texture(&mut self, w: u32, h: u32, img1: &[u8], img2: &[u8]) {
+    pub fn set_texture(&mut self, img1: &[u8], img2: &[u8]) {
         unsafe {
             if let Some(texture1) = self.texture1 {
                 self.gl.delete_texture(texture1);
@@ -61,14 +65,18 @@ impl GlTransition {
             if let Some(texture2) = self.texture2 {
                 self.gl.delete_texture(texture2);
             }
+            let w = self.width;
+            let h = self.height;
             self.texture1 = Some(create_texture(&self.gl, w, h, &img1));
             self.texture2 = Some(create_texture(&self.gl, w, h, &img2));
         }
     }
 
     // render and output pixels data...
-    pub fn render_frame(&mut self, w: u32, h: u32) {
+    pub fn render_frame(&mut self) {
         unsafe {
+            let w = self.width;
+            let h = self.height;
             if let (Some(t1), Some(t2)) = (self.texture1, self.texture2) {
                 self.pixels = render_frame(&self.gl, self.program, t1, t2, w, h);
             }
@@ -159,11 +167,28 @@ unsafe fn create_shaders(gl: &glow::Context) -> glow::Program {
         in vec2 v_tex_coord;
         uniform sampler2D u_texture1;
         uniform sampler2D u_texture2;
-        out vec4 color;
+        uniform float bounces;
+        uniform float progress;
+        const float PI = 3.14159265358;
+
+        vec4 getToColor(vec2  uv){
+            return texture2D(u_texture1, uv);
+        }
+        vec4 getFromColor(vec2 uv){
+            return texture2D(u_texture2, uv);
+        }
+        vec4 transition (vec2 uv) {
+            float time = progress;
+            float stime = sin(time * PI / 2.);
+            float phase = time * PI * bounces;
+            float y = (abs(cos(phase))) * (1.0 - stime);
+            float d = uv.y - y;
+            vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+            vec4 to = getToColor(uv);
+            return mix( to, from, step(d, 0.0) );
+        }
         void main() {
-            vec4 tex1 = texture(u_texture1, v_tex_coord);
-            vec4 tex2 = texture(u_texture2, v_tex_coord);
-            color = mix(tex1, tex2, 0.5);  // 混合两个纹理
+            gl_FragColor =  transition(v_TexCoord);
         }
     "#;
 

@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "ggtest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glow = "0.11.0"
+glutin = "0.29.0"  # 用于窗口模式
+image = "0.24.6"   # 用于加载图像
+bytemuck = "1.12.1"
