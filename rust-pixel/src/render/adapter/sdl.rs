@@ -56,6 +56,7 @@ pub struct SdlAdapter {
     pub asset_textures: Option<Vec<Texture>>,
     // rendering target textures
     pub render_texture: Option<Texture>,
+    pub gl: Option<glow::Context>,
     pub rd: Rand,
 }
 
@@ -76,6 +77,7 @@ impl SdlAdapter {
             canvas: None,
             asset_textures: None,
             render_texture: None,
+            gl: None,
             drag_ing: false,
             drag_mouse_x: 0,
             drag_mouse_y: 0,
@@ -84,6 +86,10 @@ impl SdlAdapter {
             drag_dy: 0,
             rd: Rand::new(),
         }
+    }
+
+    pub fn haha(&mut self) {
+
     }
 
     fn set_mouse_cursor(&mut self, s: &Surface) {
@@ -205,6 +211,11 @@ impl Adapter for SdlAdapter {
             .map_err(|e| e.to_string())
             .unwrap();
 
+        unsafe {
+            let _gl_context = window.gl_create_context().unwrap();
+            self.gl = Some(glow::Context::from_loader_function(|s| video_subsystem.gl_get_proc_address(s) as *const _));
+        }
+
         let canvas = window
             .into_canvas()
             .software()
@@ -248,6 +259,10 @@ impl Adapter for SdlAdapter {
         self.asset_textures = Some(vt);
         self.render_texture = Some(rt);
         self.event_pump = Some(self.context.event_pump().unwrap());
+    }
+
+    fn get_gl(&mut self) -> &Option<glow::Context> {
+        &self.gl
     }
 
     fn get_base(&mut self) -> &mut AdapterBase {
@@ -409,7 +424,7 @@ impl Adapter for SdlAdapter {
         Ok((0, 0))
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }

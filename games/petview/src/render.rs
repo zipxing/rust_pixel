@@ -12,11 +12,12 @@ use rust_pixel::{
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
+    render::adapter::sdl::SdlAdapter,
 };
 
 pub struct PetviewRender {
     pub panel: Panel,
-    pub glt: GlTransition,
+    pub glt: Option<GlTransition>,
     pub progress: f32,
 }
 
@@ -29,12 +30,13 @@ impl PetviewRender {
         gb.set_alpha(230);
         panel.add_sprite(gb, "back");
 
-        let p1 = Sprite::new(100, 50, PETW, PETH);
+        let p1 = Sprite::new(40, 25, PETW, PETH);
         panel.add_pixel_sprite(p1, "petimg1");
-        let p2 = Sprite::new(100, 50, PETW, PETH);
+        let p2 = Sprite::new(40, 25, PETW, PETH);
         panel.add_pixel_sprite(p2, "petimg2");
 
-        let glt = GlTransition::new(40, 25);
+        // let glt = GlTransition::new(40, 25);
+        let glt = None;
 
         timer_register("PetView.Timer", 0.2, "pet_timer");
         timer_fire("PetView.Timer", 1);
@@ -48,6 +50,9 @@ impl Render for PetviewRender {
         ctx.adapter
             .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
+        // self.glt = Some(GlTransition::new(&ctx.adapter.get_gl().unwrap(), 40, 25));
+        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+        sa.haha();
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "1.pix");
@@ -58,7 +63,7 @@ impl Render for PetviewRender {
         let img2 = p2.content.get_rgba_image();
         info!("image...{:#?} {:#?}", img1, img2);
 
-        self.glt.set_texture(&img1, &img2);
+        // self.glt.unwrap().set_texture(&ctx.adapter.get_gl().unwrap(), &img1, &img2);
     }
 
     fn handle_event<G: Model>(&mut self, ctx: &mut Context, data: &mut G, _dt: f32) {}
@@ -66,9 +71,10 @@ impl Render for PetviewRender {
     fn handle_timer<G: Model>(&mut self, ctx: &mut Context, _model: &mut G, _dt: f32) {
         if event_check("PetView.Timer", "pet_timer") {
             let p1 = self.panel.get_pixel_sprite("petimg2");
-            self.glt.render_frame(self.progress);
-            info!("pixels...{:?}", self.glt.pixels);
-            p1.content.set_rgba_image(&self.glt.pixels, 40, 25);
+            // self.glt.render_frame(self.progress);
+            // self.glt.unwrap().render_frame(&ctx.adapter.get_gl().unwrap(), 0.5);
+            // info!("pixels...{:?} {}", self.glt.pixels, self.glt.pixels.len());
+            // p1.content.set_rgba_image(&self.glt.unwrap().pixels, 40, 25);
             self.progress += 0.03;
             if self.progress >= 1.0 {
                 self.progress = 0.0;

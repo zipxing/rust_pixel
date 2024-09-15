@@ -1,10 +1,9 @@
 use glow::{
     HasContext, NativeBuffer, NativeFramebuffer, NativeTexture, NativeVertexArray, Program,
 };
-use glutin::ContextBuilder;
+// use glutin::ContextBuilder;
 
 pub struct GlTransition {
-    pub gl: glow::Context,
     pub program: Program,
     pub vao: NativeVertexArray,
     pub vbuf: NativeBuffer,
@@ -19,45 +18,60 @@ pub struct GlTransition {
 }
 
 impl GlTransition {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(gl: &glow::Context, width: u32, height: u32) -> Self {
         // create headless context...
-        let el = glutin::event_loop::EventLoop::new();
-        let size = glutin::dpi::PhysicalSize::new(width, height);
-        let context = ContextBuilder::new()
-            .with_gl_debug_flag(true)
-            .build_headless(&el, size)
-            .expect("Failed to create headless context");
+        // let el = glutin::event_loop::EventLoop::new();
+        // let size = glutin::dpi::PhysicalSize::new(width, height);
+        // let context = ContextBuilder::new()
+        //     .with_gl_debug_flag(true)
+        //     .build_headless(&el, size)
+        //     .expect("Failed to create headless context");
 
         unsafe {
-            let window_context = context.make_current().unwrap();
-            let gl = glow::Context::from_loader_function(|s| {
-                window_context.get_proc_address(s) as *const _
-            });
+            // let window_context = context.make_current().unwrap();
+            // let gl = glow::Context::from_loader_function(|s| {
+            //     window_context.get_proc_address(s) as *const _
+            // });
 
+            // let fs = r#"
+            // #define DEG2RAD 0.03926990816987241548078304229099 // 1/180*PI
+            // uniform float rotation = 6;
+            // uniform float scale = 1.2;
+            // uniform float ratio = 0.5;
+            // vec4 transition(vec2 uv) {
+            // float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
+            // float angleOffset = progress < 0.5 ? mix(0.0, rotation * DEG2RAD, phase) : mix(-rotation * DEG2RAD, 0.0, phase);
+            // float newScale = progress < 0.5 ? mix(1.0, scale, phase) : mix(scale, 1.0, phase);
 
+            // vec2 center = vec2(0, 0);
+
+            // vec2 assumedCenter = vec2(0.5, 0.5);
+            // vec2 p = (uv.xy - vec2(0.5, 0.5)) / newScale * vec2(ratio, 1.0);
+
+            // float angle = atan(p.y, p.x) + angleOffset;
+            // float dist = distance(center, p);
+            // p.x = cos(angle) * dist / ratio + 0.5;
+            // p.y = sin(angle) * dist + 0.5;
+            // vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
+
+            // return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
+            // }"#;
             let fs = r#"
-#define DEG2RAD 0.03926990816987241548078304229099 // 1/180*PI
-uniform float rotation = 6;
-uniform float scale = 1.2;
-uniform float ratio = 0.5;
-vec4 transition(vec2 uv) {
-  float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
-  float angleOffset = progress < 0.5 ? mix(0.0, rotation * DEG2RAD, phase) : mix(-rotation * DEG2RAD, 0.0, phase);
-  float newScale = progress < 0.5 ? mix(1.0, scale, phase) : mix(scale, 1.0, phase);
+   uniform float bounces = 3.0;
+   const float PI = 3.14159265358;
 
-  vec2 center = vec2(0, 0);
-
-  vec2 assumedCenter = vec2(0.5, 0.5);
-  vec2 p = (uv.xy - vec2(0.5, 0.5)) / newScale * vec2(ratio, 1.0);
-
-  float angle = atan(p.y, p.x) + angleOffset;
-  float dist = distance(center, p);
-  p.x = cos(angle) * dist / ratio + 0.5;
-  p.y = sin(angle) * dist + 0.5;
-  vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
-
-  return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
-}"#;
+   vec4 transition (vec2 uv) {
+     float time = progress;
+     float stime = sin(time * PI / 2.);
+     float phase = time * PI * bounces;
+     float y = (abs(cos(phase))) * (1.0 - stime);
+     float d = uv.y - y;
+     // vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+     vec4 from = getFromColor(uv);
+     vec4 to = getToColor(uv);
+     // vec4 mc = mix( to, from, step(d, 0.0) );
+     return to;
+   }"#;
 
             // create shaders and buffers...
             let program = create_shaders(&gl, fs);
@@ -66,7 +80,6 @@ vec4 transition(vec2 uv) {
             let texture1 = None;
             let texture2 = None;
             Self {
-                gl,
                 program,
                 vao,
                 vbuf,
@@ -83,38 +96,38 @@ vec4 transition(vec2 uv) {
     }
 
     // call if u want update texture...
-    pub fn set_texture(&mut self, img1: &[u8], img2: &[u8]) {
+    pub fn set_texture(&mut self, gl: &glow::Context, img1: &[u8], img2: &[u8]) {
         unsafe {
             if let Some(texture1) = self.texture1 {
-                self.gl.delete_texture(texture1);
+                gl.delete_texture(texture1);
             }
             if let Some(texture2) = self.texture2 {
-                self.gl.delete_texture(texture2);
+                gl.delete_texture(texture2);
             }
             let w = self.width;
             let h = self.height;
-            self.texture1 = Some(create_texture(&self.gl, w, h, &img1));
-            self.texture2 = Some(create_texture(&self.gl, w, h, &img2));
+            self.texture1 = Some(create_texture(&gl, w, h, &img1));
+            self.texture2 = Some(create_texture(&gl, w, h, &img2));
         }
     }
 
     // render and output pixels data...
-    pub fn render_frame(&mut self, p: f32) {
+    pub fn render_frame(&mut self, gl: &glow::Context, p: f32) {
         unsafe {
             let w = self.width;
             let h = self.height;
             if let (Some(t1), Some(t2)) = (self.texture1, self.texture2) {
-                self.pixels = render_frame(&self.gl, self.program, t1, t2, w, h, p);
+                self.pixels = render_frame(&gl, self.program, t1, t2, w, h, p);
             }
         }
     }
 
     // clean handle...
-    pub fn clean(&mut self) {
+    pub fn clean(&mut self, gl: &glow::Context) {
         unsafe {
             if let (Some(t1), Some(t2)) = (self.texture1, self.texture2) {
                 cleanup(
-                    &self.gl,
+                    &gl,
                     self.program,
                     self.vao,
                     self.vbuf,
@@ -193,7 +206,8 @@ unsafe fn create_shaders(gl: &glow::Context, fssrc: &str) -> glow::Program {
             }
     "#;
 
-    let fragment_shader_source = &format!(r#"
+    let fragment_shader_source = &format!(
+        r#"
             #version 330 core
             out vec4 FragColor;
             in vec2 TexCoord;
@@ -204,7 +218,9 @@ unsafe fn create_shaders(gl: &glow::Context, fssrc: &str) -> glow::Program {
             vec4 getToColor(vec2 uv) {{ return texture(texture2, uv); }}
             {}
             void main() {{ FragColor =  transition(TexCoord); }}
-    "#, fssrc);
+    "#,
+        fssrc
+    );
 
     let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
     gl.shader_source(vertex_shader, vertex_shader_source);

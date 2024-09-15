@@ -134,6 +134,8 @@ pub trait Adapter {
         Rect::new(0, 0, bs.cell_w, bs.cell_h)
     }
 
+    fn get_gl(&mut self) -> &Option<glow::Context>; 
+
     fn set_ratiox(&mut self, rx: f32) -> &mut Self
     where
         Self: Sized,
@@ -177,7 +179,7 @@ pub trait Adapter {
     fn show_cursor(&mut self) -> Result<(), String>;
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(&mut self) -> &mut dyn Any;
 }
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
