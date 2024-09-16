@@ -30,9 +30,9 @@ impl PetviewRender {
         gb.set_alpha(230);
         panel.add_sprite(gb, "back");
 
-        let p1 = Sprite::new(40, 25, PETW, PETH);
+        let p1 = Sprite::new(0, 0, 40, 25);
         panel.add_pixel_sprite(p1, "petimg1");
-        let p2 = Sprite::new(40, 25, PETW, PETH);
+        let p2 = Sprite::new(0, 0, 40, 25);
         panel.add_pixel_sprite(p2, "petimg2");
 
         // let glt = GlTransition::new(40, 25);
