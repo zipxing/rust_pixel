@@ -29,7 +29,8 @@ impl GlTransition {
                     float phase = time * PI * bounces;
                     float y = (abs(cos(phase))) * (1.0 - stime);
                     float d = uv.y - y;
-                    vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+                    // vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+                    vec4 from = getFromColor(uv);
                     vec4 to = getToColor(uv);
                     vec4 mc = mix( to, from, step(d, 0.0) );
                     return mc;
