@@ -1,7 +1,6 @@
 use glow::{
     HasContext, NativeBuffer, NativeFramebuffer, NativeTexture, NativeVertexArray, Program,
 };
-// use glutin::ContextBuilder;
 
 pub struct GlTransition {
     pub program: Program,
@@ -19,59 +18,22 @@ pub struct GlTransition {
 
 impl GlTransition {
     pub fn new(gl: &glow::Context, width: u32, height: u32) -> Self {
-        // create headless context...
-        // let el = glutin::event_loop::EventLoop::new();
-        // let size = glutin::dpi::PhysicalSize::new(width, height);
-        // let context = ContextBuilder::new()
-        //     .with_gl_debug_flag(true)
-        //     .build_headless(&el, size)
-        //     .expect("Failed to create headless context");
-
         unsafe {
-            // let window_context = context.make_current().unwrap();
-            // let gl = glow::Context::from_loader_function(|s| {
-            //     window_context.get_proc_address(s) as *const _
-            // });
-
-            // let fs = r#"
-            // #define DEG2RAD 0.03926990816987241548078304229099 // 1/180*PI
-            // uniform float rotation = 6;
-            // uniform float scale = 1.2;
-            // uniform float ratio = 0.5;
-            // vec4 transition(vec2 uv) {
-            // float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
-            // float angleOffset = progress < 0.5 ? mix(0.0, rotation * DEG2RAD, phase) : mix(-rotation * DEG2RAD, 0.0, phase);
-            // float newScale = progress < 0.5 ? mix(1.0, scale, phase) : mix(scale, 1.0, phase);
-
-            // vec2 center = vec2(0, 0);
-
-            // vec2 assumedCenter = vec2(0.5, 0.5);
-            // vec2 p = (uv.xy - vec2(0.5, 0.5)) / newScale * vec2(ratio, 1.0);
-
-            // float angle = atan(p.y, p.x) + angleOffset;
-            // float dist = distance(center, p);
-            // p.x = cos(angle) * dist / ratio + 0.5;
-            // p.y = sin(angle) * dist + 0.5;
-            // vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
-
-            // return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
-            // }"#;
             let fs = r#"
-   uniform float bounces = 3.0;
-   const float PI = 3.14159265358;
+                uniform float bounces = 3.0;
+                const float PI = 3.14159265358;
 
-   vec4 transition (vec2 uv) {
-     float time = progress;
-     float stime = sin(time * PI / 2.);
-     float phase = time * PI * bounces;
-     float y = (abs(cos(phase))) * (1.0 - stime);
-     float d = uv.y - y;
-     // vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
-     vec4 from = getFromColor(uv);
-     vec4 to = getToColor(uv);
-     // vec4 mc = mix( to, from, step(d, 0.0) );
-     return to;
-   }"#;
+                vec4 transition (vec2 uv) {
+                    float time = progress;
+                    float stime = sin(time * PI / 2.);
+                    float phase = time * PI * bounces;
+                    float y = (abs(cos(phase))) * (1.0 - stime);
+                    float d = uv.y - y;
+                    vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+                    vec4 to = getToColor(uv);
+                    vec4 mc = mix( to, from, step(d, 0.0) );
+                    return mc;
+            }"#;
 
             // create shaders and buffers...
             let program = create_shaders(&gl, fs);
@@ -168,11 +130,11 @@ unsafe fn render_frame(
 
     gl.active_texture(glow::TEXTURE0);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture1));
-    gl.uniform_1_i32(gl.get_uniform_location(program, "u_texture1").as_ref(), 0);
+    gl.uniform_1_i32(gl.get_uniform_location(program, "texture1").as_ref(), 0);
 
     gl.active_texture(glow::TEXTURE1);
     gl.bind_texture(glow::TEXTURE_2D, Some(texture2));
-    gl.uniform_1_i32(gl.get_uniform_location(program, "u_texture2").as_ref(), 1);
+    gl.uniform_1_i32(gl.get_uniform_location(program, "texture2").as_ref(), 1);
 
     // 设置progress
     let lb = gl.get_uniform_location(program, "progress");
@@ -225,7 +187,12 @@ unsafe fn create_shaders(gl: &glow::Context, fssrc: &str) -> glow::Program {
     let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
     gl.shader_source(vertex_shader, vertex_shader_source);
     gl.compile_shader(vertex_shader);
-    assert!(gl.get_shader_compile_status(vertex_shader));
+    if !gl.get_shader_compile_status(vertex_shader) {
+        panic!(
+            "Vertex shader compilation failed: {}",
+            gl.get_shader_info_log(vertex_shader)
+        );
+    }
 
     let fragment_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
     gl.shader_source(fragment_shader, fragment_shader_source);

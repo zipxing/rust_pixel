@@ -120,7 +120,7 @@ impl Buffer {
     }
 
     pub fn set_rgba_image(&mut self, dat: &[u8], w: u16, h: u16) {
-        self.resize(Rect::new(0, 0, w, h));
+        // self.resize(Rect::new(0, 0, w, h));
         let mut idx = 0;
         for i in 0..h {
             for j in 0..w {

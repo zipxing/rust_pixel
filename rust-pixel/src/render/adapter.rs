@@ -134,8 +134,6 @@ pub trait Adapter {
         Rect::new(0, 0, bs.cell_w, bs.cell_h)
     }
 
-    fn get_gl(&mut self) -> &Option<glow::Context>; 
-
     fn set_ratiox(&mut self, rx: f32) -> &mut Self
     where
         Self: Sized,
