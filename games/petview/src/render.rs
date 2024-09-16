@@ -25,7 +25,7 @@ fn debug_img(img: &[u8], w: usize, h: usize) {
     for i in 0..h {
         let mut line = " ".to_string();
         for j in 0..w {
-            write!(line, " {}.{}.{}.{} ", img[idx + 0], img[idx + 1], img[idx + 2], img[idx + 3]);
+            write!(line, " {}.{}.{}.{} ", img[idx + 0], img[idx + 1], img[idx + 2], img[idx + 3]).unwrap();
             idx += 4;
         }
         info!("{:?}", line);

@@ -29,8 +29,8 @@ impl GlTransition {
                     float phase = time * PI * bounces;
                     float y = (abs(cos(phase))) * (1.0 - stime);
                     float d = uv.y - y;
-                    // vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
-                    vec4 from = getFromColor(uv);
+                    vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+                    // vec4 from = getFromColor(uv);
                     vec4 to = getToColor(uv);
                     vec4 mc = mix( to, from, step(d, 0.0) );
                     return mc;
@@ -304,12 +304,14 @@ unsafe fn create_texture(
     gl.tex_parameter_i32(
         glow::TEXTURE_2D,
         glow::TEXTURE_MIN_FILTER,
-        glow::LINEAR as i32,
+        glow::NEAREST as i32,
+        // glow::LINEAR as i32,
     );
     gl.tex_parameter_i32(
         glow::TEXTURE_2D,
         glow::TEXTURE_MAG_FILTER,
-        glow::LINEAR as i32,
+        glow::NEAREST as i32,
+        // glow::LINEAR as i32,
     );
     gl.tex_parameter_i32(
         glow::TEXTURE_2D,
