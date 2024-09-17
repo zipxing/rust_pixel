@@ -2,12 +2,13 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! Cell is the basic rendering data structure in RustPixel, represents a char
-//! Cell stores some key data such as symbol, fg, bg. Many Cells form a buffer to manage rendering.
+//! Cell stores some key data such as symbol, tex(graph mode only), fg, bg. 
+//! Many Cells form a buffer to manage rendering.
+//!
 //! A buffer comprises a cell vector with width * height elements
 //!
-//! Please refer to the comments and code (cellsym, CELL_SYM_MAP) in buffer.rs
-//! for how to use cell
-//! get_cell_info to get the basic info of a cell
+//! Please refer to the code (cellsym, symidx, get_cell_info, CELL_SYM_MAP) for 
+//! how to use cell.
 //!
 
 use crate::render::style::{Color, Modifier, Style};
@@ -45,16 +46,14 @@ lazy_static! {
     };
 }
 
-
 /// sym_index, texture_index, fg_color, bg_color
 pub type CellInfo = (u8, u8, Color, Color);
 
-/// returns a cellsym char by index
-///
+/// returns a cellsym string by index
 /// 256 unicode chars mark the index of a symbol in a SDL texture
 /// unicode: 0x2200 ~ 0x22FF
 /// maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
-/// an 8-digits index gets from the UTF8 code is used to mark the offset in its texture
+/// an 8-bits index gets from the UTF8 code is used to mark the offset in its texture
 pub fn cellsym(idx: u8) -> &'static str {
     const SSYM: [&str; 256] = [
         "∀", "∁", "∂", "∃", "∄", "∅", "∆", "∇", "∈", "∉", "∊", "∋", "∌", "∍", "∎", "∏", "∐", "∑",
@@ -81,6 +80,7 @@ pub fn cellsym(idx: u8) -> &'static str {
 /// otherwise get index from CELL_SYM_MAP
 fn symidx(symbol: &String) -> u8 {
     let sbts = symbol.as_bytes();
+    // unicode graphical symbol
     if sbts.len() == 3 {
         if sbts[0] == 0xe2 && (sbts[1] >> 2 == 0x22) {
             let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
@@ -88,6 +88,7 @@ fn symidx(symbol: &String) -> u8 {
         }
     }
     let mut ret = 0u8;
+    // search in CELL_SYM_MAP
     if let Some(idx) = CELL_SYM_MAP.get(symbol) {
         ret = *idx;
     }

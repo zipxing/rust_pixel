@@ -22,7 +22,7 @@
 //! maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
 //! an 8-digits index gets from the UTF8 code is used to mark the offset in its texture
 //!
-//! bg color is used to indicate texture
+//! tex field is used to indicate texture
 //! 0: assets/c64l.png small case c64 char
 //! 1: assets/c64u.png capital case c64 char
 //! 2: assets/c64e1.png custom extension 1
@@ -30,8 +30,7 @@
 //! each texture is an image of 16 row * 16 row = 256 chars
 //! # Example
 //! ```
-//! my_buffer.set_str(0, 0, sdlsym(0),
-//!     Style::default().fg(Color::Red).bg(Color::Indexed(1)))
+//! my_buffer.set_str_tex(0, 0, sdlsym(0), Style::default().fg(Color::Red), 1)
 //! ```
 //! sets pos(0,0) in the buffer to the 1st char of texture1(assets/c64u.png)
 //!
@@ -41,10 +40,10 @@
 //! for easier set of latin letters using set_str in SDL mode
 //! # Example
 //! ```
-//! my_buffer.set_str(0, 0, "Hello world.",
-//!     Style::default().fg(Color::Red).bg(Color::Indexed(0)))
+//! my_buffer.set_str_tex(0, 0, "Hello world.",
+//!     Style::default().fg(Color::Red), 0)
 //! ```
-//! Warning！bg here must be set to Color::Indexed(0)，because the offset in SDL_SYM_MAP is preset based on
+//! Warning！tex here must be set to 0，because the offset in SDL_SYM_MAP is preset based on
 //! texture0(assets/c64l.png). May have display issues if set to another texture.
 //!
 #[allow(unused_imports)]
@@ -106,6 +105,8 @@ impl Buffer {
         &self.content
     }
 
+    /// convert buffer to a rgba image buffer
+    /// use for opengl shader texture
     pub fn get_rgba_image(&self) -> Vec<u8> {
         let mut dat = vec![];
         for c in &self.content {
@@ -119,8 +120,9 @@ impl Buffer {
         dat
     }
 
+    /// convert rgba image to buffer
+    /// use for opengl shader output
     pub fn set_rgba_image(&mut self, dat: &[u8], w: u16, h: u16) {
-        // self.resize(Rect::new(0, 0, w, h));
         let mut idx = 0;
         for i in 0..h {
             for j in 0..w {

@@ -9,16 +9,16 @@
 //! to make it compatible with web, SDL, or terminal modes.
 //! Finally, an asset_manager is included as well.
 
-use crate::event::Event;
+use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::Rand};
+
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
 use crate::render::adapter::cross::CrosstermAdapter;
+
 #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
 use crate::render::adapter::sdl::SdlAdapter;
+
 #[cfg(target_arch = "wasm32")]
 use crate::render::adapter::web::WebAdapter;
-use crate::render::adapter::Adapter;
-use crate::util::Rand;
-use crate::asset::AssetManager;
 
 pub struct Context {
     pub game_name: String,
@@ -33,7 +33,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(prefix:&str, name: &str, project_path: &str) -> Self {
+    pub fn new(prefix: &str, name: &str, project_path: &str) -> Self {
         Self {
             game_name: name.to_string(),
             prefix_path: prefix.to_string(),

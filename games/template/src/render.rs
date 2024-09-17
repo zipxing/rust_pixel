@@ -96,13 +96,12 @@ impl Render for TemplateRender {
         }
     }
 
-    fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
+    fn handle_timer(&mut self, _context: &mut Context, d: &mut Self::Model, _dt: f32) {}
 
-    fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, d: &mut Self::Model, dt: f32) {
         // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
-            let d = data.as_any().downcast_mut::<TemplateModel>().unwrap();
             let ss = &mut self.panel.get_sprite("back");
             asset2sprite!(ss, ctx, "1.ssf", (ctx.stage / 3) as usize, 40, 1);
             for i in 0..15 {
