@@ -34,7 +34,8 @@ impl GlTransition {
                     vec4 to = getToColor(uv);
                     vec4 mc = mix( to, from, step(d, 0.0) );
                     return mc;
-            }"#;
+                }
+            "#;
 
             // create shaders and buffers...
             let program = create_shaders(&gl, fs);

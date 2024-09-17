@@ -3,8 +3,6 @@
 use crate::gl::GlTransition;
 use crate::model::{PetviewModel, PETH, PETW};
 use log::info;
-use std::fmt::Write;
-use std::io::Cursor;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -16,6 +14,8 @@ use rust_pixel::{
     render::sprite::Sprite,
     render::style::Color,
 };
+use std::fmt::Write;
+use std::io::Cursor;
 
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
@@ -25,7 +25,15 @@ fn debug_img(img: &[u8], w: usize, h: usize) {
     for i in 0..h {
         let mut line = " ".to_string();
         for j in 0..w {
-            write!(line, " {}.{}.{}.{} ", img[idx + 0], img[idx + 1], img[idx + 2], img[idx + 3]).unwrap();
+            write!(
+                line,
+                " {}.{}.{}.{} ",
+                img[idx + 0],
+                img[idx + 1],
+                img[idx + 2],
+                img[idx + 3]
+            )
+            .unwrap();
             idx += 4;
         }
         info!("{:?}", line);
@@ -51,7 +59,7 @@ impl PetviewRender {
         p1.set_hidden(true);
         panel.add_pixel_sprite(p1, "petimg1");
 
-        let mut p2 = Sprite::new(0, 0, PIXW, PIXH);
+        let p2 = Sprite::new(0, 0, PIXW, PIXH);
         panel.add_pixel_sprite(p2, "petimg2");
 
         let glt = None;
@@ -90,15 +98,15 @@ impl Render for PetviewRender {
         debug_img(&img2, PIXW as usize, PIXH as usize);
 
         // let img1: Vec<u8> = vec![
-        //     201, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 
+        //     201, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
         //     202, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
-        //     203, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 
+        //     203, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
         //     204, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
         // ];
         // let img2: Vec<u8> = vec![
-        //     0, 201, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 
+        //     0, 201, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
         //     0, 202, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
-        //     0, 203, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 
+        //     0, 203, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
         //     0, 204, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255, 200, 0, 0, 255,
         // ];
 
@@ -109,7 +117,16 @@ impl Render for PetviewRender {
         }
     }
 
-    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {}
+    fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
+        if event_check("Template.RedrawTile", "draw_tile") {
+            let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+            if let Some(gl) = &sa.gl {
+                if let Some(glt) = &mut self.glt {
+                    glt.clean(&gl);
+                }
+            }
+        }
+    }
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
         let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
