@@ -1,8 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Game encapsulate Model and Render classes
-//! and implements the main loop
+//! Game encapsulate Model and Render classes and implements the main loop
 //! Be aware that all the Game, Model and Render instances have the same lifetime
 //!
 //! # Example
@@ -32,7 +31,7 @@ use std::{
 pub trait Model {
     fn init(&mut self, ctx: &mut Context);
     fn update(&mut self, ctx: &mut Context, dt: f32) {
-        //头几帧用于绘制logo
+        // render logo movie...
         if ctx.stage <= LOGO_FRAME {
             return;
         }

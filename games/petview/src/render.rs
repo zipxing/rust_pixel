@@ -70,7 +70,7 @@ impl PetviewRender {
 impl Render for PetviewRender {
     type Model = PetviewModel;
 
-    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
+    fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
             .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
@@ -111,18 +111,22 @@ impl Render for PetviewRender {
 
     fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {}
 
-    fn handle_timer(&mut self, context: &mut Context, _model: &mut Self::Model, _dt: f32) {
+    fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
+        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
         if event_check("PetView.Timer", "pet_timer") {
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-            {
-                let gb2 = self.panel.get_pixel_sprite("back2");
-                asset2sprite!(
-                    gb2,
-                    context,
-                    &format!("{}.pix", (context.stage / 13 % 20) + 1)
-                );
+            let p1 = self.panel.get_pixel_sprite("petimg2");
+            if let Some(gl) = &sa.gl {
+                if let Some(glt) = &mut self.glt {
+                    glt.render_frame(&gl, self.progress);
+                    info!("p..{} pixels...{}", self.progress, glt.pixels.len());
+                    debug_img(&glt.pixels, PIXW as usize, PIXH as usize);
+                    p1.content.set_rgba_image(&glt.pixels, PIXW, PIXH);
+                    self.progress += 0.03;
+                    if self.progress >= 1.0 {
+                        self.progress = 0.0;
+                    }
+                }
             }
-            // asset2sprite!(p1, ctx, &format!("{}.pix", (ctx.stage / 13 % 20) + 1));
             timer_fire("PetView.Timer", 1);
         }
     }
