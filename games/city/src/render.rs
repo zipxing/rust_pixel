@@ -1,16 +1,16 @@
 use crate::model::{get_xy, CityModel, CityState, CELLH, CELLW, LEVELUP_TIME, NCOL, NROW};
 use log::info;
 use rust_pixel::{
-    GAME_FRAME,
     asset::AssetType,
     asset2sprite,
     context::Context,
     event::{event_check, event_register, timer_percent, timer_rstage},
-    game::{Model, Render},
+    game::Render,
+    render::panel::Panel,
     render::sprite::Sprite,
     render::style::{Color, Style},
-    render::panel::Panel,
     util::Rect,
+    GAME_FRAME,
 };
 
 //用到的颜色
@@ -66,20 +66,15 @@ impl CityRender {
         }
 
         //msg块
-        t.add_sprite(
-            Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16),
-            "msg",
-        );
+        t.add_sprite(Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16), "msg");
 
         //注册重绘事件
         event_register("redraw_grid", "draw_grid");
 
-        Self {
-            panel: t,
-        }
+        Self { panel: t }
     }
 
-    pub fn draw_movie<G: Model>(&mut self, ctx: &mut Context, data: &mut G) {
+    pub fn draw_movie(&mut self, ctx: &mut Context, data: &mut CityModel) {
         let ss: CityState = ctx.state.into();
         match ss {
             //飞行合并
@@ -130,7 +125,9 @@ impl CityRender {
         #[cfg(feature = "sdl")]
         l.content.set_style(
             l.content.area,
-            Style::default().fg(COLORS[border_color as usize % COLORS.len()]).bg(Color::Indexed(1)),
+            Style::default()
+                .fg(COLORS[border_color as usize % COLORS.len()])
+                .bg(Color::Indexed(1)),
         );
         //设置内容
         l.set_color_str(
@@ -146,9 +143,13 @@ impl CityRender {
         }
     }
 
-    pub fn draw_moving<G: Model>(&mut self, ctx: &mut Context, data: &mut G, state: CityState, per: f32) {
-        let d = data.as_any().downcast_mut::<CityModel>().unwrap();
-
+    pub fn draw_moving(
+        &mut self,
+        ctx: &mut Context,
+        d: &mut CityModel,
+        state: CityState,
+        per: f32,
+    ) {
         for cid in &d.move_cells {
             let (x, y) = get_xy(*cid);
             let dc = &d.grid[y][x];
@@ -204,18 +205,16 @@ impl CityRender {
         }
     }
 
-    pub fn draw_ready2t<G: Model>(&mut self, ctx: &mut Context, data: &mut G) {
-        let d = data.as_any().downcast_mut::<CityModel>().unwrap();
+    pub fn draw_ready2t(&mut self, ctx: &mut Context, d: &mut CityModel) {
         if !d.ready2t {
             return;
         }
-        self.draw_grid(ctx, data);
+        self.draw_grid(ctx, d);
     }
 
     //如果有ready2t，则每帧调用
     //其他情况，只在接收到RedrawGrid事件时调用
-    pub fn draw_grid<G: Model>(&mut self, ctx: &mut Context, data: &mut G) {
-        let d = data.as_any().downcast_mut::<CityModel>().unwrap();
+    pub fn draw_grid(&mut self, ctx: &mut Context, d: &mut CityModel) {
         for i in 0..NCOL * NROW {
             let (x, y) = get_xy(i as i16);
             let dc = &d.grid[y][x];
@@ -253,22 +252,24 @@ impl CityRender {
 }
 
 impl Render for CityRender {
-    fn init<G: Model>(&mut self, ctx: &mut Context, _data: &mut G) {
+    type Model = CityModel;
+
+    fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter.init(70, 40, 2.0, 1.0, "city".to_string());
         self.panel.init(ctx);
         let l = self.panel.get_sprite("back");
         asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
-    fn handle_event<G: Model>(&mut self, ctx: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("redraw_grid", "draw_grid") {
             self.draw_grid(ctx, data);
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, _ctx: &mut Context, _model: &mut G, _dt: f32) {}
+    fn handle_timer(&mut self, _ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
-    fn draw<G: Model>(&mut self, ctx: &mut Context, data: &mut G, _dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
         self.draw_movie(ctx, data);
         self.panel.draw(ctx).unwrap();
     }

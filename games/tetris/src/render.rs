@@ -1,3 +1,5 @@
+use std::process::Termination;
+
 use crate::model::TetrisModel;
 use tetris_lib::constant::*;
 //use std::fs::File;
@@ -7,7 +9,7 @@ use rust_pixel::{
     asset2sprite,
     context::Context,
     event::{event_check, event_register, timer_exdata, timer_stage},
-    game::{Model, Render},
+    game::Render,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
@@ -163,8 +165,7 @@ impl TetrisRender {
         }
     }
 
-    pub fn redraw_hold<G: Model>(&mut self, model: &mut G) {
-        let d = model.as_any().downcast_mut::<TetrisModel>().unwrap();
+    pub fn redraw_hold(&mut self, d: &mut TetrisModel) {
         for i in 0..4 {
             for j in 0..4 {
                 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -185,8 +186,7 @@ impl TetrisRender {
         }
     }
 
-    pub fn redraw_next<G: Model>(&mut self, model: &mut G) {
-        let d = model.as_any().downcast_mut::<TetrisModel>().unwrap();
+    pub fn redraw_next(&mut self, d: &mut TetrisModel) {
         for i in 0..4 {
             for j in 0..4 {
                 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -207,8 +207,7 @@ impl TetrisRender {
         }
     }
 
-    pub fn draw_grid<G: Model>(&mut self, _context: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<TetrisModel>().unwrap();
+    pub fn draw_grid(&mut self, _context: &mut Context, d: &mut TetrisModel) {
         for n in 0..2 {
             let frs = timer_stage(&format!("clear-row{}", n));
             let mut fri: Vec<i8> = vec![];
@@ -273,7 +272,9 @@ impl TetrisRender {
 }
 
 impl Render for TetrisRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+    type Model = TetrisModel;
+
+    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         context.adapter.init(35, 24, 1.0, 1.0, "tetris".to_string());
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -287,12 +288,12 @@ impl Render for TetrisRender {
         asset2sprite!(l, context, &bp);
     }
 
-    fn draw<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+    fn draw(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         self.draw_grid(context, data);
         self.panel.draw(context).unwrap();
     }
 
-    fn handle_event<G: Model>(&mut self, _context: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, _context: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("Tetris.RedrawNext", "redraw_next") {
             self.redraw_next(data);
         }
@@ -301,5 +302,5 @@ impl Render for TetrisRender {
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, _context: &mut Context, _data: &mut G, _dt: f32) {}
+    fn handle_timer(&mut self, _context: &mut Context, _data: &mut Self::Model, _dt: f32) {}
 }

@@ -24,13 +24,11 @@
 use crate::{context::Context, event::timer_update, log::init_log, GAME_FRAME, LOGO_FRAME};
 use log::info;
 use std::{
-    any::Any,
     io,
     time::{Duration, Instant},
 };
 
 /// The Model interface, main entrance for data and core logic
-/// as_any method is to downcast to game instance's own model implementation.
 pub trait Model {
     fn init(&mut self, ctx: &mut Context);
     fn update(&mut self, ctx: &mut Context, dt: f32) {
@@ -48,32 +46,28 @@ pub trait Model {
     fn handle_event(&mut self, ctx: &mut Context, dt: f32);
     fn handle_input(&mut self, ctx: &mut Context, dt: f32);
     fn handle_auto(&mut self, ctx: &mut Context, dt: f32);
-    fn as_any(&mut self) -> &mut dyn Any;
 }
 
 /// The Render interface, takes context and model as input params. It renders every single frame
-/// The model param needs to be downcast to a GameModel instance
-/// for example:
-/// let gm = model.as_any().downcast_mut::<SnakeModel>().unwrap();
-/// For decoupling reason，render can not be accessed from model，so as_any method is not
-/// included here
 pub trait Render {
-    fn init<G: Model>(&mut self, ctx: &mut Context, m: &mut G);
-    fn update<G: Model>(&mut self, ctx: &mut Context, m: &mut G, dt: f32) {
+    type Model: Model;
+
+    fn init(&mut self, ctx: &mut Context, m: &mut Self::Model);
+    fn update(&mut self, ctx: &mut Context, m: &mut Self::Model, dt: f32) {
         self.handle_event(ctx, m, dt);
         self.handle_timer(ctx, m, dt);
         self.draw(ctx, m, dt);
     }
-    fn handle_event<G: Model>(&mut self, ctx: &mut Context, model: &mut G, dt: f32);
-    fn handle_timer<G: Model>(&mut self, ctx: &mut Context, model: &mut G, dt: f32);
-    fn draw<G: Model>(&mut self, ctx: &mut Context, model: &mut G, dt: f32);
+    fn handle_event(&mut self, ctx: &mut Context, model: &mut Self::Model, dt: f32);
+    fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, dt: f32);
+    fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, dt: f32);
 }
 
 /// Game encapsulates a Model，a Render and a Context structure
 pub struct Game<M, R>
 where
     M: Model,
-    R: Render,
+    R: Render<Model = M>,
 {
     pub context: Context,
     pub model: M,
@@ -83,7 +77,7 @@ where
 impl<M, R> Game<M, R>
 where
     M: Model,
-    R: Render,
+    R: Render<Model = M>,
 {
     pub fn new(m: M, r: R, name: &str) -> Self {
         Self::new_with_project_path(m, r, name, None)
@@ -107,7 +101,7 @@ where
                 app_name = name;
             }
         };
-        // If app embbed in rust_pixel directory, default asset path is 
+        // If app embbed in rust_pixel directory, default asset path is
         // "games/game_name/" or "apps/app_name/"
         // else you can set asset_path by yourself
         // example:

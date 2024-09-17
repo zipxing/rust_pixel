@@ -25,4 +25,3 @@ pub mod style;
 
 /// draw panel, compatible with both text mode (crossterm) and graphical mode (SDL&wasm)
 pub mod panel;
-

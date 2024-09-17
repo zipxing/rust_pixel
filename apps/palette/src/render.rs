@@ -173,8 +173,7 @@ impl PaletteRender {
         Self { panel }
     }
 
-    pub fn draw_select<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_select(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         let state = PaletteState::from_usize(ctx.state as usize).unwrap();
         match state {
             NameA | NameB => {
@@ -218,10 +217,15 @@ impl PaletteRender {
                 pl.set_pos(1, 9 + idx as u16 * 2);
                 let bcs = [Color::Red, Color::Green, Color::Blue];
                 for i in 0..3 {
-                    let pl = self.panel.get_layer_sprite("select", &format!("cursor{}", i+1));
+                    let pl = self
+                        .panel
+                        .get_layer_sprite("select", &format!("cursor{}", i + 1));
                     pl.set_color_str(0, 0, "∙", Color::Black, bcs[i]);
                     let x = d.select.ranges[i].x;
-                    pl.set_pos((x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + 2, 9 + i as u16 * 2);
+                    pl.set_pos(
+                        (x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + 2,
+                        9 + i as u16 * 2,
+                    );
                     pl.set_hidden(false);
                 }
             }
@@ -351,8 +355,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_panel<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_panel(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         info!("draw_panel_clear....");
         for i in 0..7 {
             if i != ctx.state as usize {
@@ -363,8 +366,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_gradient<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_gradient(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         if ctx.state != Gradient as u8 {
             return;
         }
@@ -403,8 +405,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_random<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_random(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         if ctx.state != 4 && ctx.state != 6 {
             return;
         }
@@ -424,8 +425,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_picker<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_picker(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         let state = PaletteState::from_usize(ctx.state as usize).unwrap();
         match state {
             PickerA | Gradient => {
@@ -474,9 +474,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_named_colors<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
-
+    pub fn draw_named_colors(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         for i in 0..2 {
             for row in 0..ROW_COUNT {
                 for col in 0..COL_COUNT {
@@ -506,8 +504,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_main_color<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_main_color(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         let pl = self.panel.get_layer_sprite("main", "main_color");
         for i in 0..6 {
             pl.set_color_str(
@@ -579,8 +576,7 @@ impl PaletteRender {
         }
     }
 
-    pub fn draw_menu<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PaletteModel>().unwrap();
+    pub fn draw_menu(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         let state = PaletteState::from_usize(ctx.state as usize).unwrap();
         let mb = self.panel.get_layer_sprite("main", "menu");
         let cst = match state {
@@ -644,21 +640,22 @@ impl PaletteRender {
 }
 
 impl Render for PaletteRender {
-    fn init<G: Model>(&mut self, context: &mut Context, data: &mut G) {
+    type Model = PaletteModel;
+
+    fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context
             .adapter
             .init(PALETTEW + 2, PALETTEH, 1.0, 1.0, "palette".to_string());
         self.panel.init(context);
         self.draw_menu(context, data);
 
-        let d = data.as_any().downcast_mut::<PaletteModel>().unwrap();
         let gb = self.panel.get_layer_sprite("main", "back");
         asset2sprite!(gb, context, "back.txt");
 
         self.draw_named_colors(context, data);
     }
 
-    fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("Palette.RedrawSelect", "draw_select") {
             self.draw_select(context, data);
         }
@@ -682,9 +679,9 @@ impl Render for PaletteRender {
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
+    fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
-    fn draw<G: Model>(&mut self, ctx: &mut Context, data: &mut G, dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
         self.panel.draw(ctx).unwrap();
     }
 }

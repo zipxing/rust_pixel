@@ -5,7 +5,7 @@ use rust_pixel::{
     asset2sprite,
     context::Context,
     event::{event_check, event_register},
-    game::{Model, Render},
+    game::Render,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
@@ -40,8 +40,7 @@ impl PokerRender {
         Self { panel: t }
     }
 
-    pub fn draw_tile<G: Model>(&mut self, ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<PokerModel>().unwrap();
+    pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut PokerModel) {
         let ts = [&d.texas_cards_red, &d.texas_cards_black];
         let msg = ["msgred", "msgblack"];
         for n in 0..2usize {
@@ -76,7 +75,9 @@ impl PokerRender {
 }
 
 impl Render for PokerRender {
-    fn init<G: Model>(&mut self, context: &mut Context, _data: &mut G) {
+    type Model = PokerModel;
+
+    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context
             .adapter
             .init(82, 20, 1.0, 1.0, "redblack".to_string());
@@ -88,15 +89,15 @@ impl Render for PokerRender {
         }
     }
 
-    fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("Poker.RedrawTile", "draw_tile") {
             self.draw_tile(context, data);
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, _context: &mut Context, _model: &mut G, _dt: f32) {}
+    fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
-    fn draw<G: Model>(&mut self, ctx: &mut Context, _data: &mut G, _dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {
         self.panel.draw(ctx).unwrap();
     }
 }

@@ -1,18 +1,17 @@
-use rust_pixel::event::{Event, KeyCode};
 use log::debug;
+use rust_pixel::event::{Event, KeyCode};
 //use rand::prelude::*;
-use tetris_lib::{
-    ai::*,
-    side::{Move, MoveRet, TetrisCell},
-    constant::*,
-};
-use std::any::Any;
 use rust_pixel::{
     context::Context,
     event::{event_emit, timer_fire},
     game::Model,
     //timer_cancel, timer_fire, timer_register,
     util::Rand,
+};
+use tetris_lib::{
+    ai::*,
+    constant::*,
+    side::{Move, MoveRet, TetrisCell},
 };
 
 //https://harddrop.com/wiki/T-Spin_Triple_Setups
@@ -189,9 +188,5 @@ impl Model for TetrisModel {
         } else {
             self.timeout_ai += dt;
         }
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 }

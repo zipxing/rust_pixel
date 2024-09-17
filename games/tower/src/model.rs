@@ -6,7 +6,6 @@ use rust_pixel::{
     game::Model,
     util::objpool::GameObjPool,
 };
-use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use tower_lib::{
     block::*, bomb::*, bullet::*, laser::*, monster::*, tower::*, MAX_BLOCK_COUNT, MAX_BOMB_COUNT,
@@ -205,9 +204,5 @@ impl Model for TowerModel {
                 }
             }
         }
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 }

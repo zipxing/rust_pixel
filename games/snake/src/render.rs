@@ -5,7 +5,7 @@ use rust_pixel::{asset::AssetType, asset2sprite};
 use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
-    game::{Model, Render},
+    game::Render,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
@@ -72,23 +72,20 @@ impl SnakeRender {
         Self { panel: t }
     }
 
-    pub fn create_sprites<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
-        self.panel.creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
-            bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
-        });
+    pub fn create_sprites(&mut self, _ctx: &mut Context, d: &mut SnakeModel) {
+        self.panel
+            .creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
+                bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
+            });
     }
 
-    pub fn draw_movie<G: Model>(&mut self, _ctx: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_mut::<SnakeModel>().unwrap();
-
+    pub fn draw_movie(&mut self, _ctx: &mut Context, d: &mut SnakeModel) {
         self.panel.draw_objpool(&mut d.pats.particles, |pl, m| {
             pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
         });
     }
 
-    pub fn draw_grid<G: Model>(&mut self, context: &mut Context, model: &mut G) {
-        let d = model.as_any().downcast_ref::<SnakeModel>().unwrap();
+    pub fn draw_grid(&mut self, context: &mut Context, d: &mut SnakeModel) {
         let ml = self.panel.get_sprite("SNAKE-MSG");
         ml.set_default_str("snake");
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -130,7 +127,9 @@ impl SnakeRender {
 }
 
 impl Render for SnakeRender {
-    fn init<G: Model>(&mut self, context: &mut Context, data: &mut G) {
+    type Model = SnakeModel;
+
+    fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context.adapter.init(
             SNAKEW as u16 + 2,
             SNAKEH as u16 + 4,
@@ -142,13 +141,13 @@ impl Render for SnakeRender {
         self.panel.init(context);
     }
 
-    fn handle_event<G: Model>(&mut self, context: &mut Context, data: &mut G, _dt: f32) {
+    fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("Snake.RedrawGrid", "draw_grid") {
             self.draw_grid(context, data);
         }
     }
 
-    fn handle_timer<G: Model>(&mut self, context: &mut Context, _model: &mut G, _dt: f32) {
+    fn handle_timer(&mut self, context: &mut Context, _model: &mut Self::Model, _dt: f32) {
         if event_check("Snake.TestTimer", "test_timer") {
             let ml = self.panel.get_sprite("SNAKE-MSG");
             ml.set_color_str(
@@ -163,7 +162,7 @@ impl Render for SnakeRender {
     }
 
     #[allow(unused_variables)]
-    fn draw<G: Model>(&mut self, context: &mut Context, model: &mut G, _dt: f32) {
+    fn draw(&mut self, context: &mut Context, model: &mut Self::Model, _dt: f32) {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             let ss = &mut self.panel.get_sprite("SNAKE-BORDER");

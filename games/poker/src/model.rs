@@ -1,8 +1,7 @@
-use rust_pixel::event::Event;
 use log::info;
-use std::any::Any;
-use texas_lib::*;
+use rust_pixel::event::Event;
 use rust_pixel::{context::Context, event::event_emit, game::Model, util::Rand};
+use texas_lib::*;
 
 pub const CARDW: usize = 7;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -70,8 +69,4 @@ impl Model for PokerModel {
 
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }

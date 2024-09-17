@@ -5,9 +5,8 @@ use rust_pixel::{
     context::Context,
     event::event_emit,
     game::Model,
-    util::{ParticleSystem, ParticleSystemInfo, Dir, PointU16},
+    util::{Dir, ParticleSystem, ParticleSystemInfo, PointU16},
 };
-use std::any::Any;
 use std::f64::consts::PI;
 
 pub const SNAKEW: usize = 60;
@@ -214,7 +213,8 @@ impl Model for SnakeModel {
         if self.count > 200.0 {
             self.count = 0.0f64;
         }
-        self.pats.move_to(10.0 + 5.0 * self.count, 10.0 + 5.0 * self.count, false);
+        self.pats
+            .move_to(10.0 + 5.0 * self.count, 10.0 + 5.0 * self.count, false);
         if self.timeout_auto > 0.4 {
             self.timeout_auto = 0.0;
             self.act(self.dir, context);
@@ -225,9 +225,4 @@ impl Model for SnakeModel {
 
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }
-

@@ -1,7 +1,6 @@
 use gin_rummy_lib::cards::*;
-use rust_pixel::event::Event;
 use log::info;
-use std::any::Any;
+use rust_pixel::event::Event;
 use rust_pixel::{context::Context, event::event_emit, game::Model, util::Rand};
 
 pub const CARDW: usize = 7;
@@ -100,8 +99,4 @@ impl Model for GinRummyModel {
 
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
 }
