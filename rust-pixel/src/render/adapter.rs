@@ -177,7 +177,7 @@ pub trait Adapter {
     fn show_cursor(&mut self) -> Result<(), String>;
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(&mut self) -> &mut dyn Any;
 }
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -203,25 +203,30 @@ fn render_helper(
     let bsrcx = 160u32 % w as u32 + (1u32 % 2u32) * w as u32;
 
     (
+        // background sym rect in texture(sym=160 tex=1)
         ARect {
             x: (w + 1) * bsrcx as i32,
             y: (h + 1) * bsrcy as i32,
             w: w as u32,
             h: h as u32,
         },
+        // sym rect in texture
         ARect {
             x: (w + 1) * srcx as i32,
             y: (h + 1) * srcy as i32,
             w: w as u32,
             h: h as u32,
         },
+        // dst rect in render texture
         ARect {
             x: (dstx + if is_border { 0 } else { 1 }) as i32 * (w as f32 / rx) as i32 + px as i32,
             y: (dsty + if is_border { 0 } else { 1 }) as i32 * (h as f32 / ry) as i32 + py as i32,
             w: (w as f32 / rx) as u32,
             h: (h as f32 / ry) as u32,
         },
+        // texture id
         tx,
+        // sym id
         sh.0 as usize,
     )
 }
@@ -229,7 +234,18 @@ fn render_helper(
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize, f64, PointI32),
+    // rgba, back rgba, back rect, sym rect, dst rect, tex, sym, angle, center point
+    F: FnMut(
+        &(u8, u8, u8, u8),
+        &Option<(u8, u8, u8, u8)>,
+        ARect,
+        ARect,
+        ARect,
+        usize,
+        usize,
+        f64,
+        PointI32,
+    ),
 {
     // sort by render_weight...
     pixel_spt.update_render_index();
@@ -280,7 +296,8 @@ where
         let fc = sh.2.get_rgba();
         let bc;
         if sh.3 != Color::Reset {
-            bc = Some(sh.3.get_rgba());
+            bc = None;
+            // bc = Some(sh.3.get_rgba());
         } else {
             bc = None;
         }

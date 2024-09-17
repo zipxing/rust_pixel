@@ -173,13 +173,14 @@ impl Asset for SeqFrameAsset {
                     } else {
                         self.texture_id as u8
                     };
-                    sp.set_str(
+                    sp.set_str_tex(
                         i % self.width,
                         i / self.width,
                         cellsym(decompressed_data[i as usize * cell_len]),
                         Style::default()
                             .fg(Color::Indexed(decompressed_data[i as usize * cell_len + 1]))
-                            .bg(Color::Indexed(bgc)),
+                            .bg(Color::Reset),
+                        bgc
                     );
                 }
             }

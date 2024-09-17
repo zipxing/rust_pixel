@@ -36,27 +36,44 @@ use std::any::Any;
 use std::time::Duration;
 // use log::info;
 
+// data for drag window...
+#[derive(Default)]
+struct Drag {
+    need: bool,
+    draging: bool,
+    mouse_x: i32,
+    mouse_y: i32,
+    dx: i32,
+    dy: i32,
+}
+
 pub struct SdlAdapter {
-    // 拖动窗口需要的数据
-    // data for dragging the window
-    pub drag_need: bool,
-    pub drag_ing: bool,
-    pub drag_mouse_x: i32,
-    pub drag_mouse_y: i32,
-    pub drag_dx: i32,
-    pub drag_dy: i32,
     pub base: AdapterBase,
+
     // sdl object
     pub context: Sdl,
     pub event_pump: Option<EventPump>,
+
     // custom cursor in rust-sdl2
     pub cursor: Option<Cursor>,
     pub canvas: Option<Canvas<Window>>,
+
     // raw textures
     pub asset_textures: Option<Vec<Texture>>,
+
     // rendering target textures
     pub render_texture: Option<Texture>,
+
+    // gl object
+    pub hidden_window: Option<sdl2::video::Window>,
+    pub hidden_gl_context: Option<sdl2::video::GLContext>,
+    pub gl: Option<glow::Context>,
+
+    // rand
     pub rd: Rand,
+
+    // data for dragging the window
+    drag: Drag,
 }
 
 pub enum SdlBorderArea {
@@ -69,22 +86,22 @@ pub enum SdlBorderArea {
 impl SdlAdapter {
     pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
+            base: AdapterBase::new(pre, gn, project_path),
             context: sdl2::init().unwrap(),
             event_pump: None,
-            base: AdapterBase::new(pre, gn, project_path),
             cursor: None,
             canvas: None,
             asset_textures: None,
             render_texture: None,
-            drag_ing: false,
-            drag_mouse_x: 0,
-            drag_mouse_y: 0,
-            drag_need: false,
-            drag_dx: 0,
-            drag_dy: 0,
+            hidden_window: None,
+            hidden_gl_context: None,
+            gl: None,
             rd: Rand::new(),
+            drag: Default::default(),
         }
     }
+
+    pub fn haha(&mut self) {}
 
     fn set_mouse_cursor(&mut self, s: &Surface) {
         self.cursor = Some(
@@ -138,9 +155,9 @@ impl SdlAdapter {
                 match bs {
                     SdlBorderArea::TOPBAR | SdlBorderArea::OTHER => {
                         // start dragging when mouse left click
-                        self.drag_ing = true;
-                        self.drag_mouse_x = x;
-                        self.drag_mouse_y = y;
+                        self.drag.draging = true;
+                        self.drag.mouse_x = x;
+                        self.drag.mouse_y = y;
                     }
                     SdlBorderArea::CLOSE => {
                         return true;
@@ -153,13 +170,13 @@ impl SdlAdapter {
                 ..
             } => {
                 // stop dragging when mouse left button is release
-                self.drag_ing = false;
+                self.drag.draging = false;
             }
-            SEvent::MouseMotion { x, y, .. } if self.drag_ing => {
-                self.drag_need = true;
+            SEvent::MouseMotion { x, y, .. } if self.drag.draging => {
+                self.drag.need = true;
                 // dragging window when mouse left button is hold and moving
-                self.drag_dx = x - self.drag_mouse_x;
-                self.drag_dy = y - self.drag_mouse_y;
+                self.drag.dx = x - self.drag.mouse_x;
+                self.drag.dy = y - self.drag.mouse_y;
             }
             _ => {}
         }
@@ -205,12 +222,41 @@ impl Adapter for SdlAdapter {
             .map_err(|e| e.to_string())
             .unwrap();
 
+        unsafe {
+            let _gl_context = window.gl_create_context().unwrap();
+            self.gl = Some(glow::Context::from_loader_function(|s| {
+                video_subsystem.gl_get_proc_address(s) as *const _
+            }));
+        }
+
         let canvas = window
             .into_canvas()
             .software()
             .build()
             .map_err(|e| e.to_string())
             .unwrap();
+
+        // create opengl context...
+        let gl_attr = video_subsystem.gl_attr();
+        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+        gl_attr.set_context_version(3, 30);
+        let hidden_window = video_subsystem
+            .window("Hidden OpenGL Window", 1, 1)
+            .opengl()
+            .hidden()
+            .build()
+            .map_err(|e| e.to_string())
+            .unwrap();
+        let hidden_gl_context = hidden_window.gl_create_context().unwrap();
+        hidden_window.gl_make_current(&hidden_gl_context).unwrap();
+        let gl = unsafe {
+            glow::Context::from_loader_function(|s| {
+                video_subsystem.gl_get_proc_address(s) as *const _
+            })
+        };
+        self.hidden_window = Some(hidden_window);
+        self.hidden_gl_context = Some(hidden_gl_context);
+        self.gl = Some(gl);
 
         let texture_creator = canvas.texture_creator();
         let mut vt: Vec<Texture> = vec![];
@@ -274,7 +320,7 @@ impl Adapter for SdlAdapter {
                     if let Some(et) =
                         input_events_from_sdl(&event, self.base.ratio_x, self.base.ratio_y)
                     {
-                        if !self.drag_ing {
+                        if !self.drag.draging {
                             es.push(et);
                         }
                     }
@@ -308,7 +354,7 @@ impl Adapter for SdlAdapter {
             &mut self.asset_textures,
         ) {
             // dragging window, set the correct position of a window
-            sdl_move_win(&mut self.drag_need, c, self.drag_dx, self.drag_dy);
+            sdl_move_win(&mut self.drag.need, c, self.drag.dx, self.drag.dy);
             c.clear();
             c.with_texture_canvas(rt, |tc| {
                 tc.clear();
@@ -375,7 +421,8 @@ impl Adapter for SdlAdapter {
                                     if let Some(bgc) = bc {
                                         tx.set_color_mod(bgc.0, bgc.1, bgc.2);
                                         tx.set_alpha_mod(bgc.3);
-                                        tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false).unwrap();
+                                        tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
+                                            .unwrap();
                                     }
                                     tx.set_color_mod(fc.0, fc.1, fc.2);
                                     tx.set_alpha_mod(fc.3);
@@ -409,7 +456,7 @@ impl Adapter for SdlAdapter {
         Ok((0, 0))
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }

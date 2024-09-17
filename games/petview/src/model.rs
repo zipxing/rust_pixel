@@ -3,8 +3,8 @@ use rust_pixel::event::Event;
 use petview_lib::PetviewData;
 use rust_pixel::{context::Context, event::event_emit, game::Model};
 
-pub const PETVIEWW: u16 = 50;
-pub const PETVIEWH: u16 = 30;
+pub const PETW: u16 = 50;
+pub const PETH: u16 = 30;
 
 #[repr(u8)]
 enum PetviewState {
@@ -24,26 +24,27 @@ impl PetviewModel {
 }
 
 impl Model for PetviewModel {
-    fn init(&mut self, _context: &mut Context) {
+    fn init(&mut self, _ctx: &mut Context) {
         event_emit("Petview.RedrawTile");
     }
 
-    fn handle_input(&mut self, context: &mut Context, _dt: f32) {
-        let es = context.input_events.clone();
+    fn handle_input(&mut self, ctx: &mut Context, _dt: f32) {
+        let es = ctx.input_events.clone();
         for e in &es {
             match e {
                 Event::Key(key) => match key.code {
                     _ => {
-                        context.state = PetviewState::Normal as u8;
+                        ctx.state = PetviewState::Normal as u8;
                     }
                 },
                 _ => {}
             }
         }
-        context.input_events.clear();
+        ctx.input_events.clear();
     }
-
-    fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
-    fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
-    fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
+  
+    fn handle_auto(&mut self, _ctx: &mut Context, _dt: f32) {}
+    fn handle_event(&mut self, _ctx: &mut Context, _dt: f32) {}
+    fn handle_timer(&mut self, _ctx: &mut Context, _dt: f32) {}
+    
 }

@@ -118,10 +118,20 @@ impl From<Color> for u8 {
             Color::LightCyan => 14,
             Color::White => 15,
             Color::Indexed(i) => i,
-            Color::Rgba(_r, _g, _b, _a) => 0,
+            Color::Rgba(r, g, b, _a) => get_u8_rgb(r, g, b),
             Color::Professional(_cpro) => 0,
         }
     }
+}
+
+fn get_u8_rgb(r: u8, g: u8, b: u8) -> u8 {
+    let ret = 0;
+    for i in 0..ANSI_COLOR_RGB.len() {
+        if ANSI_COLOR_RGB[i][0] == r && ANSI_COLOR_RGB[i][1] == g && ANSI_COLOR_RGB[i][2] == b {
+            return i as u8;
+        }
+    }
+    ret
 }
 
 pub const ANSI_COLOR_RGB: [[u8; 3]; 256] = [
