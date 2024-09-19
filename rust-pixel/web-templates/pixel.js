@@ -13,7 +13,7 @@ const Pix = function(canvasElement, antialias) {
 
         this.bind = () => {
             console.log("texture bind....");
-            bind(this);
+            flush();
             _gl.bindFramebuffer(_gl.FRAMEBUFFER, _framebuffer);
             _gl.viewport(0, 0, _width, _height);
         };
@@ -265,26 +265,16 @@ const Pix = function(canvasElement, antialias) {
         _gl.bindBuffer(_gl.ARRAY_BUFFER, _instances);
         _gl.bufferSubData(_gl.ARRAY_BUFFER, 0, _instanceBuffer, 0, _instanceBufferAt + 1);
 
-        // switch(_renderMode) {
-        //     case RENDER_MODE_PIXCELLS:
-                _gl.bindVertexArray(_vaoCells);
-                _gl.drawArraysInstanced(_gl.TRIANGLE_FAN, 0, 4, _instanceCount);
-        //        break;
-        // }
+        _gl.bindVertexArray(_vaoCells);
+        _gl.drawArraysInstanced(_gl.TRIANGLE_FAN, 0, 4, _instanceCount);
 
         _instanceBufferAt = -1;
         _instanceCount = 0;
     };
 
     const sendUniformBuffer = () => {
-        if(_surface == null) {
-            _uboContents[3] = canvasElement.width;
-            _uboContents[7] = canvasElement.height;
-        }
-        else {
-            _uboContents[3] = _surface.getWidth();
-            _uboContents[7] = _surface.getHeight();
-        }
+        _uboContents[3] = canvasElement.width;
+        _uboContents[7] = canvasElement.height;
 
         _uboContents[0] = _transformStack[_transformAt]._00;
         _uboContents[1] = _transformStack[_transformAt]._10;
@@ -350,8 +340,6 @@ const Pix = function(canvasElement, antialias) {
     };
 
     this.bind = () => {
-        bind(null);
-
         _gl.bindFramebuffer(_gl.FRAMEBUFFER, null);
         _gl.viewport(0, 0, canvasElement.width, canvasElement.height);
     };
@@ -493,7 +481,7 @@ const Pix = function(canvasElement, antialias) {
             })
     ];
 
-    let _currentShader, _currentShaderCore, _surface, _currentTextureTexture, _currentTextureAtlas, _currentTextureMesh;
+    let _currentShader, _currentShaderCore, _currentTextureTexture, _currentTextureAtlas, _currentTextureMesh;
     let _meshUvLeft, _meshUvTop, _meshUvWidth, _meshUvHeight;
     let _transformAt = 0;
     let _transformDirty = true;
@@ -541,8 +529,9 @@ const Pix = function(canvasElement, antialias) {
 
     _gl.bindVertexArray(null);
 
-    console.log("call bind 111111111", _surface);
-    this.bind();
+    // console.log("call bind 111111111", _surface);
+    flush();
+    // this.bind();
 };
 
 Pix.Color = function(r, g, b, a) {

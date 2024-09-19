@@ -317,7 +317,7 @@ impl Adapter for SdlAdapter {
         // Store the OpenGL context
         self.gl = Some(gl);
 
-        let mut textures = Vec::new();
+        // let mut textures = Vec::new();
         for texture_file in PIXEL_TEXTURE_FILES.iter() {
             let texture_path = format!(
                 "{}{}{}",

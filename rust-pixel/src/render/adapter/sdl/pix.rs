@@ -58,7 +58,7 @@ pub struct Pix {
     pub current_shader_core: Option<usize>,
     pub current_texture_atlas: Option<glow::NativeTexture>,
     pub current_texture_surface: Option<glow::NativeTexture>,
-    pub surface: Option<Texture>,
+    // pub surface: Option<Texture>,
 
     // 画布尺寸
     pub canvas_width: u32,
@@ -93,10 +93,12 @@ impl Pix {
             )],
             transform_at: 0,
             transform_dirty: true,
+
             instance_buffer: Vec::new(),
             instance_buffer_capacity: 1024,
             instance_buffer_at: -1,
             instance_count: 0,
+
             render_mode: RenderMode::None,
             vao_cells: None,
             instances_vbo: None,
@@ -107,7 +109,7 @@ impl Pix {
             current_shader_core: None,
             current_texture_atlas: None,
             current_texture_surface: None,
-            surface: None,
+            // surface: None,
             canvas_width,
             canvas_height,
             clear_color: Color::new(1.0, 1.0, 1.0, 0.0),
@@ -116,7 +118,7 @@ impl Pix {
 
     pub fn init(&mut self) {
         unsafe {
-            // 创建实例缓冲区
+            // create instance buffer...
             let instances_vbo = self.gl.create_buffer().unwrap();
             self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
             self.instance_buffer = vec![0.0; self.instance_buffer_capacity];
@@ -127,7 +129,7 @@ impl Pix {
             );
             self.instances_vbo = Some(instances_vbo);
 
-            // 创建四边形缓冲区
+            // create quad vbo...
             let quad_vbo = self.gl.create_buffer().unwrap();
             self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
             let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
@@ -138,7 +140,7 @@ impl Pix {
             );
             self.quad_vbo = Some(quad_vbo);
 
-            // 创建 Uniform Buffer Object (UBO)
+            // create Uniform Buffer Object (UBO)
             let ubo = self.gl.create_buffer().unwrap();
             self.gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
             self.gl
@@ -147,19 +149,19 @@ impl Pix {
                 .bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
             self.ubo = Some(ubo);
 
-            // 创建 VAO
+            // create VAO
             let vao_cells = self.gl.create_vertex_array().unwrap();
             self.gl.bind_vertex_array(Some(vao_cells));
             self.vao_cells = Some(vao_cells);
 
-            // 设置顶点属性
+            // set vertex attrib...
             self.gl
                 .bind_buffer(glow::ARRAY_BUFFER, Some(self.quad_vbo.unwrap()));
             self.gl.enable_vertex_attrib_array(0);
             self.gl
                 .vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
 
-            // 实例属性配置
+            // instance vertex attrib
             self.gl
                 .bind_buffer(glow::ARRAY_BUFFER, Some(self.instances_vbo.unwrap()));
             let stride = 64;
@@ -178,7 +180,7 @@ impl Pix {
 
             self.gl.bind_vertex_array(None);
 
-            // 设置 OpenGL 状态
+            // set opengl state...
             self.gl.enable(glow::BLEND);
             self.gl.disable(glow::DEPTH_TEST);
             self.gl.blend_func_separate(
@@ -188,30 +190,11 @@ impl Pix {
                 glow::ONE_MINUS_SRC_ALPHA,
             );
 
-            // 初始化 Uniform Buffer 内容
             self.ubo_contents[8] = 1.0;
             self.ubo_contents[9] = 1.0;
             self.ubo_contents[10] = 1.0;
             self.ubo_contents[11] = 1.0;
         }
-    }
-
-    fn bind(&mut self, target: Option<&Texture>) {
-        if self.surface.is_some() && self.surface.unwrap() == target.unwrap() {
-            return;
-        }
-
-        self.flush();
-
-        if self.surface.is_some() {
-            self.pop();
-        }
-
-        if target.is_some() {
-            self.push_identity();
-        }
-
-        self.surface = target.clone();
     }
 
     fn push_identity(&mut self) {
