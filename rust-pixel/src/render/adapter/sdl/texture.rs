@@ -1,7 +1,10 @@
 use crate::render::adapter::sdl::color::Color;
 use crate::render::adapter::sdl::transform::Transform;
+use crate::render::adapter::sdl::pix::Pix;
+use crate::render::adapter::sdl::pix::RenderMode;
 use glow::HasContext;
 
+#[derive(Clone, Copy, PartialEq)]
 pub struct Texture {
     pub gl_texture: glow::NativeTexture,
     pub framebuffer: Option<glow::NativeFramebuffer>,

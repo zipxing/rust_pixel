@@ -53,7 +53,7 @@ pub struct SdlAdapter {
     pub base: AdapterBase,
 
     // sdl object
-    pub context: Sdl,
+    pub sdl_context: Sdl,
     pub event_pump: Option<EventPump>,
 
     // custom cursor in rust-sdl2
@@ -86,7 +86,7 @@ impl SdlAdapter {
     pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(pre, gn, project_path),
-            context: sdl2::init().unwrap(),
+            sdl_context: sdl2::init().unwrap(),
             event_pump: None,
             cursor: None,
             canvas: None,
@@ -189,7 +189,7 @@ impl SdlAdapter {
             }
             _ => {}
         }
-        self.context.mouse().show_cursor(true);
+        self.sdl_context.mouse().show_cursor(true);
     }
 
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
@@ -284,7 +284,7 @@ impl Adapter for SdlAdapter {
             .set_pixel_size()
             .set_title(s);
 
-        let video_subsystem = self.context.video().unwrap();
+        let video_subsystem = self.sdl_context.video().unwrap();
         let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG).unwrap();
 
         // Set OpenGL attributes
@@ -325,12 +325,12 @@ impl Adapter for SdlAdapter {
                 std::path::MAIN_SEPARATOR,
                 texture_file
             );
-            let texture = load_texture(self.gl.as_ref().unwrap(), &texture_path).unwrap();
-            textures.push(texture);
+            // let texture = load_texture(self.gl.as_ref().unwrap(), &texture_path).unwrap();
+            // textures.push(texture);
         }
-        self.asset_textures = Some(textures);
+        // self.asset_textures = Some(textures);
 
-        self.create_render_texture().unwrap();
+        // self.create_render_texture().unwrap();
 
         let surface = Surface::from_file(format!(
             "{}{}{}",
@@ -342,7 +342,7 @@ impl Adapter for SdlAdapter {
         .unwrap();
         self.set_mouse_cursor(&surface);
 
-        self.event_pump = Some(self.context.event_pump().unwrap());
+        self.event_pump = Some(self.sdl_context.event_pump().unwrap());
     }
 
     fn get_base(&mut self) -> &mut AdapterBase {
@@ -404,87 +404,87 @@ impl Adapter for SdlAdapter {
         ) {
             // dragging window, set the correct position of a window
             sdl_move_win(&mut self.drag.need, c, self.drag.dx, self.drag.dy);
-            c.clear();
-            c.with_texture_canvas(rt, |tc| {
-                tc.clear();
+            // c.clear();
+            // c.with_texture_canvas(rt, |tc| {
+            //     tc.clear();
 
-                if stage <= LOGO_FRAME {
-                    render_logo(
-                        self.base.ratio_x,
-                        self.base.ratio_y,
-                        self.base.pixel_w,
-                        self.base.pixel_h,
-                        &mut self.rd,
-                        stage,
-                        |fc, ss1, ss2, texidx, _symidx| {
-                            let s1 = SRect::new(ss1.x, ss1.y, ss1.w, ss1.h);
-                            let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
-                            let tx = &mut texs[texidx / 4];
-                            // tx.set_color_mod(fc.0, fc.1, fc.2);
-                            // tx.set_alpha_mod(fc.3);
-                            // tc.copy(tx, s1, s2).unwrap();
-                        },
-                    );
-                }
+            //     if stage <= LOGO_FRAME {
+            //         render_logo(
+            //             self.base.ratio_x,
+            //             self.base.ratio_y,
+            //             self.base.pixel_w,
+            //             self.base.pixel_h,
+            //             &mut self.rd,
+            //             stage,
+            //             |fc, ss1, ss2, texidx, _symidx| {
+            //                 let s1 = SRect::new(ss1.x, ss1.y, ss1.w, ss1.h);
+            //                 let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
+            //                 let tx = &mut texs[texidx / 4];
+            //                 // tx.set_color_mod(fc.0, fc.1, fc.2);
+            //                 // tx.set_alpha_mod(fc.3);
+            //                 // tc.copy(tx, s1, s2).unwrap();
+            //             },
+            //         );
+            //     }
 
-                let rx = self.base.ratio_x;
-                let ry = self.base.ratio_y;
+            //     let rx = self.base.ratio_x;
+            //     let ry = self.base.ratio_y;
 
-                // border & main_buffer...
-                let mut rfunc = |fc: &(u8, u8, u8, u8),
-                                 bc: &Option<(u8, u8, u8, u8)>,
-                                 s0: ARect,
-                                 s1: ARect,
-                                 s2: ARect,
-                                 texidx: usize,
-                                 _symidx: usize| {
-                    let tx = &mut texs[texidx / 4];
-                    let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
-                    let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-                    let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-                    if let Some(bgc) = bc {
-                        // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-                        // tx.set_alpha_mod(bgc.3);
-                        // tc.copy(tx, ss0, ss2).unwrap();
-                    }
-                    // tx.set_color_mod(fc.0, fc.1, fc.2);
-                    // tx.set_alpha_mod(fc.3);
-                    // tc.copy(tx, ss1, ss2).unwrap();
-                };
+            //     // border & main_buffer...
+            //     let mut rfunc = |fc: &(u8, u8, u8, u8),
+            //                      bc: &Option<(u8, u8, u8, u8)>,
+            //                      s0: ARect,
+            //                      s1: ARect,
+            //                      s2: ARect,
+            //                      texidx: usize,
+            //                      _symidx: usize| {
+            //         let tx = &mut texs[texidx / 4];
+            //         let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
+            //         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
+            //         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
+            //         if let Some(bgc) = bc {
+            //             // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+            //             // tx.set_alpha_mod(bgc.3);
+            //             // tc.copy(tx, ss0, ss2).unwrap();
+            //         }
+            //         // tx.set_color_mod(fc.0, fc.1, fc.2);
+            //         // tx.set_alpha_mod(fc.3);
+            //         // tc.copy(tx, ss1, ss2).unwrap();
+            //     };
 
-                if stage > LOGO_FRAME {
-                    render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
-                    render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
-                    for idx in 0..pixel_sprites.len() {
-                        if pixel_sprites[idx].is_pixel {
-                            render_pixel_sprites(
-                                &mut pixel_sprites[idx],
-                                rx,
-                                ry,
-                                |fc, bc, s0, s1, s2, texidx, _symidx, angle, ccp| {
-                                    let tx = &mut texs[texidx / 4];
-                                    let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
-                                    let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-                                    let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-                                    let cccp = SPoint::new(ccp.x, ccp.y);
-                                    if let Some(bgc) = bc {
-                                        // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-                                        // tx.set_alpha_mod(bgc.3);
-                                        // tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
-                                        //    .unwrap();
-                                    }
-                                    // tx.set_color_mod(fc.0, fc.1, fc.2);
-                                    // tx.set_alpha_mod(fc.3);
-                                    // tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
-                                },
-                            );
-                        }
-                    }
-                }
-            })
-            .unwrap();
-            // c.copy(rt, None, None).unwrap();
-            c.present();
+            //     if stage > LOGO_FRAME {
+            //         render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
+            //         render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
+            //         for idx in 0..pixel_sprites.len() {
+            //             if pixel_sprites[idx].is_pixel {
+            //                 render_pixel_sprites(
+            //                     &mut pixel_sprites[idx],
+            //                     rx,
+            //                     ry,
+            //                     |fc, bc, s0, s1, s2, texidx, _symidx, angle, ccp| {
+            //                         let tx = &mut texs[texidx / 4];
+            //                         let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
+            //                         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
+            //                         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
+            //                         let cccp = SPoint::new(ccp.x, ccp.y);
+            //                         if let Some(bgc) = bc {
+            //                             // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+            //                             // tx.set_alpha_mod(bgc.3);
+            //                             // tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
+            //                             //    .unwrap();
+            //                         }
+            //                         // tx.set_color_mod(fc.0, fc.1, fc.2);
+            //                         // tx.set_alpha_mod(fc.3);
+            //                         // tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
+            //                     },
+            //                 );
+            //             }
+            //         }
+            //     }
+            // })
+            // .unwrap();
+            // // c.copy(rt, None, None).unwrap();
+            // c.present();
         }
         Ok(())
     }
@@ -608,6 +608,7 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> 
 }
 
 pub mod color;
+pub mod pix;
 pub mod shader;
 pub mod texture;
 pub mod transform;

@@ -12,6 +12,7 @@ const Pix = function(canvasElement, antialias) {
         };
 
         this.bind = () => {
+            console.log("texture bind....");
             bind(this);
             _gl.bindFramebuffer(_gl.FRAMEBUFFER, _framebuffer);
             _gl.viewport(0, 0, _width, _height);
@@ -212,13 +213,18 @@ const Pix = function(canvasElement, antialias) {
 
         flush();
 
-        if(_surface != null)
+        if(_surface != null) {
+            console.log("11111", _surface);
             this.pop();
+        }
 
-        if(target != null)
+        if(target != null) {
+            console.log("22222", target);
             pushIdentity();
+        }
 
         _surface = target;
+        console.log("33333", _surface, target);
     };
 
     const bindTextureTexture = texture => {
@@ -535,6 +541,7 @@ const Pix = function(canvasElement, antialias) {
 
     _gl.bindVertexArray(null);
 
+    console.log("call bind 111111111", _surface);
     this.bind();
 };
 

@@ -20,6 +20,17 @@ impl Transform {
         }
     }
 
+    pub fn new_with_values(a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) -> Self {
+        Self {
+            m00: a,
+            m10: b,
+            m20: c,
+            m01: d,
+            m11: e,
+            m21: f,
+        }
+    }
+
     pub fn identity(&mut self) {
         self.m00 = 1.0;
         self.m10 = 0.0;
