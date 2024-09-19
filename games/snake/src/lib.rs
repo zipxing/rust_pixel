@@ -54,7 +54,7 @@ impl SnakeGame {
         self.g.context.asset_manager.set_data(url, data);
     }
 
-    fn get_wb(&self) -> &Vec<WebCell> {
+    fn get_wb(&mut self) -> &Vec<WebCell> {
         &self
             .g
             .context
@@ -65,7 +65,7 @@ impl SnakeGame {
             .web_buf
     }
 
-    pub fn web_buffer_len(&self) -> usize {
+    pub fn web_buffer_len(&mut self) -> usize {
         self.get_wb().len()
     }
 
@@ -85,7 +85,7 @@ impl SnakeGame {
     // const wbuflen = sg.web_buffer_len();
     // const wbufptr = sg.web_buffer();
     // let webbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen);
-    pub fn web_buffer(&self) -> *const WebCell {
+    pub fn web_buffer(&mut self) -> *const WebCell {
         self.get_wb().as_slice().as_ptr()
     }
 }

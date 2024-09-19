@@ -283,7 +283,7 @@ impl Adapter for WebAdapter {
         Ok((0, 0))
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }

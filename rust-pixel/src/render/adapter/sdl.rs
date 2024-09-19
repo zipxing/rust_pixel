@@ -8,6 +8,7 @@
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
+use crate::render::adapter::sdl::texture::load_texture;
 use crate::{
     render::{
         adapter::{
@@ -20,6 +21,7 @@ use crate::{
     util::Rand,
     LOGO_FRAME,
 };
+use glow::HasContext;
 use sdl2::{
     event::Event as SEvent,
     image::{InitFlag, LoadSurface, LoadTexture},
@@ -58,15 +60,12 @@ pub struct SdlAdapter {
     pub cursor: Option<Cursor>,
     pub canvas: Option<Canvas<Window>>,
 
-    // raw textures
-    pub asset_textures: Option<Vec<Texture>>,
-
-    // rendering target textures
-    pub render_texture: Option<Texture>,
+    // Textures
+    pub asset_textures: Option<Texture>,
+    pub render_texture: Option<glow::NativeTexture>,
 
     // gl object
-    pub hidden_window: Option<sdl2::video::Window>,
-    pub hidden_gl_context: Option<sdl2::video::GLContext>,
+    pub gl_context: Option<sdl2::video::GLContext>,
     pub gl: Option<glow::Context>,
 
     // rand
@@ -93,15 +92,90 @@ impl SdlAdapter {
             canvas: None,
             asset_textures: None,
             render_texture: None,
-            hidden_window: None,
-            hidden_gl_context: None,
+            gl_context: None,
             gl: None,
             rd: Rand::new(),
             drag: Default::default(),
         }
     }
 
-    pub fn haha(&mut self) {}
+    fn create_render_texture(&mut self) -> Result<(), String> {
+        let gl = self.gl.as_ref().unwrap();
+        unsafe {
+            let texture = gl.create_texture()?;
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA as i32,
+                self.base.pixel_w as i32,
+                self.base.pixel_h as i32,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                None,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_S,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_T,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::LINEAR as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::LINEAR as i32,
+            );
+            self.render_texture = Some(texture);
+        }
+        Ok(())
+    }
+
+    fn compile_shader(
+        gl: &glow::Context,
+        source: &str,
+        shader_type: u32,
+    ) -> Result<glow::NativeShader, String> {
+        unsafe {
+            let shader = gl.create_shader(shader_type)?;
+            gl.shader_source(shader, source);
+            gl.compile_shader(shader);
+            if !gl.get_shader_compile_status(shader) {
+                return Err(gl.get_shader_info_log(shader));
+            }
+            Ok(shader)
+        }
+    }
+
+    fn link_program(
+        gl: &glow::Context,
+        shaders: &[glow::NativeShader],
+    ) -> Result<glow::NativeProgram, String> {
+        unsafe {
+            let program = gl.create_program()?;
+            for &shader in shaders {
+                gl.attach_shader(program, shader);
+            }
+            gl.link_program(program);
+            if !gl.get_program_link_status(program) {
+                return Err(gl.get_program_info_log(program));
+            }
+            for &shader in shaders {
+                gl.detach_shader(program, shader);
+                gl.delete_shader(shader);
+            }
+            Ok(program)
+        }
+    }
 
     fn set_mouse_cursor(&mut self, s: &Surface) {
         self.cursor = Some(
@@ -183,23 +257,23 @@ impl SdlAdapter {
         false
     }
 
-    /// dynamic update of sym dot matrix
-    /// the length of pdat should be 16 * 16 * 4(RGBA)
-    pub fn update_cell_texture(&mut self, tex_idx: u8, sym_idx: u8, pdat: &[u8]) {
-        match &mut self.asset_textures {
-            Some(st) => {
-                let w = PIXEL_SYM_WIDTH as i32;
-                let h = PIXEL_SYM_HEIGHT as i32;
-                let srcx = sym_idx as i32 % w;
-                let srcy = sym_idx as i32 / w;
-                let sr = SRect::new((w + 1) * srcx, (h + 1) * srcy, w as u32, h as u32);
-                st[tex_idx as usize]
-                    .update(sr, pdat, 4 * PIXEL_SYM_WIDTH as usize)
-                    .unwrap();
-            }
-            _ => {}
-        }
-    }
+    // dynamic update of sym dot matrix
+    // the length of pdat should be 16 * 16 * 4(RGBA)
+    // pub fn update_cell_texture(&mut self, tex_idx: u8, sym_idx: u8, pdat: &[u8]) {
+    //     match &mut self.asset_textures {
+    //         Some(st) => {
+    //             let w = PIXEL_SYM_WIDTH as i32;
+    //             let h = PIXEL_SYM_HEIGHT as i32;
+    //             let srcx = sym_idx as i32 % w;
+    //             let srcy = sym_idx as i32 / w;
+    //             let sr = SRect::new((w + 1) * srcx, (h + 1) * srcy, w as u32, h as u32);
+    //             st[tex_idx as usize]
+    //                 .update(sr, pdat, 4 * PIXEL_SYM_WIDTH as usize)
+    //                 .unwrap();
+    //         }
+    //         _ => {}
+    //     }
+    // }
 }
 
 impl Adapter for SdlAdapter {
@@ -213,8 +287,16 @@ impl Adapter for SdlAdapter {
         let video_subsystem = self.context.video().unwrap();
         let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG).unwrap();
 
+        // Set OpenGL attributes
+        {
+            let gl_attr = video_subsystem.gl_attr();
+            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+            gl_attr.set_context_version(3, 3);
+        }
+
         let window = video_subsystem
             .window(&self.base.title, self.base.pixel_w, self.base.pixel_h)
+            .opengl()
             .position_centered()
             .borderless()
             // .fullscreen()
@@ -222,63 +304,33 @@ impl Adapter for SdlAdapter {
             .map_err(|e| e.to_string())
             .unwrap();
 
-        unsafe {
-            let _gl_context = window.gl_create_context().unwrap();
-            self.gl = Some(glow::Context::from_loader_function(|s| {
-                video_subsystem.gl_get_proc_address(s) as *const _
-            }));
-        }
+        let gl_context = window.gl_create_context().unwrap();
+        video_subsystem.gl_set_swap_interval(1).unwrap(); // Enable vsync
 
-        let canvas = window
-            .into_canvas()
-            .software()
-            .build()
-            .map_err(|e| e.to_string())
-            .unwrap();
-
-        // create opengl context...
-        let gl_attr = video_subsystem.gl_attr();
-        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-        gl_attr.set_context_version(3, 30);
-        let hidden_window = video_subsystem
-            .window("Hidden OpenGL Window", 1, 1)
-            .opengl()
-            .hidden()
-            .build()
-            .map_err(|e| e.to_string())
-            .unwrap();
-        let hidden_gl_context = hidden_window.gl_create_context().unwrap();
-        hidden_window.gl_make_current(&hidden_gl_context).unwrap();
+        // Create the OpenGL context using glow
         let gl = unsafe {
             glow::Context::from_loader_function(|s| {
                 video_subsystem.gl_get_proc_address(s) as *const _
             })
         };
-        self.hidden_window = Some(hidden_window);
-        self.hidden_gl_context = Some(hidden_gl_context);
+
+        // Store the OpenGL context
         self.gl = Some(gl);
 
-        let texture_creator = canvas.texture_creator();
-        let mut vt: Vec<Texture> = vec![];
-        for t in 0..PIXEL_TEXTURE_FILES.len() {
-            vt.push(
-                texture_creator
-                    .load_texture(format!(
-                        "{}{}{}",
-                        self.base.project_path,
-                        std::path::MAIN_SEPARATOR,
-                        PIXEL_TEXTURE_FILES[t]
-                    ))
-                    .unwrap(),
+        let mut textures = Vec::new();
+        for texture_file in PIXEL_TEXTURE_FILES.iter() {
+            let texture_path = format!(
+                "{}{}{}",
+                self.base.project_path,
+                std::path::MAIN_SEPARATOR,
+                texture_file
             );
+            let texture = load_texture(self.gl.as_ref().unwrap(), &texture_path).unwrap();
+            textures.push(texture);
         }
-        let rt = texture_creator
-            .create_texture_target(
-                PixelFormatEnum::RGBA8888,
-                self.base.pixel_w,
-                self.base.pixel_h,
-            )
-            .unwrap();
+        self.asset_textures = Some(textures);
+
+        self.create_render_texture().unwrap();
 
         let surface = Surface::from_file(format!(
             "{}{}{}",
@@ -290,9 +342,6 @@ impl Adapter for SdlAdapter {
         .unwrap();
         self.set_mouse_cursor(&surface);
 
-        self.canvas = Some(canvas);
-        self.asset_textures = Some(vt);
-        self.render_texture = Some(rt);
         self.event_pump = Some(self.context.event_pump().unwrap());
     }
 
@@ -371,9 +420,9 @@ impl Adapter for SdlAdapter {
                             let s1 = SRect::new(ss1.x, ss1.y, ss1.w, ss1.h);
                             let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
                             let tx = &mut texs[texidx / 4];
-                            tx.set_color_mod(fc.0, fc.1, fc.2);
-                            tx.set_alpha_mod(fc.3);
-                            tc.copy(tx, s1, s2).unwrap();
+                            // tx.set_color_mod(fc.0, fc.1, fc.2);
+                            // tx.set_alpha_mod(fc.3);
+                            // tc.copy(tx, s1, s2).unwrap();
                         },
                     );
                 }
@@ -394,13 +443,13 @@ impl Adapter for SdlAdapter {
                     let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
                     let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
                     if let Some(bgc) = bc {
-                        tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-                        tx.set_alpha_mod(bgc.3);
-                        tc.copy(tx, ss0, ss2).unwrap();
+                        // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+                        // tx.set_alpha_mod(bgc.3);
+                        // tc.copy(tx, ss0, ss2).unwrap();
                     }
-                    tx.set_color_mod(fc.0, fc.1, fc.2);
-                    tx.set_alpha_mod(fc.3);
-                    tc.copy(tx, ss1, ss2).unwrap();
+                    // tx.set_color_mod(fc.0, fc.1, fc.2);
+                    // tx.set_alpha_mod(fc.3);
+                    // tc.copy(tx, ss1, ss2).unwrap();
                 };
 
                 if stage > LOGO_FRAME {
@@ -419,14 +468,14 @@ impl Adapter for SdlAdapter {
                                     let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
                                     let cccp = SPoint::new(ccp.x, ccp.y);
                                     if let Some(bgc) = bc {
-                                        tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-                                        tx.set_alpha_mod(bgc.3);
-                                        tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
-                                            .unwrap();
+                                        // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+                                        // tx.set_alpha_mod(bgc.3);
+                                        // tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
+                                        //    .unwrap();
                                     }
-                                    tx.set_color_mod(fc.0, fc.1, fc.2);
-                                    tx.set_alpha_mod(fc.3);
-                                    tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
+                                    // tx.set_color_mod(fc.0, fc.1, fc.2);
+                                    // tx.set_alpha_mod(fc.3);
+                                    // tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
                                 },
                             );
                         }
@@ -434,7 +483,7 @@ impl Adapter for SdlAdapter {
                 }
             })
             .unwrap();
-            c.copy(rt, None, None).unwrap();
+            // c.copy(rt, None, None).unwrap();
             c.present();
         }
         Ok(())
@@ -557,3 +606,8 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> 
     }
     None
 }
+
+pub mod color;
+pub mod shader;
+pub mod texture;
+pub mod transform;

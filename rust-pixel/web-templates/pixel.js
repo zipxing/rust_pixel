@@ -259,12 +259,12 @@ const Pix = function(canvasElement, antialias) {
         _gl.bindBuffer(_gl.ARRAY_BUFFER, _instances);
         _gl.bufferSubData(_gl.ARRAY_BUFFER, 0, _instanceBuffer, 0, _instanceBufferAt + 1);
 
-        switch(_renderMode) {
-            case RENDER_MODE_PIXCELLS:
+        // switch(_renderMode) {
+        //     case RENDER_MODE_PIXCELLS:
                 _gl.bindVertexArray(_vaoCells);
                 _gl.drawArraysInstanced(_gl.TRIANGLE_FAN, 0, 4, _instanceCount);
-                break;
-        }
+        //        break;
+        // }
 
         _instanceBufferAt = -1;
         _instanceCount = 0;
@@ -422,7 +422,7 @@ const Pix = function(canvasElement, antialias) {
     this.unregister = name => delete _sprites[name];
 
     const RENDER_MODE_NONE = -1;
-    const RENDER_MODE_SURFACES = 0;
+    // const RENDER_MODE_SURFACES = 0;
     const RENDER_MODE_PIXCELLS = 1;
     const TEXTURE_ATLAS = _gl.TEXTURE0;
     const TEXTURE_SURFACE = _gl.TEXTURE1;
