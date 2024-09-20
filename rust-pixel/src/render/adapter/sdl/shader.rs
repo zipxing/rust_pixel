@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use glow::HasContext;
 
+#[derive(Clone)]
 pub struct ShaderCore {
     pub program: glow::NativeProgram,
 }

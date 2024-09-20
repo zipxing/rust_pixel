@@ -8,7 +8,11 @@
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
+use crate::render::adapter::sdl::color::Color;
+use crate::render::adapter::sdl::pix::Pix;
 use crate::render::adapter::sdl::texture::load_texture;
+use crate::render::adapter::sdl::texture::Cell;
+use crate::render::adapter::sdl::texture::GTexture;
 use crate::{
     render::{
         adapter::{
@@ -22,6 +26,7 @@ use crate::{
     LOGO_FRAME,
 };
 use glow::HasContext;
+use log::info;
 use sdl2::{
     event::Event as SEvent,
     image::{InitFlag, LoadSurface, LoadTexture},
@@ -36,7 +41,6 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
-// use log::info;
 
 // data for drag window...
 #[derive(Default)]
@@ -54,19 +58,15 @@ pub struct SdlAdapter {
 
     // sdl object
     pub sdl_context: Sdl,
+    pub sdl_window: Option<Window>,
     pub event_pump: Option<EventPump>,
-
-    // custom cursor in rust-sdl2
-    pub cursor: Option<Cursor>,
-    pub canvas: Option<Canvas<Window>>,
-
-    // Textures
-    pub asset_textures: Option<Texture>,
-    pub render_texture: Option<glow::NativeTexture>,
 
     // gl object
     pub gl_context: Option<sdl2::video::GLContext>,
     pub gl: Option<glow::Context>,
+
+    // custom cursor
+    pub cursor: Option<Cursor>,
 
     // rand
     pub rd: Rand,
@@ -89,91 +89,11 @@ impl SdlAdapter {
             sdl_context: sdl2::init().unwrap(),
             event_pump: None,
             cursor: None,
-            canvas: None,
-            asset_textures: None,
-            render_texture: None,
+            sdl_window: None,
             gl_context: None,
             gl: None,
             rd: Rand::new(),
             drag: Default::default(),
-        }
-    }
-
-    fn create_render_texture(&mut self) -> Result<(), String> {
-        let gl = self.gl.as_ref().unwrap();
-        unsafe {
-            let texture = gl.create_texture()?;
-            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA as i32,
-                self.base.pixel_w as i32,
-                self.base.pixel_h as i32,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                None,
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_WRAP_S,
-                glow::CLAMP_TO_EDGE as i32,
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_WRAP_T,
-                glow::CLAMP_TO_EDGE as i32,
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MIN_FILTER,
-                glow::LINEAR as i32,
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MAG_FILTER,
-                glow::LINEAR as i32,
-            );
-            self.render_texture = Some(texture);
-        }
-        Ok(())
-    }
-
-    fn compile_shader(
-        gl: &glow::Context,
-        source: &str,
-        shader_type: u32,
-    ) -> Result<glow::NativeShader, String> {
-        unsafe {
-            let shader = gl.create_shader(shader_type)?;
-            gl.shader_source(shader, source);
-            gl.compile_shader(shader);
-            if !gl.get_shader_compile_status(shader) {
-                return Err(gl.get_shader_info_log(shader));
-            }
-            Ok(shader)
-        }
-    }
-
-    fn link_program(
-        gl: &glow::Context,
-        shaders: &[glow::NativeShader],
-    ) -> Result<glow::NativeProgram, String> {
-        unsafe {
-            let program = gl.create_program()?;
-            for &shader in shaders {
-                gl.attach_shader(program, shader);
-            }
-            gl.link_program(program);
-            if !gl.get_program_link_status(program) {
-                return Err(gl.get_program_info_log(program));
-            }
-            for &shader in shaders {
-                gl.detach_shader(program, shader);
-                gl.delete_shader(shader);
-            }
-            Ok(program)
         }
     }
 
@@ -305,6 +225,7 @@ impl Adapter for SdlAdapter {
             .unwrap();
 
         let gl_context = window.gl_create_context().unwrap();
+        self.gl_context = Some(gl_context);
         video_subsystem.gl_set_swap_interval(1).unwrap(); // Enable vsync
 
         // Create the OpenGL context using glow
@@ -316,21 +237,50 @@ impl Adapter for SdlAdapter {
 
         // Store the OpenGL context
         self.gl = Some(gl);
+        self.sdl_window = Some(window);
 
         // let mut textures = Vec::new();
-        for texture_file in PIXEL_TEXTURE_FILES.iter() {
-            let texture_path = format!(
-                "{}{}{}",
-                self.base.project_path,
-                std::path::MAIN_SEPARATOR,
-                texture_file
-            );
-            // let texture = load_texture(self.gl.as_ref().unwrap(), &texture_path).unwrap();
-            // textures.push(texture);
-        }
+        // for texture_file in PIXEL_TEXTURE_FILES.iter() {
+        //     let texture_path = format!(
+        //         "{}{}{}",
+        //         self.base.project_path,
+        //         std::path::MAIN_SEPARATOR,
+        //         texture_file
+        //     );
+        //     // let texture = load_texture(self.gl.as_ref().unwrap(), &texture_path).unwrap();
+        //     // textures.push(texture);
+        // }
         // self.asset_textures = Some(textures);
 
         // self.create_render_texture().unwrap();
+
+        let mut pix = Pix::new(self.gl.as_ref().unwrap(), w as i32, h as i32);
+
+        // 创建纹理和精灵
+        let mut sprite_sheet =
+            GTexture::new(self.gl.as_ref().unwrap(), "assets/pix/c64.png").unwrap();
+        sprite_sheet.bind(self.gl.as_ref().unwrap());
+        pix.set_clear_color(Color::new(0.1, 0.1, 0.1, 1.0));
+
+        let mut draw_cells = Vec::new();
+
+        for i in 0..32 {
+            for j in 0..32 {
+                let name = format!("{}", i * 32 + j);
+                let frame = pix.make_cell_frame(
+                    &mut sprite_sheet,
+                    j as f32 * 17.0,
+                    i as f32 * 17.0,
+                    16.0,
+                    16.0,
+                    8.0,
+                    8.0,
+                );
+                pix.register(&name, frame.clone());
+                let cell = Cell::new(frame);
+                draw_cells.push(cell);
+            }
+        }
 
         let surface = Surface::from_file(format!(
             "{}{}{}",
@@ -396,96 +346,111 @@ impl Adapter for SdlAdapter {
         stage: u32,
     ) -> Result<(), String> {
         let width = current_buffer.area.width;
-
-        if let (Some(c), Some(rt), Some(texs)) = (
-            &mut self.canvas,
-            &mut self.render_texture,
-            &mut self.asset_textures,
-        ) {
-            // dragging window, set the correct position of a window
-            sdl_move_win(&mut self.drag.need, c, self.drag.dx, self.drag.dy);
-            // c.clear();
-            // c.with_texture_canvas(rt, |tc| {
-            //     tc.clear();
-
-            //     if stage <= LOGO_FRAME {
-            //         render_logo(
-            //             self.base.ratio_x,
-            //             self.base.ratio_y,
-            //             self.base.pixel_w,
-            //             self.base.pixel_h,
-            //             &mut self.rd,
-            //             stage,
-            //             |fc, ss1, ss2, texidx, _symidx| {
-            //                 let s1 = SRect::new(ss1.x, ss1.y, ss1.w, ss1.h);
-            //                 let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
-            //                 let tx = &mut texs[texidx / 4];
-            //                 // tx.set_color_mod(fc.0, fc.1, fc.2);
-            //                 // tx.set_alpha_mod(fc.3);
-            //                 // tc.copy(tx, s1, s2).unwrap();
-            //             },
-            //         );
-            //     }
-
-            //     let rx = self.base.ratio_x;
-            //     let ry = self.base.ratio_y;
-
-            //     // border & main_buffer...
-            //     let mut rfunc = |fc: &(u8, u8, u8, u8),
-            //                      bc: &Option<(u8, u8, u8, u8)>,
-            //                      s0: ARect,
-            //                      s1: ARect,
-            //                      s2: ARect,
-            //                      texidx: usize,
-            //                      _symidx: usize| {
-            //         let tx = &mut texs[texidx / 4];
-            //         let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
-            //         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-            //         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-            //         if let Some(bgc) = bc {
-            //             // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-            //             // tx.set_alpha_mod(bgc.3);
-            //             // tc.copy(tx, ss0, ss2).unwrap();
-            //         }
-            //         // tx.set_color_mod(fc.0, fc.1, fc.2);
-            //         // tx.set_alpha_mod(fc.3);
-            //         // tc.copy(tx, ss1, ss2).unwrap();
-            //     };
-
-            //     if stage > LOGO_FRAME {
-            //         render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
-            //         render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
-            //         for idx in 0..pixel_sprites.len() {
-            //             if pixel_sprites[idx].is_pixel {
-            //                 render_pixel_sprites(
-            //                     &mut pixel_sprites[idx],
-            //                     rx,
-            //                     ry,
-            //                     |fc, bc, s0, s1, s2, texidx, _symidx, angle, ccp| {
-            //                         let tx = &mut texs[texidx / 4];
-            //                         let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
-            //                         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-            //                         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-            //                         let cccp = SPoint::new(ccp.x, ccp.y);
-            //                         if let Some(bgc) = bc {
-            //                             // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-            //                             // tx.set_alpha_mod(bgc.3);
-            //                             // tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
-            //                             //    .unwrap();
-            //                         }
-            //                         // tx.set_color_mod(fc.0, fc.1, fc.2);
-            //                         // tx.set_alpha_mod(fc.3);
-            //                         // tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
-            //                     },
-            //                 );
-            //             }
-            //         }
-            //     }
-            // })
-            // .unwrap();
-            // // c.copy(rt, None, None).unwrap();
-            // c.present();
+        info!("render buffer.....");
+        let gl = self.gl.as_ref().unwrap();
+        unsafe {
+            gl.clear_color(0.2, 0.3, 0.3, 1.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
         }
+
+        sdl_move_win(
+            &mut self.drag.need,
+            self.sdl_window.as_mut().unwrap(),
+            self.drag.dx,
+            self.drag.dy,
+        );
+        // 交换缓冲区
+        self.sdl_window.as_ref().unwrap().gl_swap_window();
+
+        // if let (Some(c), Some(rt), Some(texs)) = (
+        //     &mut self.canvas,
+        //     &mut self.render_texture,
+        //     &mut self.asset_textures,
+        // ) {
+        // dragging window, set the correct position of a window
+        // sdl_move_win(&mut self.drag.need, c, self.drag.dx, self.drag.dy);
+        // c.clear();
+        // c.with_texture_canvas(rt, |tc| {
+        //     tc.clear();
+
+        //     if stage <= LOGO_FRAME {
+        //         render_logo(
+        //             self.base.ratio_x,
+        //             self.base.ratio_y,
+        //             self.base.pixel_w,
+        //             self.base.pixel_h,
+        //             &mut self.rd,
+        //             stage,
+        //             |fc, ss1, ss2, texidx, _symidx| {
+        //                 let s1 = SRect::new(ss1.x, ss1.y, ss1.w, ss1.h);
+        //                 let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
+        //                 let tx = &mut texs[texidx / 4];
+        //                 // tx.set_color_mod(fc.0, fc.1, fc.2);
+        //                 // tx.set_alpha_mod(fc.3);
+        //                 // tc.copy(tx, s1, s2).unwrap();
+        //             },
+        //         );
+        //     }
+
+        //     let rx = self.base.ratio_x;
+        //     let ry = self.base.ratio_y;
+
+        //     // border & main_buffer...
+        //     let mut rfunc = |fc: &(u8, u8, u8, u8),
+        //                      bc: &Option<(u8, u8, u8, u8)>,
+        //                      s0: ARect,
+        //                      s1: ARect,
+        //                      s2: ARect,
+        //                      texidx: usize,
+        //                      _symidx: usize| {
+        //         let tx = &mut texs[texidx / 4];
+        //         let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
+        //         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
+        //         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
+        //         if let Some(bgc) = bc {
+        //             // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+        //             // tx.set_alpha_mod(bgc.3);
+        //             // tc.copy(tx, ss0, ss2).unwrap();
+        //         }
+        //         // tx.set_color_mod(fc.0, fc.1, fc.2);
+        //         // tx.set_alpha_mod(fc.3);
+        //         // tc.copy(tx, ss1, ss2).unwrap();
+        //     };
+
+        //     if stage > LOGO_FRAME {
+        //         render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
+        //         render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
+        //         for idx in 0..pixel_sprites.len() {
+        //             if pixel_sprites[idx].is_pixel {
+        //                 render_pixel_sprites(
+        //                     &mut pixel_sprites[idx],
+        //                     rx,
+        //                     ry,
+        //                     |fc, bc, s0, s1, s2, texidx, _symidx, angle, ccp| {
+        //                         let tx = &mut texs[texidx / 4];
+        //                         let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
+        //                         let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
+        //                         let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
+        //                         let cccp = SPoint::new(ccp.x, ccp.y);
+        //                         if let Some(bgc) = bc {
+        //                             // tx.set_color_mod(bgc.0, bgc.1, bgc.2);
+        //                             // tx.set_alpha_mod(bgc.3);
+        //                             // tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
+        //                             //    .unwrap();
+        //                         }
+        //                         // tx.set_color_mod(fc.0, fc.1, fc.2);
+        //                         // tx.set_alpha_mod(fc.3);
+        //                         // tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
+        //                     },
+        //                 );
+        //             }
+        //         }
+        //     }
+        // })
+        // .unwrap();
+        // // c.copy(rt, None, None).unwrap();
+        // c.present();
+        // }
         Ok(())
     }
 
@@ -510,10 +475,9 @@ impl Adapter for SdlAdapter {
     }
 }
 
-pub fn sdl_move_win(drag_need: &mut bool, c: &mut Canvas<Window>, dx: i32, dy: i32) {
+pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {
     // dragging window, set the correct position of a window
     if *drag_need {
-        let win = c.window_mut();
         let (win_x, win_y) = win.position();
         win.set_position(Positioned(win_x + dx), Positioned(win_y + dy));
         *drag_need = false;

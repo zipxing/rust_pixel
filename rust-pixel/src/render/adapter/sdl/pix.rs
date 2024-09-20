@@ -1,12 +1,15 @@
 use crate::render::adapter::sdl::color::Color;
 use crate::render::adapter::sdl::shader::Shader;
+use crate::render::adapter::sdl::shader::ShaderCore;
+use crate::render::adapter::sdl::shader::UniformValue;
 use crate::render::adapter::sdl::texture::Frame;
-use crate::render::adapter::sdl::texture::Texture;
+use crate::render::adapter::sdl::texture::GTexture;
 use crate::render::adapter::sdl::transform::Transform;
 use glow::HasContext;
 use sdl2::video::Window;
 use sdl2::Sdl;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum RenderMode {
@@ -16,19 +19,11 @@ pub enum RenderMode {
 }
 
 pub struct Pix {
-    // OpenGL 上下文
-    pub gl: glow::Context,
-
-    // SDL 上下文和窗口
-    pub sdl_context: Sdl,
-    pub window: Window,
-
     // 着色器列表
+    shader_core_cells: ShaderCore,
     pub shaders: Vec<Shader>,
 
-    // 纹理和精灵
-    pub textures: Vec<Texture>,
-    pub sprites: HashMap<String, Vec<Frame>>,
+    pub sprites: HashMap<String, Frame>,
 
     // 变换栈
     pub transform_stack: Vec<Transform>,
@@ -45,10 +40,10 @@ pub struct Pix {
     pub render_mode: RenderMode,
 
     // OpenGL 缓冲区和顶点数组对象
-    pub vao_cells: Option<glow::NativeVertexArray>,
-    pub instances_vbo: Option<glow::NativeBuffer>,
-    pub quad_vbo: Option<glow::NativeBuffer>,
-    pub ubo: Option<glow::NativeBuffer>,
+    pub vao_cells: glow::NativeVertexArray,
+    pub instances_vbo: glow::NativeBuffer,
+    pub quad_vbo: glow::NativeBuffer,
+    pub ubo: glow::NativeBuffer,
 
     // Uniform Buffer 内容
     pub ubo_contents: [f32; 12],
@@ -57,8 +52,6 @@ pub struct Pix {
     pub current_shader: Option<usize>,
     pub current_shader_core: Option<usize>,
     pub current_texture_atlas: Option<glow::NativeTexture>,
-    pub current_texture_surface: Option<glow::NativeTexture>,
-    // pub surface: Option<Texture>,
 
     // 画布尺寸
     pub canvas_width: u32,
@@ -69,20 +62,142 @@ pub struct Pix {
 }
 
 impl Pix {
-    pub fn new(
-        gl: glow::Context,
-        sdl_context: Sdl,
-        window: Window,
-        canvas_width: u32,
-        canvas_height: u32,
-    ) -> Self {
+    pub fn new(gl: &glow::Context, canvas_width: i32, canvas_height: i32) -> Self {
+        // 初始化着色器
+        let vertex_shader_src = r#"
+        #version 330 core
+        layout(location=0) in vec2 vertex;
+        layout(location=1) in vec4 a1;
+        layout(location=2) in vec4 a2;
+        layout(location=3) in vec4 a3;
+        layout(location=4) in vec4 color;
+        layout(std140) uniform transform {
+            vec4 tw;
+            vec4 th;
+            vec4 colorFilter;
+        };
+        out vec2 uv;
+        out vec4 colorj;
+        void main() {
+            uv = a1.zw + vertex * a2.xy;
+            vec2 transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0;
+            gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
+            colorj = color * colorFilter;
+        }
+        "#;
+
+        let fragment_shader_src = r#"
+        #version 330 core
+        uniform sampler2D source;
+        layout(std140) uniform transform {
+            vec4 tw;
+            vec4 th;
+            vec4 colorFilter;
+        };
+        in vec2 uv;
+        in vec4 colorj;
+        layout(location=0) out vec4 color;
+        void main() {
+            color = texture(source, uv) * colorj;
+        }
+        "#;
+
+        let shader_core_cells = ShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
+
+        let mut uniforms = HashMap::new();
+        uniforms.insert("source".to_string(), UniformValue::Int(0));
+
+        let shader = Shader::new(shader_core_cells.clone(), uniforms);
+
+        let shaders = vec![shader];
+
+        // 创建缓冲区和 VAO
+        let quad_vbo = unsafe { gl.create_buffer().unwrap() };
+        let instances_vbo = unsafe { gl.create_buffer().unwrap() };
+        let vao_cells = unsafe { gl.create_vertex_array().unwrap() };
+        let ubo = unsafe { gl.create_buffer().unwrap() };
+
+        // 初始化缓冲区
+        unsafe {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
+            let instance_buffer_capacity = 1024;
+            gl.buffer_data_size(
+                glow::ARRAY_BUFFER,
+                (instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
+                glow::DYNAMIC_DRAW,
+            );
+
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                &quad_vertices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
+
+            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
+            gl.buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
+            gl.bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
+
+            // 设置 VAO
+            gl.bind_vertex_array(Some(vao_cells));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
+
+            let stride = 64;
+
+            // Attribute 1
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
+            gl.vertex_attrib_divisor(1, 1);
+
+            // Attribute 2
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
+            gl.vertex_attrib_divisor(2, 1);
+
+            // Attribute 3
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
+            gl.vertex_attrib_divisor(3, 1);
+
+            // Attribute 4 (color)
+            gl.enable_vertex_attrib_array(4);
+            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
+            gl.vertex_attrib_divisor(4, 1);
+
+            gl.bind_vertex_array(None);
+
+            // 启用混合
+            gl.enable(glow::BLEND);
+            gl.disable(glow::DEPTH_TEST);
+            gl.blend_func_separate(
+                glow::SRC_ALPHA,
+                glow::ONE_MINUS_SRC_ALPHA,
+                glow::ONE,
+                glow::ONE_MINUS_SRC_ALPHA,
+            );
+        }
+
+        let mut ubo_contents = [0.0f32; 12];
+        ubo_contents[8] = 1.0;
+        ubo_contents[9] = 1.0;
+        ubo_contents[10] = 1.0;
+        ubo_contents[11] = 1.0;
+
         Self {
-            gl,
-            sdl_context,
-            window,
-            shaders: Vec::new(),
-            textures: Vec::new(),
-            sprites: HashMap::new(),
+            canvas_width: canvas_width as u32,
+            canvas_height: canvas_height as u32,
+            shader_core_cells,
+            shaders,
+            quad_vbo,
+            instances_vbo,
+            vao_cells,
+            ubo,
+            ubo_contents,
             transform_stack: vec![Transform::new_with_values(
                 1.0,
                 0.0,
@@ -93,107 +208,16 @@ impl Pix {
             )],
             transform_at: 0,
             transform_dirty: true,
-
-            instance_buffer: Vec::new(),
             instance_buffer_capacity: 1024,
             instance_buffer_at: -1,
+            instance_buffer: vec![0.0; 1024],
             instance_count: 0,
-
             render_mode: RenderMode::None,
-            vao_cells: None,
-            instances_vbo: None,
-            quad_vbo: None,
-            ubo: None,
-            ubo_contents: [0.0; 12],
             current_shader: None,
             current_shader_core: None,
             current_texture_atlas: None,
-            current_texture_surface: None,
-            // surface: None,
-            canvas_width,
-            canvas_height,
+            sprites: HashMap::new(),
             clear_color: Color::new(1.0, 1.0, 1.0, 0.0),
-        }
-    }
-
-    pub fn init(&mut self) {
-        unsafe {
-            // create instance buffer...
-            let instances_vbo = self.gl.create_buffer().unwrap();
-            self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
-            self.instance_buffer = vec![0.0; self.instance_buffer_capacity];
-            self.gl.buffer_data_size(
-                glow::ARRAY_BUFFER,
-                (self.instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
-                glow::DYNAMIC_DRAW,
-            );
-            self.instances_vbo = Some(instances_vbo);
-
-            // create quad vbo...
-            let quad_vbo = self.gl.create_buffer().unwrap();
-            self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
-            let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
-            self.gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                &quad_vertices.align_to::<u8>().1,
-                glow::STATIC_DRAW,
-            );
-            self.quad_vbo = Some(quad_vbo);
-
-            // create Uniform Buffer Object (UBO)
-            let ubo = self.gl.create_buffer().unwrap();
-            self.gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
-            self.gl
-                .buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
-            self.gl
-                .bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
-            self.ubo = Some(ubo);
-
-            // create VAO
-            let vao_cells = self.gl.create_vertex_array().unwrap();
-            self.gl.bind_vertex_array(Some(vao_cells));
-            self.vao_cells = Some(vao_cells);
-
-            // set vertex attrib...
-            self.gl
-                .bind_buffer(glow::ARRAY_BUFFER, Some(self.quad_vbo.unwrap()));
-            self.gl.enable_vertex_attrib_array(0);
-            self.gl
-                .vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
-
-            // instance vertex attrib
-            self.gl
-                .bind_buffer(glow::ARRAY_BUFFER, Some(self.instances_vbo.unwrap()));
-            let stride = 64;
-            for i in 0..4 {
-                self.gl.enable_vertex_attrib_array(1 + i);
-                self.gl.vertex_attrib_pointer_f32(
-                    1 + i,
-                    4,
-                    glow::FLOAT,
-                    false,
-                    stride,
-                    (i * 16) as i32,
-                );
-                self.gl.vertex_attrib_divisor(1 + i, 1);
-            }
-
-            self.gl.bind_vertex_array(None);
-
-            // set opengl state...
-            self.gl.enable(glow::BLEND);
-            self.gl.disable(glow::DEPTH_TEST);
-            self.gl.blend_func_separate(
-                glow::SRC_ALPHA,
-                glow::ONE_MINUS_SRC_ALPHA,
-                glow::ONE,
-                glow::ONE_MINUS_SRC_ALPHA,
-            );
-
-            self.ubo_contents[8] = 1.0;
-            self.ubo_contents[9] = 1.0;
-            self.ubo_contents[10] = 1.0;
-            self.ubo_contents[11] = 1.0;
         }
     }
 
@@ -202,41 +226,26 @@ impl Pix {
         self.transform_dirty = true;
     }
 
-    pub fn push(&mut self) {
-        let current_transform = self.transform_stack.last().unwrap().clone();
-        self.transform_stack.push(current_transform);
-    }
-
-    pub fn pop(&mut self) {
-        if self.transform_stack.len() > 1 {
-            self.transform_stack.pop();
-            self.transform_dirty = true;
-        }
-    }
-
-    pub fn prepare_draw(&mut self, mode: RenderMode, size: usize, shader: Option<&mut Shader>) {
+    pub fn prepare_draw(&mut self, gl: &glow::Context, mode: RenderMode, size: usize) {
         if self.transform_dirty {
-            self.flush();
-            self.send_uniform_buffer();
+            self.flush(gl);
+            self.send_uniform_buffer(gl);
         }
 
         if self.render_mode != mode {
-            self.flush();
+            self.flush(gl);
             self.render_mode = mode;
-            if let Some(shader) = shader {
-                shader.bind(&self.gl);
-            } else {
-                self.shaders[mode as usize].bind(&self.gl);
-            }
+            self.shaders[mode as usize].bind(gl);
         }
 
         if (self.instance_buffer_at as usize) + size >= self.instance_buffer_capacity {
             self.instance_buffer_capacity *= 2;
-            self.instance_buffer.resize(self.instance_buffer_capacity, 0.0);
+            self.instance_buffer
+                .resize(self.instance_buffer_capacity, 0.0);
 
             unsafe {
-                self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.instances_vbo.unwrap()));
-                self.gl.buffer_data_size(
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.instances_vbo));
+                gl.buffer_data_size(
                     glow::ARRAY_BUFFER,
                     (self.instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
                     glow::DYNAMIC_DRAW,
@@ -247,7 +256,7 @@ impl Pix {
         self.instance_count += 1;
     }
 
-    fn send_uniform_buffer(&mut self) {
+    fn send_uniform_buffer(&mut self, gl: &glow::Context) {
         let transform = self.transform_stack.last().unwrap();
         self.ubo_contents[0] = transform.m00;
         self.ubo_contents[1] = transform.m10;
@@ -259,8 +268,8 @@ impl Pix {
         self.ubo_contents[7] = self.canvas_height as f32;
 
         unsafe {
-            self.gl.bind_buffer(glow::UNIFORM_BUFFER, Some(self.ubo.unwrap()));
-            self.gl.buffer_sub_data_u8_slice(
+            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(self.ubo));
+            gl.buffer_sub_data_u8_slice(
                 glow::UNIFORM_BUFFER,
                 0,
                 &self.ubo_contents.align_to::<u8>().1,
@@ -270,64 +279,100 @@ impl Pix {
         self.transform_dirty = false;
     }
 
-    pub fn clear(&mut self) {
-        self.flush();
+    pub fn clear(&mut self, gl: &glow::Context) {
+        self.flush(gl);
 
         unsafe {
-            self.gl.clear_color(
+            gl.clear_color(
                 self.clear_color.r * self.ubo_contents[8],
                 self.clear_color.g * self.ubo_contents[9],
                 self.clear_color.b * self.ubo_contents[10],
                 self.clear_color.a * self.ubo_contents[11],
             );
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            gl.clear(glow::COLOR_BUFFER_BIT);
         }
     }
 
-    pub fn flush(&mut self) {
+    pub fn flush(&mut self, gl: &glow::Context) {
         if self.instance_count == 0 {
             return;
         }
 
         unsafe {
-            self.gl
-                .bind_buffer(glow::ARRAY_BUFFER, Some(self.instances_vbo.unwrap()));
-            self.gl.buffer_sub_data_u8_slice(
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.instances_vbo));
+            gl.buffer_sub_data_u8_slice(
                 glow::ARRAY_BUFFER,
                 0,
-                &self.instance_buffer[0..=(self.instance_buffer_at as usize)].align_to::<u8>().1,
+                &self.instance_buffer[0..=(self.instance_buffer_at as usize)]
+                    .align_to::<u8>()
+                    .1,
             );
 
-            match self.render_mode {
-                RenderMode::PixCells => {
-                    self.gl.bind_vertex_array(Some(self.vao_cells.unwrap()));
-                    self.gl.draw_arrays_instanced(
-                        glow::TRIANGLE_FAN,
-                        0,
-                        4,
-                        self.instance_count as i32,
-                    );
-                }
-                _ => {}
-            }
+            gl.bind_vertex_array(Some(self.vao_cells));
+            gl.draw_arrays_instanced(glow::TRIANGLE_FAN, 0, 4, self.instance_count as i32);
 
             self.instance_buffer_at = -1;
             self.instance_count = 0;
         }
     }
 
-    pub fn bind_texture_atlas(&mut self, texture: glow::NativeTexture) {
+    pub fn bind_texture_atlas(&mut self, gl: &glow::Context, texture: glow::NativeTexture) {
         if Some(texture) == self.current_texture_atlas {
             return;
         }
 
-        self.flush();
+        self.flush(gl);
 
         unsafe {
-            self.gl.active_texture(glow::TEXTURE0);
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
         }
 
         self.current_texture_atlas = Some(texture);
+    }
+
+    pub fn register(&mut self, name: &str, frame: Frame) {
+        self.sprites.insert(name.to_string(), frame);
+    }
+
+    pub fn make_cell_frame(
+        &mut self,
+        sheet: &mut GTexture,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        x_origin: f32,
+        y_origin: f32,
+    ) -> Frame {
+        let origin_x = x_origin / width;
+        let origin_y = y_origin / height;
+        let tex_width = sheet.width as f32;
+        let tex_height = sheet.height as f32;
+
+        let uv_left = x / tex_width;
+        let uv_top = y / tex_height;
+        let uv_right = (x + width) / tex_width;
+        let uv_bottom = (y + height) / tex_height;
+
+        let frame = Frame {
+            texture: sheet.texture,
+            width,
+            height,
+            origin_x,
+            origin_y,
+            uv_left,
+            uv_top,
+            uv_right,
+            uv_bottom,
+        };
+
+        sheet.frames.push(frame.clone());
+
+        frame
+    }
+
+    pub fn set_clear_color(&mut self, color: Color) {
+        self.clear_color = color;
     }
 }
