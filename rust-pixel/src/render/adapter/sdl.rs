@@ -8,11 +8,11 @@
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
-use crate::render::adapter::sdl::color::Color;
-use crate::render::adapter::sdl::pix::Pix;
-use crate::render::adapter::sdl::texture::load_texture;
-use crate::render::adapter::sdl::texture::Cell;
-use crate::render::adapter::sdl::texture::GTexture;
+use crate::render::adapter::sdl::gl_color::GlColor;
+use crate::render::adapter::sdl::gl_pix::GlPix;
+use crate::render::adapter::sdl::gl_texture::load_texture;
+use crate::render::adapter::sdl::gl_texture::GlCell;
+use crate::render::adapter::sdl::gl_texture::GlTexture;
 use crate::{
     render::{
         adapter::{
@@ -41,6 +41,12 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
+
+pub mod gl_color;
+pub mod gl_pix;
+pub mod gl_shader;
+pub mod gl_texture;
+pub mod gl_transform;
 
 // data for drag window...
 #[derive(Default)]
@@ -254,13 +260,13 @@ impl Adapter for SdlAdapter {
 
         // self.create_render_texture().unwrap();
 
-        let mut pix = Pix::new(self.gl.as_ref().unwrap(), w as i32, h as i32);
+        let mut pix = GlPix::new(self.gl.as_ref().unwrap(), w as i32, h as i32);
 
         // 创建纹理和精灵
         let mut sprite_sheet =
-            GTexture::new(self.gl.as_ref().unwrap(), "assets/pix/c64.png").unwrap();
+            GlTexture::new(self.gl.as_ref().unwrap(), "assets/pix/c64.png").unwrap();
         sprite_sheet.bind(self.gl.as_ref().unwrap());
-        pix.set_clear_color(Color::new(0.1, 0.1, 0.1, 1.0));
+        pix.set_clear_color(GlColor::new(0.1, 0.1, 0.1, 1.0));
 
         let mut draw_cells = Vec::new();
 
@@ -277,7 +283,7 @@ impl Adapter for SdlAdapter {
                     8.0,
                 );
                 pix.register(&name, frame.clone());
-                let cell = Cell::new(frame);
+                let cell = GlCell::new(frame);
                 draw_cells.push(cell);
             }
         }
@@ -571,8 +577,3 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> 
     None
 }
 
-pub mod color;
-pub mod pix;
-pub mod shader;
-pub mod texture;
-pub mod transform;

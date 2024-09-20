@@ -1,21 +1,21 @@
-use crate::render::adapter::sdl::color::Color;
-use crate::render::adapter::sdl::transform::Transform;
-use crate::render::adapter::sdl::pix::Pix;
-use crate::render::adapter::sdl::pix::RenderMode;
+use crate::render::adapter::sdl::gl_color::GlColor;
+use crate::render::adapter::sdl::gl_transform::GlTransform;
+use crate::render::adapter::sdl::gl_pix::GlPix;
+use crate::render::adapter::sdl::gl_pix::GlRenderMode;
 use glow::HasContext;
 use std::rc::Rc;
 
-pub struct GTexture {
+pub struct GlTexture {
     pub texture: glow::NativeTexture,
     framebuffer: glow::NativeFramebuffer,
     pub width: u32,
     pub height: u32,
-    clear_color: Color,
-    pub frames: Vec<Frame>,
+    clear_color: GlColor,
+    pub frames: Vec<GlFrame>,
 }
 
 #[derive(Clone)]
-pub struct Frame {
+pub struct GlFrame {
     pub texture: glow::NativeTexture,
     pub width: f32,
     pub height: f32,
@@ -27,18 +27,18 @@ pub struct Frame {
     pub uv_bottom: f32,
 }
 
-pub struct Cell {
-    pub frame: Frame,
+pub struct GlCell {
+    pub frame: GlFrame,
 }
 
-impl GTexture {
+impl GlTexture {
     pub fn new(gl: &glow::Context, source: &str) -> Result<Self, String> {
         let texture = unsafe { gl.create_texture().map_err(|e| e.to_string())? };
         let framebuffer = unsafe { gl.create_framebuffer().map_err(|e| e.to_string())? };
 
         let mut width = 0;
         let mut height = 0;
-        let clear_color = Color::new(1.0, 1.0, 1.0, 0.0);
+        let clear_color = GlColor::new(1.0, 1.0, 1.0, 0.0);
         let frames = Vec::new();
 
         // 加载图像
@@ -121,7 +121,7 @@ impl GTexture {
         }
     }
 
-    pub fn add_frame(&mut self, frame: Frame) {
+    pub fn add_frame(&mut self, frame: GlFrame) {
         self.frames.push(frame);
     }
 
@@ -137,25 +137,25 @@ impl GTexture {
         self.height
     }
 
-    pub fn set_clear_color(&mut self, color: Color) {
+    pub fn set_clear_color(&mut self, color: GlColor) {
         self.clear_color = color;
     }
 }
 
-impl Cell {
-    pub fn new(frame: Frame) -> Self {
+impl GlCell {
+    pub fn new(frame: GlFrame) -> Self {
         Self { frame }
     }
 
     pub fn draw(
         &mut self,
         gl: &glow::Context,
-        pix: &mut Pix,
-        transform: &Transform,
-        color: &Color,
+        pix: &mut GlPix,
+        transform: &GlTransform,
+        color: &GlColor,
     ) {
         pix.bind_texture_atlas(gl, self.frame.texture);
-        pix.prepare_draw(gl, RenderMode::PixCells, 16);
+        pix.prepare_draw(gl, GlRenderMode::PixCells, 16);
 
         let frame = &self.frame;
         let instance_buffer = &mut pix.instance_buffer;

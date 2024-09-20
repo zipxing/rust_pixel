@@ -1,5 +1,5 @@
 #[derive(Clone, Copy)]
-pub struct Transform {
+pub struct GlTransform {
     pub m00: f32,
     pub m10: f32,
     pub m20: f32,
@@ -8,7 +8,7 @@ pub struct Transform {
     pub m21: f32,
 }
 
-impl Transform {
+impl GlTransform {
     pub fn new() -> Self {
         Self {
             m00: 1.0,
@@ -40,7 +40,7 @@ impl Transform {
         self.m21 = 0.0;
     }
 
-    pub fn set(&mut self, other: &Transform) {
+    pub fn set(&mut self, other: &GlTransform) {
         *self = *other;
     }
 
@@ -48,7 +48,7 @@ impl Transform {
         *self
     }
 
-    pub fn multiply(&mut self, other: &Transform) {
+    pub fn multiply(&mut self, other: &GlTransform) {
         let m00 = self.m00 * other.m00 + self.m10 * other.m01;
         let m10 = self.m00 * other.m10 + self.m10 * other.m11;
         let m20 = self.m20 + self.m00 * other.m20 + self.m10 * other.m21;

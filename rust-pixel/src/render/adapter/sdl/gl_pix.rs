@@ -1,32 +1,31 @@
-use crate::render::adapter::sdl::color::Color;
-use crate::render::adapter::sdl::shader::Shader;
-use crate::render::adapter::sdl::shader::ShaderCore;
-use crate::render::adapter::sdl::shader::UniformValue;
-use crate::render::adapter::sdl::texture::Frame;
-use crate::render::adapter::sdl::texture::GTexture;
-use crate::render::adapter::sdl::transform::Transform;
+use crate::render::adapter::sdl::gl_color::GlColor;
+use crate::render::adapter::sdl::gl_shader::GlShader;
+use crate::render::adapter::sdl::gl_shader::GlShaderCore;
+use crate::render::adapter::sdl::gl_shader::GlUniformValue;
+use crate::render::adapter::sdl::gl_texture::GlFrame;
+use crate::render::adapter::sdl::gl_texture::GlTexture;
+use crate::render::adapter::sdl::gl_transform::GlTransform;
 use glow::HasContext;
 use sdl2::video::Window;
 use sdl2::Sdl;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum RenderMode {
+pub enum GlRenderMode {
     None = -1,
     Surfaces = 0,
     PixCells = 1,
 }
 
-pub struct Pix {
+pub struct GlPix {
     // 着色器列表
-    shader_core_cells: ShaderCore,
-    pub shaders: Vec<Shader>,
+    shader_core_cells: GlShaderCore,
+    pub shaders: Vec<GlShader>,
 
-    pub sprites: HashMap<String, Frame>,
+    pub sprites: HashMap<String, GlFrame>,
 
     // 变换栈
-    pub transform_stack: Vec<Transform>,
+    pub transform_stack: Vec<GlTransform>,
     pub transform_at: usize,
     pub transform_dirty: bool,
 
@@ -37,7 +36,7 @@ pub struct Pix {
     pub instance_count: usize,
 
     // 渲染模式
-    pub render_mode: RenderMode,
+    pub render_mode: GlRenderMode,
 
     // OpenGL 缓冲区和顶点数组对象
     pub vao_cells: glow::NativeVertexArray,
@@ -58,10 +57,10 @@ pub struct Pix {
     pub canvas_height: u32,
 
     // 清除颜色
-    pub clear_color: Color,
+    pub clear_color: GlColor,
 }
 
-impl Pix {
+impl GlPix {
     pub fn new(gl: &glow::Context, canvas_width: i32, canvas_height: i32) -> Self {
         // 初始化着色器
         let vertex_shader_src = r#"
@@ -102,12 +101,12 @@ impl Pix {
         }
         "#;
 
-        let shader_core_cells = ShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
+        let shader_core_cells = GlShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
 
         let mut uniforms = HashMap::new();
-        uniforms.insert("source".to_string(), UniformValue::Int(0));
+        uniforms.insert("source".to_string(), GlUniformValue::Int(0));
 
-        let shader = Shader::new(shader_core_cells.clone(), uniforms);
+        let shader = GlShader::new(shader_core_cells.clone(), uniforms);
 
         let shaders = vec![shader];
 
@@ -198,7 +197,7 @@ impl Pix {
             vao_cells,
             ubo,
             ubo_contents,
-            transform_stack: vec![Transform::new_with_values(
+            transform_stack: vec![GlTransform::new_with_values(
                 1.0,
                 0.0,
                 0.0,
@@ -212,21 +211,21 @@ impl Pix {
             instance_buffer_at: -1,
             instance_buffer: vec![0.0; 1024],
             instance_count: 0,
-            render_mode: RenderMode::None,
+            render_mode: GlRenderMode::None,
             current_shader: None,
             current_shader_core: None,
             current_texture_atlas: None,
             sprites: HashMap::new(),
-            clear_color: Color::new(1.0, 1.0, 1.0, 0.0),
+            clear_color: GlColor::new(1.0, 1.0, 1.0, 0.0),
         }
     }
 
     fn push_identity(&mut self) {
-        self.transform_stack.push(Transform::new());
+        self.transform_stack.push(GlTransform::new());
         self.transform_dirty = true;
     }
 
-    pub fn prepare_draw(&mut self, gl: &glow::Context, mode: RenderMode, size: usize) {
+    pub fn prepare_draw(&mut self, gl: &glow::Context, mode: GlRenderMode, size: usize) {
         if self.transform_dirty {
             self.flush(gl);
             self.send_uniform_buffer(gl);
@@ -331,20 +330,20 @@ impl Pix {
         self.current_texture_atlas = Some(texture);
     }
 
-    pub fn register(&mut self, name: &str, frame: Frame) {
+    pub fn register(&mut self, name: &str, frame: GlFrame) {
         self.sprites.insert(name.to_string(), frame);
     }
 
     pub fn make_cell_frame(
         &mut self,
-        sheet: &mut GTexture,
+        sheet: &mut GlTexture,
         x: f32,
         y: f32,
         width: f32,
         height: f32,
         x_origin: f32,
         y_origin: f32,
-    ) -> Frame {
+    ) -> GlFrame {
         let origin_x = x_origin / width;
         let origin_y = y_origin / height;
         let tex_width = sheet.width as f32;
@@ -355,7 +354,7 @@ impl Pix {
         let uv_right = (x + width) / tex_width;
         let uv_bottom = (y + height) / tex_height;
 
-        let frame = Frame {
+        let frame = GlFrame {
             texture: sheet.texture,
             width,
             height,
@@ -372,7 +371,7 @@ impl Pix {
         frame
     }
 
-    pub fn set_clear_color(&mut self, color: Color) {
+    pub fn set_clear_color(&mut self, color: GlColor) {
         self.clear_color = color;
     }
 }

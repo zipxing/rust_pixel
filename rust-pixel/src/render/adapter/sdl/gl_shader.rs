@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use glow::HasContext;
 
 #[derive(Clone)]
-pub struct ShaderCore {
+pub struct GlShaderCore {
     pub program: glow::NativeProgram,
 }
 
-impl ShaderCore {
+impl GlShaderCore {
     pub fn new(gl: &glow::Context, vertex_source: &str, fragment_source: &str) -> Self {
         unsafe {
             let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
@@ -53,13 +53,13 @@ impl ShaderCore {
     }
 }
 
-pub struct Shader {
-    pub core: ShaderCore,
-    pub uniforms: HashMap<String, UniformValue>,
+pub struct GlShader {
+    pub core: GlShaderCore,
+    pub uniforms: HashMap<String, GlUniformValue>,
 }
 
-impl Shader {
-    pub fn new(core: ShaderCore, uniforms: HashMap<String, UniformValue>) -> Self {
+impl GlShader {
+    pub fn new(core: GlShaderCore, uniforms: HashMap<String, GlUniformValue>) -> Self {
         Self { core, uniforms }
     }
 
@@ -69,10 +69,10 @@ impl Shader {
             let location = unsafe { gl.get_uniform_location(self.core.get_program(), name) };
             if let Some(loc) = location {
                 match uniform {
-                    UniformValue::Int(value) => unsafe {
+                    GlUniformValue::Int(value) => unsafe {
                         gl.uniform_1_i32(Some(&loc), *value);
                     },
-                    UniformValue::Float(value) => unsafe {
+                    GlUniformValue::Float(value) => unsafe {
                         gl.uniform_1_f32(Some(&loc), *value);
                     },
                     // 添加其他类型的 UniformValue
@@ -81,12 +81,12 @@ impl Shader {
         }
     }
 
-    pub fn set_uniform(&mut self, name: &str, value: UniformValue) {
+    pub fn set_uniform(&mut self, name: &str, value: GlUniformValue) {
         self.uniforms.insert(name.to_string(), value);
     }
 }
 
-pub enum UniformValue {
+pub enum GlUniformValue {
     Int(i32),
     Float(f32),
     // 添加其他类型
