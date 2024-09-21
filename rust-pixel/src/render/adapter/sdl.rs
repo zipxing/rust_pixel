@@ -19,15 +19,12 @@ use crate::render::{
     buffer::Buffer,
     sprite::Sprites,
 };
-use log::info;
+// use log::info;
 use sdl2::{
     event::Event as SEvent,
     image::{InitFlag, LoadSurface},
     keyboard::Keycode as SKeycode,
     mouse::*,
-    // pixels::PixelFormatEnum,
-    // rect::{Point as SPoint, Rect as SRect},
-    // render::{Canvas, Texture},
     surface::Surface,
     video::{Window, WindowPos::Positioned},
     EventPump,
@@ -335,6 +332,8 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
+
+        // process window draging move...
         sdl_move_win(
             &mut self.drag.need,
             self.sdl_window.as_mut().unwrap(),
@@ -342,12 +341,13 @@ impl Adapter for SdlAdapter {
             self.drag.dy,
         );
 
+        // render every thing to rbuf
         self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
 
-        info!("rbuf size...{}", self.get_base().rbuf.len());
         let ratio_x = self.get_base().ratio_x;
         let ratio_y = self.get_base().ratio_y;
 
+        // render rbuf to window use opengl
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
             pix.bind(gl);
             pix.clear(gl);
@@ -361,7 +361,7 @@ impl Adapter for SdlAdapter {
                 let cpy = r.cy as f32;
 
                 let mut transform = GlTransform::new();
-                transform.translate(spx + cpx - 16.0, spy + cpy - 8.0);
+                transform.translate(spx + cpx - 16.0, spy + cpy - 16.0);
                 if ang != 0.0 {
                     transform.rotate(ang);
                 }
@@ -386,13 +386,7 @@ impl Adapter for SdlAdapter {
                 );
                 self.gl_symbols[texidx].draw(gl, pix, &transform, &color);
             }
-            // let mut t = GlTransform::new();
-            // t.translate(100.0, 100.0);
-            // // t.scale(10.0, 10.0);
-            // let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            // self.gl_symbols[302].draw(gl, pix, &t, &c);
-            // t.translate(100.0, 100.0);
-            // self.gl_symbols[60].draw(gl, pix, &t, &c);
+
             pix.flush(gl);
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }

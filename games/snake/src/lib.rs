@@ -62,9 +62,6 @@ impl SnakeGame {
             .context
             .adapter
             .get_base()
-            // .as_any()
-            // .downcast_ref::<WebAdapter>()
-            // .unwrap()
             .rbuf
     }
 

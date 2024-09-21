@@ -9,15 +9,11 @@ use crate::event::{
 };
 use crate::{
     render::{
-        adapter::{
-            render_border, render_logo, render_main_buffer, render_pixel_sprites, ARect, Adapter,
-            AdapterBase, PointI32, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
-        },
+        adapter::{Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
         buffer::Buffer,
         sprite::Sprites,
     },
     util::Rand,
-    LOGO_FRAME,
 };
 use log::info;
 use std::any::Any;
