@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
 
 [dependencies]
 crossterm = { version = "0.22" }
@@ -25,3 +29,4 @@ texas_lib = { path = "./texas" }
 web = ["rust_pixel/web"]
 sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
+
