@@ -22,32 +22,8 @@ use crate::{
 use log::info;
 use std::any::Any;
 use std::time::Duration;
-// use wasm_bindgen::prelude::*;
-// use wasm_bindgen::JsCast;
-
-#[derive(Clone, Copy, Default, Debug, PartialEq)]
-pub struct WebCell {
-    pub r: u32,
-    pub g: u32,
-    pub b: u32,
-    pub a: u32,
-    pub back: u32,
-    pub br: u32,
-    pub bg: u32,
-    pub bb: u32,
-    pub ba: u32,
-    pub texsym: u32,
-    pub x: i32,
-    pub y: i32,
-    pub w: u32,
-    pub h: u32,
-    pub angle: u32,
-    pub cx: i32,
-    pub cy: i32,
-}
 
 pub struct WebAdapter {
-    pub web_buf: Vec<WebCell>,
     pub base: AdapterBase,
     pub rd: Rand,
 }
@@ -55,66 +31,9 @@ pub struct WebAdapter {
 impl WebAdapter {
     pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
-            web_buf: vec![],
             base: AdapterBase::new(pre, gn, project_path),
             rd: Rand::new(),
         }
-    }
-
-    pub fn push_web_buffer(
-        &mut self,
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-        has_back: bool,
-        br: u8,
-        bg: u8,
-        bb: u8,
-        ba: u8,
-        texidx: usize,
-        symidx: usize,
-        s: ARect,
-        angle: f64,
-        ccp: &PointI32,
-    ) {
-        let mut wc: WebCell = Default::default();
-        wc.r = r as u32;
-        wc.g = g as u32;
-        wc.b = b as u32;
-        wc.a = a as u32;
-        if has_back {
-            wc.back = 1;
-            wc.br = br as u32;
-            wc.bg = bg as u32;
-            wc.bb = bb as u32;
-            wc.ba = ba as u32;
-        } else {
-            wc.back = 0;
-        }
-        let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
-        let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
-        wc.texsym = y * 32u32 + x;
-        wc.x = s.x;
-        wc.y = s.y;
-        wc.w = s.w;
-        wc.h = s.h;
-        if angle == 0.0 {
-            wc.angle = 0u32;
-        } else {
-            let mut aa = (1.0 - angle / 180.0) * std::f64::consts::PI;
-            let pi2 = std::f64::consts::PI * 2.0;
-            while aa < 0.0 {
-                aa += pi2;
-            }
-            while aa > pi2 {
-                aa -= pi2;
-            }
-            wc.angle = (aa * 1000.0) as u32;
-        }
-        wc.cx = ccp.x as i32;
-        wc.cy = ccp.y as i32;
-        self.web_buf.push(wc);
     }
 }
 
@@ -153,117 +72,7 @@ impl Adapter for WebAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        self.web_buf.clear();
-        let width = current_buffer.area.width;
-        if stage <= LOGO_FRAME {
-            let mut tv = vec![];
-            render_logo(
-                self.base.ratio_x,
-                self.base.ratio_y,
-                self.base.pixel_w,
-                self.base.pixel_h,
-                &mut self.rd,
-                stage,
-                |fc, _s1, s2, texidx, symidx| {
-                    tv.push((fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2));
-                },
-            );
-            for tmp in tv {
-                self.push_web_buffer(
-                    tmp.0,
-                    tmp.1,
-                    tmp.2,
-                    tmp.3,
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
-                    tmp.4,
-                    tmp.5,
-                    tmp.6,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
-                );
-            }
-            return Ok(());
-        }
-
-        let cw = self.base.cell_w;
-        let ch = self.base.cell_h;
-        let rx = self.base.ratio_x;
-        let ry = self.base.ratio_y;
-        let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         bc: &Option<(u8, u8, u8, u8)>,
-                         _s0: ARect,
-                         _s1: ARect,
-                         s2: ARect,
-                         texidx: usize,
-                         symidx: usize| {
-            if let Some(bgc) = bc {
-                self.push_web_buffer(
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    true,
-                    bgc.0,
-                    bgc.1,
-                    bgc.2,
-                    bgc.3,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
-                );
-            } else {
-                self.push_web_buffer(
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
-                );
-            }
-        };
-        render_border(cw, ch, rx, ry, &mut rfunc);
-        if stage > LOGO_FRAME {
-            render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
-        }
-        if stage > LOGO_FRAME {
-            for idx in 0..pixel_sprites.len() {
-                if pixel_sprites[idx].is_pixel {
-                    render_pixel_sprites(
-                        &mut pixel_sprites[idx],
-                        rx,
-                        ry,
-                        |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
-                            if let Some(bgc) = bc {
-                                self.push_web_buffer(
-                                    fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3,
-                                    texidx, symidx, s2, angle, &ccp,
-                                );
-                            } else {
-                                self.push_web_buffer(
-                                    fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2,
-                                    angle, &ccp,
-                                );
-                            }
-                        },
-                    );
-                }
-            }
-        }
+        self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
         Ok(())
     }
 

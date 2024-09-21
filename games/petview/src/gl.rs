@@ -102,7 +102,7 @@ vec4 transition (vec2 uv) {
     }
 
     // call if u want update texture...
-    pub fn set_texture(&mut self, gl: &glow::Context, img1: &[u8], img2: &[u8]) {
+    pub fn set_texture_tex(&mut self, gl: &glow::Context, tex1: NativeTexture, tex2: NativeTexture) {
         unsafe {
             if let Some(texture1) = self.texture1 {
                 gl.delete_texture(texture1);
@@ -110,10 +110,18 @@ vec4 transition (vec2 uv) {
             if let Some(texture2) = self.texture2 {
                 gl.delete_texture(texture2);
             }
-            let w = self.width;
-            let h = self.height;
-            self.texture1 = Some(create_texture(&gl, w, h, &img1));
-            self.texture2 = Some(create_texture(&gl, w, h, &img2));
+            self.texture1 = Some(tex1);
+            self.texture2 = Some(tex2);
+        }
+    }
+
+    pub fn set_texture(&mut self, gl: &glow::Context, img1: &[u8], img2: &[u8]) {
+        let w = self.width;
+        let h = self.height;
+        unsafe {
+            let tex1 = create_texture(&gl, w, h, &img1);
+            let tex2 = create_texture(&gl, w, h, &img2);
+            self.set_texture_tex(gl, tex1, tex2);
         }
     }
 

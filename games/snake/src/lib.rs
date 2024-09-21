@@ -6,7 +6,9 @@ use rust_pixel::game::Game;
 // use log::info;
 
 #[cfg(target_arch = "wasm32")]
-use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter, WebCell};
+use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter};
+#[cfg(target_arch = "wasm32")]
+use rust_pixel::render::adapter::RenderCell;
 use wasm_bindgen::prelude::*;
 
 // wasm can not bind template or data structure with lifetime,
@@ -54,15 +56,16 @@ impl SnakeGame {
         self.g.context.asset_manager.set_data(url, data);
     }
 
-    fn get_wb(&mut self) -> &Vec<WebCell> {
+    fn get_wb(&mut self) -> &Vec<RenderCell> {
         &self
             .g
             .context
             .adapter
-            .as_any()
-            .downcast_ref::<WebAdapter>()
-            .unwrap()
-            .web_buf
+            .get_base()
+            // .as_any()
+            // .downcast_ref::<WebAdapter>()
+            // .unwrap()
+            .rbuf
     }
 
     pub fn web_buffer_len(&mut self) -> usize {
@@ -70,7 +73,7 @@ impl SnakeGame {
     }
 
     pub fn web_cell_len(&self) -> usize {
-        std::mem::size_of::<WebCell>() / 4
+        std::mem::size_of::<RenderCell>() / 4
     }
 
     pub fn get_ratiox(&mut self) -> f32 {
@@ -85,7 +88,7 @@ impl SnakeGame {
     // const wbuflen = sg.web_buffer_len();
     // const wbufptr = sg.web_buffer();
     // let webbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen);
-    pub fn web_buffer(&mut self) -> *const WebCell {
+    pub fn web_buffer(&mut self) -> *const RenderCell {
         self.get_wb().as_slice().as_ptr()
     }
 }

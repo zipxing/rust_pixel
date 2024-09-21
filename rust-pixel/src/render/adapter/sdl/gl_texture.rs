@@ -1,17 +1,107 @@
 use crate::render::adapter::sdl::gl_color::GlColor;
-use crate::render::adapter::sdl::gl_transform::GlTransform;
 use crate::render::adapter::sdl::gl_pix::GlPix;
 use crate::render::adapter::sdl::gl_pix::GlRenderMode;
+use crate::render::adapter::sdl::gl_transform::GlTransform;
 use glow::HasContext;
-use std::rc::Rc;
+use log::info;
+
+pub struct GlRenderTexture {
+    pub framebuffer: glow::NativeFramebuffer,
+    pub texture: glow::NativeTexture,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl GlRenderTexture {
+    pub fn new(gl: &glow::Context, width: u32, height: u32) -> Result<Self, String> {
+        unsafe {
+            // 创建帧缓冲对象
+            let framebuffer = gl.create_framebuffer()?;
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+
+            // 创建纹理
+            let texture = gl.create_texture()?;
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA as i32,
+                width as i32,
+                height as i32,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                None,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::LINEAR as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::LINEAR as i32,
+            );
+
+            // 将纹理附加到帧缓冲的颜色附件上
+            gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(texture),
+                0,
+            );
+
+            // 检查帧缓冲是否完整
+            if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+                return Err("Framebuffer is not complete".to_string());
+            }
+
+            // 解绑帧缓冲和纹理
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+
+            Ok(Self {
+                framebuffer,
+                texture,
+                width,
+                height,
+            })
+        }
+    }
+
+    pub fn bind(&self, gl: &glow::Context) {
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.framebuffer));
+            gl.viewport(0, 0, self.width as i32, self.height as i32);
+        }
+    }
+
+    pub fn unbind(&self, gl: &glow::Context) {
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        }
+    }
+
+    pub fn get_texture(&self) -> glow::NativeTexture {
+        self.texture
+    }
+
+    pub fn free(&self, gl: &glow::Context) {
+        unsafe {
+            gl.delete_framebuffer(self.framebuffer);
+            gl.delete_texture(self.texture);
+        }
+    }
+}
 
 pub struct GlTexture {
     pub texture: glow::NativeTexture,
-    framebuffer: glow::NativeFramebuffer,
     pub width: u32,
     pub height: u32,
     clear_color: GlColor,
-    pub frames: Vec<GlFrame>,
+    framebuffer: glow::NativeFramebuffer,
 }
 
 #[derive(Clone)]
@@ -36,15 +126,12 @@ impl GlTexture {
         let texture = unsafe { gl.create_texture().map_err(|e| e.to_string())? };
         let framebuffer = unsafe { gl.create_framebuffer().map_err(|e| e.to_string())? };
 
-        let mut width = 0;
-        let mut height = 0;
-        let clear_color = GlColor::new(1.0, 1.0, 1.0, 0.0);
-        let frames = Vec::new();
+        let clear_color = GlColor::new(1.0, 1.0, 1.0, 1.0);
 
-        // 加载图像
         let img = image::open(source).map_err(|e| e.to_string())?.to_rgba8();
-        width = img.width();
-        height = img.height();
+        let width = img.width();
+        let height = img.height();
+        info!("texture...w{} h{}", width, height);
 
         unsafe {
             gl.active_texture(glow::TEXTURE0);
@@ -101,16 +188,13 @@ impl GlTexture {
             width,
             height,
             clear_color,
-            frames,
         })
     }
 
     pub fn bind(&self, gl: &glow::Context) {
         unsafe {
-            gl
-                .bind_framebuffer(glow::FRAMEBUFFER, Some(self.framebuffer));
-            gl
-                .viewport(0, 0, self.width as i32, self.height as i32);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.framebuffer));
+            gl.viewport(0, 0, self.width as i32, self.height as i32);
         }
     }
 
@@ -119,10 +203,6 @@ impl GlTexture {
             gl.delete_texture(self.texture);
             gl.delete_framebuffer(self.framebuffer);
         }
-    }
-
-    pub fn add_frame(&mut self, frame: GlFrame) {
-        self.frames.push(frame);
     }
 
     pub fn get_texture(&self) -> glow::NativeTexture {
@@ -200,49 +280,3 @@ impl GlCell {
         instance_buffer[pix.instance_buffer_at as usize] = color.a;
     }
 }
-
-pub fn load_texture(gl: &glow::Context, image_path: &str) -> Result<glow::NativeTexture, String> {
-    let img = image::open(image_path)
-        .map_err(|e| format!("Failed to load image: {}", e))?
-        .flipv()
-        .to_rgba8();
-    let (width, height) = img.dimensions();
-    unsafe {
-        let texture = gl.create_texture()?;
-        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            glow::RGBA as i32,
-            width as i32,
-            height as i32,
-            0,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            Some(&img),
-        );
-        gl.generate_mipmap(glow::TEXTURE_2D);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_S,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_T,
-            glow::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::LINEAR_MIPMAP_LINEAR as i32,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::LINEAR as i32,
-        );
-        Ok(texture)
-    }
-}
-

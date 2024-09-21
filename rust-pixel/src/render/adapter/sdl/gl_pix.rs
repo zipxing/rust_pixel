@@ -6,23 +6,19 @@ use crate::render::adapter::sdl::gl_texture::GlFrame;
 use crate::render::adapter::sdl::gl_texture::GlTexture;
 use crate::render::adapter::sdl::gl_transform::GlTransform;
 use glow::HasContext;
-use sdl2::video::Window;
-use sdl2::Sdl;
 use std::collections::HashMap;
+// use log::info;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum GlRenderMode {
     None = -1,
-    Surfaces = 0,
-    PixCells = 1,
+    PixCells = 0,
 }
 
 pub struct GlPix {
     // 着色器列表
-    shader_core_cells: GlShaderCore,
+    pub shader_core_cells: GlShaderCore,
     pub shaders: Vec<GlShader>,
-
-    pub sprites: HashMap<String, GlFrame>,
 
     // 变换栈
     pub transform_stack: Vec<GlTransform>,
@@ -215,14 +211,8 @@ impl GlPix {
             current_shader: None,
             current_shader_core: None,
             current_texture_atlas: None,
-            sprites: HashMap::new(),
             clear_color: GlColor::new(1.0, 1.0, 1.0, 0.0),
         }
-    }
-
-    fn push_identity(&mut self) {
-        self.transform_stack.push(GlTransform::new());
-        self.transform_dirty = true;
     }
 
     pub fn prepare_draw(&mut self, gl: &glow::Context, mode: GlRenderMode, size: usize) {
@@ -237,7 +227,7 @@ impl GlPix {
             self.shaders[mode as usize].bind(gl);
         }
 
-        if (self.instance_buffer_at as usize) + size >= self.instance_buffer_capacity {
+        if (self.instance_buffer_at + size as isize) as usize >= self.instance_buffer_capacity {
             self.instance_buffer_capacity *= 2;
             self.instance_buffer
                 .resize(self.instance_buffer_capacity, 0.0);
@@ -276,6 +266,13 @@ impl GlPix {
         }
 
         self.transform_dirty = false;
+    }
+
+    pub fn bind(&mut self, gl: &glow::Context) {
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            gl.viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
+        }
     }
 
     pub fn clear(&mut self, gl: &glow::Context) {
@@ -330,10 +327,6 @@ impl GlPix {
         self.current_texture_atlas = Some(texture);
     }
 
-    pub fn register(&mut self, name: &str, frame: GlFrame) {
-        self.sprites.insert(name.to_string(), frame);
-    }
-
     pub fn make_cell_frame(
         &mut self,
         sheet: &mut GlTexture,
@@ -351,8 +344,8 @@ impl GlPix {
 
         let uv_left = x / tex_width;
         let uv_top = y / tex_height;
-        let uv_right = (x + width) / tex_width;
-        let uv_bottom = (y + height) / tex_height;
+        let uv_right = width / tex_width;
+        let uv_bottom = height / tex_height;
 
         let frame = GlFrame {
             texture: sheet.texture,
@@ -365,8 +358,6 @@ impl GlPix {
             uv_right,
             uv_bottom,
         };
-
-        sheet.frames.push(frame.clone());
 
         frame
     }

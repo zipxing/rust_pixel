@@ -11,10 +11,6 @@ impl GlColor {
         Self { r, g, b, a }
     }
 
-    pub fn copy(&self) -> Self {
-        *self
-    }
-
     pub fn add(&mut self, color: &GlColor) {
         self.r = (self.r + color.r).min(1.0);
         self.g = (self.g + color.g).min(1.0);
@@ -27,8 +23,8 @@ impl GlColor {
         self.b *= color.b;
     }
 
-    pub fn equals(&self, color: &GlColor) -> bool {
-        self.r == color.r && self.g == color.g && self.b == color.b && self.a == color.a
-    }
+    // pub fn equals(&self, color: &GlColor) -> bool {
+    //     self.r == color.r && self.g == color.g && self.b == color.b && self.a == color.a
+    // }
 }
 

@@ -47,8 +47,6 @@ pix.utils.loop(function(timeStep) {
     const ratio_y = sg.get_ratioy();
     let wbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen * wclen);
     pix.bind();
-    // pix.flush();
-    // pix.pop();
     pix.clear();
     // draw sprites...
     for (let i = 0; i < wbuflen; ++i) {
