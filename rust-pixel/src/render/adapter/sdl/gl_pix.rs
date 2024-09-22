@@ -282,6 +282,43 @@ impl GlPix {
         }
     }
 
+    pub fn prepare_draw_trans(&mut self, gl: &glow::Context) {
+        unsafe {
+            let vertices: [f32; 16] = [
+                -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
+            ];
+            let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
+            gl.bind_vertex_array(Some(self.vao_trans));
+
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbuf));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                &vertices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
+
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ibuf));
+            gl.buffer_data_u8_slice(
+                glow::ELEMENT_ARRAY_BUFFER,
+                &indices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
+
+            let pos_attrib = gl
+                .get_attrib_location(self.shaders[1].core.program, "aPos")
+                .unwrap();
+            let tex_attrib = gl
+                .get_attrib_location(self.shaders[1].core.program, "aTexCoord")
+                .unwrap();
+            gl.enable_vertex_attrib_array(pos_attrib);
+            gl.enable_vertex_attrib_array(tex_attrib);
+
+            gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
+            gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
+        }
+    }
+
     pub fn prepare_draw(&mut self, gl: &glow::Context, mode: GlRenderMode, size: usize) {
         if self.transform_dirty {
             self.flush(gl);

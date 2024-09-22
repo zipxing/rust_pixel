@@ -27,7 +27,7 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
-// use log::info;
+use log::info;
 
 pub mod gl_color;
 pub mod gl_pix;
@@ -111,16 +111,21 @@ impl SdlAdapter {
         let bs = self.get_base();
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
+        let w = bs.pixel_w;
+        let h = bs.pixel_h;
         let pixel_w = (buf.area.width as f32 * PIXEL_SYM_WIDTH / rx) as u32;
         let pixel_h = (buf.area.height as f32 * PIXEL_SYM_HEIGHT / ry) as u32;
         let rbuf = self.buf_to_render_buffer(buf);
         // render rbuf to window use opengl
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            pix.bind_render_texture(gl, rtidx, pixel_w as i32, pixel_h as i32);
+            // pix.bind_render_texture(gl, rtidx, pixel_w as i32, pixel_h as i32);
+            pix.bind_render_texture(gl, rtidx, w as i32, h as i32);
+            // pix.bind(gl);
             pix.clear(gl);
             pix.render_rbuf(gl, &rbuf, rx, ry);
             // call opengl instance rendering
             pix.flush(gl);
+            // self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
     }
 
@@ -334,6 +339,7 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
+        return Ok(());
         // process window draging move...
         sdl_move_win(
             &mut self.drag.need,
