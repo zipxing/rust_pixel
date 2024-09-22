@@ -1,7 +1,6 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-// use log::info;
 use crate::{
     event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
     render::{
@@ -31,6 +30,7 @@ use crossterm::{
 use std::any::Any;
 use std::io::{self, Write};
 use std::time::Duration;
+// use log::info;
 
 #[cfg(not(feature = "sdl"))]
 pub struct CrosstermAdapter {

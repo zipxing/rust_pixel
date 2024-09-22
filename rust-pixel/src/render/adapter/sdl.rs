@@ -10,16 +10,12 @@ use crate::event::{
 };
 use crate::render::adapter::sdl::gl_color::GlColor;
 use crate::render::adapter::sdl::gl_pix::GlPix;
-use crate::render::adapter::sdl::gl_texture::GlCell;
-use crate::render::adapter::sdl::gl_texture::GlRenderTexture;
-use crate::render::adapter::sdl::gl_texture::GlTexture;
-use crate::render::adapter::sdl::gl_transform::GlTransform;
+use crate::render::adapter::sdl::gl_texture::{GlCell, GlRenderTexture, GlTexture};
 use crate::render::{
     adapter::{Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES},
     buffer::Buffer,
     sprite::Sprites,
 };
-// use log::info;
 use sdl2::{
     event::Event as SEvent,
     image::{InitFlag, LoadSurface},
@@ -27,11 +23,11 @@ use sdl2::{
     mouse::*,
     surface::Surface,
     video::{Window, WindowPos::Positioned},
-    EventPump,
-    Sdl,
+    EventPump, Sdl,
 };
 use std::any::Any;
 use std::time::Duration;
+// use log::info;
 
 pub mod gl_color;
 pub mod gl_pix;
@@ -111,6 +107,23 @@ impl SdlAdapter {
         self.sdl_context.mouse().show_cursor(true);
     }
 
+    pub fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+        let bs = self.get_base();
+        let rx = bs.ratio_x;
+        let ry = bs.ratio_y;
+        let pixel_w = (buf.area.width as f32 * PIXEL_SYM_WIDTH / rx) as u32;
+        let pixel_h = (buf.area.height as f32 * PIXEL_SYM_HEIGHT / ry) as u32;
+        let rbuf = self.buf_to_render_buffer(buf);
+        // render rbuf to window use opengl
+        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
+            pix.bind_render_texture(gl, rtidx, pixel_w as i32, pixel_h as i32);
+            pix.clear(gl);
+            pix.render_rbuf(gl, &rbuf, rx, ry);
+            // call opengl instance rendering
+            pix.flush(gl);
+        }
+    }
+
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
         let w = self.cell_width();
         let h = self.cell_height();
@@ -137,7 +150,6 @@ impl SdlAdapter {
                 keycode: Some(SKeycode::Q),
                 ..
             } => return true,
-
             SEvent::MouseButtonDown {
                 mouse_btn: sdl2::mouse::MouseButton::Left,
                 x,
@@ -250,22 +262,12 @@ impl Adapter for SdlAdapter {
                         8.0,
                     );
                     let cell = GlCell::new(frame);
-                    self.gl_symbols.push(cell);
+                    pix.symbols.push(cell);
                 }
             }
         }
-        self.gl_pix = Some(pix);
 
-        // create 2 render texture for gl transition...
-        for _i in 0..2 {
-            let rt = GlRenderTexture::new(
-                self.gl.as_ref().unwrap(),
-                self.base.pixel_w,
-                self.base.pixel_h,
-            )
-            .unwrap();
-            self.gl_render_textures.push(rt);
-        }
+        self.gl_pix = Some(pix);
 
         // custom mouse cursor image
         let surface = Surface::from_file(format!(
@@ -332,7 +334,6 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-
         // process window draging move...
         sdl_move_win(
             &mut self.drag.need,
@@ -351,43 +352,10 @@ impl Adapter for SdlAdapter {
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
             pix.bind(gl);
             pix.clear(gl);
-
-            for r in &self.base.rbuf {
-                let texidx = r.texsym as usize;
-                let spx = r.x as f32 + 16.0;
-                let spy = r.y as f32 + 16.0;
-                let ang = r.angle as f32 / 1000.0;
-                let cpx = r.cx as f32;
-                let cpy = r.cy as f32;
-
-                let mut transform = GlTransform::new();
-                transform.translate(spx + cpx - 16.0, spy + cpy - 16.0);
-                if ang != 0.0 {
-                    transform.rotate(ang);
-                }
-                transform.translate(-cpx + 8.0, -cpy + 8.0);
-                transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
-
-                if r.back != 0 {
-                    let back_color = GlColor::new(
-                        r.br as f32 / 255.0,
-                        r.bg as f32 / 255.0,
-                        r.bb as f32 / 255.0,
-                        r.ba as f32 / 255.0,
-                    );
-                    self.gl_symbols[320].draw(gl, pix, &transform, &back_color);
-                }
-
-                let color = GlColor::new(
-                    r.r as f32 / 255.0,
-                    r.g as f32 / 255.0,
-                    r.b as f32 / 255.0,
-                    r.a as f32 / 255.0,
-                );
-                self.gl_symbols[texidx].draw(gl, pix, &transform, &color);
-            }
-
+            pix.render_rbuf(gl, &self.base.rbuf, ratio_x, ratio_y);
+            // call opengl instance rendering
             pix.flush(gl);
+            // swap window for display
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
 

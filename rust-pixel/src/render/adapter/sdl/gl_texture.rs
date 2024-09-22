@@ -1,7 +1,4 @@
 use crate::render::adapter::sdl::gl_color::GlColor;
-use crate::render::adapter::sdl::gl_pix::GlPix;
-use crate::render::adapter::sdl::gl_pix::GlRenderMode;
-use crate::render::adapter::sdl::gl_transform::GlTransform;
 use glow::HasContext;
 use log::info;
 
@@ -15,11 +12,9 @@ pub struct GlRenderTexture {
 impl GlRenderTexture {
     pub fn new(gl: &glow::Context, width: u32, height: u32) -> Result<Self, String> {
         unsafe {
-            // 创建帧缓冲对象
             let framebuffer = gl.create_framebuffer()?;
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
 
-            // 创建纹理
             let texture = gl.create_texture()?;
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
             gl.tex_image_2d(
@@ -44,7 +39,6 @@ impl GlRenderTexture {
                 glow::LINEAR as i32,
             );
 
-            // 将纹理附加到帧缓冲的颜色附件上
             gl.framebuffer_texture_2d(
                 glow::FRAMEBUFFER,
                 glow::COLOR_ATTACHMENT0,
@@ -53,7 +47,6 @@ impl GlRenderTexture {
                 0,
             );
 
-            // 检查帧缓冲是否完整
             if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
                 return Err("Framebuffer is not complete".to_string());
             }
@@ -113,8 +106,8 @@ pub struct GlFrame {
     pub origin_y: f32,
     pub uv_left: f32,
     pub uv_top: f32,
-    pub uv_right: f32,
-    pub uv_bottom: f32,
+    pub uv_width: f32,
+    pub uv_height: f32,
 }
 
 pub struct GlCell {
@@ -225,58 +218,5 @@ impl GlTexture {
 impl GlCell {
     pub fn new(frame: GlFrame) -> Self {
         Self { frame }
-    }
-
-    pub fn draw(
-        &mut self,
-        gl: &glow::Context,
-        pix: &mut GlPix,
-        transform: &GlTransform,
-        color: &GlColor,
-    ) {
-        pix.bind_texture_atlas(gl, self.frame.texture);
-        pix.prepare_draw(gl, GlRenderMode::PixCells, 16);
-
-        let frame = &self.frame;
-        let instance_buffer = &mut pix.instance_buffer;
-
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = frame.origin_x;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = frame.origin_y;
-
-        // UV attributes
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = frame.uv_left;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = frame.uv_top;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = frame.uv_right;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = frame.uv_bottom;
-
-        // Transform attributes
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = transform.m00 * frame.width;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = transform.m10 * frame.height;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = transform.m01 * frame.width;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = transform.m11 * frame.height;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = transform.m20;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = transform.m21;
-
-        // Color
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = color.r;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = color.g;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = color.b;
-        pix.instance_buffer_at += 1;
-        instance_buffer[pix.instance_buffer_at as usize] = color.a;
     }
 }

@@ -1,10 +1,8 @@
 use crate::render::adapter::sdl::gl_color::GlColor;
-use crate::render::adapter::sdl::gl_shader::GlShader;
-use crate::render::adapter::sdl::gl_shader::GlShaderCore;
-use crate::render::adapter::sdl::gl_shader::GlUniformValue;
-use crate::render::adapter::sdl::gl_texture::GlFrame;
-use crate::render::adapter::sdl::gl_texture::GlTexture;
+use crate::render::adapter::sdl::gl_shader::{GlShader, GlShaderCore, GlUniformValue};
+use crate::render::adapter::sdl::gl_texture::{GlCell, GlFrame, GlRenderTexture, GlTexture};
 use crate::render::adapter::sdl::gl_transform::GlTransform;
+use crate::render::adapter::RenderCell;
 use glow::HasContext;
 use std::collections::HashMap;
 // use log::info;
@@ -17,8 +15,10 @@ pub enum GlRenderMode {
 
 pub struct GlPix {
     // 着色器列表
-    pub shader_core_cells: GlShaderCore,
     pub shaders: Vec<GlShader>,
+
+    pub symbols: Vec<GlCell>,
+    pub render_textures: Vec<GlRenderTexture>,
 
     // 变换栈
     pub transform_stack: Vec<GlTransform>,
@@ -39,6 +39,10 @@ pub struct GlPix {
     pub instances_vbo: glow::NativeBuffer,
     pub quad_vbo: glow::NativeBuffer,
     pub ubo: glow::NativeBuffer,
+
+    pub vao_trans: glow::NativeVertexArray,
+    pub vbuf: glow::NativeBuffer,
+    pub ibuf: glow::NativeBuffer,
 
     // Uniform Buffer 内容
     pub ubo_contents: [f32; 12],
@@ -97,14 +101,65 @@ impl GlPix {
         }
         "#;
 
-        let shader_core_cells = GlShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
+        let vertex_shader_src2 = r#"
+            #version 330 core
+            layout(location = 0) in vec2 aPos;
+            layout(location = 1) in vec2 aTexCoord;
+            out vec2 TexCoord;
+            void main() {
+                gl_Position = vec4(aPos, 0.0, 1.0);
+                TexCoord = aTexCoord;
+            }
+        "#;
+        let fs = r#"
+            uniform float bounces = 3.0;
+            const float PI = 3.14159265358;
 
+            vec4 transition (vec2 uv) {
+                    float time = progress;
+                    float stime = sin(time * PI / 2.);
+                    float phase = time * PI * bounces;
+                    float y = (abs(cos(phase))) * (1.0 - stime);
+                    float d = uv.y - y;
+                    vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+                    // vec4 from = getFromColor(uv);
+                    vec4 to = getToColor(uv);
+                    vec4 mc = mix( to, from, step(d, 0.0) );
+                    return mc;
+            }
+        "#;
+
+        let fragment_shader_src2 = &format!(
+            r#"
+            #version 330 core
+            out vec4 FragColor;
+            in vec2 TexCoord;
+            uniform sampler2D texture1;
+            uniform sampler2D texture2;
+            uniform float progress;
+            vec4 getFromColor(vec2 uv) {{ return texture(texture1, uv); }}
+            vec4 getToColor(vec2 uv) {{ return texture(texture2, uv); }}
+            {}
+            void main() {{ FragColor =  transition(TexCoord); }}
+            "#,
+            fs
+        );
+
+        let shader_core_cells = GlShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
+        let shader_core_trans = GlShaderCore::new(&gl, vertex_shader_src2, fragment_shader_src2);
         let mut uniforms = HashMap::new();
         uniforms.insert("source".to_string(), GlUniformValue::Int(0));
+        let shader = GlShader::new(shader_core_cells, uniforms);
 
-        let shader = GlShader::new(shader_core_cells.clone(), uniforms);
+        let mut uniforms2 = HashMap::new();
+        uniforms2.insert("texture1".to_string(), GlUniformValue::Int(0));
+        uniforms2.insert("texture2".to_string(), GlUniformValue::Int(1));
+        uniforms2.insert("progress".to_string(), GlUniformValue::Float(0.0));
+        let shader2 = GlShader::new(shader_core_trans, uniforms2);
 
-        let shaders = vec![shader];
+        let (vao_trans, vbuf, ibuf) = unsafe { create_buffers(&gl, shader2.core.program) };
+
+        let shaders = vec![shader, shader2];
 
         // 创建缓冲区和 VAO
         let quad_vbo = unsafe { gl.create_buffer().unwrap() };
@@ -183,16 +238,26 @@ impl GlPix {
         ubo_contents[10] = 1.0;
         ubo_contents[11] = 1.0;
 
+        let mut render_textures = vec![];
+        // create 2 render texture for gl transition...
+        for _i in 0..2 {
+            let rt = GlRenderTexture::new(gl, canvas_width as u32, canvas_height as u32).unwrap();
+            render_textures.push(rt);
+        }
+
         Self {
             canvas_width: canvas_width as u32,
             canvas_height: canvas_height as u32,
-            shader_core_cells,
+            // shader_core_cells,
             shaders,
             quad_vbo,
             instances_vbo,
             vao_cells,
             ubo,
             ubo_contents,
+            vao_trans,
+            vbuf,
+            ibuf,
             transform_stack: vec![GlTransform::new_with_values(
                 1.0,
                 0.0,
@@ -212,6 +277,8 @@ impl GlPix {
             current_shader_core: None,
             current_texture_atlas: None,
             clear_color: GlColor::new(1.0, 1.0, 1.0, 0.0),
+            symbols: vec![],
+            render_textures,
         }
     }
 
@@ -272,6 +339,16 @@ impl GlPix {
         unsafe {
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             gl.viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
+        }
+    }
+
+    pub fn bind_render_texture(&mut self, gl: &glow::Context, idx: usize, w: i32, h: i32) {
+        unsafe {
+            gl.bind_framebuffer(
+                glow::FRAMEBUFFER,
+                Some(self.render_textures[idx].framebuffer),
+            );
+            gl.viewport(0, 0, w, h);
         }
     }
 
@@ -344,8 +421,8 @@ impl GlPix {
 
         let uv_left = x / tex_width;
         let uv_top = y / tex_height;
-        let uv_right = width / tex_width;
-        let uv_bottom = height / tex_height;
+        let uv_width = width / tex_width;
+        let uv_height = height / tex_height;
 
         let frame = GlFrame {
             texture: sheet.texture,
@@ -355,8 +432,8 @@ impl GlPix {
             origin_y,
             uv_left,
             uv_top,
-            uv_right,
-            uv_bottom,
+            uv_width,
+            uv_height,
         };
 
         frame
@@ -365,4 +442,194 @@ impl GlPix {
     pub fn set_clear_color(&mut self, color: GlColor) {
         self.clear_color = color;
     }
+
+    pub fn render_trans_frame(
+        &mut self,
+        gl: &glow::Context,
+        width: u32,
+        height: u32,
+        progress: f32,
+    ) {
+        unsafe {
+            render_trans_frame(
+                gl,
+                self.shaders[1].core.program,
+                self.render_textures[0].texture,
+                self.render_textures[1].texture,
+                width,
+                height,
+                progress,
+            );
+        }
+    }
+
+    pub fn render_rbuf(
+        &mut self,
+        gl: &glow::Context,
+        rbuf: &[RenderCell],
+        ratio_x: f32,
+        ratio_y: f32,
+    ) {
+        for r in rbuf {
+            let texidx = r.texsym as usize;
+            let spx = r.x as f32 + 16.0;
+            let spy = r.y as f32 + 16.0;
+            let ang = r.angle as f32 / 1000.0;
+            let cpx = r.cx as f32;
+            let cpy = r.cy as f32;
+
+            let mut transform = GlTransform::new();
+            transform.translate(spx + cpx - 16.0, spy + cpy - 16.0);
+            if ang != 0.0 {
+                transform.rotate(ang);
+            }
+            transform.translate(-cpx + 8.0, -cpy + 8.0);
+            transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
+
+            if r.back != 0 {
+                let back_color = GlColor::new(
+                    r.br as f32 / 255.0,
+                    r.bg as f32 / 255.0,
+                    r.bb as f32 / 255.0,
+                    r.ba as f32 / 255.0,
+                );
+                // fill buffer for opengl rendering
+                self.draw_symbol(gl, 320, &transform, &back_color);
+            }
+
+            let color = GlColor::new(
+                r.r as f32 / 255.0,
+                r.g as f32 / 255.0,
+                r.b as f32 / 255.0,
+                r.a as f32 / 255.0,
+            );
+            // fill buffer for opengl rendering
+            self.draw_symbol(gl, texidx, &transform, &color);
+        }
+    }
+
+    pub fn draw_symbol(
+        &mut self,
+        gl: &glow::Context,
+        sym: usize,
+        transform: &GlTransform,
+        color: &GlColor,
+    ) {
+        self.bind_texture_atlas(gl, self.symbols[sym].frame.texture);
+        self.prepare_draw(gl, GlRenderMode::PixCells, 16);
+
+        let frame = &self.symbols[sym].frame;
+        let instance_buffer = &mut self.instance_buffer;
+
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.origin_x;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.origin_y;
+
+        // UV attributes
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.uv_left;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.uv_top;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.uv_width;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.uv_height;
+
+        // Transform attributes
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m00 * frame.width;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m10 * frame.height;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m01 * frame.width;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m11 * frame.height;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m20;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m21;
+
+        // Color
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.r;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.g;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.b;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.a;
+    }
+}
+
+unsafe fn create_buffers(
+    gl: &glow::Context,
+    program: glow::Program,
+) -> (
+    glow::NativeVertexArray,
+    glow::NativeBuffer,
+    glow::NativeBuffer,
+) {
+    let vertices: [f32; 16] = [
+        -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
+    ];
+    let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
+    let vao = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao));
+
+    let vertex_buffer = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+    gl.buffer_data_u8_slice(
+        glow::ARRAY_BUFFER,
+        &vertices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let index_buffer = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+    gl.buffer_data_u8_slice(
+        glow::ELEMENT_ARRAY_BUFFER,
+        &indices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
+    let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
+    gl.enable_vertex_attrib_array(pos_attrib);
+    gl.enable_vertex_attrib_array(tex_attrib);
+
+    gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
+    gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
+
+    (vao, vertex_buffer, index_buffer)
+}
+
+unsafe fn render_trans_frame(
+    gl: &glow::Context,
+    program: glow::Program,
+    texture1: glow::NativeTexture,
+    texture2: glow::NativeTexture,
+    width: u32,
+    height: u32,
+    progress: f32,
+) {
+    gl.viewport(0, 0, width as i32, height as i32);
+    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+    gl.clear(glow::COLOR_BUFFER_BIT);
+
+    gl.use_program(Some(program));
+
+    gl.active_texture(glow::TEXTURE0);
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture1));
+    gl.uniform_1_i32(gl.get_uniform_location(program, "texture1").as_ref(), 0);
+
+    gl.active_texture(glow::TEXTURE1);
+    gl.bind_texture(glow::TEXTURE_2D, Some(texture2));
+    gl.uniform_1_i32(gl.get_uniform_location(program, "texture2").as_ref(), 1);
+
+    let lb = gl.get_uniform_location(program, "progress");
+    gl.uniform_1_f32(lb.as_ref(), progress);
+
+    gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
 }

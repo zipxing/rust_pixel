@@ -1,5 +1,4 @@
 use crate::model::{SnakeModel, SNAKEH, SNAKEW};
-use log::info;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use rust_pixel::{asset::AssetType, asset2sprite};
 use rust_pixel::{
@@ -10,6 +9,7 @@ use rust_pixel::{
     render::sprite::Sprite,
     render::style::Color,
 };
+use log::info;
 
 const COLORS: [Color; 14] = [
     Color::Red,

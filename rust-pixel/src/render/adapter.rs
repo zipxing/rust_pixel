@@ -12,9 +12,9 @@ use crate::{
     util::{ARect, PointI32},
     LOGO_FRAME,
 };
-// use log::info;
 use std::any::Any;
 use std::time::Duration;
+// use log::info;
 
 // add more files to this list when needed
 // max 255 textures
@@ -73,6 +73,7 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
     15, 1, 32, 15, 1, 32, 15, 1,
 ];
 
+// pre-render cell...
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
     pub r: u32,
@@ -106,6 +107,7 @@ pub struct AdapterBase {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub rd: Rand,
+    // pre-render buffer...
     pub rbuf: Vec<RenderCell>,
 }
 
@@ -202,6 +204,60 @@ pub trait Adapter {
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn buf_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
+        let mut rbuf = vec![];
+        let rx = self.get_base().ratio_x;
+        let ry = self.get_base().ratio_y;
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         _s0: ARect,
+                         _s1: ARect,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize| {
+            if let Some(bgc) = bc {
+                push_render_buffer(
+                    &mut rbuf,
+                    fc.0,
+                    fc.1,
+                    fc.2,
+                    fc.3,
+                    true,
+                    bgc.0,
+                    bgc.1,
+                    bgc.2,
+                    bgc.3,
+                    texidx,
+                    symidx,
+                    s2,
+                    0.0,
+                    &PointI32 { x: 0, y: 0 },
+                );
+            } else {
+                push_render_buffer(
+                    &mut rbuf,
+                    fc.0,
+                    fc.1,
+                    fc.2,
+                    fc.3,
+                    false,
+                    0,
+                    0,
+                    0,
+                    0,
+                    texidx,
+                    symidx,
+                    s2,
+                    0.0,
+                    &PointI32 { x: 0, y: 0 },
+                );
+            }
+        };
+        render_main_buffer(cb, cb.area.width, rx, ry, &mut rfunc);
+        rbuf
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     fn gen_render_buffer(&mut self, cb: &Buffer, _pb: &Buffer, ps: &mut Vec<Sprites>, stage: u32) {
         self.get_base().rbuf.clear();
         let width = cb.area.width;
@@ -219,7 +275,8 @@ pub trait Adapter {
                 },
             );
             for tmp in tv {
-                self.push_render_buffer(
+                push_render_buffer(
+                    &mut self.get_base().rbuf,
                     tmp.0,
                     tmp.1,
                     tmp.2,
@@ -251,7 +308,8 @@ pub trait Adapter {
                          texidx: usize,
                          symidx: usize| {
             if let Some(bgc) = bc {
-                self.push_render_buffer(
+                push_render_buffer(
+                    &mut self.get_base().rbuf,
                     fc.0,
                     fc.1,
                     fc.2,
@@ -268,7 +326,8 @@ pub trait Adapter {
                     &PointI32 { x: 0, y: 0 },
                 );
             } else {
-                self.push_render_buffer(
+                push_render_buffer(
+                    &mut self.get_base().rbuf,
                     fc.0,
                     fc.1,
                     fc.2,
@@ -292,19 +351,21 @@ pub trait Adapter {
         }
         if stage > LOGO_FRAME {
             for idx in 0..ps.len() {
-                if ps[idx].is_pixel {
+                if ps[idx].is_pixel && !ps[idx].is_hidden {
                     render_pixel_sprites(
                         &mut ps[idx],
                         rx,
                         ry,
                         |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
                             if let Some(bgc) = bc {
-                                self.push_render_buffer(
+                                push_render_buffer(
+                                    &mut self.get_base().rbuf,
                                     fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3,
                                     texidx, symidx, s2, angle, &ccp,
                                 );
                             } else {
-                                self.push_render_buffer(
+                                push_render_buffer(
+                                    &mut self.get_base().rbuf,
                                     fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2,
                                     angle, &ccp,
                                 );
@@ -316,64 +377,64 @@ pub trait Adapter {
         }
     }
 
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn push_render_buffer(
-        &mut self,
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-        has_back: bool,
-        br: u8,
-        bg: u8,
-        bb: u8,
-        ba: u8,
-        texidx: usize,
-        symidx: usize,
-        s: ARect,
-        angle: f64,
-        ccp: &PointI32,
-    ) {
-        let mut wc: RenderCell = Default::default();
-        wc.r = r as u32;
-        wc.g = g as u32;
-        wc.b = b as u32;
-        wc.a = a as u32;
-        if has_back {
-            wc.back = 1;
-            wc.br = br as u32;
-            wc.bg = bg as u32;
-            wc.bb = bb as u32;
-            wc.ba = ba as u32;
-        } else {
-            wc.back = 0;
-        }
-        let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
-        let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
-        wc.texsym = y * 32u32 + x;
-        wc.x = s.x;
-        wc.y = s.y;
-        wc.w = s.w;
-        wc.h = s.h;
-        if angle == 0.0 {
-            wc.angle = 0u32;
-        } else {
-            let mut aa = (1.0 - angle / 180.0) * std::f64::consts::PI;
-            let pi2 = std::f64::consts::PI * 2.0;
-            while aa < 0.0 {
-                aa += pi2;
-            }
-            while aa > pi2 {
-                aa -= pi2;
-            }
-            wc.angle = (aa * 1000.0) as u32;
-        }
-        wc.cx = ccp.x as i32;
-        wc.cy = ccp.y as i32;
-        self.get_base().rbuf.push(wc);
-    }
-
     fn as_any(&mut self) -> &mut dyn Any;
+}
+
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+fn push_render_buffer(
+    rbuf: &mut Vec<RenderCell>,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+    has_back: bool,
+    br: u8,
+    bg: u8,
+    bb: u8,
+    ba: u8,
+    texidx: usize,
+    symidx: usize,
+    s: ARect,
+    angle: f64,
+    ccp: &PointI32,
+) {
+    let mut wc: RenderCell = Default::default();
+    wc.r = r as u32;
+    wc.g = g as u32;
+    wc.b = b as u32;
+    wc.a = a as u32;
+    if has_back {
+        wc.back = 1;
+        wc.br = br as u32;
+        wc.bg = bg as u32;
+        wc.bb = bb as u32;
+        wc.ba = ba as u32;
+    } else {
+        wc.back = 0;
+    }
+    let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
+    let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
+    wc.texsym = y * 32u32 + x;
+    wc.x = s.x;
+    wc.y = s.y;
+    wc.w = s.w;
+    wc.h = s.h;
+    if angle == 0.0 {
+        wc.angle = 0u32;
+    } else {
+        let mut aa = (1.0 - angle / 180.0) * std::f64::consts::PI;
+        let pi2 = std::f64::consts::PI * 2.0;
+        while aa < 0.0 {
+            aa += pi2;
+        }
+        while aa > pi2 {
+            aa -= pi2;
+        }
+        wc.angle = (aa * 1000.0) as u32;
+    }
+    wc.cx = ccp.x as i32;
+    wc.cy = ccp.y as i32;
+    rbuf.push(wc);
 }
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -492,8 +553,7 @@ where
         let fc = sh.2.get_rgba();
         let bc;
         if sh.3 != Color::Reset {
-            bc = None;
-            // bc = Some(sh.3.get_rgba());
+            bc = Some(sh.3.get_rgba());
         } else {
             bc = None;
         }

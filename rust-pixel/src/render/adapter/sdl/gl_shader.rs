@@ -75,7 +75,7 @@ impl GlShader {
                     GlUniformValue::Float(value) => unsafe {
                         gl.uniform_1_f32(Some(&loc), *value);
                     },
-                    // 添加其他类型的 UniformValue
+                    // other
                 }
             }
         }
@@ -89,6 +89,6 @@ impl GlShader {
 pub enum GlUniformValue {
     Int(i32),
     Float(f32),
-    // 添加其他类型
+    // other
 }
 

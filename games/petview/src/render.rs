@@ -86,11 +86,11 @@ impl Render for PetviewRender {
         let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
-        asset2sprite!(p1, ctx, "1.pix");
+        asset2sprite!(p1, ctx, "6.pix");
         let img1 = p1.content.get_rgba_image();
 
         let p2 = self.panel.get_pixel_sprite("petimg2");
-        asset2sprite!(p2, ctx, "2.pix");
+        asset2sprite!(p2, ctx, "7.pix");
         let img2 = p2.content.get_rgba_image();
 
         debug_img(&img1, PIXW as usize, PIXH as usize);
