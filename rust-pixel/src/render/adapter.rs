@@ -16,12 +16,10 @@ use std::any::Any;
 use std::time::Duration;
 // use log::info;
 
-// add more files to this list when needed
-// max 255 textures
-// merge l, u, ext1, ext2 to a complete image
-//
+// merge l, u, ext1, ext2 to a single image
 // c64l.png  c64u.png    -->  c64.png
 // c64e1.png c64e2.png
+// Add more files to this list when needed,max 255 textures...
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub const PIXEL_TEXTURE_FILES: [&'static str; 1] = ["assets/pix/c64.png"];
 
@@ -74,6 +72,7 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 ];
 
 // pre-render cell...
+// this struct used for opengl render and webgl render...
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
     pub r: u32,
@@ -261,6 +260,8 @@ pub trait Adapter {
     fn gen_render_buffer(&mut self, cb: &Buffer, _pb: &Buffer, ps: &mut Vec<Sprites>, stage: u32) {
         self.get_base().rbuf.clear();
         let width = cb.area.width;
+
+        // render logo...
         if stage <= LOGO_FRAME {
             let mut tv = vec![];
             render_logo(
@@ -345,10 +346,15 @@ pub trait Adapter {
                 );
             }
         };
+        // render border...
         render_border(cw, ch, rx, ry, &mut rfunc);
+
+        // render main buffer...
         if stage > LOGO_FRAME {
             render_main_buffer(cb, width, rx, ry, &mut rfunc);
         }
+
+        // render pixel_sprites...
         if stage > LOGO_FRAME {
             for idx in 0..ps.len() {
                 if ps[idx].is_pixel && !ps[idx].is_hidden {
@@ -360,14 +366,38 @@ pub trait Adapter {
                             if let Some(bgc) = bc {
                                 push_render_buffer(
                                     &mut self.get_base().rbuf,
-                                    fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3,
-                                    texidx, symidx, s2, angle, &ccp,
+                                    fc.0,
+                                    fc.1,
+                                    fc.2,
+                                    fc.3,
+                                    true,
+                                    bgc.0,
+                                    bgc.1,
+                                    bgc.2,
+                                    bgc.3,
+                                    texidx,
+                                    symidx,
+                                    s2,
+                                    angle,
+                                    &ccp,
                                 );
                             } else {
                                 push_render_buffer(
                                     &mut self.get_base().rbuf,
-                                    fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2,
-                                    angle, &ccp,
+                                    fc.0,
+                                    fc.1,
+                                    fc.2,
+                                    fc.3,
+                                    false,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    texidx,
+                                    symidx,
+                                    s2,
+                                    angle,
+                                    &ccp,
                                 );
                             }
                         },

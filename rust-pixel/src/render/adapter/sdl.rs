@@ -1,21 +1,21 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Implements an Adapter trait. Moreover,
-//! all SDL related processing is handled here.
-//! Includes resizing of height and width, init settings,
-//! some code is also called in cell.rs
+//! Implements an Adapter trait. Moreover, all SDL related processing is handled here.
+//! Includes resizing of height and width, init settings.
+//! Use opengl and glow mod for rendering.
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
 use crate::render::adapter::sdl::gl_color::GlColor;
 use crate::render::adapter::sdl::gl_pix::GlPix;
-use crate::render::adapter::sdl::gl_texture::{GlCell, GlRenderTexture, GlTexture};
+use crate::render::adapter::sdl::gl_texture::GlTexture;
 use crate::render::{
     adapter::{Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES},
     buffer::Buffer,
     sprite::Sprites,
 };
+use log::info;
 use sdl2::{
     event::Event as SEvent,
     image::{InitFlag, LoadSurface},
@@ -27,8 +27,8 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
-use log::info;
 
+// opengl codes...
 pub mod gl_color;
 pub mod gl_pix;
 pub mod gl_shader;
@@ -58,8 +58,6 @@ pub struct SdlAdapter {
     pub gl: Option<glow::Context>,
     pub gl_context: Option<sdl2::video::GLContext>,
     pub gl_pix: Option<GlPix>,
-    pub gl_symbols: Vec<GlCell>,
-    pub gl_render_textures: Vec<GlRenderTexture>,
 
     // custom cursor
     pub cursor: Option<Cursor>,
@@ -86,8 +84,6 @@ impl SdlAdapter {
             gl_context: None,
             gl: None,
             gl_pix: None,
-            gl_symbols: vec![],
-            gl_render_textures: vec![],
             drag: Default::default(),
         }
     }
@@ -111,15 +107,12 @@ impl SdlAdapter {
         let bs = self.get_base();
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
-        let w = bs.pixel_w;
-        let h = bs.pixel_h;
-        let pixel_w = (buf.area.width as f32 * PIXEL_SYM_WIDTH / rx) as u32;
-        let pixel_h = (buf.area.height as f32 * PIXEL_SYM_HEIGHT / ry) as u32;
+        // let pixel_w = (buf.area.width as f32 * PIXEL_SYM_WIDTH / rx) as u32;
+        // let pixel_h = (buf.area.height as f32 * PIXEL_SYM_HEIGHT / ry) as u32;
         let rbuf = self.buf_to_render_buffer(buf);
         // render rbuf to window use opengl
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            // pix.bind_render_texture(gl, rtidx, pixel_w as i32, pixel_h as i32);
-            pix.bind_render_texture(gl, rtidx, w as i32, h as i32);
+            pix.bind_render_texture(gl, rtidx);
             // pix.bind(gl);
             pix.clear(gl);
             pix.render_rbuf(gl, &rbuf, rx, ry);
@@ -257,7 +250,7 @@ impl Adapter for SdlAdapter {
             sprite_sheet.bind(self.gl.as_ref().unwrap());
             for i in 0..32 {
                 for j in 0..32 {
-                    let frame = pix.make_cell_frame(
+                    let cell = pix.make_cell_frame(
                         &mut sprite_sheet,
                         j as f32 * 17.0,
                         i as f32 * 17.0,
@@ -266,13 +259,14 @@ impl Adapter for SdlAdapter {
                         8.0,
                         8.0,
                     );
-                    let cell = GlCell::new(frame);
                     pix.symbols.push(cell);
                 }
             }
         }
 
         self.gl_pix = Some(pix);
+
+        info!("Window & gl init ok...");
 
         // custom mouse cursor image
         let surface = Surface::from_file(format!(
@@ -339,7 +333,7 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        return Ok(());
+        // return Ok(());
         // process window draging move...
         sdl_move_win(
             &mut self.drag.need,
@@ -356,7 +350,8 @@ impl Adapter for SdlAdapter {
 
         // render rbuf to window use opengl
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            pix.bind(gl);
+            pix.bind_render_texture(gl, 2);
+            // pix.bind(gl);
             pix.clear(gl);
             pix.render_rbuf(gl, &self.base.rbuf, ratio_x, ratio_y);
             // call opengl instance rendering

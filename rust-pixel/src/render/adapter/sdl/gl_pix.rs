@@ -1,6 +1,9 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022~2024
+
 use crate::render::adapter::sdl::gl_color::GlColor;
 use crate::render::adapter::sdl::gl_shader::{GlShader, GlShaderCore, GlUniformValue};
-use crate::render::adapter::sdl::gl_texture::{GlCell, GlFrame, GlRenderTexture, GlTexture};
+use crate::render::adapter::sdl::gl_texture::{GlCell, GlRenderTexture, GlTexture};
 use crate::render::adapter::sdl::gl_transform::GlTransform;
 use crate::render::adapter::RenderCell;
 use glow::HasContext;
@@ -11,58 +14,56 @@ use std::collections::HashMap;
 pub enum GlRenderMode {
     None = -1,
     PixCells = 0,
+    Transition = 1,
+    General2D = 2,
 }
 
 pub struct GlPix {
-    // 着色器列表
-    pub shaders: Vec<GlShader>,
+    pub render_mode: GlRenderMode,
 
-    pub symbols: Vec<GlCell>,
+    pub shaders: Vec<GlShader>,
     pub render_textures: Vec<GlRenderTexture>,
 
-    // 变换栈
+    pub symbols: Vec<GlCell>,
+
     pub transform_stack: Vec<GlTransform>,
     pub transform_at: usize,
     pub transform_dirty: bool,
 
-    // 实例缓冲区
+    // instance buffer for cells shader...
     pub instance_buffer: Vec<f32>,
     pub instance_buffer_capacity: usize,
     pub instance_buffer_at: isize,
     pub instance_count: usize,
 
-    // 渲染模式
-    pub render_mode: GlRenderMode,
-
-    // OpenGL 缓冲区和顶点数组对象
+    // cells shader buffers...
     pub vao_cells: glow::NativeVertexArray,
     pub instances_vbo: glow::NativeBuffer,
     pub quad_vbo: glow::NativeBuffer,
     pub ubo: glow::NativeBuffer,
+    pub ubo_contents: [f32; 12],
 
+    // trans shader buffers...
     pub vao_trans: glow::NativeVertexArray,
     pub vbuf: glow::NativeBuffer,
     pub ibuf: glow::NativeBuffer,
 
-    // Uniform Buffer 内容
-    pub ubo_contents: [f32; 12],
+    // general2d shader buffers...
+    pub vao_general2d: glow::NativeVertexArray,
+    pub vbo_general2d: glow::NativeBuffer,
+    pub ebo_general2d: glow::NativeBuffer,
 
-    // 当前状态
-    pub current_shader: Option<usize>,
-    pub current_shader_core: Option<usize>,
     pub current_texture_atlas: Option<glow::NativeTexture>,
 
-    // 画布尺寸
     pub canvas_width: u32,
     pub canvas_height: u32,
 
-    // 清除颜色
     pub clear_color: GlColor,
 }
 
 impl GlPix {
     pub fn new(gl: &glow::Context, canvas_width: i32, canvas_height: i32) -> Self {
-        // 初始化着色器
+        // cells shader...
         let vertex_shader_src = r#"
         #version 330 core
         layout(location=0) in vec2 vertex;
@@ -101,6 +102,7 @@ impl GlPix {
         }
         "#;
 
+        // trans shader ...
         let vertex_shader_src2 = r#"
             #version 330 core
             layout(location = 0) in vec2 aPos;
@@ -145,21 +147,78 @@ impl GlPix {
             fs
         );
 
+        let vertex_shader_src3 = r#"
+    #version 330 core
+    layout(location = 0) in vec2 aPos;        // 顶点坐标
+    layout(location = 1) in vec2 aTexCoord;   // 纹理坐标
+
+    out vec2 TexCoord;  // 传递给片段着色器的纹理坐标
+
+    uniform mat4 transform;  // 变换矩阵
+    uniform vec4 area;       // 纹理的采样区域 (x, y, width, height) [0.0, 1.0]
+
+    void main()
+    {
+        // 纹理的 UV 坐标映射到指定区域
+        TexCoord = vec2(
+            mix(area.x, area.x + area.z, aTexCoord.x),
+            mix(area.y, area.y + area.w, aTexCoord.y)
+        );
+
+        // 使用变换矩阵对顶点坐标进行变换
+        gl_Position = transform * vec4(aPos, 0.0, 1.0);
+    }
+    "#;
+
+        let fragment_shader_src3 = r#"
+    #version 330 core
+    out vec4 FragColor;
+
+    in vec2 TexCoord;
+
+    uniform sampler2D texture1;  // 输入的纹理
+    uniform vec4 color;          // 渲染颜色，包含透明度
+
+    void main()
+    {
+        // 从纹理中采样颜色
+        vec4 texColor = texture(texture1, TexCoord);
+
+        // 应用颜色和透明度
+        FragColor = texColor * color;
+    }
+    "#;
+
         let shader_core_cells = GlShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
-        let shader_core_trans = GlShaderCore::new(&gl, vertex_shader_src2, fragment_shader_src2);
         let mut uniforms = HashMap::new();
         uniforms.insert("source".to_string(), GlUniformValue::Int(0));
         let shader = GlShader::new(shader_core_cells, uniforms);
 
+        let shader_core_trans = GlShaderCore::new(&gl, vertex_shader_src2, fragment_shader_src2);
         let mut uniforms2 = HashMap::new();
         uniforms2.insert("texture1".to_string(), GlUniformValue::Int(0));
         uniforms2.insert("texture2".to_string(), GlUniformValue::Int(1));
         uniforms2.insert("progress".to_string(), GlUniformValue::Float(0.0));
         let shader2 = GlShader::new(shader_core_trans, uniforms2);
 
+        let shader_core_general2d =
+            GlShaderCore::new(&gl, vertex_shader_src3, fragment_shader_src3);
+        let mut uniforms3 = HashMap::new();
+        uniforms3.insert("texture1".to_string(), GlUniformValue::Int(0));
+        uniforms3.insert("transform".to_string(), GlUniformValue::Mat4([0.0; 16]));
+        uniforms3.insert("area".to_string(), GlUniformValue::Vec4([0.0; 4]));
+        uniforms3.insert(
+            "color".to_string(),
+            GlUniformValue::Vec4([1.0, 1.0, 1.0, 1.0]),
+        );
+        let shader3 = GlShader::new(shader_core_general2d, uniforms3);
+
         let (vao_trans, vbuf, ibuf) = unsafe { create_buffers(&gl, shader2.core.program) };
 
-        let shaders = vec![shader, shader2];
+        let (vao_general2d, vbo_general2d, ebo_general2d) =
+            unsafe { create_general2d_buffers(&gl, shader3.core.program) };
+
+        let shaders = vec![shader, shader2, shader3];
 
         // 创建缓冲区和 VAO
         let quad_vbo = unsafe { gl.create_buffer().unwrap() };
@@ -239,8 +298,8 @@ impl GlPix {
         ubo_contents[11] = 1.0;
 
         let mut render_textures = vec![];
-        // create 2 render texture for gl transition...
-        for _i in 0..2 {
+        // create 4 render texture for gl transition...
+        for _i in 0..4 {
             let rt = GlRenderTexture::new(gl, canvas_width as u32, canvas_height as u32).unwrap();
             render_textures.push(rt);
         }
@@ -248,7 +307,6 @@ impl GlPix {
         Self {
             canvas_width: canvas_width as u32,
             canvas_height: canvas_height as u32,
-            // shader_core_cells,
             shaders,
             quad_vbo,
             instances_vbo,
@@ -258,6 +316,9 @@ impl GlPix {
             vao_trans,
             vbuf,
             ibuf,
+            vao_general2d,
+            vbo_general2d,
+            ebo_general2d,
             transform_stack: vec![GlTransform::new_with_values(
                 1.0,
                 0.0,
@@ -273,8 +334,6 @@ impl GlPix {
             instance_buffer: vec![0.0; 1024],
             instance_count: 0,
             render_mode: GlRenderMode::None,
-            current_shader: None,
-            current_shader_core: None,
             current_texture_atlas: None,
             clear_color: GlColor::new(1.0, 1.0, 1.0, 0.0),
             symbols: vec![],
@@ -284,38 +343,7 @@ impl GlPix {
 
     pub fn prepare_draw_trans(&mut self, gl: &glow::Context) {
         unsafe {
-            let vertices: [f32; 16] = [
-                -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
-            ];
-            let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
-
             gl.bind_vertex_array(Some(self.vao_trans));
-
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbuf));
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                &vertices.align_to::<u8>().1,
-                glow::STATIC_DRAW,
-            );
-
-            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ibuf));
-            gl.buffer_data_u8_slice(
-                glow::ELEMENT_ARRAY_BUFFER,
-                &indices.align_to::<u8>().1,
-                glow::STATIC_DRAW,
-            );
-
-            let pos_attrib = gl
-                .get_attrib_location(self.shaders[1].core.program, "aPos")
-                .unwrap();
-            let tex_attrib = gl
-                .get_attrib_location(self.shaders[1].core.program, "aTexCoord")
-                .unwrap();
-            gl.enable_vertex_attrib_array(pos_attrib);
-            gl.enable_vertex_attrib_array(tex_attrib);
-
-            gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
-            gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
         }
     }
 
@@ -379,13 +407,13 @@ impl GlPix {
         }
     }
 
-    pub fn bind_render_texture(&mut self, gl: &glow::Context, idx: usize, w: i32, h: i32) {
+    pub fn bind_render_texture(&mut self, gl: &glow::Context, idx: usize) {
         unsafe {
             gl.bind_framebuffer(
                 glow::FRAMEBUFFER,
                 Some(self.render_textures[idx].framebuffer),
             );
-            gl.viewport(0, 0, w, h);
+            gl.viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
         }
     }
 
@@ -450,7 +478,7 @@ impl GlPix {
         height: f32,
         x_origin: f32,
         y_origin: f32,
-    ) -> GlFrame {
+    ) -> GlCell {
         let origin_x = x_origin / width;
         let origin_y = y_origin / height;
         let tex_width = sheet.width as f32;
@@ -461,7 +489,7 @@ impl GlPix {
         let uv_width = width / tex_width;
         let uv_height = height / tex_height;
 
-        let frame = GlFrame {
+        let frame = GlCell {
             texture: sheet.texture,
             width,
             height,
@@ -488,6 +516,7 @@ impl GlPix {
         progress: f32,
     ) {
         unsafe {
+            self.prepare_draw_trans(gl);
             render_trans_frame(
                 gl,
                 self.shaders[1].core.program,
@@ -552,10 +581,10 @@ impl GlPix {
         transform: &GlTransform,
         color: &GlColor,
     ) {
-        self.bind_texture_atlas(gl, self.symbols[sym].frame.texture);
+        self.bind_texture_atlas(gl, self.symbols[sym].texture);
         self.prepare_draw(gl, GlRenderMode::PixCells, 16);
 
-        let frame = &self.symbols[sym].frame;
+        let frame = &self.symbols[sym];
         let instance_buffer = &mut self.instance_buffer;
 
         self.instance_buffer_at += 1;
@@ -669,4 +698,56 @@ unsafe fn render_trans_frame(
     gl.uniform_1_f32(lb.as_ref(), progress);
 
     gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
+}
+
+unsafe fn create_general2d_buffers(
+    gl: &glow::Context,
+    program: glow::Program,
+) -> (
+    glow::NativeVertexArray,
+    glow::NativeBuffer,
+    glow::NativeBuffer,
+) {
+    let vertices: [f32; 16] = [
+        // positions  // texCoords
+        0.0, 0.0,     0.0, 0.0, // 左下角
+        1.0, 0.0,     1.0, 0.0, // 右下角
+        1.0, 1.0,     1.0, 1.0, // 右上角
+        0.0, 1.0,     0.0, 1.0, // 左上角
+    ];
+    let indices: [u32; 6] = [
+        0, 1, 2,
+        2, 3, 0,
+    ];
+
+    let vao = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao));
+
+    let vbo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+    gl.buffer_data_u8_slice(
+        glow::ARRAY_BUFFER,
+        &vertices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let ebo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+    gl.buffer_data_u8_slice(
+        glow::ELEMENT_ARRAY_BUFFER,
+        &indices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
+    let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
+    gl.enable_vertex_attrib_array(pos_attrib);
+    gl.enable_vertex_attrib_array(tex_attrib);
+
+    gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
+    gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
+
+    gl.bind_vertex_array(None);
+
+    (vao, vbo, ebo)
 }

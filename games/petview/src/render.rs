@@ -109,7 +109,6 @@ impl Render for PetviewRender {
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pix, &mut sa.gl) {
                 pix.bind(gl);
                 pix.clear(gl);
-                pix.prepare_draw_trans(gl);
                 pix.render_trans_frame(&gl, 40*16, 25*16, self.progress);
                 sa.sdl_window.as_ref().unwrap().gl_swap_window();
                 self.progress += 0.03;

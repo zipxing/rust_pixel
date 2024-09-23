@@ -1,7 +1,11 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022~2024
+
 use crate::render::adapter::sdl::gl_color::GlColor;
 use glow::HasContext;
 use log::info;
 
+// render target texture...
 pub struct GlRenderTexture {
     pub framebuffer: glow::NativeFramebuffer,
     pub texture: glow::NativeTexture,
@@ -98,7 +102,7 @@ pub struct GlTexture {
 }
 
 #[derive(Clone)]
-pub struct GlFrame {
+pub struct GlCell {
     pub texture: glow::NativeTexture,
     pub width: f32,
     pub height: f32,
@@ -108,10 +112,6 @@ pub struct GlFrame {
     pub uv_top: f32,
     pub uv_width: f32,
     pub uv_height: f32,
-}
-
-pub struct GlCell {
-    pub frame: GlFrame,
 }
 
 impl GlTexture {
@@ -124,7 +124,7 @@ impl GlTexture {
         let img = image::open(source).map_err(|e| e.to_string())?.to_rgba8();
         let width = img.width();
         let height = img.height();
-        info!("texture...w{} h{}", width, height);
+        info!("opengl texture...(width{} height{})", width, height);
 
         unsafe {
             gl.active_texture(glow::TEXTURE0);
@@ -163,7 +163,6 @@ impl GlTexture {
                 glow::CLAMP_TO_EDGE as i32,
             );
 
-            // 绑定帧缓冲
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
             gl.framebuffer_texture_2d(
                 glow::FRAMEBUFFER,
@@ -215,8 +214,3 @@ impl GlTexture {
     }
 }
 
-impl GlCell {
-    pub fn new(frame: GlFrame) -> Self {
-        Self { frame }
-    }
-}

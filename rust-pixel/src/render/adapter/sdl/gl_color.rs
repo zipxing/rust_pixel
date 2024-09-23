@@ -1,3 +1,6 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022~2024
+
 #[derive(Clone, Copy)]
 pub struct GlColor {
     pub r: f32,
@@ -22,9 +25,5 @@ impl GlColor {
         self.g *= color.g;
         self.b *= color.b;
     }
-
-    // pub fn equals(&self, color: &GlColor) -> bool {
-    //     self.r == color.r && self.g == color.g && self.b == color.b && self.a == color.a
-    // }
 }
 
