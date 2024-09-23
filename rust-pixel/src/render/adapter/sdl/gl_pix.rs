@@ -508,6 +508,84 @@ impl GlPix {
         self.clear_color = color;
     }
 
+    pub fn draw_general2d(
+        &mut self,
+        gl: &glow::Context,
+        rtidx: usize,
+        // texture: glow::NativeTexture,
+        area: [f32; 4],
+        transform: &GlTransform,
+        color: &GlColor,
+    ) {
+        self.flush(gl); // 确保之前的绘制命令已经执行
+
+        // 使用 General2D 着色器
+        self.shaders[GlRenderMode::General2D as usize].bind(gl);
+        self.render_mode = GlRenderMode::General2D;
+
+        // 绑定 VAO
+        unsafe {
+            gl.bind_vertex_array(Some(self.vao_general2d));
+
+            // 设置 uniform
+            let shader_program = self.shaders[GlRenderMode::General2D as usize].core.program;
+
+            // 绑定纹理
+            unsafe {
+                gl.active_texture(glow::TEXTURE0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(self.render_textures[rtidx]));
+                let tex_loc = gl.get_uniform_location(shader_program, "texture1");
+                gl.uniform_1_i32(tex_loc.as_ref(), 0);
+            }
+
+            // 设置变换矩阵
+            let transform_loc = gl.get_uniform_location(shader_program, "transform");
+            unsafe {
+                gl.uniform_matrix_4_f32_slice(
+                    transform_loc.as_ref(),
+                    false,
+                    &[
+                        transform.m00,
+                        transform.m01,
+                        0.0,
+                        0.0,
+                        transform.m10,
+                        transform.m11,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        transform.m20,
+                        transform.m21,
+                        0.0,
+                        1.0,
+                    ],
+                );
+            }
+
+            // 设置纹理区域
+            let area_loc = gl.get_uniform_location(shader_program, "area");
+            unsafe {
+                gl.uniform_4_f32_slice(area_loc.as_ref(), &area);
+            }
+
+            // 设置颜色
+            let color_loc = gl.get_uniform_location(shader_program, "color");
+            unsafe {
+                gl.uniform_4_f32_slice(color_loc.as_ref(), &[color.r, color.g, color.b, color.a]);
+            }
+
+            // 绘制
+            unsafe {
+                gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
+            }
+
+            gl.bind_vertex_array(None);
+        }
+    }
+
     pub fn render_trans_frame(
         &mut self,
         gl: &glow::Context,
@@ -710,15 +788,12 @@ unsafe fn create_general2d_buffers(
 ) {
     let vertices: [f32; 16] = [
         // positions  // texCoords
-        0.0, 0.0,     0.0, 0.0, // 左下角
-        1.0, 0.0,     1.0, 0.0, // 右下角
-        1.0, 1.0,     1.0, 1.0, // 右上角
-        0.0, 1.0,     0.0, 1.0, // 左上角
+        0.0, 0.0, 0.0, 0.0, // 左下角
+        1.0, 0.0, 1.0, 0.0, // 右下角
+        1.0, 1.0, 1.0, 1.0, // 右上角
+        0.0, 1.0, 0.0, 1.0, // 左上角
     ];
-    let indices: [u32; 6] = [
-        0, 1, 2,
-        2, 3, 0,
-    ];
+    let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
     let vao = gl.create_vertex_array().unwrap();
     gl.bind_vertex_array(Some(vao));
