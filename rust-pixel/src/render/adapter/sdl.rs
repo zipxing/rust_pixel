@@ -360,7 +360,7 @@ impl Adapter for SdlAdapter {
             // render texture 2 , 3 to screen
             pix.bind(gl);
             let mut t = GlTransform::new();
-            t.scale(2.0 as f32, 2.0 as f32);
+            // t.scale(2.0 as f32, 2.0 as f32);
             t.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
