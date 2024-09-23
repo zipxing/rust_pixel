@@ -7,11 +7,10 @@
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
-use crate::render::adapter::sdl::gl_color::GlColor;
-use crate::render::adapter::sdl::gl_pix::GlPix;
-use crate::render::adapter::sdl::gl_texture::GlTexture;
-use crate::render::adapter::sdl::gl_transform::GlTransform;
 use crate::render::{
+    adapter::sdl::{
+        gl_color::GlColor, gl_pix::GlPix, gl_texture::GlTexture, gl_transform::GlTransform,
+    },
     adapter::{Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES},
     buffer::Buffer,
     sprite::Sprites,
@@ -360,10 +359,16 @@ impl Adapter for SdlAdapter {
             // render texture 2 , 3 to screen
             pix.bind(gl);
             let mut t = GlTransform::new();
-            // t.scale(2.0 as f32, 2.0 as f32);
+            t.scale(2.0 as f32, 2.0 as f32);
             t.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+
+            let mut t2 = GlTransform::new();
+            // t.scale(2.0 as f32, 2.0 as f32);
+            t.translate(0.1, 0.1);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 3, [0.0, 0.0, 1.0, 1.0], &t, &c);
             // swap window for display
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
