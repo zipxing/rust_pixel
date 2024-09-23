@@ -533,7 +533,8 @@ impl GlPix {
             // 绑定纹理
             unsafe {
                 gl.active_texture(glow::TEXTURE0);
-                gl.bind_texture(glow::TEXTURE_2D, Some(self.render_textures[rtidx]));
+                gl.bind_texture(glow::TEXTURE_2D, Some(self.render_textures[rtidx].texture));
+                self.current_texture_atlas = Some(self.render_textures[rtidx].texture);
                 let tex_loc = gl.get_uniform_location(shader_program, "texture1");
                 gl.uniform_1_i32(tex_loc.as_ref(), 0);
             }
