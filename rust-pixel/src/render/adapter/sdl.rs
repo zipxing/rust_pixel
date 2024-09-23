@@ -348,14 +348,17 @@ impl Adapter for SdlAdapter {
         let ratio_x = self.get_base().ratio_x;
         let ratio_y = self.get_base().ratio_y;
 
-        // render rbuf to window use opengl
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
+            // render rbuf to texture 2 use opengl
             pix.bind_render_texture(gl, 2);
-            // pix.bind(gl);
             pix.clear(gl);
             pix.render_rbuf(gl, &self.base.rbuf, ratio_x, ratio_y);
             // call opengl instance rendering
             pix.flush(gl);
+
+            // render texture 2 , 3 to screen
+            // pix.bind(gl);
+            // 
             // swap window for display
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
