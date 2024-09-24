@@ -62,7 +62,7 @@ pub struct GlPix {
 }
 
 impl GlPix {
-    pub fn new(gl: &glow::Context, canvas_width: i32, canvas_height: i32) -> Self {
+    pub fn new(gl: &glow::Context, canvas_width: i32, canvas_height: i32, texs: Vec<String>) -> Self {
         // cells shader...
         let vertex_shader_src = r#"
         #version 330 core
@@ -304,7 +304,7 @@ impl GlPix {
             render_textures.push(rt);
         }
 
-        Self {
+        let mut s = Self {
             canvas_width: canvas_width as u32,
             canvas_height: canvas_height as u32,
             shaders,
@@ -338,7 +338,30 @@ impl GlPix {
             clear_color: GlColor::new(1.0, 1.0, 1.0, 0.0),
             symbols: vec![],
             render_textures,
+        };
+
+        s.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
+
+        // init gl_symbols
+        for texture_path in texs {
+            let mut sprite_sheet = GlTexture::new(gl, &texture_path).unwrap();
+            sprite_sheet.bind(gl);
+            for i in 0..32 {
+                for j in 0..32 {
+                    let cell = s.make_cell_frame(
+                        &mut sprite_sheet,
+                        j as f32 * 17.0,
+                        i as f32 * 17.0,
+                        16.0,
+                        16.0,
+                        8.0,
+                        8.0,
+                    );
+                    s.symbols.push(cell);
+                }
+            }
         }
+        s
     }
 
     pub fn prepare_draw_trans(&mut self, gl: &glow::Context) {
@@ -569,6 +592,10 @@ impl GlPix {
             // 设置颜色
             let color_loc = gl.get_uniform_location(shader_program, "color");
             gl.uniform_4_f32_slice(color_loc.as_ref(), &[color.r, color.g, color.b, color.a]);
+
+            // gl.viewport(0, 0, 1200, 830);
+            // gl.clear_color(1.0, 0.0, 1.0, 1.0);
+            // gl.clear(glow::COLOR_BUFFER_BIT);
 
             // 绘制
             gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);

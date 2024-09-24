@@ -8,10 +8,10 @@ use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
 use crate::render::{
-    adapter::sdl::{
-        gl_color::GlColor, gl_pix::GlPix, gl_texture::GlTexture, gl_transform::GlTransform,
+    adapter::sdl::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
+    adapter::{
+        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
-    adapter::{RenderCell, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES},
     buffer::Buffer,
     sprite::Sprites,
 };
@@ -228,14 +228,7 @@ impl Adapter for SdlAdapter {
         self.gl = Some(gl);
         self.sdl_window = Some(window);
 
-        let mut pix = GlPix::new(
-            self.gl.as_ref().unwrap(),
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
-        );
-        pix.set_clear_color(GlColor::new(0.0, 0.0, 0.1, 1.0));
-
-        // init gl_symbols
+        let mut texs = vec![];
         for texture_file in PIXEL_TEXTURE_FILES.iter() {
             let texture_path = format!(
                 "{}{}{}",
@@ -243,26 +236,15 @@ impl Adapter for SdlAdapter {
                 std::path::MAIN_SEPARATOR,
                 texture_file
             );
-            let mut sprite_sheet =
-                GlTexture::new(self.gl.as_ref().unwrap(), &texture_path).unwrap();
-            sprite_sheet.bind(self.gl.as_ref().unwrap());
-            for i in 0..32 {
-                for j in 0..32 {
-                    let cell = pix.make_cell_frame(
-                        &mut sprite_sheet,
-                        j as f32 * 17.0,
-                        i as f32 * 17.0,
-                        16.0,
-                        16.0,
-                        8.0,
-                        8.0,
-                    );
-                    pix.symbols.push(cell);
-                }
-            }
+            texs.push(texture_path);
         }
 
-        self.gl_pix = Some(pix);
+        self.gl_pix = Some(GlPix::new(
+            self.gl.as_ref().unwrap(),
+            self.base.pixel_w as i32,
+            self.base.pixel_h as i32,
+            texs,
+        ));
 
         info!("Window & gl init ok...");
 
@@ -344,9 +326,7 @@ impl Adapter for SdlAdapter {
         let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
         self.render_rbuf(&rbuf, 2);
 
-
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-
             // render texture 2 , 3 to screen
             pix.bind(gl);
             let mut t = GlTransform::new();
@@ -356,10 +336,10 @@ impl Adapter for SdlAdapter {
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
             let mut t2 = GlTransform::new();
-            // t2.scale(2.0 as f32, 2.0 as f32);
+            t2.scale(2.0 * 0.512, 2.0 * 0.756);
             t2.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 3, [0.1, 0.2, 0.6, 0.6], &t2, &c);
+            pix.draw_general2d(gl, 3, [0.05, 0.0, 0.512, 0.756], &t2, &c);
             // swap window for display
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
