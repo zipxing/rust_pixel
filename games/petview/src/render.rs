@@ -19,25 +19,25 @@ use std::io::Cursor;
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
 
-fn debug_img(img: &[u8], w: usize, h: usize) {
-    let mut idx = 0;
-    for i in 0..h {
-        let mut line = " ".to_string();
-        for j in 0..w {
-            write!(
-                line,
-                " {}.{}.{}.{} ",
-                img[idx + 0],
-                img[idx + 1],
-                img[idx + 2],
-                img[idx + 3]
-            )
-            .unwrap();
-            idx += 4;
-        }
-        info!("{:?}", line);
-    }
-}
+// fn debug_img(img: &[u8], w: usize, h: usize) {
+//     let mut idx = 0;
+//     for i in 0..h {
+//         let mut line = " ".to_string();
+//         for j in 0..w {
+//             write!(
+//                 line,
+//                 " {}.{}.{}.{} ",
+//                 img[idx + 0],
+//                 img[idx + 1],
+//                 img[idx + 2],
+//                 img[idx + 3]
+//             )
+//             .unwrap();
+//             idx += 4;
+//         }
+//         info!("{:?}", line);
+//     }
+// }
 
 pub struct PetviewRender {
     pub panel: Panel,

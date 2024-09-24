@@ -106,8 +106,6 @@ pub struct AdapterBase {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub rd: Rand,
-    // pre-render buffer...
-    pub rbuf: Vec<RenderCell>,
 }
 
 impl AdapterBase {
@@ -124,7 +122,6 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
-            rbuf: vec![],
         }
     }
 }
@@ -207,6 +204,7 @@ pub trait Adapter {
         let mut rbuf = vec![];
         let rx = self.get_base().ratio_x;
         let ry = self.get_base().ratio_y;
+        let pz = PointI32 { x: 0, y: 0 };
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
                          _s0: ARect,
@@ -216,39 +214,13 @@ pub trait Adapter {
                          symidx: usize| {
             if let Some(bgc) = bc {
                 push_render_buffer(
-                    &mut rbuf,
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    true,
-                    bgc.0,
-                    bgc.1,
-                    bgc.2,
-                    bgc.3,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
+                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3, texidx,
+                    symidx, s2, 0.0, &pz,
                 );
             } else {
                 push_render_buffer(
-                    &mut rbuf,
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
+                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2, 0.0,
+                    &pz,
                 );
             }
         };
@@ -257,9 +229,16 @@ pub trait Adapter {
     }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn gen_render_buffer(&mut self, cb: &Buffer, _pb: &Buffer, ps: &mut Vec<Sprites>, stage: u32) {
-        self.get_base().rbuf.clear();
+    fn gen_render_buffer(
+        &mut self,
+        cb: &Buffer,
+        _pb: &Buffer,
+        ps: &mut Vec<Sprites>,
+        stage: u32,
+    ) -> Vec<RenderCell> {
+        let mut rbuf = vec![];
         let width = cb.area.width;
+        let pz = PointI32 { x: 0, y: 0 };
 
         // render logo...
         if stage <= LOGO_FRAME {
@@ -277,24 +256,11 @@ pub trait Adapter {
             );
             for tmp in tv {
                 push_render_buffer(
-                    &mut self.get_base().rbuf,
-                    tmp.0,
-                    tmp.1,
-                    tmp.2,
-                    tmp.3,
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
-                    tmp.4,
-                    tmp.5,
-                    tmp.6,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
+                    &mut rbuf, tmp.0, tmp.1, tmp.2, tmp.3, false, 0, 0, 0, 0, tmp.4, tmp.5, tmp.6,
+                    0.0, &pz,
                 );
             }
-            return;
+            return rbuf;
         }
 
         let cw = self.get_base().cell_w;
@@ -310,39 +276,13 @@ pub trait Adapter {
                          symidx: usize| {
             if let Some(bgc) = bc {
                 push_render_buffer(
-                    &mut self.get_base().rbuf,
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    true,
-                    bgc.0,
-                    bgc.1,
-                    bgc.2,
-                    bgc.3,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
+                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3, texidx,
+                    symidx, s2, 0.0, &pz,
                 );
             } else {
                 push_render_buffer(
-                    &mut self.get_base().rbuf,
-                    fc.0,
-                    fc.1,
-                    fc.2,
-                    fc.3,
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
-                    texidx,
-                    symidx,
-                    s2,
-                    0.0,
-                    &PointI32 { x: 0, y: 0 },
+                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2, 0.0,
+                    &pz,
                 );
             }
         };
@@ -365,39 +305,13 @@ pub trait Adapter {
                         |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
                             if let Some(bgc) = bc {
                                 push_render_buffer(
-                                    &mut self.get_base().rbuf,
-                                    fc.0,
-                                    fc.1,
-                                    fc.2,
-                                    fc.3,
-                                    true,
-                                    bgc.0,
-                                    bgc.1,
-                                    bgc.2,
-                                    bgc.3,
-                                    texidx,
-                                    symidx,
-                                    s2,
-                                    angle,
-                                    &ccp,
+                                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2,
+                                    bgc.3, texidx, symidx, s2, angle, &ccp,
                                 );
                             } else {
                                 push_render_buffer(
-                                    &mut self.get_base().rbuf,
-                                    fc.0,
-                                    fc.1,
-                                    fc.2,
-                                    fc.3,
-                                    false,
-                                    0,
-                                    0,
-                                    0,
-                                    0,
-                                    texidx,
-                                    symidx,
-                                    s2,
-                                    angle,
-                                    &ccp,
+                                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx,
+                                    symidx, s2, angle, &ccp,
                                 );
                             }
                         },
@@ -405,6 +319,7 @@ pub trait Adapter {
                 }
             }
         }
+        rbuf
     }
 
     fn as_any(&mut self) -> &mut dyn Any;

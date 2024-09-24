@@ -11,7 +11,7 @@ use crate::render::{
     adapter::sdl::{
         gl_color::GlColor, gl_pix::GlPix, gl_texture::GlTexture, gl_transform::GlTransform,
     },
-    adapter::{Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES},
+    adapter::{RenderCell, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES},
     buffer::Buffer,
     sprite::Sprites,
 };
@@ -104,21 +104,19 @@ impl SdlAdapter {
     }
 
     pub fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+        let rbuf = self.buf_to_render_buffer(buf);
+        self.render_rbuf(&rbuf, rtidx);
+    }
+
+    pub fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
         let bs = self.get_base();
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
-        // let pixel_w = (buf.area.width as f32 * PIXEL_SYM_WIDTH / rx) as u32;
-        // let pixel_h = (buf.area.height as f32 * PIXEL_SYM_HEIGHT / ry) as u32;
-        let rbuf = self.buf_to_render_buffer(buf);
-        // render rbuf to window use opengl
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
             pix.bind_render_texture(gl, rtidx);
-            // pix.bind(gl);
             pix.clear(gl);
-            pix.render_rbuf(gl, &rbuf, rx, ry);
-            // call opengl instance rendering
+            pix.render_rbuf(gl, rbuf, rx, ry);
             pix.flush(gl);
-            // self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
     }
 
@@ -203,6 +201,8 @@ impl Adapter for SdlAdapter {
             let gl_attr = video_subsystem.gl_attr();
             gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
             gl_attr.set_context_version(3, 3);
+            // gl_attr.set_multisample_buffers(1);
+            // gl_attr.set_multisample_samples(4);
         }
 
         let window = video_subsystem
@@ -343,18 +343,11 @@ impl Adapter for SdlAdapter {
         );
 
         // render every thing to rbuf
-        self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        self.render_rbuf(&rbuf, 2);
 
-        let ratio_x = self.get_base().ratio_x;
-        let ratio_y = self.get_base().ratio_y;
 
         if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            // render rbuf to texture 2 use opengl
-            pix.bind_render_texture(gl, 2);
-            pix.clear(gl);
-            pix.render_rbuf(gl, &self.base.rbuf, ratio_x, ratio_y);
-            // call opengl instance rendering
-            pix.flush(gl);
 
             // render texture 2 , 3 to screen
             pix.bind(gl);
@@ -365,10 +358,10 @@ impl Adapter for SdlAdapter {
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
             let mut t2 = GlTransform::new();
-            // t.scale(2.0 as f32, 2.0 as f32);
-            t.translate(0.1, 0.1);
+            t2.scale(2.0 as f32, 2.0 as f32);
+            t2.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 3, [0.0, 0.0, 1.0, 1.0], &t, &c);
+            pix.draw_general2d(gl, 3, [0.0, 0.0, 1.0, 1.0], &t2, &c);
             // swap window for display
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
