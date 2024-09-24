@@ -356,10 +356,10 @@ impl Adapter for SdlAdapter {
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
             let mut t2 = GlTransform::new();
-            t2.scale(2.0 as f32, 2.0 as f32);
+            // t2.scale(2.0 as f32, 2.0 as f32);
             t2.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 3, [0.0, 0.0, 1.0, 1.0], &t2, &c);
+            pix.draw_general2d(gl, 3, [0.1, 0.2, 0.6, 0.6], &t2, &c);
             // swap window for display
             self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
