@@ -201,8 +201,6 @@ impl Adapter for SdlAdapter {
             let gl_attr = video_subsystem.gl_attr();
             gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
             gl_attr.set_context_version(3, 3);
-            // gl_attr.set_multisample_buffers(1);
-            // gl_attr.set_multisample_samples(4);
         }
 
         let window = video_subsystem
