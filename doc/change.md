@@ -1,3 +1,23 @@
+# 0.4.8
+- Refactored the underlying rendering module, abandoned the canvas API of SDL, and replaced it with OpenGL shader,
+- Opengl rendering improved engine performance (CPU dropped from 38% to about 15%) 
+- Added the ability to use shader to achieve various special effects(coding petview transition)
+- Refer to rust-pixel/src/render/adapter/sdl.rs
+- Abstracted the repeated code in lib.rs of each application into a procedural macro:
+```
+pixel_game!(Snake)
+```
+- Refer to pixel_macro/src/lib.rs
+
+# 0.4.7
+- add petview game for petscii arts
+- update tpetii tool for convert petscii art to pix files
+- added graph mode cell background color
+
+# 0.4.6
+- Added linux & windows install guide
+- Update readme
+
 # 0.4.5
 - Update cargo.toml fix rustdoc bug...
 
