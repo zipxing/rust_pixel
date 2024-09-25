@@ -8,7 +8,7 @@ use crate::render::adapter::sdl::gl_transform::GlTransform;
 use crate::render::adapter::RenderCell;
 use glow::HasContext;
 use std::collections::HashMap;
-// use log::info;
+use log::info;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum GlRenderMode {
@@ -344,6 +344,7 @@ impl GlPix {
 
         // init gl_symbols
         for texture_path in texs {
+            info!("gl_pix load texture...{}", texture_path);
             let mut sprite_sheet = GlTexture::new(gl, &texture_path).unwrap();
             sprite_sheet.bind(gl);
             for i in 0..32 {

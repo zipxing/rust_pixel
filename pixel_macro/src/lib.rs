@@ -64,7 +64,9 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                         .g
                         .context
                         .adapter
-                        .get_base()
+                        .as_any()
+                        .downcast_ref::<WebAdapter>()
+                        .unwrap()
                         .rbuf
                 }
 

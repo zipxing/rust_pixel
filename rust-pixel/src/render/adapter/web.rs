@@ -9,7 +9,7 @@ use crate::event::{
 };
 use crate::{
     render::{
-        adapter::{Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
+        adapter::{Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
         buffer::Buffer,
         sprite::Sprites,
     },
@@ -22,6 +22,7 @@ use std::time::Duration;
 pub struct WebAdapter {
     pub base: AdapterBase,
     pub rd: Rand,
+    pub rbuf: Vec<RenderCell>,
 }
 
 impl WebAdapter {
@@ -29,6 +30,7 @@ impl WebAdapter {
         Self {
             base: AdapterBase::new(pre, gn, project_path),
             rd: Rand::new(),
+            rbuf: vec![],
         }
     }
 }
@@ -68,7 +70,7 @@ impl Adapter for WebAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        self.rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
         Ok(())
     }
 

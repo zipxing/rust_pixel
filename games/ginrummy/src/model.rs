@@ -1,4 +1,4 @@
-use gin_rummy_lib::cards::*;
+use ginrummy_lib::cards::*;
 use log::info;
 use rust_pixel::event::Event;
 use rust_pixel::{context::Context, event::event_emit, game::Model, util::Rand};

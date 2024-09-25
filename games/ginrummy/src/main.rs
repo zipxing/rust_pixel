@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use gin_rummy::run;
+use ginrummy::run;
 
 fn main() -> Result<(), JsValue> {
     run()

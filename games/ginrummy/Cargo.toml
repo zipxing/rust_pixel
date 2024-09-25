@@ -1,5 +1,5 @@
 [package]
-name = "gin_rummy"
+name = "ginrummy"
 version = "0.1.0"
 edition = "2021"
 
@@ -18,7 +18,8 @@ wasm-bindgen-futures = "0.4.42"
 web-sys = "0.3.4"
 rust_pixel = { path = "../../rust-pixel", default-features = false }
 poker_lib = { path = "../poker/lib" }
-gin_rummy_lib = { path = "./lib" }
+ginrummy_lib = { path = "./lib" }
+pixel_macro = { path = "../../pixel_macro" }
 
 [features]
 sdl = ["rust_pixel/sdl"]
