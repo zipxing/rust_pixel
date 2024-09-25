@@ -12,7 +12,8 @@ const Pix = function(canvasElement, antialias) {
         };
 
         this.bind = () => {
-            bind(this);
+            console.log("texture bind....");
+            flush();
             _gl.bindFramebuffer(_gl.FRAMEBUFFER, _framebuffer);
             _gl.viewport(0, 0, _width, _height);
         };
@@ -26,13 +27,11 @@ const Pix = function(canvasElement, antialias) {
         this.getHeight = () => _height;
         this.setClearColor = color => _clearColor = color;
         this.clear = () => clear(_clearColor);
-        this.ready = () => _ready;
 
         const _texture = _gl.createTexture();
         const _framebuffer = _gl.createFramebuffer();
         const _frames = [];
 
-        let _ready = false;
         let _width = 0;
         let _height = 0;
         let _clearColor = new Pix.Color(1, 1, 1, 0);
@@ -56,12 +55,10 @@ const Pix = function(canvasElement, antialias) {
                 frame[7] /= _width;
                 frame[8] /= _height;
             }
-            _ready = true;
         };
 
         const source = arguments[0];
 
-        image.crossOrigin = "Anonymous";
         image.src = source;
 
         _gl.texImage2D(_gl.TEXTURE_2D, 0, _gl.RGBA, 1, 1, 0, _gl.RGBA, _gl.UNSIGNED_BYTE, _emptyPixel);
@@ -109,14 +106,9 @@ const Pix = function(canvasElement, antialias) {
             _instanceBuffer[++_instanceBufferAt] = a;
         };
 
-        this._getFrame = () => _frames[_frame];
-        this.setFrame = index => _frame = index;
-        this.getFrame = () => _frame;
-        this.getFrameCount = () => _frames.length;
+        this._getFrame = () => _frame;
 
-        const _frames = _sprites[name];
-        let _frameCounter = 0;
-        let _frame = 0;
+        const _frame = _sprites[name];
     };
 
     this.utils = {};
@@ -206,33 +198,6 @@ const Pix = function(canvasElement, antialias) {
             ]);
     };
 
-    const bind = target => {
-        if(_surface === target)
-            return;
-
-        flush();
-
-        if(_surface != null)
-            this.pop();
-
-        if(target != null)
-            pushIdentity();
-
-        _surface = target;
-    };
-
-    const bindTextureTexture = texture => {
-        if(_currentTextureTexture === texture)
-            return;
-
-        flush();
-
-        _gl.activeTexture(TEXTURE_SURFACE);
-        _gl.bindTexture(_gl.TEXTURE_2D, texture);
-
-        _currentTextureTexture = texture;
-    };
-
     const bindTextureAtlas = texture => {
         if(_currentTextureAtlas === texture)
             return;
@@ -259,26 +224,16 @@ const Pix = function(canvasElement, antialias) {
         _gl.bindBuffer(_gl.ARRAY_BUFFER, _instances);
         _gl.bufferSubData(_gl.ARRAY_BUFFER, 0, _instanceBuffer, 0, _instanceBufferAt + 1);
 
-        switch(_renderMode) {
-            case RENDER_MODE_PIXCELLS:
-                _gl.bindVertexArray(_vaoCells);
-                _gl.drawArraysInstanced(_gl.TRIANGLE_FAN, 0, 4, _instanceCount);
-                break;
-        }
+        _gl.bindVertexArray(_vaoCells);
+        _gl.drawArraysInstanced(_gl.TRIANGLE_FAN, 0, 4, _instanceCount);
 
         _instanceBufferAt = -1;
         _instanceCount = 0;
     };
 
     const sendUniformBuffer = () => {
-        if(_surface == null) {
-            _uboContents[3] = canvasElement.width;
-            _uboContents[7] = canvasElement.height;
-        }
-        else {
-            _uboContents[3] = _surface.getWidth();
-            _uboContents[7] = _surface.getHeight();
-        }
+        _uboContents[3] = canvasElement.width;
+        _uboContents[7] = canvasElement.height;
 
         _uboContents[0] = _transformStack[_transformAt]._00;
         _uboContents[1] = _transformStack[_transformAt]._10;
@@ -292,7 +247,7 @@ const Pix = function(canvasElement, antialias) {
         _transformDirty = false;
     };
 
-    const prepareDraw = (mode, size, shader) => {
+    const prepareDraw = (mode, size) => {
         if(_transformDirty) {
             flush();
 
@@ -301,9 +256,8 @@ const Pix = function(canvasElement, antialias) {
 
         if(_renderMode !== mode) {
             flush();
-
             _renderMode = mode;
-            (shader || _shaders[mode]).bind();
+            _shaders[mode].bind();
         }
 
         if(_instanceBufferAt + size >= _instanceBufferCapacity) {
@@ -330,45 +284,16 @@ const Pix = function(canvasElement, antialias) {
         _transformDirty = true;
     };
 
-    this.push = () => {
-        if(++_transformAt === _transformStack.length)
-            _transformStack.push(_transformStack[_transformAt - 1].copy());
-        else
-            _transformStack[_transformAt].set(_transformStack[_transformAt - 1]);
-    };
-
-    this.pop = () => {
-        --_transformAt;
-
-        _transformDirty = true;
-    };
-
     this.bind = () => {
-        bind(null);
-
         _gl.bindFramebuffer(_gl.FRAMEBUFFER, null);
         _gl.viewport(0, 0, canvasElement.width, canvasElement.height);
     };
 
     this.register = function() {
-        const frames = [];
-
-        for(let i = 1; i < arguments.length; ++i)
-            frames.push(arguments[i]);
-
-        if(_sprites[arguments[0]] === undefined)
-            _sprites[arguments[0]] = frames;
-        else {
-            _sprites[arguments[0]].length = 0;
-
-            for(let i = 0; i < frames.length; ++i)
-                _sprites[arguments[0]].push(frames[i]);
-        }
+        _sprites[arguments[0]] = arguments[1];
     };
 
-    this.isRegistered = name => _sprites[name] !== undefined;
-
-    this.makeCellFrame = (sheet, x, y, width, height, xOrigin, yOrigin, time) => {
+    this.makeCellFrame = (sheet, x, y, width, height, xOrigin, yOrigin) => {
         const frame = [
             sheet._getTexture(),
             width,
@@ -379,7 +304,6 @@ const Pix = function(canvasElement, antialias) {
             y,
             width,
             height,
-            time
         ];
 
         sheet._addFrame(frame);
@@ -419,16 +343,11 @@ const Pix = function(canvasElement, antialias) {
     this.clear = () => clear(_clearColor);
     this.getWidth = () => canvasElement.width;
     this.getHeight = () => canvasElement.height;
-    this.unregister = name => delete _sprites[name];
 
     const RENDER_MODE_NONE = -1;
-    const RENDER_MODE_SURFACES = 0;
-    const RENDER_MODE_PIXCELLS = 1;
+    const RENDER_MODE_PIXCELLS = 0;
     const TEXTURE_ATLAS = _gl.TEXTURE0;
-    const TEXTURE_SURFACE = _gl.TEXTURE1;
-    const TEXTURE_MESH = _gl.TEXTURE2;
     const TEXTURE_EDITING = _gl.TEXTURE3;
-    const TEXTURE_SHADER_FIRST = _gl.TEXTURE4;
 
     const _quad = _gl.createBuffer();
     const _instances = _gl.createBuffer();
@@ -474,20 +393,12 @@ const Pix = function(canvasElement, antialias) {
             {
                 source: {
                     type: "1i",
-                    value: 1
-                }
-            }),
-        new Shader(
-            _shaderCoreCells,
-            {
-                source: {
-                    type: "1i",
                     value: 0
                 }
             })
     ];
 
-    let _currentShader, _currentShaderCore, _surface, _currentTextureTexture, _currentTextureAtlas, _currentTextureMesh;
+    let _currentShader, _currentShaderCore, _currentTextureTexture, _currentTextureAtlas, _currentTextureMesh;
     let _meshUvLeft, _meshUvTop, _meshUvWidth, _meshUvHeight;
     let _transformAt = 0;
     let _transformDirty = true;
@@ -535,7 +446,7 @@ const Pix = function(canvasElement, antialias) {
 
     _gl.bindVertexArray(null);
 
-    this.bind();
+    flush();
 };
 
 Pix.Color = function(r, g, b, a) {

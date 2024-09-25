@@ -1,40 +1,39 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Implements an Adapter trait. Moreover,
-//! all SDL related processing is handled here.
-//! Includes resizing of height and width, init settings,
-//! some code is also called in cell.rs
+//! Implements an Adapter trait. Moreover, all SDL related processing is handled here.
+//! Includes resizing of height and width, init settings.
+//! Use opengl and glow mod for rendering.
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
-use crate::{
-    render::{
-        adapter::{
-            render_border, render_logo, render_main_buffer, render_pixel_sprites, ARect, Adapter,
-            AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
-        },
-        buffer::Buffer,
-        sprite::Sprites,
+use crate::render::{
+    adapter::sdl::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
+    adapter::{
+        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
-    util::Rand,
-    LOGO_FRAME,
+    buffer::Buffer,
+    sprite::Sprites,
 };
+use log::info;
 use sdl2::{
     event::Event as SEvent,
-    image::{InitFlag, LoadSurface, LoadTexture},
+    image::{InitFlag, LoadSurface},
     keyboard::Keycode as SKeycode,
     mouse::*,
-    pixels::PixelFormatEnum,
-    rect::{Point as SPoint, Rect as SRect},
-    render::{Canvas, Texture},
     surface::Surface,
     video::{Window, WindowPos::Positioned},
     EventPump, Sdl,
 };
 use std::any::Any;
 use std::time::Duration;
-// use log::info;
+
+// opengl codes...
+pub mod gl_color;
+pub mod gl_pix;
+pub mod gl_shader;
+pub mod gl_texture;
+pub mod gl_transform;
 
 // data for drag window...
 #[derive(Default)]
@@ -51,26 +50,17 @@ pub struct SdlAdapter {
     pub base: AdapterBase,
 
     // sdl object
-    pub context: Sdl,
+    pub sdl_context: Sdl,
+    pub sdl_window: Option<Window>,
     pub event_pump: Option<EventPump>,
 
-    // custom cursor in rust-sdl2
-    pub cursor: Option<Cursor>,
-    pub canvas: Option<Canvas<Window>>,
-
-    // raw textures
-    pub asset_textures: Option<Vec<Texture>>,
-
-    // rendering target textures
-    pub render_texture: Option<Texture>,
-
     // gl object
-    pub hidden_window: Option<sdl2::video::Window>,
-    pub hidden_gl_context: Option<sdl2::video::GLContext>,
     pub gl: Option<glow::Context>,
+    pub gl_context: Option<sdl2::video::GLContext>,
+    pub gl_pix: Option<GlPix>,
 
-    // rand
-    pub rd: Rand,
+    // custom cursor
+    pub cursor: Option<Cursor>,
 
     // data for dragging the window
     drag: Drag,
@@ -87,21 +77,16 @@ impl SdlAdapter {
     pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(pre, gn, project_path),
-            context: sdl2::init().unwrap(),
+            sdl_context: sdl2::init().unwrap(),
             event_pump: None,
             cursor: None,
-            canvas: None,
-            asset_textures: None,
-            render_texture: None,
-            hidden_window: None,
-            hidden_gl_context: None,
+            sdl_window: None,
+            gl_context: None,
             gl: None,
-            rd: Rand::new(),
+            gl_pix: None,
             drag: Default::default(),
         }
     }
-
-    pub fn haha(&mut self) {}
 
     fn set_mouse_cursor(&mut self, s: &Surface) {
         self.cursor = Some(
@@ -115,7 +100,24 @@ impl SdlAdapter {
             }
             _ => {}
         }
-        self.context.mouse().show_cursor(true);
+        self.sdl_context.mouse().show_cursor(true);
+    }
+
+    pub fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+        let rbuf = self.buf_to_render_buffer(buf);
+        self.render_rbuf(&rbuf, rtidx);
+    }
+
+    pub fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
+        let bs = self.get_base();
+        let rx = bs.ratio_x;
+        let ry = bs.ratio_y;
+        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
+            pix.bind_render_texture(gl, rtidx);
+            pix.clear(gl);
+            pix.render_rbuf(gl, rbuf, rx, ry);
+            pix.flush(gl);
+        }
     }
 
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
@@ -144,7 +146,6 @@ impl SdlAdapter {
                 keycode: Some(SKeycode::Q),
                 ..
             } => return true,
-
             SEvent::MouseButtonDown {
                 mouse_btn: sdl2::mouse::MouseButton::Left,
                 x,
@@ -182,24 +183,6 @@ impl SdlAdapter {
         }
         false
     }
-
-    /// dynamic update of sym dot matrix
-    /// the length of pdat should be 16 * 16 * 4(RGBA)
-    pub fn update_cell_texture(&mut self, tex_idx: u8, sym_idx: u8, pdat: &[u8]) {
-        match &mut self.asset_textures {
-            Some(st) => {
-                let w = PIXEL_SYM_WIDTH as i32;
-                let h = PIXEL_SYM_HEIGHT as i32;
-                let srcx = sym_idx as i32 % w;
-                let srcy = sym_idx as i32 / w;
-                let sr = SRect::new((w + 1) * srcx, (h + 1) * srcy, w as u32, h as u32);
-                st[tex_idx as usize]
-                    .update(sr, pdat, 4 * PIXEL_SYM_WIDTH as usize)
-                    .unwrap();
-            }
-            _ => {}
-        }
-    }
 }
 
 impl Adapter for SdlAdapter {
@@ -210,11 +193,19 @@ impl Adapter for SdlAdapter {
             .set_pixel_size()
             .set_title(s);
 
-        let video_subsystem = self.context.video().unwrap();
+        let video_subsystem = self.sdl_context.video().unwrap();
         let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG).unwrap();
+
+        // Set OpenGL attributes
+        {
+            let gl_attr = video_subsystem.gl_attr();
+            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+            gl_attr.set_context_version(3, 3);
+        }
 
         let window = video_subsystem
             .window(&self.base.title, self.base.pixel_w, self.base.pixel_h)
+            .opengl()
             .position_centered()
             .borderless()
             // .fullscreen()
@@ -222,64 +213,42 @@ impl Adapter for SdlAdapter {
             .map_err(|e| e.to_string())
             .unwrap();
 
-        unsafe {
-            let _gl_context = window.gl_create_context().unwrap();
-            self.gl = Some(glow::Context::from_loader_function(|s| {
-                video_subsystem.gl_get_proc_address(s) as *const _
-            }));
-        }
+        let gl_context = window.gl_create_context().unwrap();
+        self.gl_context = Some(gl_context);
+        video_subsystem.gl_set_swap_interval(1).unwrap(); // Enable vsync
 
-        let canvas = window
-            .into_canvas()
-            .software()
-            .build()
-            .map_err(|e| e.to_string())
-            .unwrap();
-
-        // create opengl context...
-        let gl_attr = video_subsystem.gl_attr();
-        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-        gl_attr.set_context_version(3, 30);
-        let hidden_window = video_subsystem
-            .window("Hidden OpenGL Window", 1, 1)
-            .opengl()
-            .hidden()
-            .build()
-            .map_err(|e| e.to_string())
-            .unwrap();
-        let hidden_gl_context = hidden_window.gl_create_context().unwrap();
-        hidden_window.gl_make_current(&hidden_gl_context).unwrap();
+        // Create the OpenGL context using glow
         let gl = unsafe {
             glow::Context::from_loader_function(|s| {
                 video_subsystem.gl_get_proc_address(s) as *const _
             })
         };
-        self.hidden_window = Some(hidden_window);
-        self.hidden_gl_context = Some(hidden_gl_context);
+
+        // Store the OpenGL context
         self.gl = Some(gl);
+        self.sdl_window = Some(window);
 
-        let texture_creator = canvas.texture_creator();
-        let mut vt: Vec<Texture> = vec![];
-        for t in 0..PIXEL_TEXTURE_FILES.len() {
-            vt.push(
-                texture_creator
-                    .load_texture(format!(
-                        "{}{}{}",
-                        self.base.project_path,
-                        std::path::MAIN_SEPARATOR,
-                        PIXEL_TEXTURE_FILES[t]
-                    ))
-                    .unwrap(),
+        let mut texs = vec![];
+        for texture_file in PIXEL_TEXTURE_FILES.iter() {
+            let texture_path = format!(
+                "{}{}{}",
+                self.base.project_path,
+                std::path::MAIN_SEPARATOR,
+                texture_file
             );
+            texs.push(texture_path);
         }
-        let rt = texture_creator
-            .create_texture_target(
-                PixelFormatEnum::RGBA8888,
-                self.base.pixel_w,
-                self.base.pixel_h,
-            )
-            .unwrap();
 
+        self.gl_pix = Some(GlPix::new(
+            self.gl.as_ref().unwrap(),
+            self.base.pixel_w as i32,
+            self.base.pixel_h as i32,
+            texs,
+        ));
+
+        info!("Window & gl init ok...");
+
+        // custom mouse cursor image
         let surface = Surface::from_file(format!(
             "{}{}{}",
             self.base.project_path,
@@ -290,10 +259,8 @@ impl Adapter for SdlAdapter {
         .unwrap();
         self.set_mouse_cursor(&surface);
 
-        self.canvas = Some(canvas);
-        self.asset_textures = Some(vt);
-        self.render_texture = Some(rt);
-        self.event_pump = Some(self.context.event_pump().unwrap());
+        // init event_pump
+        self.event_pump = Some(self.sdl_context.event_pump().unwrap());
     }
 
     fn get_base(&mut self) -> &mut AdapterBase {
@@ -346,97 +313,37 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        let width = current_buffer.area.width;
+        // return Ok(());
+        // process window draging move...
+        sdl_move_win(
+            &mut self.drag.need,
+            self.sdl_window.as_mut().unwrap(),
+            self.drag.dx,
+            self.drag.dy,
+        );
 
-        if let (Some(c), Some(rt), Some(texs)) = (
-            &mut self.canvas,
-            &mut self.render_texture,
-            &mut self.asset_textures,
-        ) {
-            // dragging window, set the correct position of a window
-            sdl_move_win(&mut self.drag.need, c, self.drag.dx, self.drag.dy);
-            c.clear();
-            c.with_texture_canvas(rt, |tc| {
-                tc.clear();
+        // render every thing to rbuf
+        let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        self.render_rbuf(&rbuf, 2);
 
-                if stage <= LOGO_FRAME {
-                    render_logo(
-                        self.base.ratio_x,
-                        self.base.ratio_y,
-                        self.base.pixel_w,
-                        self.base.pixel_h,
-                        &mut self.rd,
-                        stage,
-                        |fc, ss1, ss2, texidx, _symidx| {
-                            let s1 = SRect::new(ss1.x, ss1.y, ss1.w, ss1.h);
-                            let s2 = SRect::new(ss2.x, ss2.y, ss2.w, ss2.h);
-                            let tx = &mut texs[texidx / 4];
-                            tx.set_color_mod(fc.0, fc.1, fc.2);
-                            tx.set_alpha_mod(fc.3);
-                            tc.copy(tx, s1, s2).unwrap();
-                        },
-                    );
-                }
+        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
+            // render texture 2 , 3 to screen
+            pix.bind(gl);
+            let mut t = GlTransform::new();
+            t.scale(2.0 as f32, 2.0 as f32);
+            t.translate(-0.5, -0.5);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
-                let rx = self.base.ratio_x;
-                let ry = self.base.ratio_y;
-
-                // border & main_buffer...
-                let mut rfunc = |fc: &(u8, u8, u8, u8),
-                                 bc: &Option<(u8, u8, u8, u8)>,
-                                 s0: ARect,
-                                 s1: ARect,
-                                 s2: ARect,
-                                 texidx: usize,
-                                 _symidx: usize| {
-                    let tx = &mut texs[texidx / 4];
-                    let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
-                    let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-                    let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-                    if let Some(bgc) = bc {
-                        tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-                        tx.set_alpha_mod(bgc.3);
-                        tc.copy(tx, ss0, ss2).unwrap();
-                    }
-                    tx.set_color_mod(fc.0, fc.1, fc.2);
-                    tx.set_alpha_mod(fc.3);
-                    tc.copy(tx, ss1, ss2).unwrap();
-                };
-
-                if stage > LOGO_FRAME {
-                    render_border(self.base.cell_w, self.base.cell_h, rx, ry, &mut rfunc);
-                    render_main_buffer(current_buffer, width, rx, ry, &mut rfunc);
-                    for idx in 0..pixel_sprites.len() {
-                        if pixel_sprites[idx].is_pixel {
-                            render_pixel_sprites(
-                                &mut pixel_sprites[idx],
-                                rx,
-                                ry,
-                                |fc, bc, s0, s1, s2, texidx, _symidx, angle, ccp| {
-                                    let tx = &mut texs[texidx / 4];
-                                    let ss0 = SRect::new(s0.x, s0.y, s0.w, s0.h);
-                                    let ss1 = SRect::new(s1.x, s1.y, s1.w, s1.h);
-                                    let ss2 = SRect::new(s2.x, s2.y, s2.w, s2.h);
-                                    let cccp = SPoint::new(ccp.x, ccp.y);
-                                    if let Some(bgc) = bc {
-                                        tx.set_color_mod(bgc.0, bgc.1, bgc.2);
-                                        tx.set_alpha_mod(bgc.3);
-                                        tc.copy_ex(tx, ss0, ss2, angle, cccp, false, false)
-                                            .unwrap();
-                                    }
-                                    tx.set_color_mod(fc.0, fc.1, fc.2);
-                                    tx.set_alpha_mod(fc.3);
-                                    tc.copy_ex(tx, ss1, ss2, angle, cccp, false, false).unwrap();
-                                },
-                            );
-                        }
-                    }
-                }
-            })
-            .unwrap();
-            c.copy(rt, None, None).unwrap();
-            c.present();
+            let mut t2 = GlTransform::new();
+            t2.scale(2.0 * 0.512, 2.0 * 0.756);
+            t2.translate(-0.5, -0.5);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 3, [0.05, 0.0, 0.512, 0.756], &t2, &c);
+            // swap window for display
+            self.sdl_window.as_ref().unwrap().gl_swap_window();
         }
+
         Ok(())
     }
 
@@ -461,10 +368,9 @@ impl Adapter for SdlAdapter {
     }
 }
 
-pub fn sdl_move_win(drag_need: &mut bool, c: &mut Canvas<Window>, dx: i32, dy: i32) {
+pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {
     // dragging window, set the correct position of a window
     if *drag_need {
-        let win = c.window_mut();
         let (win_x, win_y) = win.position();
         win.set_position(Positioned(win_x + dx), Positioned(win_y + dy));
         *drag_need = false;

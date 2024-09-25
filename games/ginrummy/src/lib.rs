@@ -1,7 +1,7 @@
 mod model;
 mod render;
 
-use crate::{model::CityModel, render::CityRender};
+use crate::{model::GinRummyModel, render::GinRummyRender};
 use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
@@ -12,5 +12,5 @@ use wasm_bindgen::prelude::*;
 
 use pixel_macro::pixel_game;
 
-pixel_game!(City);
+pixel_game!(GinRummy);
 
