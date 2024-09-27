@@ -7,8 +7,8 @@ use crate::render::adapter::sdl::gl_texture::{GlCell, GlRenderTexture, GlTexture
 use crate::render::adapter::sdl::gl_transform::GlTransform;
 use crate::render::adapter::RenderCell;
 use glow::HasContext;
-use std::collections::HashMap;
 use log::info;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum GlRenderMode {
@@ -26,27 +26,24 @@ pub struct GlPix {
 
     pub symbols: Vec<GlCell>,
 
-    pub transform_stack: Vec<GlTransform>,
-    pub transform_at: usize,
+    pub transform_stack: GlTransform,
     pub transform_dirty: bool,
-
-    // instance buffer for cells shader...
-    pub instance_buffer: Vec<f32>,
-    pub instance_buffer_capacity: usize,
-    pub instance_buffer_at: isize,
-    pub instance_count: usize,
 
     // cells shader buffers...
     pub vao_cells: glow::NativeVertexArray,
     pub instances_vbo: glow::NativeBuffer,
+    pub instance_buffer: Vec<f32>,
+    pub instance_buffer_capacity: usize,
+    pub instance_buffer_at: isize,
+    pub instance_count: usize,
     pub quad_vbo: glow::NativeBuffer,
     pub ubo: glow::NativeBuffer,
     pub ubo_contents: [f32; 12],
 
     // trans shader buffers...
     pub vao_trans: glow::NativeVertexArray,
-    pub vbuf: glow::NativeBuffer,
-    pub ibuf: glow::NativeBuffer,
+    pub vbo_trans: glow::NativeBuffer,
+    pub ebo_trans: glow::NativeBuffer,
 
     // general2d shader buffers...
     pub vao_general2d: glow::NativeVertexArray,
@@ -62,7 +59,12 @@ pub struct GlPix {
 }
 
 impl GlPix {
-    pub fn new(gl: &glow::Context, canvas_width: i32, canvas_height: i32, texs: Vec<String>) -> Self {
+    pub fn new(
+        gl: &glow::Context,
+        canvas_width: i32,
+        canvas_height: i32,
+        texs: Vec<String>,
+    ) -> Self {
         // cells shader...
         let vertex_shader_src = r#"
         #version 330 core
@@ -213,74 +215,18 @@ impl GlPix {
         );
         let shader3 = GlShader::new(shader_core_general2d, uniforms3);
 
-        let (vao_trans, vbuf, ibuf) = unsafe { create_buffers(&gl, shader2.core.program) };
+        let (vao_trans, vbo_trans, ebo_trans) =
+            unsafe { create_buffers(&gl, shader2.core.program) };
 
         let (vao_general2d, vbo_general2d, ebo_general2d) =
             unsafe { create_general2d_buffers(&gl, shader3.core.program) };
 
-        let shaders = vec![shader, shader2, shader3];
+        let (vao_cells, instances_vbo, quad_vbo, ubo) = unsafe { create_cell_buffers(&gl) };
 
-        // 创建缓冲区和 VAO
-        let quad_vbo = unsafe { gl.create_buffer().unwrap() };
-        let instances_vbo = unsafe { gl.create_buffer().unwrap() };
-        let vao_cells = unsafe { gl.create_vertex_array().unwrap() };
-        let ubo = unsafe { gl.create_buffer().unwrap() };
+        let shaders = vec![shader, shader2, shader3];
 
         // 初始化缓冲区
         unsafe {
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
-            let instance_buffer_capacity = 1024;
-            gl.buffer_data_size(
-                glow::ARRAY_BUFFER,
-                (instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
-                glow::DYNAMIC_DRAW,
-            );
-
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
-            let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                &quad_vertices.align_to::<u8>().1,
-                glow::STATIC_DRAW,
-            );
-
-            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
-            gl.buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
-            gl.bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
-
-            // 设置 VAO
-            gl.bind_vertex_array(Some(vao_cells));
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
-
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
-
-            let stride = 64;
-
-            // Attribute 1
-            gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
-            gl.vertex_attrib_divisor(1, 1);
-
-            // Attribute 2
-            gl.enable_vertex_attrib_array(2);
-            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
-            gl.vertex_attrib_divisor(2, 1);
-
-            // Attribute 3
-            gl.enable_vertex_attrib_array(3);
-            gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
-            gl.vertex_attrib_divisor(3, 1);
-
-            // Attribute 4 (color)
-            gl.enable_vertex_attrib_array(4);
-            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
-            gl.vertex_attrib_divisor(4, 1);
-
-            gl.bind_vertex_array(None);
-
-            // 启用混合
             gl.enable(glow::BLEND);
             gl.disable(glow::DEPTH_TEST);
             gl.blend_func_separate(
@@ -314,20 +260,19 @@ impl GlPix {
             ubo,
             ubo_contents,
             vao_trans,
-            vbuf,
-            ibuf,
+            vbo_trans,
+            ebo_trans,
             vao_general2d,
             vbo_general2d,
             ebo_general2d,
-            transform_stack: vec![GlTransform::new_with_values(
+            transform_stack: GlTransform::new_with_values(
                 1.0,
                 0.0,
                 0.0,
                 0.0,
                 -1.0,
                 canvas_height as f32,
-            )],
-            transform_at: 0,
+            ),
             transform_dirty: true,
             instance_buffer_capacity: 1024,
             instance_buffer_at: -1,
@@ -402,7 +347,7 @@ impl GlPix {
     }
 
     fn send_uniform_buffer(&mut self, gl: &glow::Context) {
-        let transform = self.transform_stack.last().unwrap();
+        let transform = self.transform_stack;
         self.ubo_contents[0] = transform.m00;
         self.ubo_contents[1] = transform.m10;
         self.ubo_contents[2] = transform.m20;
@@ -656,7 +601,7 @@ impl GlPix {
                     r.bb as f32 / 255.0,
                     r.ba as f32 / 255.0,
                 );
-                // fill buffer for opengl rendering
+                // fill instance buffer for opengl instance rendering
                 self.draw_symbol(gl, 320, &transform, &back_color);
             }
 
@@ -666,7 +611,7 @@ impl GlPix {
                 r.b as f32 / 255.0,
                 r.a as f32 / 255.0,
             );
-            // fill buffer for opengl rendering
+            // fill instance buffer for opengl instance rendering
             self.draw_symbol(gl, texidx, &transform, &color);
         }
     }
@@ -765,6 +710,8 @@ unsafe fn create_buffers(
     gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
     gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
 
+    gl.bind_vertex_array(None);
+
     (vao, vertex_buffer, index_buffer)
 }
 
@@ -795,6 +742,74 @@ unsafe fn render_trans_frame(
     gl.uniform_1_f32(lb.as_ref(), progress);
 
     gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
+}
+
+unsafe fn create_cell_buffers(
+    gl: &glow::Context,
+    // program: glow::Program,
+) -> (
+    glow::NativeVertexArray,
+    glow::NativeBuffer,
+    glow::NativeBuffer,
+    glow::NativeBuffer,
+) {
+    let vao_cells = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao_cells));
+
+    let instances_vbo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
+    let instance_buffer_capacity = 1024;
+    gl.buffer_data_size(
+        glow::ARRAY_BUFFER,
+        (instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
+        glow::DYNAMIC_DRAW,
+    );
+
+    let quad_vbo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+    let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
+    gl.buffer_data_u8_slice(
+        glow::ARRAY_BUFFER,
+        &quad_vertices.align_to::<u8>().1,
+        glow::STATIC_DRAW,
+    );
+
+    let ubo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
+    gl.buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
+    gl.bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
+
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+    gl.enable_vertex_attrib_array(0);
+    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
+
+    let stride = 64;
+
+    // Attribute 1
+    gl.enable_vertex_attrib_array(1);
+    gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
+    gl.vertex_attrib_divisor(1, 1);
+
+    // Attribute 2
+    gl.enable_vertex_attrib_array(2);
+    gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
+    gl.vertex_attrib_divisor(2, 1);
+
+    // Attribute 3
+    gl.enable_vertex_attrib_array(3);
+    gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
+    gl.vertex_attrib_divisor(3, 1);
+
+    // Attribute 4 (color)
+    gl.enable_vertex_attrib_array(4);
+    gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
+    gl.vertex_attrib_divisor(4, 1);
+
+    gl.bind_vertex_array(None);
+
+    (vao_cells, instances_vbo, quad_vbo, ubo)
 }
 
 unsafe fn create_general2d_buffers(

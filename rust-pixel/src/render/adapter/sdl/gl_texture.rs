@@ -35,14 +35,14 @@ impl GlRenderTexture {
             gl.tex_parameter_i32(
                 glow::TEXTURE_2D,
                 glow::TEXTURE_MIN_FILTER,
-                // glow::NEAREST as i32,
-                glow::LINEAR as i32,
+                glow::NEAREST as i32,
+                // glow::LINEAR as i32,
             );
             gl.tex_parameter_i32(
                 glow::TEXTURE_2D,
                 glow::TEXTURE_MAG_FILTER,
-                // glow::NEAREST as i32,
-                glow::LINEAR as i32,
+                glow::NEAREST as i32,
+                // glow::LINEAR as i32,
             );
 
             gl.framebuffer_texture_2d(
@@ -148,11 +148,13 @@ impl GlTexture {
                 glow::TEXTURE_2D,
                 glow::TEXTURE_MAG_FILTER,
                 glow::NEAREST as i32,
+                // glow::LINEAR as i32,
             );
             gl.tex_parameter_i32(
                 glow::TEXTURE_2D,
                 glow::TEXTURE_MIN_FILTER,
                 glow::NEAREST as i32,
+                // glow::LINEAR as i32,
             );
             gl.tex_parameter_i32(
                 glow::TEXTURE_2D,
