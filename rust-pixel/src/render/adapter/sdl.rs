@@ -94,11 +94,8 @@ impl SdlAdapter {
                 .map_err(|err| format!("failed to load cursor: {}", err))
                 .unwrap(),
         );
-        match &self.cursor {
-            Some(cursor) => {
-                cursor.set();
-            }
-            _ => {}
+        if let Some(cursor) = &self.cursor {
+            cursor.set();
         }
         self.sdl_context.mouse().show_cursor(true);
     }

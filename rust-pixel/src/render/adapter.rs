@@ -75,23 +75,16 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 // this struct used for opengl render and webgl render...
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
-    pub r: u32,
-    pub g: u32,
-    pub b: u32,
-    pub a: u32,
-    pub back: u32,
-    pub br: u32,
-    pub bg: u32,
-    pub bb: u32,
-    pub ba: u32,
-    pub texsym: u32,
-    pub x: i32,
-    pub y: i32,
+    pub fcolor: (f32, f32, f32, f32),
+    pub bcolor: Option<(f32, f32, f32, f32)>,
+    pub texsym: usize,
+    pub x: f32,
+    pub y: f32,
     pub w: u32,
     pub h: u32,
-    pub angle: u32,
-    pub cx: i32,
-    pub cy: i32,
+    pub angle: f32,
+    pub cx: f32,
+    pub cy: f32,
 }
 
 pub struct AdapterBase {
@@ -344,28 +337,31 @@ fn push_render_buffer(
     ccp: &PointI32,
 ) {
     let mut wc: RenderCell = Default::default();
-    wc.r = r as u32;
-    wc.g = g as u32;
-    wc.b = b as u32;
-    wc.a = a as u32;
+    wc.fcolor = (
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a as f32 / 255.0,
+    );
     if has_back {
-        wc.back = 1;
-        wc.br = br as u32;
-        wc.bg = bg as u32;
-        wc.bb = bb as u32;
-        wc.ba = ba as u32;
+        wc.bcolor = Some((
+            br as f32 / 255.0,
+            bg as f32 / 255.0,
+            bb as f32 / 255.0,
+            ba as f32 / 255.0,
+        ));
     } else {
-        wc.back = 0;
+        wc.bcolor = None;
     }
-    let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
     let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
-    wc.texsym = y * 32u32 + x;
-    wc.x = s.x;
-    wc.y = s.y;
+    let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
+    wc.texsym = (y * 32u32 + x) as usize;
+    wc.x = s.x as f32 + PIXEL_SYM_WIDTH;
+    wc.y = s.y as f32 + PIXEL_SYM_HEIGHT;
     wc.w = s.w;
     wc.h = s.h;
     if angle == 0.0 {
-        wc.angle = 0u32;
+        wc.angle = angle as f32;
     } else {
         let mut aa = (1.0 - angle / 180.0) * std::f64::consts::PI;
         let pi2 = std::f64::consts::PI * 2.0;
@@ -375,10 +371,10 @@ fn push_render_buffer(
         while aa > pi2 {
             aa -= pi2;
         }
-        wc.angle = (aa * 1000.0) as u32;
+        wc.angle = aa as f32;
     }
-    wc.cx = ccp.x as i32;
-    wc.cy = ccp.y as i32;
+    wc.cx = ccp.x as f32;
+    wc.cy = ccp.y as f32;
     rbuf.push(wc);
 }
 

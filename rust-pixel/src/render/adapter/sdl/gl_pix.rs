@@ -2,13 +2,12 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 use crate::render::adapter::sdl::gl_color::GlColor;
-use crate::render::adapter::sdl::gl_shader::{GlShader, GlShaderCore, GlUniformValue};
+use crate::render::adapter::sdl::gl_shader::GlShader;
 use crate::render::adapter::sdl::gl_texture::{GlCell, GlRenderTexture, GlTexture};
 use crate::render::adapter::sdl::gl_transform::GlTransform;
-use crate::render::adapter::RenderCell;
+use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
 use log::info;
-use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum GlRenderMode {
@@ -191,39 +190,17 @@ impl GlPix {
     }
     "#;
 
-        let shader_core_cells = GlShaderCore::new(&gl, vertex_shader_src, fragment_shader_src);
-        let mut uniforms = HashMap::new();
-        uniforms.insert("source".to_string(), GlUniformValue::Int(0));
-        let shader = GlShader::new(shader_core_cells, uniforms);
-
-        let shader_core_trans = GlShaderCore::new(&gl, vertex_shader_src2, fragment_shader_src2);
-        let mut uniforms2 = HashMap::new();
-        uniforms2.insert("texture1".to_string(), GlUniformValue::Int(0));
-        uniforms2.insert("texture2".to_string(), GlUniformValue::Int(1));
-        uniforms2.insert("progress".to_string(), GlUniformValue::Float(0.0));
-        let shader2 = GlShader::new(shader_core_trans, uniforms2);
-
-        let shader_core_general2d =
-            GlShaderCore::new(&gl, vertex_shader_src3, fragment_shader_src3);
-        let mut uniforms3 = HashMap::new();
-        uniforms3.insert("texture1".to_string(), GlUniformValue::Int(0));
-        uniforms3.insert("transform".to_string(), GlUniformValue::Mat4([0.0; 16]));
-        uniforms3.insert("area".to_string(), GlUniformValue::Vec4([0.0; 4]));
-        uniforms3.insert(
-            "color".to_string(),
-            GlUniformValue::Vec4([1.0, 1.0, 1.0, 1.0]),
-        );
-        let shader3 = GlShader::new(shader_core_general2d, uniforms3);
+        let shader_cell = GlShader::new(&gl, vertex_shader_src, fragment_shader_src);
+        let shader_trans = GlShader::new(&gl, vertex_shader_src2, fragment_shader_src2);
+        let shader_general2d = GlShader::new(&gl, vertex_shader_src3, fragment_shader_src3);
 
         let (vao_trans, vbo_trans, ebo_trans) =
-            unsafe { create_buffers(&gl, shader2.core.program) };
-
+            unsafe { create_buffers(&gl, shader_trans.program) };
         let (vao_general2d, vbo_general2d, ebo_general2d) =
-            unsafe { create_general2d_buffers(&gl, shader3.core.program) };
-
+            unsafe { create_general2d_buffers(&gl, shader_general2d.program) };
         let (vao_cells, instances_vbo, quad_vbo, ubo) = unsafe { create_cell_buffers(&gl) };
 
-        let shaders = vec![shader, shader2, shader3];
+        let shaders = vec![shader_cell, shader_trans, shader_general2d];
 
         // 初始化缓冲区
         unsafe {
@@ -296,10 +273,10 @@ impl GlPix {
                 for j in 0..32 {
                     let cell = s.make_cell_frame(
                         &mut sprite_sheet,
-                        j as f32 * 17.0,
-                        i as f32 * 17.0,
-                        16.0,
-                        16.0,
+                        j as f32 * (PIXEL_SYM_WIDTH + 1.0),
+                        i as f32 * (PIXEL_SYM_HEIGHT + 1.0),
+                        PIXEL_SYM_WIDTH,
+                        PIXEL_SYM_HEIGHT,
                         8.0,
                         8.0,
                     );
@@ -428,8 +405,6 @@ impl GlPix {
             return;
         }
 
-        self.flush(gl);
-
         unsafe {
             gl.active_texture(glow::TEXTURE0);
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
@@ -497,7 +472,7 @@ impl GlPix {
             gl.bind_vertex_array(Some(self.vao_general2d));
 
             // 设置 uniform
-            let shader_program = self.shaders[GlRenderMode::General2D as usize].core.program;
+            let shader_program = self.shaders[GlRenderMode::General2D as usize].program;
 
             // 绑定纹理
             gl.active_texture(glow::TEXTURE0);
@@ -531,19 +506,12 @@ impl GlPix {
                 ],
             );
 
-            // 设置纹理区域
             let area_loc = gl.get_uniform_location(shader_program, "area");
             gl.uniform_4_f32_slice(area_loc.as_ref(), &area);
 
-            // 设置颜色
             let color_loc = gl.get_uniform_location(shader_program, "color");
             gl.uniform_4_f32_slice(color_loc.as_ref(), &[color.r, color.g, color.b, color.a]);
 
-            // gl.viewport(0, 0, 1200, 830);
-            // gl.clear_color(1.0, 0.0, 1.0, 1.0);
-            // gl.clear(glow::COLOR_BUFFER_BIT);
-
-            // 绘制
             gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
 
             gl.bind_vertex_array(None);
@@ -561,7 +529,7 @@ impl GlPix {
             self.prepare_draw_trans(gl);
             render_trans_frame(
                 gl,
-                self.shaders[1].core.program,
+                self.shaders[1].program,
                 self.render_textures[0].texture,
                 self.render_textures[1].texture,
                 width,
@@ -578,41 +546,28 @@ impl GlPix {
         ratio_x: f32,
         ratio_y: f32,
     ) {
+        self.bind_texture_atlas(gl, self.symbols[0].texture);
         for r in rbuf {
-            let texidx = r.texsym as usize;
-            let spx = r.x as f32 + 16.0;
-            let spy = r.y as f32 + 16.0;
-            let ang = r.angle as f32 / 1000.0;
-            let cpx = r.cx as f32;
-            let cpy = r.cy as f32;
-
             let mut transform = GlTransform::new();
-            transform.translate(spx + cpx - 16.0, spy + cpy - 16.0);
-            if ang != 0.0 {
-                transform.rotate(ang);
+            transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT);
+            if r.angle != 0.0 {
+                transform.rotate(r.angle);
             }
-            transform.translate(-cpx + 8.0, -cpy + 8.0);
+            transform.translate(
+                -r.cx + PIXEL_SYM_WIDTH / 2.0,
+                -r.cy + PIXEL_SYM_HEIGHT / 2.0,
+            );
             transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
 
-            if r.back != 0 {
-                let back_color = GlColor::new(
-                    r.br as f32 / 255.0,
-                    r.bg as f32 / 255.0,
-                    r.bb as f32 / 255.0,
-                    r.ba as f32 / 255.0,
-                );
+            if let Some(b) = r.bcolor {
+                let back_color = GlColor::new(b.0, b.1, b.2, b.3);
                 // fill instance buffer for opengl instance rendering
                 self.draw_symbol(gl, 320, &transform, &back_color);
             }
 
-            let color = GlColor::new(
-                r.r as f32 / 255.0,
-                r.g as f32 / 255.0,
-                r.b as f32 / 255.0,
-                r.a as f32 / 255.0,
-            );
+            let color = GlColor::new(r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3);
             // fill instance buffer for opengl instance rendering
-            self.draw_symbol(gl, texidx, &transform, &color);
+            self.draw_symbol(gl, r.texsym, &transform, &color);
         }
     }
 
@@ -623,9 +578,7 @@ impl GlPix {
         transform: &GlTransform,
         color: &GlColor,
     ) {
-        self.bind_texture_atlas(gl, self.symbols[sym].texture);
         self.prepare_draw(gl, GlRenderMode::PixCells, 16);
-
         let frame = &self.symbols[sym];
         let instance_buffer = &mut self.instance_buffer;
 
