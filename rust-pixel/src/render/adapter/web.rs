@@ -10,7 +10,7 @@ use crate::event::{
 use crate::render::{
     adapter::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
     adapter::{
-        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
+        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -21,7 +21,6 @@ use std::time::Duration;
 
 pub struct WebAdapter {
     pub base: AdapterBase,
-
     // gl object
     pub gl: Option<glow::Context>,
     pub gl_pix: Option<GlPix>,
@@ -93,30 +92,7 @@ impl Adapter for WebAdapter {
 
         // Store the OpenGL context
         self.gl = Some(gl);
-
-        // let mut texs = vec![];
-        // for texture_file in PIXEL_TEXTURE_FILES.iter() {
-        //     let texture_path = format!(
-        //         "{}{}{}",
-        //         self.base.project_path,
-        //         std::path::MAIN_SEPARATOR,
-        //         texture_file
-        //     );
-        //     texs.push(texture_path);
-        // }
-
-        // self.gl_pix = Some(GlPix::new(
-        //     self.gl.as_ref().unwrap(),
-        //     "#version 300 es",
-        //     self.base.pixel_w as i32,
-        //     self.base.pixel_h as i32,
-        //     texs,
-        // ));
-
         info!("Window & gl init ok...");
-
-        // init event_pump
-        // self.event_pump = Some(self.sdl_context.event_pump().unwrap());
     }
 
     fn get_base(&mut self) -> &mut AdapterBase {
@@ -133,7 +109,7 @@ impl Adapter for WebAdapter {
         PIXEL_SYM_HEIGHT / self.base.ratio_y
     }
 
-    fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
+    fn poll_event(&mut self, _timeout: Duration, _es: &mut Vec<Event>) -> bool {
         false
     }
 

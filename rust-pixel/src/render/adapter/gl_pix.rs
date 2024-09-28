@@ -7,7 +7,7 @@ use crate::render::adapter::gl_texture::{GlCell, GlRenderTexture, GlTexture};
 use crate::render::adapter::gl_transform::GlTransform;
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
-use log::info;
+// use log::info;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum GlRenderMode {
@@ -69,41 +69,41 @@ impl GlPix {
     ) -> Self {
         // symbolss shader...
         let vertex_shader_src = r#"
-        precision mediump float;
-        layout(location=0) in vec2 vertex;
-        layout(location=1) in vec4 a1;
-        layout(location=2) in vec4 a2;
-        layout(location=3) in vec4 a3;
-        layout(location=4) in vec4 color;
-        layout(std140) uniform transform {
-            vec4 tw;
-            vec4 th;
-            vec4 colorFilter;
-        };
-        out vec2 uv;
-        out vec4 colorj;
-        void main() {
-            uv = a1.zw + vertex * a2.xy;
-            vec2 transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0;
-            gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
-            colorj = color * colorFilter;
-        }
+            precision mediump float;
+            layout(location=0) in vec2 vertex;
+            layout(location=1) in vec4 a1;
+            layout(location=2) in vec4 a2;
+            layout(location=3) in vec4 a3;
+            layout(location=4) in vec4 color;
+            layout(std140) uniform transform {
+                vec4 tw;
+                vec4 th;
+                vec4 colorFilter;
+            };
+            out vec2 uv;
+            out vec4 colorj;
+            void main() {
+                uv = a1.zw + vertex * a2.xy;
+                vec2 transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0;
+                gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
+                colorj = color * colorFilter;
+            }
         "#;
 
         let fragment_shader_src = r#"
-        precision mediump float;
-        uniform sampler2D source;
-        layout(std140) uniform transform {
-            vec4 tw;
-            vec4 th;
-            vec4 colorFilter;
-        };
-        in vec2 uv;
-        in vec4 colorj;
-        layout(location=0) out vec4 color;
-        void main() {
-            color = texture(source, uv) * colorj;
-        }
+            precision mediump float;
+            uniform sampler2D source;
+            layout(std140) uniform transform {
+                vec4 tw;
+                vec4 th;
+                vec4 colorFilter;
+            };
+            in vec2 uv;
+            in vec4 colorj;
+            layout(location=0) out vec4 color;
+            void main() {
+                color = texture(source, uv) * colorj;
+            }
         "#;
 
         // trans shader ...
@@ -118,7 +118,6 @@ impl GlPix {
             }
         "#;
         let fs = r#"
-
             vec4 transition (vec2 uv) {
                     float time = progress;
                     float stime = sin(time * 3.14159265 / 2.);
@@ -151,53 +150,40 @@ impl GlPix {
 
         let vertex_shader_src3 = r#"
             precision mediump float;
-    layout(location = 0) in vec2 aPos;        // 顶点坐标
-    layout(location = 1) in vec2 aTexCoord;   // 纹理坐标
+            layout(location = 0) in vec2 aPos;        // 顶点坐标
+            layout(location = 1) in vec2 aTexCoord;   // 纹理坐标
 
-    out vec2 TexCoord;  // 传递给片段着色器的纹理坐标
+            out vec2 TexCoord;  // 传递给片段着色器的纹理坐标
 
-    uniform mat4 transform;  // 变换矩阵
-    uniform vec4 area;       // 纹理的采样区域 (x, y, width, height) [0.0, 1.0]
+            uniform mat4 transform;  // 变换矩阵
+            uniform vec4 area;       // 纹理的采样区域 (x, y, width, height) [0.0, 1.0]
 
-    void main()
-    {
-        // 纹理的 UV 坐标映射到指定区域
-        TexCoord = vec2(
-            mix(area.x, area.x + area.z, aTexCoord.x),
-            mix(area.y, area.y + area.w, aTexCoord.y)
-        );
-
-        // 使用变换矩阵对顶点坐标进行变换
-        gl_Position = transform * vec4(aPos, 0.0, 1.0);
-    }
-    "#;
+            void main()
+            {
+                TexCoord = vec2(
+                    mix(area.x, area.x + area.z, aTexCoord.x),
+                    mix(area.y, area.y + area.w, aTexCoord.y)
+                );
+                gl_Position = transform * vec4(aPos, 0.0, 1.0);
+            }
+        "#;
 
         let fragment_shader_src3 = r#"
             precision mediump float;
-    out vec4 FragColor;
-
-    in vec2 TexCoord;
-
-    uniform sampler2D texture1;  // 输入的纹理
-    uniform vec4 color;          // 渲染颜色，包含透明度
-
-    void main()
-    {
-        // 从纹理中采样颜色
-        vec4 texColor = texture(texture1, TexCoord);
-
-        // 应用颜色和透明度
-        FragColor = texColor * color;
-    }
-    "#;
-    info!("AAADDDWEE1111.........");
+            out vec4 FragColor;
+            in vec2 TexCoord;
+            uniform sampler2D texture1;  
+            uniform vec4 color;          
+            void main()
+            {
+                vec4 texColor = texture(texture1, TexCoord);
+                FragColor = texColor * color;
+            }
+        "#;
 
         let shader_symbols = GlShader::new(&gl, ver, vertex_shader_src, fragment_shader_src);
-    info!("AAADDDWEE22222.........");
         let shader_trans = GlShader::new(&gl, ver, vertex_shader_src2, fragment_shader_src2);
-    info!("AAADDDWEE33333.........");
         let shader_general2d = GlShader::new(&gl, ver, vertex_shader_src3, fragment_shader_src3);
-    info!("AAADDDWEE44444.........");
 
         let (vao_trans, vbo_trans, ebo_trans) =
             unsafe { create_trans_buffers(&gl, shader_trans.program) };
@@ -268,14 +254,6 @@ impl GlPix {
         };
 
         s.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
-
-        // init gl_symbols
-        // for texture_path in texs {
-        // info!("gl_pix load texture...{}", texture_path);
-        // let img = image::open(texture_path).map_err(|e| e.to_string()).unwrap().to_rgba8();
-        // let width = img.width();
-        // let height = img.height();
-        info!("aaaa1111111111111");
 
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);

@@ -184,18 +184,22 @@ impl Sprite {
         self.check_asset_request(am);
     }
 
-    pub fn check_asset_request(&mut self, am: &mut AssetManager) {
+    pub fn check_asset_request(&mut self, am: &mut AssetManager) -> bool {
         if let Some(req) = &self.asset_request {
             if let Some(ast) = am.get(&req.1) {
                 match ast.get_state() {
                     AssetState::Ready => {
                         ast.set_sprite(self, req.2, req.3, req.4);
                         self.asset_request = None;
+                        return true;
                     }
                     _ => {}
                 }
             }
+        } else {
+            return true;
         }
+        false
     }
 
     pub fn set_angle(&mut self, a: f64) {

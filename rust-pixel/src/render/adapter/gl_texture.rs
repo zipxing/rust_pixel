@@ -57,7 +57,6 @@ impl GlRenderTexture {
                 return Err("Framebuffer is not complete".to_string());
             }
 
-            // 解绑帧缓冲和纹理
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             gl.bind_texture(glow::TEXTURE_2D, None);
 
@@ -122,11 +121,6 @@ impl GlTexture {
         let framebuffer = unsafe { gl.create_framebuffer().map_err(|e| e.to_string())? };
 
         let clear_color = GlColor::new(1.0, 1.0, 1.0, 1.0);
-
-        // let img = image::open(source).map_err(|e| e.to_string())?.to_rgba8();
-        // let width = img.width();
-        // let height = img.height();
-        // info!("opengl texture...(width{} height{})", width, height);
 
         unsafe {
             gl.active_texture(glow::TEXTURE0);

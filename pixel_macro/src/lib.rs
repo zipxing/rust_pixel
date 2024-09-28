@@ -16,6 +16,17 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
     let game_name_lit = LitStr::new(&game_name_str, name.span());
 
     let expanded = quote! {
+            use crate::{model::#model_name, render::#render_name};
+            use rust_pixel::game::Game;
+
+            #[cfg(target_arch = "wasm32")]
+            use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter};
+            use wasm_bindgen::prelude::*;
+            #[cfg(target_arch = "wasm32")]
+            use wasm_bindgen_futures::js_sys;
+            #[cfg(target_arch = "wasm32")]
+            use log::info;
+
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             pub struct #game_name {
                 g: Game<#model_name, #render_name>,
@@ -78,25 +89,6 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                     self.g.context.asset_manager.set_data(url, data);
                 }
 
-                // fn get_wb(&mut self) -> &Vec<RenderCell> {
-                //     &self
-                //         .g
-                //         .context
-                //         .adapter
-                //         .as_any()
-                //         .downcast_ref::<WebAdapter>()
-                //         .unwrap()
-                //         .rbuf
-                // }
-
-                // pub fn web_buffer_len(&mut self) -> usize {
-                //     self.get_wb().len()
-                // }
-
-                // pub fn web_cell_len(&self) -> usize {
-                //     std::mem::size_of::<RenderCell>() / 4
-                // }
-
                 pub fn get_ratiox(&mut self) -> f32 {
                     self.g.context.adapter.get_base().ratio_x
                 }
@@ -104,14 +96,6 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                 pub fn get_ratioy(&mut self) -> f32 {
                     self.g.context.adapter.get_base().ratio_y
                 }
-
-                // // web renders buffer, can be accessed in js using the following
-                // // const wbuflen = sg.web_buffer_len();
-                // // const wbufptr = sg.web_buffer();
-                // // let webbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen);
-                // pub fn web_buffer(&mut self) -> *const RenderCell {
-                //     self.get_wb().as_slice().as_ptr()
-                // }
             }
 
             pub fn run() -> Result<(), JsValue> {

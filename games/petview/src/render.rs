@@ -9,6 +9,7 @@ use rust_pixel::{
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
     render::adapter::web::WebAdapter,
+    // render::adapter::sdl::SdlAdapter,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
@@ -82,6 +83,7 @@ impl Render for PetviewRender {
         self.panel.init(ctx);
 
         let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
+        // let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "12.pix");
@@ -96,16 +98,22 @@ impl Render for PetviewRender {
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
         let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
-        if !self.tex_ready && ctx.stage > 200 {
+        // let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+        if !self.tex_ready {
             let p1 = self.panel.get_pixel_sprite("petimg1");
-            asset2sprite!(p1, ctx, "12.pix");
-            info!("EEEEE....{:?}", &p1.content);
-            sa.render_buffer_to_texture(&p1.content, 0);
+            let l1 = p1.check_asset_request(&mut ctx.asset_manager);
+            if l1 {
+                sa.render_buffer_to_texture(&p1.content, 0);
+            }
             let p2 = self.panel.get_pixel_sprite("petimg2");
-            asset2sprite!(p2, ctx, "8.pix");
-            sa.render_buffer_to_texture(&p2.content, 1);
-            self.tex_ready = true;
-            info!("tex_ready.........");
+            let l2 = p2.check_asset_request(&mut ctx.asset_manager);
+            if l2 {
+                sa.render_buffer_to_texture(&p2.content, 1);
+            }
+            if l1 && l2 {
+                self.tex_ready = true;
+                info!("tex_ready.........");
+            }
         }
         if event_check("PetView.Timer", "pet_timer") {
             // info!("timer......{}", ctx.stage);
