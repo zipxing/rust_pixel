@@ -17,11 +17,7 @@ use std::time::Duration;
 // use log::info;
 
 // opengl codes...
-pub mod gl_color;
-pub mod gl_pix;
-pub mod gl_shader;
-pub mod gl_texture;
-pub mod gl_transform;
+pub mod gl;
 
 // merge l, u, ext1, ext2 to a single image
 // c64l.png  c64u.png    -->  c64.png

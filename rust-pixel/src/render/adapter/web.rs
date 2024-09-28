@@ -8,8 +8,8 @@ use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
 use crate::render::{
-    adapter::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
     adapter::{
+        gl::{color::GlColor, pixel::GlPix, transform::GlTransform},
         Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
@@ -54,13 +54,13 @@ impl WebAdapter {
 
     pub fn init_glpix(&mut self, w: i32, h: i32, tex: &[u8]) {
         self.gl_pix = Some(GlPix::new(
-                self.gl.as_ref().unwrap(),
-                "#version 300 es",
-                self.base.pixel_w as i32,
-                self.base.pixel_h as i32,
-                w as i32,
-                h as i32,
-                tex,
+            self.gl.as_ref().unwrap(),
+            "#version 300 es",
+            self.base.pixel_w as i32,
+            self.base.pixel_h as i32,
+            w as i32,
+            h as i32,
+            tex,
         ));
     }
 }
@@ -74,21 +74,21 @@ impl Adapter for WebAdapter {
             .set_title(s);
 
         use wasm_bindgen::JsCast;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("canvas")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            let webgl2_context = canvas
-                .get_context("webgl2")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<web_sys::WebGl2RenderingContext>()
-                .unwrap();
-            let gl = glow::Context::from_webgl2_context(webgl2_context);
+        let canvas = web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .get_element_by_id("canvas")
+            .unwrap()
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .unwrap();
+        let webgl2_context = canvas
+            .get_context("webgl2")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::WebGl2RenderingContext>()
+            .unwrap();
+        let gl = glow::Context::from_webgl2_context(webgl2_context);
 
         // Store the OpenGL context
         self.gl = Some(gl);
@@ -240,4 +240,3 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32)
     }
     None
 }
-

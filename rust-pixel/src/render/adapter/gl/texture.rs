@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-use crate::render::adapter::gl_color::GlColor;
+use crate::render::adapter::gl::color::GlColor;
 use glow::HasContext;
 // use log::info;
 

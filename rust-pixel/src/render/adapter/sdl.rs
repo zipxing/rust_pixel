@@ -8,8 +8,8 @@ use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
 use crate::render::{
-    adapter::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
     adapter::{
+        gl::{color::GlColor, pixel::GlPix, transform::GlTransform},
         Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
     buffer::Buffer,

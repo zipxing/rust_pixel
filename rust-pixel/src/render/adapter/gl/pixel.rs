@@ -1,10 +1,12 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-use crate::render::adapter::gl::color::GlColor;
-use crate::render::adapter::gl::shader::GlShader;
-use crate::render::adapter::gl::texture::{GlCell, GlRenderTexture, GlTexture};
-use crate::render::adapter::gl::transform::GlTransform;
+use crate::render::adapter::gl::{
+    color::GlColor,
+    shader::GlShader,
+    texture::{GlCell, GlRenderTexture, GlTexture},
+    transform::GlTransform,
+};
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
 // use log::info;
