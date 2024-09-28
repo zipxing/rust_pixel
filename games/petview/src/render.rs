@@ -2,18 +2,23 @@
 #![allow(unused_variables)]
 use crate::model::{PetviewModel, PETH, PETW};
 use log::info;
+#[cfg(feature = "sdl")]
+use rust_pixel::render::adapter::sdl::SdlAdapter;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    render::adapter::web::WebAdapter,
     // render::adapter::sdl::SdlAdapter,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
 };
+
+#[cfg(not(feature = "sdl"))]
+use rust_pixel::render::adapter::web::WebAdapter;
+
 use std::fmt::Write;
 use std::io::Cursor;
 
@@ -82,8 +87,10 @@ impl Render for PetviewRender {
             .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
 
+        #[cfg(not(feature = "sdl"))]
         let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
-        // let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+        #[cfg(feature = "sdl")]
+        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "12.pix");
@@ -97,8 +104,11 @@ impl Render for PetviewRender {
     }
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
+        #[cfg(not(feature = "sdl"))]
         let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
-        // let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+        #[cfg(feature = "sdl")]
+        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+
         if !self.tex_ready {
             let p1 = self.panel.get_pixel_sprite("petimg1");
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 use rust_pixel::event::Event;
 // use log::info;
 use petview_lib::PetviewData;

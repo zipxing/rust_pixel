@@ -1,6 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+#![allow(unused_variables)]
 use crate::{
     event::Event,
     render::{buffer::Buffer, sprite::Sprites},
@@ -283,6 +284,7 @@ pub trait Adapter {
             }
         };
         // render border...
+        #[cfg(feature = "sdl")]
         render_border(cw, ch, rx, ry, &mut rfunc);
 
         // render main buffer...
