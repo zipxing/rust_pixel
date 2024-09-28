@@ -54,29 +54,48 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                     }
                 }
 
+                pub fn do_img(&mut self, w: i32, h: i32, d: &js_sys::Uint8ClampedArray) {
+                    let length = d.length() as usize;
+                    let mut pixels = vec![0u8; length];
+                    d.copy_to(&mut pixels);
+                    info!("RUST...pixels.len={}", pixels.len());
+
+                    let wa = &mut self
+                        .g
+                        .context
+                        .adapter
+                        .as_any()
+                        .downcast_mut::<WebAdapter>()
+                        .unwrap();
+
+                    info!("after RUST...pixels.len111");
+                    wa.init_glpix(w, h, &pixels);
+                    info!("after RUST...pixels.len222");
+                }
+
                 pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
                     // info!("asset({:?}): {:?}!!!", url, data);
                     self.g.context.asset_manager.set_data(url, data);
                 }
 
-                fn get_wb(&mut self) -> &Vec<RenderCell> {
-                    &self
-                        .g
-                        .context
-                        .adapter
-                        .as_any()
-                        .downcast_ref::<WebAdapter>()
-                        .unwrap()
-                        .rbuf
-                }
+                // fn get_wb(&mut self) -> &Vec<RenderCell> {
+                //     &self
+                //         .g
+                //         .context
+                //         .adapter
+                //         .as_any()
+                //         .downcast_ref::<WebAdapter>()
+                //         .unwrap()
+                //         .rbuf
+                // }
 
-                pub fn web_buffer_len(&mut self) -> usize {
-                    self.get_wb().len()
-                }
+                // pub fn web_buffer_len(&mut self) -> usize {
+                //     self.get_wb().len()
+                // }
 
-                pub fn web_cell_len(&self) -> usize {
-                    std::mem::size_of::<RenderCell>() / 4
-                }
+                // pub fn web_cell_len(&self) -> usize {
+                //     std::mem::size_of::<RenderCell>() / 4
+                // }
 
                 pub fn get_ratiox(&mut self) -> f32 {
                     self.g.context.adapter.get_base().ratio_x
@@ -86,13 +105,13 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                     self.g.context.adapter.get_base().ratio_y
                 }
 
-                // web renders buffer, can be accessed in js using the following
-                // const wbuflen = sg.web_buffer_len();
-                // const wbufptr = sg.web_buffer();
-                // let webbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen);
-                pub fn web_buffer(&mut self) -> *const RenderCell {
-                    self.get_wb().as_slice().as_ptr()
-                }
+                // // web renders buffer, can be accessed in js using the following
+                // // const wbuflen = sg.web_buffer_len();
+                // // const wbufptr = sg.web_buffer();
+                // // let webbuf = new Uint32Array(wasm.memory.buffer, wbufptr, wbuflen);
+                // pub fn web_buffer(&mut self) -> *const RenderCell {
+                //     self.get_wb().as_slice().as_ptr()
+                // }
             }
 
             pub fn run() -> Result<(), JsValue> {

@@ -1,10 +1,10 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-use crate::render::adapter::sdl::gl_color::GlColor;
-use crate::render::adapter::sdl::gl_shader::GlShader;
-use crate::render::adapter::sdl::gl_texture::{GlCell, GlRenderTexture, GlTexture};
-use crate::render::adapter::sdl::gl_transform::GlTransform;
+use crate::render::adapter::gl_color::GlColor;
+use crate::render::adapter::gl_shader::GlShader;
+use crate::render::adapter::gl_texture::{GlCell, GlRenderTexture, GlTexture};
+use crate::render::adapter::gl_transform::GlTransform;
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
 use log::info;
@@ -29,27 +29,27 @@ pub struct GlPix {
     pub transform_dirty: bool,
 
     // symbols shader buffers...
-    pub vao_symbols: glow::NativeVertexArray,
-    pub instances_vbo: glow::NativeBuffer,
+    pub vao_symbols: glow::VertexArray,
+    pub instances_vbo: glow::Buffer,
     pub instance_buffer: Vec<f32>,
     pub instance_buffer_capacity: usize,
     pub instance_buffer_at: isize,
     pub instance_count: usize,
-    pub quad_vbo: glow::NativeBuffer,
-    pub ubo: glow::NativeBuffer,
+    pub quad_vbo: glow::Buffer,
+    pub ubo: glow::Buffer,
     pub ubo_contents: [f32; 12],
 
     // trans shader buffers...
-    pub vao_trans: glow::NativeVertexArray,
-    pub vbo_trans: glow::NativeBuffer,
-    pub ebo_trans: glow::NativeBuffer,
+    pub vao_trans: glow::VertexArray,
+    pub vbo_trans: glow::Buffer,
+    pub ebo_trans: glow::Buffer,
 
     // general2d shader buffers...
-    pub vao_general2d: glow::NativeVertexArray,
-    pub vbo_general2d: glow::NativeBuffer,
-    pub ebo_general2d: glow::NativeBuffer,
+    pub vao_general2d: glow::VertexArray,
+    pub vbo_general2d: glow::Buffer,
+    pub ebo_general2d: glow::Buffer,
 
-    pub current_texture_atlas: Option<glow::NativeTexture>,
+    pub current_texture_atlas: Option<glow::Texture>,
 
     pub canvas_width: u32,
     pub canvas_height: u32,
@@ -63,10 +63,13 @@ impl GlPix {
         ver: &str,
         canvas_width: i32,
         canvas_height: i32,
-        texs: Vec<String>,
+        texw: i32,
+        texh: i32,
+        texdata: &[u8],
     ) -> Self {
         // symbolss shader...
         let vertex_shader_src = r#"
+        precision mediump float;
         layout(location=0) in vec2 vertex;
         layout(location=1) in vec4 a1;
         layout(location=2) in vec4 a2;
@@ -88,6 +91,7 @@ impl GlPix {
         "#;
 
         let fragment_shader_src = r#"
+        precision mediump float;
         uniform sampler2D source;
         layout(std140) uniform transform {
             vec4 tw;
@@ -104,6 +108,7 @@ impl GlPix {
 
         // trans shader ...
         let vertex_shader_src2 = r#"
+            precision mediump float;
             layout(location = 0) in vec2 aPos;
             layout(location = 1) in vec2 aTexCoord;
             out vec2 TexCoord;
@@ -113,13 +118,12 @@ impl GlPix {
             }
         "#;
         let fs = r#"
-            uniform float bounces = 3.0;
             const float PI = 3.14159265358;
 
             vec4 transition (vec2 uv) {
                     float time = progress;
                     float stime = sin(time * PI / 2.);
-                    float phase = time * PI * bounces;
+                    float phase = time * PI * 3.0;
                     float y = (abs(cos(phase))) * (1.0 - stime);
                     float d = uv.y - y;
                     vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
@@ -132,6 +136,7 @@ impl GlPix {
 
         let fragment_shader_src2 = &format!(
             r#"
+            precision highp float;
             out vec4 FragColor;
             in vec2 TexCoord;
             uniform sampler2D texture1;
@@ -146,6 +151,7 @@ impl GlPix {
         );
 
         let vertex_shader_src3 = r#"
+            precision mediump float;
     layout(location = 0) in vec2 aPos;        // 顶点坐标
     layout(location = 1) in vec2 aTexCoord;   // 纹理坐标
 
@@ -168,6 +174,7 @@ impl GlPix {
     "#;
 
         let fragment_shader_src3 = r#"
+            precision mediump float;
     out vec4 FragColor;
 
     in vec2 TexCoord;
@@ -184,10 +191,14 @@ impl GlPix {
         FragColor = texColor * color;
     }
     "#;
+    info!("AAADDDWEE1111.........");
 
         let shader_symbols = GlShader::new(&gl, ver, vertex_shader_src, fragment_shader_src);
+    info!("AAADDDWEE22222.........");
         let shader_trans = GlShader::new(&gl, ver, vertex_shader_src2, fragment_shader_src2);
+    info!("AAADDDWEE33333.........");
         let shader_general2d = GlShader::new(&gl, ver, vertex_shader_src3, fragment_shader_src3);
+    info!("AAADDDWEE44444.........");
 
         let (vao_trans, vbo_trans, ebo_trans) =
             unsafe { create_trans_buffers(&gl, shader_trans.program) };
@@ -260,25 +271,30 @@ impl GlPix {
         s.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
 
         // init gl_symbols
-        for texture_path in texs {
-            info!("gl_pix load texture...{}", texture_path);
-            let mut sprite_sheet = GlTexture::new(gl, &texture_path).unwrap();
-            sprite_sheet.bind(gl);
-            for i in 0..32 {
-                for j in 0..32 {
-                    let symbol = s.make_symbols_frame(
-                        &mut sprite_sheet,
-                        j as f32 * (PIXEL_SYM_WIDTH + 1.0),
-                        i as f32 * (PIXEL_SYM_HEIGHT + 1.0),
-                        PIXEL_SYM_WIDTH,
-                        PIXEL_SYM_HEIGHT,
-                        8.0,
-                        8.0,
-                    );
-                    s.symbols.push(symbol);
-                }
+        // for texture_path in texs {
+        // info!("gl_pix load texture...{}", texture_path);
+        // let img = image::open(texture_path).map_err(|e| e.to_string()).unwrap().to_rgba8();
+        // let width = img.width();
+        // let height = img.height();
+        info!("aaaa1111111111111");
+
+        let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
+        sprite_sheet.bind(gl);
+        for i in 0..32 {
+            for j in 0..32 {
+                let symbol = s.make_symbols_frame(
+                    &mut sprite_sheet,
+                    j as f32 * (PIXEL_SYM_WIDTH + 1.0),
+                    i as f32 * (PIXEL_SYM_HEIGHT + 1.0),
+                    PIXEL_SYM_WIDTH,
+                    PIXEL_SYM_HEIGHT,
+                    8.0,
+                    8.0,
+                );
+                s.symbols.push(symbol);
             }
         }
+        // }
         s
     }
 
@@ -395,7 +411,7 @@ impl GlPix {
         }
     }
 
-    pub fn bind_texture_atlas(&mut self, gl: &glow::Context, texture: glow::NativeTexture) {
+    pub fn bind_texture_atlas(&mut self, gl: &glow::Context, texture: glow::Texture) {
         if Some(texture) == self.current_texture_atlas {
             return;
         }
@@ -451,7 +467,7 @@ impl GlPix {
         &mut self,
         gl: &glow::Context,
         rtidx: usize,
-        // texture: glow::NativeTexture,
+        // texture: glow::Texture,
         area: [f32; 4],
         transform: &GlTransform,
         color: &GlColor,
@@ -638,11 +654,7 @@ impl GlPix {
 unsafe fn create_trans_buffers(
     gl: &glow::Context,
     program: glow::Program,
-) -> (
-    glow::NativeVertexArray,
-    glow::NativeBuffer,
-    glow::NativeBuffer,
-) {
+) -> (glow::VertexArray, glow::Buffer, glow::Buffer) {
     let vertices: [f32; 16] = [
         -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
     ];
@@ -683,12 +695,7 @@ unsafe fn create_trans_buffers(
 unsafe fn create_symbols_buffers(
     gl: &glow::Context,
     // program: glow::Program,
-) -> (
-    glow::NativeVertexArray,
-    glow::NativeBuffer,
-    glow::NativeBuffer,
-    glow::NativeBuffer,
-) {
+) -> (glow::VertexArray, glow::Buffer, glow::Buffer, glow::Buffer) {
     let vao_symbolss = gl.create_vertex_array().unwrap();
     gl.bind_vertex_array(Some(vao_symbolss));
 
@@ -751,11 +758,7 @@ unsafe fn create_symbols_buffers(
 unsafe fn create_general2d_buffers(
     gl: &glow::Context,
     program: glow::Program,
-) -> (
-    glow::NativeVertexArray,
-    glow::NativeBuffer,
-    glow::NativeBuffer,
-) {
+) -> (glow::VertexArray, glow::Buffer, glow::Buffer) {
     let vertices: [f32; 16] = [
         // positions  // texCoords
         0.0, 0.0, 0.0, 0.0, // 左下角

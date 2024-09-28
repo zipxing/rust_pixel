@@ -8,7 +8,7 @@ use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
 use crate::render::{
-    adapter::sdl::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
+    adapter::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
     adapter::{
         Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
@@ -27,13 +27,6 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
-
-// opengl codes...
-pub mod gl_color;
-pub mod gl_pix;
-pub mod gl_shader;
-pub mod gl_texture;
-pub mod gl_transform;
 
 // data for drag window...
 #[derive(Default)]
@@ -225,7 +218,6 @@ impl Adapter for SdlAdapter {
         self.gl = Some(gl);
         self.sdl_window = Some(window);
 
-        let mut texs = vec![];
         for texture_file in PIXEL_TEXTURE_FILES.iter() {
             let texture_path = format!(
                 "{}{}{}",
@@ -233,16 +225,23 @@ impl Adapter for SdlAdapter {
                 std::path::MAIN_SEPARATOR,
                 texture_file
             );
-            texs.push(texture_path);
+            info!("gl_pix load texture...{}", texture_path);
+            let img = image::open(texture_path)
+                .map_err(|e| e.to_string())
+                .unwrap()
+                .to_rgba8();
+            let width = img.width();
+            let height = img.height();
+            self.gl_pix = Some(GlPix::new(
+                self.gl.as_ref().unwrap(),
+                "#version 330 core",
+                self.base.pixel_w as i32,
+                self.base.pixel_h as i32,
+                width as i32,
+                height as i32,
+                &img,
+            ));
         }
-
-        self.gl_pix = Some(GlPix::new(
-            self.gl.as_ref().unwrap(),
-            "#version 330 core",
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
-            texs,
-        ));
 
         info!("Window & gl init ok...");
 

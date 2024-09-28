@@ -1,14 +1,14 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-use crate::render::adapter::sdl::gl_color::GlColor;
+use crate::render::adapter::gl_color::GlColor;
 use glow::HasContext;
-use log::info;
+// use log::info;
 
 // render target texture...
 pub struct GlRenderTexture {
-    pub framebuffer: glow::NativeFramebuffer,
-    pub texture: glow::NativeTexture,
+    pub framebuffer: glow::Framebuffer,
+    pub texture: glow::Texture,
     pub width: u32,
     pub height: u32,
 }
@@ -83,7 +83,7 @@ impl GlRenderTexture {
         }
     }
 
-    pub fn get_texture(&self) -> glow::NativeTexture {
+    pub fn get_texture(&self) -> glow::Texture {
         self.texture
     }
 
@@ -96,16 +96,16 @@ impl GlRenderTexture {
 }
 
 pub struct GlTexture {
-    pub texture: glow::NativeTexture,
+    pub texture: glow::Texture,
     pub width: u32,
     pub height: u32,
     clear_color: GlColor,
-    framebuffer: glow::NativeFramebuffer,
+    framebuffer: glow::Framebuffer,
 }
 
 #[derive(Clone)]
 pub struct GlCell {
-    pub texture: glow::NativeTexture,
+    pub texture: glow::Texture,
     pub width: f32,
     pub height: f32,
     pub origin_x: f32,
@@ -117,16 +117,16 @@ pub struct GlCell {
 }
 
 impl GlTexture {
-    pub fn new(gl: &glow::Context, source: &str) -> Result<Self, String> {
+    pub fn new(gl: &glow::Context, w:i32, h: i32, data: &[u8]) -> Result<Self, String> {
         let texture = unsafe { gl.create_texture().map_err(|e| e.to_string())? };
         let framebuffer = unsafe { gl.create_framebuffer().map_err(|e| e.to_string())? };
 
         let clear_color = GlColor::new(1.0, 1.0, 1.0, 1.0);
 
-        let img = image::open(source).map_err(|e| e.to_string())?.to_rgba8();
-        let width = img.width();
-        let height = img.height();
-        info!("opengl texture...(width{} height{})", width, height);
+        // let img = image::open(source).map_err(|e| e.to_string())?.to_rgba8();
+        // let width = img.width();
+        // let height = img.height();
+        // info!("opengl texture...(width{} height{})", width, height);
 
         unsafe {
             gl.active_texture(glow::TEXTURE0);
@@ -136,12 +136,12 @@ impl GlTexture {
                 glow::TEXTURE_2D,
                 0,
                 glow::RGBA as i32,
-                width as i32,
-                height as i32,
+                w,
+                h,
                 0,
                 glow::RGBA,
                 glow::UNSIGNED_BYTE,
-                Some(&img),
+                Some(&data),
             );
 
             gl.tex_parameter_i32(
@@ -181,8 +181,8 @@ impl GlTexture {
         Ok(Self {
             texture,
             framebuffer,
-            width,
-            height,
+            width: w as u32,
+            height: h as u32,
             clear_color,
         })
     }
@@ -201,7 +201,7 @@ impl GlTexture {
         }
     }
 
-    pub fn get_texture(&self) -> glow::NativeTexture {
+    pub fn get_texture(&self) -> glow::Texture {
         self.texture
     }
 

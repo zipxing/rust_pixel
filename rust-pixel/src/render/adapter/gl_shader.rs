@@ -2,10 +2,11 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 use glow::HasContext;
+use log::info;
 
 #[derive(Clone)]
 pub struct GlShader {
-    pub program: glow::NativeProgram,
+    pub program: glow::Program,
 }
 
 impl GlShader {
@@ -15,7 +16,7 @@ impl GlShader {
             gl.shader_source(vertex_shader, &format!("{}\n{}", ver, vertex_source));
             gl.compile_shader(vertex_shader);
             if !gl.get_shader_compile_status(vertex_shader) {
-                panic!(
+                info!(
                     "Vertex Shader Compilation Error: {}",
                     gl.get_shader_info_log(vertex_shader)
                 );
@@ -25,7 +26,7 @@ impl GlShader {
             gl.shader_source(fragment_shader, &format!("{}\n{}", ver, fragment_source));
             gl.compile_shader(fragment_shader);
             if !gl.get_shader_compile_status(fragment_shader) {
-                panic!(
+                info!(
                     "Fragment Shader Compilation Error: {}",
                     gl.get_shader_info_log(fragment_shader)
                 );
@@ -56,7 +57,7 @@ impl GlShader {
         }
     }
 
-    pub fn get_program(&self) -> glow::NativeProgram {
+    pub fn get_program(&self) -> glow::Program {
         self.program
     }
 }
