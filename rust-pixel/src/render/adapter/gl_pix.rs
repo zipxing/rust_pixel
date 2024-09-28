@@ -118,12 +118,11 @@ impl GlPix {
             }
         "#;
         let fs = r#"
-            const float PI = 3.14159265358;
 
             vec4 transition (vec2 uv) {
                     float time = progress;
-                    float stime = sin(time * PI / 2.);
-                    float phase = time * PI * 3.0;
+                    float stime = sin(time * 3.14159265 / 2.);
+                    float phase = time * 3.14159265 * 3.0;
                     float y = (abs(cos(phase))) * (1.0 - stime);
                     float d = uv.y - y;
                     vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
@@ -136,7 +135,7 @@ impl GlPix {
 
         let fragment_shader_src2 = &format!(
             r#"
-            precision highp float;
+            precision mediump float;
             out vec4 FragColor;
             in vec2 TexCoord;
             uniform sampler2D texture1;

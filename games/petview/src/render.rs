@@ -8,7 +8,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    render::adapter::sdl::SdlAdapter,
+    render::adapter::web::WebAdapter,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
@@ -81,7 +81,7 @@ impl Render for PetviewRender {
             .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
 
-        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
+        let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "12.pix");
@@ -91,26 +91,30 @@ impl Render for PetviewRender {
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        if event_check("Template.RedrawTile", "draw_tile") {
-        }
+        if event_check("Template.RedrawTile", "draw_tile") {}
     }
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
-        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
-        if !self.tex_ready {
+        let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
+        if !self.tex_ready && ctx.stage > 200 {
             let p1 = self.panel.get_pixel_sprite("petimg1");
+            asset2sprite!(p1, ctx, "12.pix");
+            info!("EEEEE....{:?}", &p1.content);
             sa.render_buffer_to_texture(&p1.content, 0);
             let p2 = self.panel.get_pixel_sprite("petimg2");
+            asset2sprite!(p2, ctx, "8.pix");
             sa.render_buffer_to_texture(&p2.content, 1);
             self.tex_ready = true;
+            info!("tex_ready.........");
         }
         if event_check("PetView.Timer", "pet_timer") {
+            // info!("timer......{}", ctx.stage);
             // let p1 = self.panel.get_pixel_sprite("petimg2");
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pix, &mut sa.gl) {
                 pix.bind_render_texture(gl, 3);
                 pix.clear(gl);
-                pix.render_trans_frame(&gl, 40*16, 25*16, self.progress);
-                sa.sdl_window.as_ref().unwrap().gl_swap_window();
+                pix.render_trans_frame(&gl, 40 * 16, 25 * 16, self.progress);
+                // sa.sdl_window.as_ref().unwrap().gl_swap_window();
                 self.progress += 0.03;
                 if self.progress >= 1.0 {
                     self.progress = 0.0;
