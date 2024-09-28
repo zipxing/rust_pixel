@@ -238,6 +238,7 @@ impl Adapter for SdlAdapter {
 
         self.gl_pix = Some(GlPix::new(
             self.gl.as_ref().unwrap(),
+            "#version 330 core",
             self.base.pixel_w as i32,
             self.base.pixel_h as i32,
             texs,

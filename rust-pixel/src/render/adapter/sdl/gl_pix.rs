@@ -28,8 +28,8 @@ pub struct GlPix {
     pub transform_stack: GlTransform,
     pub transform_dirty: bool,
 
-    // cells shader buffers...
-    pub vao_cells: glow::NativeVertexArray,
+    // symbols shader buffers...
+    pub vao_symbols: glow::NativeVertexArray,
     pub instances_vbo: glow::NativeBuffer,
     pub instance_buffer: Vec<f32>,
     pub instance_buffer_capacity: usize,
@@ -60,13 +60,13 @@ pub struct GlPix {
 impl GlPix {
     pub fn new(
         gl: &glow::Context,
+        ver: &str,
         canvas_width: i32,
         canvas_height: i32,
         texs: Vec<String>,
     ) -> Self {
-        // cells shader...
+        // symbolss shader...
         let vertex_shader_src = r#"
-        #version 330 core
         layout(location=0) in vec2 vertex;
         layout(location=1) in vec4 a1;
         layout(location=2) in vec4 a2;
@@ -88,7 +88,6 @@ impl GlPix {
         "#;
 
         let fragment_shader_src = r#"
-        #version 330 core
         uniform sampler2D source;
         layout(std140) uniform transform {
             vec4 tw;
@@ -105,7 +104,6 @@ impl GlPix {
 
         // trans shader ...
         let vertex_shader_src2 = r#"
-            #version 330 core
             layout(location = 0) in vec2 aPos;
             layout(location = 1) in vec2 aTexCoord;
             out vec2 TexCoord;
@@ -134,7 +132,6 @@ impl GlPix {
 
         let fragment_shader_src2 = &format!(
             r#"
-            #version 330 core
             out vec4 FragColor;
             in vec2 TexCoord;
             uniform sampler2D texture1;
@@ -149,7 +146,6 @@ impl GlPix {
         );
 
         let vertex_shader_src3 = r#"
-    #version 330 core
     layout(location = 0) in vec2 aPos;        // 顶点坐标
     layout(location = 1) in vec2 aTexCoord;   // 纹理坐标
 
@@ -172,7 +168,6 @@ impl GlPix {
     "#;
 
         let fragment_shader_src3 = r#"
-    #version 330 core
     out vec4 FragColor;
 
     in vec2 TexCoord;
@@ -190,17 +185,17 @@ impl GlPix {
     }
     "#;
 
-        let shader_cell = GlShader::new(&gl, vertex_shader_src, fragment_shader_src);
-        let shader_trans = GlShader::new(&gl, vertex_shader_src2, fragment_shader_src2);
-        let shader_general2d = GlShader::new(&gl, vertex_shader_src3, fragment_shader_src3);
+        let shader_symbols = GlShader::new(&gl, ver, vertex_shader_src, fragment_shader_src);
+        let shader_trans = GlShader::new(&gl, ver, vertex_shader_src2, fragment_shader_src2);
+        let shader_general2d = GlShader::new(&gl, ver, vertex_shader_src3, fragment_shader_src3);
 
         let (vao_trans, vbo_trans, ebo_trans) =
-            unsafe { create_buffers(&gl, shader_trans.program) };
+            unsafe { create_trans_buffers(&gl, shader_trans.program) };
         let (vao_general2d, vbo_general2d, ebo_general2d) =
             unsafe { create_general2d_buffers(&gl, shader_general2d.program) };
-        let (vao_cells, instances_vbo, quad_vbo, ubo) = unsafe { create_cell_buffers(&gl) };
+        let (vao_symbols, instances_vbo, quad_vbo, ubo) = unsafe { create_symbols_buffers(&gl) };
 
-        let shaders = vec![shader_cell, shader_trans, shader_general2d];
+        let shaders = vec![shader_symbols, shader_trans, shader_general2d];
 
         // 初始化缓冲区
         unsafe {
@@ -233,7 +228,7 @@ impl GlPix {
             shaders,
             quad_vbo,
             instances_vbo,
-            vao_cells,
+            vao_symbols,
             ubo,
             ubo_contents,
             vao_trans,
@@ -271,7 +266,7 @@ impl GlPix {
             sprite_sheet.bind(gl);
             for i in 0..32 {
                 for j in 0..32 {
-                    let cell = s.make_cell_frame(
+                    let symbol = s.make_symbols_frame(
                         &mut sprite_sheet,
                         j as f32 * (PIXEL_SYM_WIDTH + 1.0),
                         i as f32 * (PIXEL_SYM_HEIGHT + 1.0),
@@ -280,7 +275,7 @@ impl GlPix {
                         8.0,
                         8.0,
                     );
-                    s.symbols.push(cell);
+                    s.symbols.push(symbol);
                 }
             }
         }
@@ -293,7 +288,7 @@ impl GlPix {
         }
     }
 
-    pub fn prepare_draw(&mut self, gl: &glow::Context, mode: GlRenderMode, size: usize) {
+    pub fn prepare_render_symbols(&mut self, gl: &glow::Context, mode: GlRenderMode, size: usize) {
         if self.transform_dirty {
             self.flush(gl);
             self.send_uniform_buffer(gl);
@@ -392,7 +387,7 @@ impl GlPix {
                     .1,
             );
 
-            gl.bind_vertex_array(Some(self.vao_cells));
+            gl.bind_vertex_array(Some(self.vao_symbols));
             gl.draw_arrays_instanced(glow::TRIANGLE_FAN, 0, 4, self.instance_count as i32);
 
             self.instance_buffer_at = -1;
@@ -413,7 +408,7 @@ impl GlPix {
         self.current_texture_atlas = Some(texture);
     }
 
-    pub fn make_cell_frame(
+    pub fn make_symbols_frame(
         &mut self,
         sheet: &mut GlTexture,
         x: f32,
@@ -527,15 +522,32 @@ impl GlPix {
     ) {
         unsafe {
             self.prepare_draw_trans(gl);
-            render_trans_frame(
-                gl,
-                self.shaders[1].program,
-                self.render_textures[0].texture,
-                self.render_textures[1].texture,
-                width,
-                height,
-                progress,
+            gl.viewport(0, 0, width as i32, height as i32);
+            gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+
+            gl.use_program(Some(self.shaders[1].program));
+
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.render_textures[0].texture));
+            gl.uniform_1_i32(
+                gl.get_uniform_location(self.shaders[1].program, "texture1")
+                    .as_ref(),
+                0,
             );
+
+            gl.active_texture(glow::TEXTURE1);
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.render_textures[1].texture));
+            gl.uniform_1_i32(
+                gl.get_uniform_location(self.shaders[1].program, "texture2")
+                    .as_ref(),
+                1,
+            );
+
+            let lb = gl.get_uniform_location(self.shaders[1].program, "progress");
+            gl.uniform_1_f32(lb.as_ref(), progress);
+
+            gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
         }
     }
 
@@ -562,23 +574,23 @@ impl GlPix {
             if let Some(b) = r.bcolor {
                 let back_color = GlColor::new(b.0, b.1, b.2, b.3);
                 // fill instance buffer for opengl instance rendering
-                self.draw_symbol(gl, 320, &transform, &back_color);
+                self.render_symbol(gl, 320, &transform, &back_color);
             }
 
             let color = GlColor::new(r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3);
             // fill instance buffer for opengl instance rendering
-            self.draw_symbol(gl, r.texsym, &transform, &color);
+            self.render_symbol(gl, r.texsym, &transform, &color);
         }
     }
 
-    pub fn draw_symbol(
+    pub fn render_symbol(
         &mut self,
         gl: &glow::Context,
         sym: usize,
         transform: &GlTransform,
         color: &GlColor,
     ) {
-        self.prepare_draw(gl, GlRenderMode::PixCells, 16);
+        self.prepare_render_symbols(gl, GlRenderMode::PixCells, 16);
         let frame = &self.symbols[sym];
         let instance_buffer = &mut self.instance_buffer;
 
@@ -623,7 +635,7 @@ impl GlPix {
     }
 }
 
-unsafe fn create_buffers(
+unsafe fn create_trans_buffers(
     gl: &glow::Context,
     program: glow::Program,
 ) -> (
@@ -668,36 +680,7 @@ unsafe fn create_buffers(
     (vao, vertex_buffer, index_buffer)
 }
 
-unsafe fn render_trans_frame(
-    gl: &glow::Context,
-    program: glow::Program,
-    texture1: glow::NativeTexture,
-    texture2: glow::NativeTexture,
-    width: u32,
-    height: u32,
-    progress: f32,
-) {
-    gl.viewport(0, 0, width as i32, height as i32);
-    gl.clear_color(0.0, 0.0, 0.0, 1.0);
-    gl.clear(glow::COLOR_BUFFER_BIT);
-
-    gl.use_program(Some(program));
-
-    gl.active_texture(glow::TEXTURE0);
-    gl.bind_texture(glow::TEXTURE_2D, Some(texture1));
-    gl.uniform_1_i32(gl.get_uniform_location(program, "texture1").as_ref(), 0);
-
-    gl.active_texture(glow::TEXTURE1);
-    gl.bind_texture(glow::TEXTURE_2D, Some(texture2));
-    gl.uniform_1_i32(gl.get_uniform_location(program, "texture2").as_ref(), 1);
-
-    let lb = gl.get_uniform_location(program, "progress");
-    gl.uniform_1_f32(lb.as_ref(), progress);
-
-    gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
-}
-
-unsafe fn create_cell_buffers(
+unsafe fn create_symbols_buffers(
     gl: &glow::Context,
     // program: glow::Program,
 ) -> (
@@ -706,8 +689,8 @@ unsafe fn create_cell_buffers(
     glow::NativeBuffer,
     glow::NativeBuffer,
 ) {
-    let vao_cells = gl.create_vertex_array().unwrap();
-    gl.bind_vertex_array(Some(vao_cells));
+    let vao_symbolss = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao_symbolss));
 
     let instances_vbo = gl.create_buffer().unwrap();
     gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
@@ -762,7 +745,7 @@ unsafe fn create_cell_buffers(
 
     gl.bind_vertex_array(None);
 
-    (vao_cells, instances_vbo, quad_vbo, ubo)
+    (vao_symbolss, instances_vbo, quad_vbo, ubo)
 }
 
 unsafe fn create_general2d_buffers(

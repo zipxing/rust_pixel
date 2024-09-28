@@ -9,10 +9,10 @@ pub struct GlShader {
 }
 
 impl GlShader {
-    pub fn new(gl: &glow::Context, vertex_source: &str, fragment_source: &str) -> Self {
+    pub fn new(gl: &glow::Context, ver: &str, vertex_source: &str, fragment_source: &str) -> Self {
         unsafe {
             let vertex_shader = gl.create_shader(glow::VERTEX_SHADER).unwrap();
-            gl.shader_source(vertex_shader, vertex_source);
+            gl.shader_source(vertex_shader, &format!("{}\n{}", ver, vertex_source));
             gl.compile_shader(vertex_shader);
             if !gl.get_shader_compile_status(vertex_shader) {
                 panic!(
@@ -22,7 +22,7 @@ impl GlShader {
             }
 
             let fragment_shader = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
-            gl.shader_source(fragment_shader, fragment_source);
+            gl.shader_source(fragment_shader, &format!("{}\n{}", ver, fragment_source));
             gl.compile_shader(fragment_shader);
             if !gl.get_shader_compile_status(fragment_shader) {
                 panic!(
