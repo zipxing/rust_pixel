@@ -5,4 +5,4 @@
 # refer to tools/cargo-pixel/src/main.rs
 [pixel]
 standalone = false
-rust_pixel = "./rust-pixel"
+rust_pixel = "./"

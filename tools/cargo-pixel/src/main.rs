@@ -59,7 +59,7 @@ fn common_arg(app: App) -> App {
 
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
-        .version("0.2.0")
+        .version("0.3.0")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
@@ -140,7 +140,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
         "web" | "w" => {
             let mut crate_path = "".to_string();
             if ctx.standalone {
-                crate_path = "".to_string();
+                crate_path = ".".to_string();
             } else {
                 let cpath = format!("games/{}", mod_name);
                 if Path::new(&cpath).exists() {
@@ -166,7 +166,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 cmds.push(format!("mkdir -p {}", tmpwd));
                 cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
                 cmds.push(format!(
-                    "cp {}/web-templates/* {}",
+                    "cp {}/rust-pixel/web-templates/* {}",
                     ctx.rust_pixel_path, tmpwd
                 ));
                 cmds.push(format!(
@@ -265,9 +265,13 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     exec_cmd("cp -r games/template tmp/pixel_game_template");
 
     if is_standalone {
-        exec_cmd("cp games/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml");
+        exec_cmd(
+            "cp games/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml",
+        );
         exec_cmd("cp games/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml");
+        exec_cmd(
+            "cp games/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml",
+        );
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
 
@@ -300,15 +304,19 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
                         let content = fs::read(&path).unwrap();
                         let mut content_str = String::from_utf8_lossy(&content).to_string();
                         if !is_standalone {
-                            content_str = content_str
-                                .replace("games/template", &format!("{}/{}", dirname, loname));
+                            if dirname == "games" {
+                            } else {
+                                content_str = content_str.replace(
+                                    "pixel_game!(Template)",
+                                    &format!("pixel_game!(Template, \"{}\")", dirname),
+                                );
+                            }
                         } else {
                             content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
-                            content_str = content_str
-                                .replace("let mut g = Game::new(m, r, \"games/template\");",
-                                    "let mut g = Game::new_with_project_path(m, r, \"games/template\", Some(\".\"));");
-                            content_str = content_str
-                                .replace("games/template", &format!("{}/{}", "app", loname));
+                            content_str = content_str.replace(
+                                "pixel_game!(Template)",
+                                &format!("pixel_game!(Template, \"app\", \".\")"),
+                            );
                         }
                         content_str = content_str.replace("Template", capname);
                         content_str = content_str.replace("TEMPLATE", upname);
