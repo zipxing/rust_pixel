@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::{color::GlColor, pixel::GlPix, transform::GlTransform},
-        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+        gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -21,40 +21,18 @@ use std::time::Duration;
 
 pub struct WebAdapter {
     pub base: AdapterBase,
-    // gl object
-    pub gl: Option<glow::Context>,
-    pub gl_pix: Option<GlPix>,
 }
 
 impl WebAdapter {
     pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(pre, gn, project_path),
-            gl: None,
-            gl_pix: None,
-        }
-    }
-
-    pub fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
-        let rbuf = self.buf_to_render_buffer(buf);
-        self.render_rbuf(&rbuf, rtidx);
-    }
-
-    pub fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
-        let bs = self.get_base();
-        let rx = bs.ratio_x;
-        let ry = bs.ratio_y;
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            pix.bind_render_texture(gl, rtidx);
-            pix.clear(gl);
-            pix.render_rbuf(gl, rbuf, rx, ry);
-            pix.flush(gl);
         }
     }
 
     pub fn init_glpix(&mut self, w: i32, h: i32, tex: &[u8]) {
-        self.gl_pix = Some(GlPix::new(
-            self.gl.as_ref().unwrap(),
+        self.base.gl_pixel = Some(GlPixel::new(
+            self.base.gl.as_ref().unwrap(),
             "#version 300 es",
             self.base.pixel_w as i32,
             self.base.pixel_h as i32,
@@ -91,7 +69,7 @@ impl Adapter for WebAdapter {
         let gl = glow::Context::from_webgl2_context(webgl2_context);
 
         // Store the OpenGL context
-        self.gl = Some(gl);
+        self.base.gl = Some(gl);
         info!("Window & gl init ok...");
     }
 
@@ -125,7 +103,7 @@ impl Adapter for WebAdapter {
         let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
         self.render_rbuf(&rbuf, 2);
 
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
+        if let (Some(pix), Some(gl)) = (&mut self.base.gl_pixel, &mut self.base.gl) {
             // render texture 2 , 3 to screen
             pix.bind(gl);
             let mut t = GlTransform::new();

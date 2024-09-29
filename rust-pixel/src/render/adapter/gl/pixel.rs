@@ -19,7 +19,7 @@ pub enum GlRenderMode {
     General2D = 2,
 }
 
-pub struct GlPix {
+pub struct GlPixel {
     pub render_mode: GlRenderMode,
 
     pub shaders: Vec<GlShader>,
@@ -59,7 +59,7 @@ pub struct GlPix {
     pub clear_color: GlColor,
 }
 
-impl GlPix {
+impl GlPixel {
     pub fn new(
         gl: &glow::Context,
         ver: &str,

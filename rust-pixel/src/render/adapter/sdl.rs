@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::{color::GlColor, pixel::GlPix, transform::GlTransform},
-        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
+        gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -48,9 +48,7 @@ pub struct SdlAdapter {
     pub event_pump: Option<EventPump>,
 
     // gl object
-    pub gl: Option<glow::Context>,
     pub gl_context: Option<sdl2::video::GLContext>,
-    pub gl_pixel: Option<GlPix>,
 
     // custom cursor
     pub cursor: Option<Cursor>,
@@ -75,8 +73,6 @@ impl SdlAdapter {
             cursor: None,
             sdl_window: None,
             gl_context: None,
-            gl: None,
-            gl_pixel: None,
             drag: Default::default(),
         }
     }
@@ -91,23 +87,6 @@ impl SdlAdapter {
             cursor.set();
         }
         self.sdl_context.mouse().show_cursor(true);
-    }
-
-    pub fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
-        let rbuf = self.buf_to_render_buffer(buf);
-        self.render_rbuf(&rbuf, rtidx);
-    }
-
-    pub fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
-        let bs = self.get_base();
-        let rx = bs.ratio_x;
-        let ry = bs.ratio_y;
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pixel, &mut self.gl) {
-            pix.bind_render_texture(gl, rtidx);
-            pix.clear(gl);
-            pix.render_rbuf(gl, rbuf, rx, ry);
-            pix.flush(gl);
-        }
     }
 
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
@@ -215,7 +194,7 @@ impl Adapter for SdlAdapter {
         };
 
         // Store the OpenGL context
-        self.gl = Some(gl);
+        self.base.gl = Some(gl);
         self.sdl_window = Some(window);
 
         for texture_file in PIXEL_TEXTURE_FILES.iter() {
@@ -232,8 +211,8 @@ impl Adapter for SdlAdapter {
                 .to_rgba8();
             let width = img.width();
             let height = img.height();
-            self.gl_pixel = Some(GlPix::new(
-                self.gl.as_ref().unwrap(),
+            self.base.gl_pixel = Some(GlPixel::new(
+                self.base.gl.as_ref().unwrap(),
                 "#version 330 core",
                 self.base.pixel_w as i32,
                 self.base.pixel_h as i32,
@@ -324,7 +303,7 @@ impl Adapter for SdlAdapter {
         // draw main buffer & pixel_sprites to render_texture 2
         self.render_rbuf(&rbuf, 2);
 
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pixel, &mut self.gl) {
+        if let (Some(pix), Some(gl)) = (&mut self.base.gl_pixel, &mut self.base.gl) {
             // render to screen
             pix.bind(gl);
 

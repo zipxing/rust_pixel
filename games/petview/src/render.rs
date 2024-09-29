@@ -2,8 +2,6 @@
 #![allow(unused_variables)]
 use crate::model::{PetviewModel, PETH, PETW};
 use log::info;
-#[cfg(feature = "sdl")]
-use rust_pixel::render::adapter::sdl::SdlAdapter;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -15,9 +13,7 @@ use rust_pixel::{
     render::sprite::Sprite,
     render::style::Color,
 };
-
-#[cfg(not(feature = "sdl"))]
-use rust_pixel::render::adapter::web::WebAdapter;
+use rust_pixel::render::adapter::Adapter;
 
 use std::fmt::Write;
 use std::io::Cursor;
@@ -67,11 +63,6 @@ impl Render for PetviewRender {
             .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
 
-        #[cfg(not(feature = "sdl"))]
-        let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
-        #[cfg(feature = "sdl")]
-        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
-
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "12.pix");
 
@@ -84,21 +75,18 @@ impl Render for PetviewRender {
     }
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
-        #[cfg(not(feature = "sdl"))]
-        let sa = ctx.adapter.as_any().downcast_mut::<WebAdapter>().unwrap();
-        #[cfg(feature = "sdl")]
-        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
-
         if !self.tex_ready {
             let p1 = self.panel.get_pixel_sprite("petimg1");
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
             if l1 {
-                sa.render_buffer_to_texture(&p1.content, 0);
+                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                ctx.adapter.render_buffer_to_texture(&p1.content, 0);
             }
             let p2 = self.panel.get_pixel_sprite("petimg2");
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
             if l2 {
-                sa.render_buffer_to_texture(&p2.content, 1);
+                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                ctx.adapter.render_buffer_to_texture(&p2.content, 1);
             }
             if l1 && l2 {
                 self.tex_ready = true;
@@ -108,6 +96,9 @@ impl Render for PetviewRender {
         if event_check("PetView.Timer", "pet_timer") {
             // info!("timer......{}", ctx.stage);
             // let p1 = self.panel.get_pixel_sprite("petimg2");
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            let sa = ctx.adapter.get_base();
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_render_texture(gl, 3);
                 pix.clear(gl);

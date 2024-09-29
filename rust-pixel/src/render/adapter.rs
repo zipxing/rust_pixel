@@ -9,6 +9,7 @@ use crate::{
 };
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::{
+    render::adapter::gl::pixel::GlPixel,
     render::style::Color,
     util::{ARect, PointI32},
     LOGO_FRAME,
@@ -103,6 +104,10 @@ pub struct AdapterBase {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub rd: Rand,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub gl: Option<glow::Context>,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub gl_pixel: Option<GlPixel>,
 }
 
 impl AdapterBase {
@@ -119,6 +124,10 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            gl: None,
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            gl_pixel: None,
         }
     }
 }
@@ -195,6 +204,25 @@ pub trait Adapter {
     fn show_cursor(&mut self) -> Result<(), String>;
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+        let rbuf = self.buf_to_render_buffer(buf);
+        self.render_rbuf(&rbuf, rtidx);
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
+        let bs = self.get_base();
+        let rx = bs.ratio_x;
+        let ry = bs.ratio_y;
+        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            pix.bind_render_texture(gl, rtidx);
+            pix.clear(gl);
+            pix.render_rbuf(gl, rbuf, rx, ry);
+            pix.flush(gl);
+        }
+    }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     fn buf_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
