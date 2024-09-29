@@ -25,26 +25,6 @@ use std::io::Cursor;
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
 
-// fn debug_img(img: &[u8], w: usize, h: usize) {
-//     let mut idx = 0;
-//     for i in 0..h {
-//         let mut line = " ".to_string();
-//         for j in 0..w {
-//             write!(
-//                 line,
-//                 " {}.{}.{}.{} ",
-//                 img[idx + 0],
-//                 img[idx + 1],
-//                 img[idx + 2],
-//                 img[idx + 3]
-//             )
-//             .unwrap();
-//             idx += 4;
-//         }
-//         info!("{:?}", line);
-//     }
-// }
-
 pub struct PetviewRender {
     pub panel: Panel,
     pub progress: f32,
@@ -128,7 +108,7 @@ impl Render for PetviewRender {
         if event_check("PetView.Timer", "pet_timer") {
             // info!("timer......{}", ctx.stage);
             // let p1 = self.panel.get_pixel_sprite("petimg2");
-            if let (Some(pix), Some(gl)) = (&mut sa.gl_pix, &mut sa.gl) {
+            if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_render_texture(gl, 3);
                 pix.clear(gl);
                 pix.render_trans_frame(&gl, 40 * 16, 25 * 16, self.progress);

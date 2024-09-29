@@ -50,7 +50,7 @@ pub struct SdlAdapter {
     // gl object
     pub gl: Option<glow::Context>,
     pub gl_context: Option<sdl2::video::GLContext>,
-    pub gl_pix: Option<GlPix>,
+    pub gl_pixel: Option<GlPix>,
 
     // custom cursor
     pub cursor: Option<Cursor>,
@@ -76,7 +76,7 @@ impl SdlAdapter {
             sdl_window: None,
             gl_context: None,
             gl: None,
-            gl_pix: None,
+            gl_pixel: None,
             drag: Default::default(),
         }
     }
@@ -102,7 +102,7 @@ impl SdlAdapter {
         let bs = self.get_base();
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
+        if let (Some(pix), Some(gl)) = (&mut self.gl_pixel, &mut self.gl) {
             pix.bind_render_texture(gl, rtidx);
             pix.clear(gl);
             pix.render_rbuf(gl, rbuf, rx, ry);
@@ -225,14 +225,14 @@ impl Adapter for SdlAdapter {
                 std::path::MAIN_SEPARATOR,
                 texture_file
             );
-            info!("gl_pix load texture...{}", texture_path);
+            info!("gl_pixel load texture...{}", texture_path);
             let img = image::open(texture_path)
                 .map_err(|e| e.to_string())
                 .unwrap()
                 .to_rgba8();
             let width = img.width();
             let height = img.height();
-            self.gl_pix = Some(GlPix::new(
+            self.gl_pixel = Some(GlPix::new(
                 self.gl.as_ref().unwrap(),
                 "#version 330 core",
                 self.base.pixel_w as i32,
@@ -321,17 +321,21 @@ impl Adapter for SdlAdapter {
 
         // render every thing to rbuf
         let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        // draw main buffer & pixel_sprites to render_texture 2
         self.render_rbuf(&rbuf, 2);
 
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            // render texture 2 , 3 to screen
+        if let (Some(pix), Some(gl)) = (&mut self.gl_pixel, &mut self.gl) {
+            // render to screen
             pix.bind(gl);
+
+            // draw render_texture 2 ( main buffer )
             let mut t = GlTransform::new();
             t.scale(2.0 as f32, 2.0 as f32);
             t.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
+            // draw render_texture 3 ( gl transition )
             let mut t2 = GlTransform::new();
             t2.scale(2.0 * 0.512, 2.0 * 0.756);
             t2.translate(-0.5, -0.5);

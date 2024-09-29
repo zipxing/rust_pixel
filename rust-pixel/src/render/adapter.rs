@@ -209,17 +209,7 @@ pub trait Adapter {
                          s2: ARect,
                          texidx: usize,
                          symidx: usize| {
-            if let Some(bgc) = bc {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3, texidx,
-                    symidx, s2, 0.0, &pz,
-                );
-            } else {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2, 0.0,
-                    &pz,
-                );
-            }
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
         render_main_buffer(cb, cb.area.width, rx, ry, &mut rfunc);
         rbuf
@@ -239,7 +229,6 @@ pub trait Adapter {
 
         // render logo...
         if stage <= LOGO_FRAME {
-            let mut tv = vec![];
             render_logo(
                 self.get_base().ratio_x,
                 self.get_base().ratio_y,
@@ -248,15 +237,9 @@ pub trait Adapter {
                 &mut self.get_base().rd,
                 stage,
                 |fc, _s1, s2, texidx, symidx| {
-                    tv.push((fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2));
+                    push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
                 },
             );
-            for tmp in tv {
-                push_render_buffer(
-                    &mut rbuf, tmp.0, tmp.1, tmp.2, tmp.3, false, 0, 0, 0, 0, tmp.4, tmp.5, tmp.6,
-                    0.0, &pz,
-                );
-            }
             return rbuf;
         }
 
@@ -271,19 +254,10 @@ pub trait Adapter {
                          s2: ARect,
                          texidx: usize,
                          symidx: usize| {
-            if let Some(bgc) = bc {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3, texidx,
-                    symidx, s2, 0.0, &pz,
-                );
-            } else {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2, 0.0,
-                    &pz,
-                );
-            }
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
-        // render border...
+
+        // render windows border, only at sdl mode
         #[cfg(feature = "sdl")]
         render_border(cw, ch, rx, ry, &mut rfunc);
 
@@ -301,17 +275,7 @@ pub trait Adapter {
                         rx,
                         ry,
                         |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
-                            if let Some(bgc) = bc {
-                                push_render_buffer(
-                                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2,
-                                    bgc.3, texidx, symidx, s2, angle, &ccp,
-                                );
-                            } else {
-                                push_render_buffer(
-                                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx,
-                                    symidx, s2, angle, &ccp,
-                                );
-                            }
+                            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
                         },
                     );
                 }
@@ -326,15 +290,8 @@ pub trait Adapter {
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
-    has_back: bool,
-    br: u8,
-    bg: u8,
-    bb: u8,
-    ba: u8,
+    fc: &(u8, u8, u8, u8),
+    bgc: &Option<(u8, u8, u8, u8)>,
     texidx: usize,
     symidx: usize,
     s: ARect,
@@ -343,17 +300,17 @@ fn push_render_buffer(
 ) {
     let mut wc: RenderCell = Default::default();
     wc.fcolor = (
-        r as f32 / 255.0,
-        g as f32 / 255.0,
-        b as f32 / 255.0,
-        a as f32 / 255.0,
+        fc.0 as f32 / 255.0,
+        fc.1 as f32 / 255.0,
+        fc.2 as f32 / 255.0,
+        fc.3 as f32 / 255.0,
     );
-    if has_back {
+    if let Some(bc) = bgc {
         wc.bcolor = Some((
-            br as f32 / 255.0,
-            bg as f32 / 255.0,
-            bb as f32 / 255.0,
-            ba as f32 / 255.0,
+            bc.0 as f32 / 255.0,
+            bc.1 as f32 / 255.0,
+            bc.2 as f32 / 255.0,
+            bc.3 as f32 / 255.0,
         ));
     } else {
         wc.bcolor = None;
