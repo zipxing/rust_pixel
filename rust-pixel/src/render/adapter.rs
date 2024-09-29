@@ -1,6 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+#![allow(unused_variables)]
 use crate::{
     event::Event,
     render::{buffer::Buffer, sprite::Sprites},
@@ -8,6 +9,7 @@ use crate::{
 };
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::{
+    render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
     render::style::Color,
     util::{ARect, PointI32},
     LOGO_FRAME,
@@ -15,6 +17,9 @@ use crate::{
 use std::any::Any;
 use std::time::Duration;
 // use log::info;
+
+// opengl codes...
+pub mod gl;
 
 // merge l, u, ext1, ext2 to a single image
 // c64l.png  c64u.png    -->  c64.png
@@ -25,6 +30,7 @@ pub const PIXEL_TEXTURE_FILES: [&'static str; 1] = ["assets/pix/c64.png"];
 
 pub const PIXEL_SYM_WIDTH: f32 = 16.0;
 pub const PIXEL_SYM_HEIGHT: f32 = 16.0;
+
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
 pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
@@ -75,23 +81,16 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 // this struct used for opengl render and webgl render...
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
-    pub r: u32,
-    pub g: u32,
-    pub b: u32,
-    pub a: u32,
-    pub back: u32,
-    pub br: u32,
-    pub bg: u32,
-    pub bb: u32,
-    pub ba: u32,
-    pub texsym: u32,
-    pub x: i32,
-    pub y: i32,
+    pub fcolor: (f32, f32, f32, f32),
+    pub bcolor: Option<(f32, f32, f32, f32)>,
+    pub texsym: usize,
+    pub x: f32,
+    pub y: f32,
     pub w: u32,
     pub h: u32,
-    pub angle: u32,
-    pub cx: i32,
-    pub cy: i32,
+    pub angle: f32,
+    pub cx: f32,
+    pub cy: f32,
 }
 
 pub struct AdapterBase {
@@ -106,6 +105,10 @@ pub struct AdapterBase {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub rd: Rand,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub gl: Option<glow::Context>,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub gl_pixel: Option<GlPixel>,
 }
 
 impl AdapterBase {
@@ -122,6 +125,10 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            gl: None,
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            gl_pixel: None,
         }
     }
 }
@@ -200,7 +207,50 @@ pub trait Adapter {
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn buf_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
+    fn main_render_pass(&mut self) {
+        let bs = self.get_base();
+
+        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            // render to screen
+            pix.bind(gl);
+
+            // draw render_texture 2 ( main buffer )
+            let mut t = GlTransform::new();
+            t.scale(2.0 as f32, 2.0 as f32);
+            t.translate(-0.5, -0.5);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+
+            // draw render_texture 3 ( gl transition )
+            let mut t2 = GlTransform::new();
+            t2.scale(2.0 * 0.512, 2.0 * 0.756);
+            t2.translate(-0.5, -0.5);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 3, [0.05, 0.0, 0.512, 0.756], &t2, &c);
+        }
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+        let rbuf = self.buffer_to_render_buffer(buf);
+        self.render_rbuf(&rbuf, rtidx);
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
+        let bs = self.get_base();
+        let rx = bs.ratio_x;
+        let ry = bs.ratio_y;
+        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            pix.bind_render_texture(gl, rtidx);
+            pix.clear(gl);
+            pix.render_rbuf(gl, rbuf, rx, ry);
+            pix.flush(gl);
+        }
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
         let rx = self.get_base().ratio_x;
         let ry = self.get_base().ratio_y;
@@ -212,17 +262,7 @@ pub trait Adapter {
                          s2: ARect,
                          texidx: usize,
                          symidx: usize| {
-            if let Some(bgc) = bc {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3, texidx,
-                    symidx, s2, 0.0, &pz,
-                );
-            } else {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2, 0.0,
-                    &pz,
-                );
-            }
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
         render_main_buffer(cb, cb.area.width, rx, ry, &mut rfunc);
         rbuf
@@ -242,7 +282,6 @@ pub trait Adapter {
 
         // render logo...
         if stage <= LOGO_FRAME {
-            let mut tv = vec![];
             render_logo(
                 self.get_base().ratio_x,
                 self.get_base().ratio_y,
@@ -251,15 +290,9 @@ pub trait Adapter {
                 &mut self.get_base().rd,
                 stage,
                 |fc, _s1, s2, texidx, symidx| {
-                    tv.push((fc.0, fc.1, fc.2, fc.3, texidx, symidx, s2));
+                    push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
                 },
             );
-            for tmp in tv {
-                push_render_buffer(
-                    &mut rbuf, tmp.0, tmp.1, tmp.2, tmp.3, false, 0, 0, 0, 0, tmp.4, tmp.5, tmp.6,
-                    0.0, &pz,
-                );
-            }
             return rbuf;
         }
 
@@ -274,19 +307,11 @@ pub trait Adapter {
                          s2: ARect,
                          texidx: usize,
                          symidx: usize| {
-            if let Some(bgc) = bc {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2, bgc.3, texidx,
-                    symidx, s2, 0.0, &pz,
-                );
-            } else {
-                push_render_buffer(
-                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx, symidx, s2, 0.0,
-                    &pz,
-                );
-            }
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
-        // render border...
+
+        // render windows border, only at sdl mode
+        #[cfg(feature = "sdl")]
         render_border(cw, ch, rx, ry, &mut rfunc);
 
         // render main buffer...
@@ -303,17 +328,7 @@ pub trait Adapter {
                         rx,
                         ry,
                         |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
-                            if let Some(bgc) = bc {
-                                push_render_buffer(
-                                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, true, bgc.0, bgc.1, bgc.2,
-                                    bgc.3, texidx, symidx, s2, angle, &ccp,
-                                );
-                            } else {
-                                push_render_buffer(
-                                    &mut rbuf, fc.0, fc.1, fc.2, fc.3, false, 0, 0, 0, 0, texidx,
-                                    symidx, s2, angle, &ccp,
-                                );
-                            }
+                            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
                         },
                     );
                 }
@@ -328,15 +343,8 @@ pub trait Adapter {
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
-    has_back: bool,
-    br: u8,
-    bg: u8,
-    bb: u8,
-    ba: u8,
+    fc: &(u8, u8, u8, u8),
+    bgc: &Option<(u8, u8, u8, u8)>,
     texidx: usize,
     symidx: usize,
     s: ARect,
@@ -344,28 +352,31 @@ fn push_render_buffer(
     ccp: &PointI32,
 ) {
     let mut wc: RenderCell = Default::default();
-    wc.r = r as u32;
-    wc.g = g as u32;
-    wc.b = b as u32;
-    wc.a = a as u32;
-    if has_back {
-        wc.back = 1;
-        wc.br = br as u32;
-        wc.bg = bg as u32;
-        wc.bb = bb as u32;
-        wc.ba = ba as u32;
+    wc.fcolor = (
+        fc.0 as f32 / 255.0,
+        fc.1 as f32 / 255.0,
+        fc.2 as f32 / 255.0,
+        fc.3 as f32 / 255.0,
+    );
+    if let Some(bc) = bgc {
+        wc.bcolor = Some((
+            bc.0 as f32 / 255.0,
+            bc.1 as f32 / 255.0,
+            bc.2 as f32 / 255.0,
+            bc.3 as f32 / 255.0,
+        ));
     } else {
-        wc.back = 0;
+        wc.bcolor = None;
     }
-    let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
     let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
-    wc.texsym = y * 32u32 + x;
-    wc.x = s.x;
-    wc.y = s.y;
+    let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
+    wc.texsym = (y * 32u32 + x) as usize;
+    wc.x = s.x as f32 + PIXEL_SYM_WIDTH;
+    wc.y = s.y as f32 + PIXEL_SYM_HEIGHT;
     wc.w = s.w;
     wc.h = s.h;
     if angle == 0.0 {
-        wc.angle = 0u32;
+        wc.angle = angle as f32;
     } else {
         let mut aa = (1.0 - angle / 180.0) * std::f64::consts::PI;
         let pi2 = std::f64::consts::PI * 2.0;
@@ -375,10 +386,10 @@ fn push_render_buffer(
         while aa > pi2 {
             aa -= pi2;
         }
-        wc.angle = (aa * 1000.0) as u32;
+        wc.angle = aa as f32;
     }
-    wc.cx = ccp.x as i32;
-    wc.cy = ccp.y as i32;
+    wc.cx = ccp.x as f32;
+    wc.cy = ccp.y as f32;
     rbuf.push(wc);
 }
 

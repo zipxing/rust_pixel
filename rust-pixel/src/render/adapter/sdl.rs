@@ -8,9 +8,9 @@ use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
 use crate::render::{
-    adapter::sdl::{gl_color::GlColor, gl_pix::GlPix, gl_transform::GlTransform},
     adapter::{
-        Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
+        gl::pixel::GlPixel,
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -27,13 +27,6 @@ use sdl2::{
 };
 use std::any::Any;
 use std::time::Duration;
-
-// opengl codes...
-pub mod gl_color;
-pub mod gl_pix;
-pub mod gl_shader;
-pub mod gl_texture;
-pub mod gl_transform;
 
 // data for drag window...
 #[derive(Default)]
@@ -55,9 +48,7 @@ pub struct SdlAdapter {
     pub event_pump: Option<EventPump>,
 
     // gl object
-    pub gl: Option<glow::Context>,
     pub gl_context: Option<sdl2::video::GLContext>,
-    pub gl_pix: Option<GlPix>,
 
     // custom cursor
     pub cursor: Option<Cursor>,
@@ -82,8 +73,6 @@ impl SdlAdapter {
             cursor: None,
             sdl_window: None,
             gl_context: None,
-            gl: None,
-            gl_pix: None,
             drag: Default::default(),
         }
     }
@@ -94,30 +83,10 @@ impl SdlAdapter {
                 .map_err(|err| format!("failed to load cursor: {}", err))
                 .unwrap(),
         );
-        match &self.cursor {
-            Some(cursor) => {
-                cursor.set();
-            }
-            _ => {}
+        if let Some(cursor) = &self.cursor {
+            cursor.set();
         }
         self.sdl_context.mouse().show_cursor(true);
-    }
-
-    pub fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
-        let rbuf = self.buf_to_render_buffer(buf);
-        self.render_rbuf(&rbuf, rtidx);
-    }
-
-    pub fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
-        let bs = self.get_base();
-        let rx = bs.ratio_x;
-        let ry = bs.ratio_y;
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            pix.bind_render_texture(gl, rtidx);
-            pix.clear(gl);
-            pix.render_rbuf(gl, rbuf, rx, ry);
-            pix.flush(gl);
-        }
     }
 
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
@@ -225,10 +194,9 @@ impl Adapter for SdlAdapter {
         };
 
         // Store the OpenGL context
-        self.gl = Some(gl);
+        self.base.gl = Some(gl);
         self.sdl_window = Some(window);
 
-        let mut texs = vec![];
         for texture_file in PIXEL_TEXTURE_FILES.iter() {
             let texture_path = format!(
                 "{}{}{}",
@@ -236,15 +204,23 @@ impl Adapter for SdlAdapter {
                 std::path::MAIN_SEPARATOR,
                 texture_file
             );
-            texs.push(texture_path);
+            info!("gl_pixel load texture...{}", texture_path);
+            let img = image::open(texture_path)
+                .map_err(|e| e.to_string())
+                .unwrap()
+                .to_rgba8();
+            let width = img.width();
+            let height = img.height();
+            self.base.gl_pixel = Some(GlPixel::new(
+                self.base.gl.as_ref().unwrap(),
+                "#version 330 core",
+                self.base.pixel_w as i32,
+                self.base.pixel_h as i32,
+                width as i32,
+                height as i32,
+                &img,
+            ));
         }
-
-        self.gl_pix = Some(GlPix::new(
-            self.gl.as_ref().unwrap(),
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
-            texs,
-        ));
 
         info!("Window & gl init ok...");
 
@@ -313,7 +289,6 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // return Ok(());
         // process window draging move...
         sdl_move_win(
             &mut self.drag.need,
@@ -324,26 +299,13 @@ impl Adapter for SdlAdapter {
 
         // render every thing to rbuf
         let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        // draw main buffer & pixel_sprites to render_texture 2
         self.render_rbuf(&rbuf, 2);
 
-        if let (Some(pix), Some(gl)) = (&mut self.gl_pix, &mut self.gl) {
-            // render texture 2 , 3 to screen
-            pix.bind(gl);
-            let mut t = GlTransform::new();
-            t.scale(2.0 as f32, 2.0 as f32);
-            t.translate(-0.5, -0.5);
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+        self.main_render_pass();
 
-            let mut t2 = GlTransform::new();
-            t2.scale(2.0 * 0.512, 2.0 * 0.756);
-            t2.translate(-0.5, -0.5);
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 3, [0.05, 0.0, 0.512, 0.756], &t2, &c);
-            // swap window for display
-            self.sdl_window.as_ref().unwrap().gl_swap_window();
-        }
-
+        // swap window for display
+        self.sdl_window.as_ref().unwrap().gl_swap_window();
         Ok(())
     }
 

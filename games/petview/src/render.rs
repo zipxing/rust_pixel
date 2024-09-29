@@ -8,36 +8,18 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    render::adapter::sdl::SdlAdapter,
+    // render::adapter::sdl::SdlAdapter,
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
 };
+use rust_pixel::render::adapter::Adapter;
+
 use std::fmt::Write;
 use std::io::Cursor;
 
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
-
-// fn debug_img(img: &[u8], w: usize, h: usize) {
-//     let mut idx = 0;
-//     for i in 0..h {
-//         let mut line = " ".to_string();
-//         for j in 0..w {
-//             write!(
-//                 line,
-//                 " {}.{}.{}.{} ",
-//                 img[idx + 0],
-//                 img[idx + 1],
-//                 img[idx + 2],
-//                 img[idx + 3]
-//             )
-//             .unwrap();
-//             idx += 4;
-//         }
-//         info!("{:?}", line);
-//     }
-// }
 
 pub struct PetviewRender {
     pub panel: Panel,
@@ -81,8 +63,6 @@ impl Render for PetviewRender {
             .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
 
-        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
-
         let p1 = self.panel.get_pixel_sprite("petimg1");
         asset2sprite!(p1, ctx, "12.pix");
 
@@ -91,26 +71,39 @@ impl Render for PetviewRender {
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        if event_check("Template.RedrawTile", "draw_tile") {
-        }
+        if event_check("Template.RedrawTile", "draw_tile") {}
     }
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
-        let sa = ctx.adapter.as_any().downcast_mut::<SdlAdapter>().unwrap();
         if !self.tex_ready {
             let p1 = self.panel.get_pixel_sprite("petimg1");
-            sa.render_buffer_to_texture(&p1.content, 0);
+            let l1 = p1.check_asset_request(&mut ctx.asset_manager);
+            if l1 {
+                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                ctx.adapter.render_buffer_to_texture(&p1.content, 0);
+            }
             let p2 = self.panel.get_pixel_sprite("petimg2");
-            sa.render_buffer_to_texture(&p2.content, 1);
-            self.tex_ready = true;
+            let l2 = p2.check_asset_request(&mut ctx.asset_manager);
+            if l2 {
+                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                ctx.adapter.render_buffer_to_texture(&p2.content, 1);
+            }
+            if l1 && l2 {
+                self.tex_ready = true;
+                info!("tex_ready.........");
+            }
         }
         if event_check("PetView.Timer", "pet_timer") {
+            // info!("timer......{}", ctx.stage);
             // let p1 = self.panel.get_pixel_sprite("petimg2");
-            if let (Some(pix), Some(gl)) = (&mut sa.gl_pix, &mut sa.gl) {
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            let sa = ctx.adapter.get_base();
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_render_texture(gl, 3);
                 pix.clear(gl);
-                pix.render_trans_frame(&gl, 40*16, 25*16, self.progress);
-                sa.sdl_window.as_ref().unwrap().gl_swap_window();
+                pix.render_trans_frame(&gl, 40 * 16, 25 * 16, self.progress);
+                // sa.sdl_window.as_ref().unwrap().gl_swap_window();
                 self.progress += 0.03;
                 if self.progress >= 1.0 {
                     self.progress = 0.0;

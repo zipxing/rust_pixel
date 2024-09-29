@@ -1,19 +1,19 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Implements an Adapter class. Moreover,
-//! all web related processing is handled here.
-
+//! Implements an Adapter trait. Moreover, all SDL related processing is handled here.
+//! Includes resizing of height and width, init settings.
+//! Use opengl and glow mod for rendering.
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
 };
-use crate::{
-    render::{
-        adapter::{Adapter, AdapterBase, RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
-        buffer::Buffer,
-        sprite::Sprites,
+use crate::render::{
+    adapter::{
+        gl::pixel::GlPixel, 
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
-    util::Rand,
+    buffer::Buffer,
+    sprite::Sprites,
 };
 use log::info;
 use std::any::Any;
@@ -21,17 +21,25 @@ use std::time::Duration;
 
 pub struct WebAdapter {
     pub base: AdapterBase,
-    pub rd: Rand,
-    pub rbuf: Vec<RenderCell>,
 }
 
 impl WebAdapter {
     pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(pre, gn, project_path),
-            rd: Rand::new(),
-            rbuf: vec![],
         }
+    }
+
+    pub fn init_glpix(&mut self, w: i32, h: i32, tex: &[u8]) {
+        self.base.gl_pixel = Some(GlPixel::new(
+            self.base.gl.as_ref().unwrap(),
+            "#version 300 es",
+            self.base.pixel_w as i32,
+            self.base.pixel_h as i32,
+            w as i32,
+            h as i32,
+            tex,
+        ));
     }
 }
 
@@ -42,7 +50,27 @@ impl Adapter for WebAdapter {
             .set_ratioy(ry)
             .set_pixel_size()
             .set_title(s);
-        info!("web adapter init ... {:?}", (w, h));
+
+        use wasm_bindgen::JsCast;
+        let canvas = web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .get_element_by_id("canvas")
+            .unwrap()
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .unwrap();
+        let webgl2_context = canvas
+            .get_context("webgl2")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::WebGl2RenderingContext>()
+            .unwrap();
+        let gl = glow::Context::from_webgl2_context(webgl2_context);
+
+        // Store the OpenGL context
+        self.base.gl = Some(gl);
+        info!("Window & gl init ok...");
     }
 
     fn get_base(&mut self) -> &mut AdapterBase {
@@ -70,7 +98,13 @@ impl Adapter for WebAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        self.rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        // render every thing to rbuf
+        let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        // draw main buffer & pixel_sprites to render_texture 2
+        self.render_rbuf(&rbuf, 2);
+
+        self.main_render_pass();
+
         Ok(())
     }
 
