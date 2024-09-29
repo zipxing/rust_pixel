@@ -33,10 +33,10 @@ const wasm = await init();
 const timg = new Image();
 timg.src = "assets/pix/c64.png";
 await timg.decode();
-var canvas = document.createElement("canvas");
+const canvas = document.createElement("canvas");
 canvas.width = timg.width;
 canvas.height = timg.height;
-var ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d");
 ctx.drawImage(timg, 0, 0);
 const imgdata = ctx.getImageData(0,0,timg.width,timg.height).data;
 

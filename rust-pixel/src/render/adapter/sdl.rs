@@ -9,7 +9,7 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
+        gl::pixel::GlPixel,
         Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
     },
     buffer::Buffer,
@@ -289,7 +289,6 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // return Ok(());
         // process window draging move...
         sdl_move_win(
             &mut self.drag.need,
@@ -303,27 +302,10 @@ impl Adapter for SdlAdapter {
         // draw main buffer & pixel_sprites to render_texture 2
         self.render_rbuf(&rbuf, 2);
 
-        if let (Some(pix), Some(gl)) = (&mut self.base.gl_pixel, &mut self.base.gl) {
-            // render to screen
-            pix.bind(gl);
+        self.main_render_pass();
 
-            // draw render_texture 2 ( main buffer )
-            let mut t = GlTransform::new();
-            t.scale(2.0 as f32, 2.0 as f32);
-            t.translate(-0.5, -0.5);
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
-
-            // draw render_texture 3 ( gl transition )
-            let mut t2 = GlTransform::new();
-            t2.scale(2.0 * 0.512, 2.0 * 0.756);
-            t2.translate(-0.5, -0.5);
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 3, [0.05, 0.0, 0.512, 0.756], &t2, &c);
-            // swap window for display
-            self.sdl_window.as_ref().unwrap().gl_swap_window();
-        }
-
+        // swap window for display
+        self.sdl_window.as_ref().unwrap().gl_swap_window();
         Ok(())
     }
 

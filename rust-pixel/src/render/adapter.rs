@@ -9,7 +9,7 @@ use crate::{
 };
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 use crate::{
-    render::adapter::gl::pixel::GlPixel,
+    render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
     render::style::Color,
     util::{ARect, PointI32},
     LOGO_FRAME,
@@ -30,6 +30,7 @@ pub const PIXEL_TEXTURE_FILES: [&'static str; 1] = ["assets/pix/c64.png"];
 
 pub const PIXEL_SYM_WIDTH: f32 = 16.0;
 pub const PIXEL_SYM_HEIGHT: f32 = 16.0;
+
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
 pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
@@ -206,8 +207,32 @@ pub trait Adapter {
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn main_render_pass(&mut self) {
+        let bs = self.get_base();
+
+        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            // render to screen
+            pix.bind(gl);
+
+            // draw render_texture 2 ( main buffer )
+            let mut t = GlTransform::new();
+            t.scale(2.0 as f32, 2.0 as f32);
+            t.translate(-0.5, -0.5);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+
+            // draw render_texture 3 ( gl transition )
+            let mut t2 = GlTransform::new();
+            t2.scale(2.0 * 0.512, 2.0 * 0.756);
+            t2.translate(-0.5, -0.5);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            pix.draw_general2d(gl, 3, [0.05, 0.0, 0.512, 0.756], &t2, &c);
+        }
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
-        let rbuf = self.buf_to_render_buffer(buf);
+        let rbuf = self.buffer_to_render_buffer(buf);
         self.render_rbuf(&rbuf, rtidx);
     }
 
@@ -225,7 +250,7 @@ pub trait Adapter {
     }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn buf_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
+    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
         let rx = self.get_base().ratio_x;
         let ry = self.get_base().ratio_y;
