@@ -79,13 +79,11 @@ impl Render for PetviewRender {
             let p1 = self.panel.get_pixel_sprite("petimg1");
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
             if l1 {
-                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                 ctx.adapter.render_buffer_to_texture(&p1.content, 0);
             }
             let p2 = self.panel.get_pixel_sprite("petimg2");
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
             if l2 {
-                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
                 ctx.adapter.render_buffer_to_texture(&p2.content, 1);
             }
             if l1 && l2 {
@@ -96,9 +94,7 @@ impl Render for PetviewRender {
         if event_check("PetView.Timer", "pet_timer") {
             // info!("timer......{}", ctx.stage);
             // let p1 = self.panel.get_pixel_sprite("petimg2");
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             let sa = ctx.adapter.get_base();
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_render_texture(gl, 3);
                 pix.clear(gl);

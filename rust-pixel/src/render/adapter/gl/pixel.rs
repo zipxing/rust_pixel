@@ -120,18 +120,82 @@ impl GlPixel {
             }
         "#;
         let fs = r#"
-            vec4 transition (vec2 uv) {
-                    float time = progress;
-                    float stime = sin(time * 3.14159265 / 2.);
-                    float phase = time * 3.14159265 * 3.0;
-                    float y = (abs(cos(phase))) * (1.0 - stime);
-                    float d = uv.y - y;
-                    vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
-                    // vec4 from = getFromColor(uv);
-                    vec4 to = getToColor(uv);
-                    vec4 mc = mix( to, from, step(d, 0.0) );
-                    return mc;
-            }
+
+            // minimum number of squares (when the effect is at its higher level)
+uniform ivec2 squaresMin = ivec2(20);
+// zero disable the stepping
+uniform int steps = 50;
+
+float d = min(progress, 1.0 - progress);
+float dist = steps>0 ? ceil(d * float(steps)) / float(steps) : d;
+vec2 squareSize = 2.0 * dist / vec2(squaresMin);
+
+vec4 transition(vec2 uv) {
+  vec2 p = dist>0.0 ? (floor(uv / squareSize) + 0.5) * squareSize : uv;
+  return mix(getFromColor(p), getToColor(p), progress);
+}
+
+
+          // float inHeart (vec2 p, vec2 center, float size) {
+          // if (size==0.0) return 0.0;
+          // vec2 o = (p-center)/(1.6*size);
+          // float a = o.x*o.x+o.y*o.y-0.3;
+          // return step(a*a*a, o.x*o.x*o.y*o.y*o.y);
+          // }
+          // vec4 transition (vec2 uv) {
+          // return mix(
+          // getFromColor(uv),
+          // getToColor(uv),
+          // inHeart(uv, vec2(0.5, 0.4), progress)
+          // );
+          // }
+
+            // highp float noise(vec2 co)
+            // {
+            //     highp float a = 12.9898;
+            //     highp float b = 78.233;
+            //     highp float c = 43758.5453;
+            //     highp float dt= dot(co.xy * progress, vec2(a, b));
+            //     highp float sn= mod(dt,3.14);
+            //     return fract(sin(sn) * c);
+            // }
+            // vec4 transition(vec2 p) {
+            //   if (progress < 0.05 ) {
+            //     return getFromColor(p);
+            //   } else if (progress > (1.0 - 0.05 )) {
+            //     return getToColor(p);
+            //   } else {
+            //     return vec4(vec3(noise(p)), 1.0);
+            //   }
+            // }
+
+            // vec4 transition(vec2 uv) {
+            //   float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
+            //   float angleOffset = progress < 0.5 ? mix(0.0, 6.0 * 0.03927, phase) : mix(-6.0 * 0.03927, 0.0, phase);
+            //   float newScale = progress < 0.5 ? mix(1.0, 1.2, phase) : mix(1.2, 1.0, phase);
+            //   vec2 center = vec2(0, 0);
+            //   vec2 assumedCenter = vec2(0.5, 0.5);
+            //   vec2 p = (uv.xy - vec2(0.5, 0.5)) / newScale * vec2(1.2, 1.0);
+            //   float angle = atan(p.y, p.x) + angleOffset;
+            //   float dist = distance(center, p);
+            //   p.x = cos(angle) * dist / 1.2 + 0.5;
+            //   p.y = sin(angle) * dist + 0.5;
+            //   vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
+            //   return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
+            // }
+
+            // vec4 transition (vec2 uv) {
+            //         float time = progress;
+            //         float stime = sin(time * 3.14159265 / 2.);
+            //         float phase = time * 3.14159265 * 3.0;
+            //         float y = (abs(cos(phase))) * (1.0 - stime);
+            //         float d = uv.y - y;
+            //         vec4 from = getFromColor(vec2(uv.x, uv.y + (1.0 - y)));
+            //         // vec4 from = getFromColor(uv);
+            //         vec4 to = getToColor(uv);
+            //         vec4 mc = mix( to, from, step(d, 0.0) );
+            //         return mc;
+            // }
         "#;
 
         let fragment_shader_src2 = &format!(
