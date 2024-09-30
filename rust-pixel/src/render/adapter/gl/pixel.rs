@@ -208,7 +208,7 @@ impl GlPixel {
         "#);
 
         let mut fragment_shader_src2 = vec![];
-        for i in 0..4 {
+        for i in 0..fs.len() {
             fragment_shader_src2.push(format!(
                 r#"
             precision mediump float;
@@ -228,14 +228,11 @@ impl GlPixel {
 
         let vertex_shader_src3 = r#"
             precision mediump float;
-            layout(location = 0) in vec2 aPos;        // 顶点坐标
-            layout(location = 1) in vec2 aTexCoord;   // 纹理坐标
-
-            out vec2 TexCoord;  // 传递给片段着色器的纹理坐标
-
-            uniform mat4 transform;  // 变换矩阵
-            uniform vec4 area;       // 纹理的采样区域 (x, y, width, height) [0.0, 1.0]
-
+            layout(location = 0) in vec2 aPos;
+            layout(location = 1) in vec2 aTexCoord;
+            out vec2 TexCoord;  
+            uniform mat4 transform; 
+            uniform vec4 area;      
             void main()
             {
                 TexCoord = vec2(
@@ -268,7 +265,7 @@ impl GlPixel {
         let (vao_general2d, vbo_general2d, ebo_general2d) =
             unsafe { create_general2d_buffers(&gl, shaders[1].program) };
 
-        for i in 0..4 {
+        for i in 0..fs.len() {
             info!("shader.............{}", i);
             shaders.push(GlShader::new(
                 &gl,
