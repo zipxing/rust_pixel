@@ -1,3 +1,7 @@
+# 0.4.9
+- Refactored gl/pixel.rs, Use the GlRender trait to wrap several opengl shaders and facilitate further extension of the shader
+- Updated the cargo-pixel tool so that when it runs, it first compares the version number in pixel.toml. If it is inconsistent, it prompts to update cargo-pixel.
+
 # 0.4.8
 - Refactored the underlying rendering module, abandoned the canvas API of SDL, and replaced it with OpenGL shader,
 - Opengl rendering improved engine performance (CPU dropped from 38% to about 15%) 

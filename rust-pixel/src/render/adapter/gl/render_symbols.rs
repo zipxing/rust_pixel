@@ -340,20 +340,6 @@ impl GlRenderSymbols {
         self.draw(gl);
     }
 
-    // pub fn clear(&mut self, gl: &glow::Context, clear_color: GlColor) {
-    //     self.draw(gl);
-
-    //     unsafe {
-    //         gl.clear_color(
-    //             clear_color.r * self.ubo_contents[8],
-    //             clear_color.g * self.ubo_contents[9],
-    //             clear_color.b * self.ubo_contents[10],
-    //             clear_color.a * self.ubo_contents[11],
-    //         );
-    //         gl.clear(glow::COLOR_BUFFER_BIT);
-    //     }
-    // }
-
     fn make_symbols_frame(
         &mut self,
         sheet: &mut GlTexture,
