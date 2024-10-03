@@ -214,6 +214,7 @@ pub trait Adapter {
             // render to screen
             pix.bind(gl);
 
+            // pix.clear(gl);
             // draw render_texture 2 ( main buffer )
             let mut t = GlTransform::new();
             t.scale(2.0 as f32, 2.0 as f32);
@@ -242,10 +243,9 @@ pub trait Adapter {
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
         if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
-            pix.bind_render_texture(gl, rtidx);
+            pix.bind_target(gl, rtidx);
             pix.clear(gl);
             pix.render_rbuf(gl, rbuf, rx, ry);
-            pix.flush(gl);
         }
     }
 

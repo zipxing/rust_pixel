@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct GlTransform {
     pub m00: f32,
     pub m10: f32,

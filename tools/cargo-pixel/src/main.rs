@@ -451,6 +451,12 @@ fn check_pixel_toml() -> PixelContext {
             let rpp = rust_pixel.to_string();
             pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
         }
+        if let Some(cargo_pixel) = pixel.get("cargo_pixel") {
+            let cps = cargo_pixel.to_string();
+            if cps != "\"0.3.0\"" {
+                panic!("Please update cargo pixel: cargo install --path tools/cargo-pixel --root ~/.cargo");
+            }
+        }
     }
     if !pc.standalone {
         let srcdir = PathBuf::from(&pc.rust_pixel_path);
