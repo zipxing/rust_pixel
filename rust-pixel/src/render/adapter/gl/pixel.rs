@@ -21,8 +21,6 @@ pub struct GlPixel {
 
     pub render_textures: Vec<GlRenderTexture>,
 
-    pub current_texture_atlas: Option<glow::Texture>,
-
     pub canvas_width: u32,
     pub canvas_height: u32,
 
@@ -49,9 +47,7 @@ impl GlPixel {
         let mut r_trans = GlRenderTransition::new(canvas_width as u32, canvas_height as u32);
         r_trans.init(gl, "#version 330 core");
 
-        // 初始化缓冲区
         unsafe {
-            info!("GL EDB....");
             gl.enable(glow::BLEND);
             gl.disable(glow::DEPTH_TEST);
             gl.blend_func_separate(
@@ -78,12 +74,11 @@ impl GlPixel {
             r_g2d,
             r_trans,
             render_textures,
-            current_texture_atlas: None,
             clear_color: GlColor::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 
-    pub fn bind(&mut self, gl: &glow::Context) {
+    pub fn bind_screen(&mut self, gl: &glow::Context) {
         unsafe {
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             gl.viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
@@ -107,7 +102,12 @@ impl GlPixel {
 
     pub fn clear(&mut self, gl: &glow::Context) {
         unsafe {
-            gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            gl.clear_color(
+                self.clear_color.r,
+                self.clear_color.g,
+                self.clear_color.b,
+                self.clear_color.a,
+            );
             gl.clear(glow::COLOR_BUFFER_BIT);
         }
     }
@@ -127,7 +127,6 @@ impl GlPixel {
             .set_color(&color);
         self.r_g2d.prepare_draw(gl, GlRenderMode::General2D, 0);
         self.r_g2d.draw(gl);
-        self.r_sym.base.textures_binded = false;
     }
 
     pub fn render_rbuf(

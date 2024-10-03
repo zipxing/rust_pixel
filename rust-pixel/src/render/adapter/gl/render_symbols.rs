@@ -201,6 +201,7 @@ impl GlRender for GlRenderSymbols {
             self.instance_buffer_at = -1;
             self.instance_count = 0;
             self.base.shader_binded = false;
+            self.base.textures_binded = false;
         }
     }
 

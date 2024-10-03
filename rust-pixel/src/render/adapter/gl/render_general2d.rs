@@ -13,8 +13,6 @@ use glow::HasContext;
 
 pub struct GlRenderGeneral2d {
     pub base: GlRenderBase,
-    pub width: u32,
-    pub height: u32,
     pub area: [f32; 4],
     pub transform: GlTransform,
     pub color: GlColor,
@@ -36,8 +34,6 @@ impl GlRender for GlRenderGeneral2d {
 
         Self {
             base,
-            width: 0,
-            height: 0,
             area: [0.0, 0.0, 0.0, 0.0],
             transform: GlTransform::new(),
             color: GlColor::new(0.0, 0.0, 0.0, 1.0),
@@ -108,7 +104,6 @@ impl GlRender for GlRenderGeneral2d {
         self.base.shader[0].bind(gl);
         unsafe {
             gl.bind_vertex_array(self.base.vao);
-            // gl.viewport(0, 0, self.width as i32, self.height as i32);
 
             gl.active_texture(glow::TEXTURE0);
             gl.bind_texture(glow::TEXTURE_2D, Some(self.base.textures[0]));
@@ -173,9 +168,6 @@ impl GlRenderGeneral2d {
         self.base.textures.push(tex1);
         self.base.textures_binded = false;
 
-        // width, height...
-        // self.width = w;
-        // self.height = h;
         self
     }
 

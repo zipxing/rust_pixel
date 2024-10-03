@@ -211,10 +211,8 @@ pub trait Adapter {
         let bs = self.get_base();
 
         if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
-            // render to screen
-            pix.bind(gl);
+            pix.bind_screen(gl);
 
-            // pix.clear(gl);
             // draw render_texture 2 ( main buffer )
             let mut t = GlTransform::new();
             t.scale(2.0 as f32, 2.0 as f32);
