@@ -7,7 +7,7 @@ use crate::render::adapter::gl::{
     shader::GlShader,
     texture::{GlCell, GlTexture},
     transform::GlTransform,
-    GlRender, GlRenderBase, GlRenderMode,
+    GlRender, GlRenderBase, 
 };
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
@@ -140,7 +140,8 @@ impl GlRender for GlRenderSymbols {
         self.base.gl_buffers = vec![instances_vbo, quad_vbo, ubo];
     }
 
-    fn prepare_draw(&mut self, gl: &glow::Context, current_render_mode: GlRenderMode, size: usize) {
+    fn prepare_draw(&mut self, gl: &glow::Context) {
+        let size = 16u32;
 
         if !self.base.textures_binded {
             unsafe {
@@ -263,7 +264,7 @@ impl GlRenderSymbols {
         transform: &GlTransform,
         color: &GlColor,
     ) {
-        self.prepare_draw(gl, GlRenderMode::PixSymbols, 16);
+        self.prepare_draw(gl);
         let frame = &self.symbols[sym];
         let instance_buffer = &mut self.instance_buffer;
 
@@ -339,19 +340,19 @@ impl GlRenderSymbols {
         self.draw(gl);
     }
 
-    pub fn clear(&mut self, gl: &glow::Context, clear_color: GlColor) {
-        self.draw(gl);
+    // pub fn clear(&mut self, gl: &glow::Context, clear_color: GlColor) {
+    //     self.draw(gl);
 
-        unsafe {
-            gl.clear_color(
-                clear_color.r * self.ubo_contents[8],
-                clear_color.g * self.ubo_contents[9],
-                clear_color.b * self.ubo_contents[10],
-                clear_color.a * self.ubo_contents[11],
-            );
-            gl.clear(glow::COLOR_BUFFER_BIT);
-        }
-    }
+    //     unsafe {
+    //         gl.clear_color(
+    //             clear_color.r * self.ubo_contents[8],
+    //             clear_color.g * self.ubo_contents[9],
+    //             clear_color.b * self.ubo_contents[10],
+    //             clear_color.a * self.ubo_contents[11],
+    //         );
+    //         gl.clear(glow::COLOR_BUFFER_BIT);
+    //     }
+    // }
 
     fn make_symbols_frame(
         &mut self,

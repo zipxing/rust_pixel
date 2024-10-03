@@ -11,14 +11,6 @@ pub mod render_general2d;
 // use crate::render::adapter::gl::shader::GlShader;
 use shader::GlShader;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum GlRenderMode {
-    None = -1,
-    PixSymbols = 0,
-    General2D = 1,
-    Transition = 2,
-}
-
 pub trait GlRender {
     fn new(canvas_width: u32, canvas_height: u32) -> Self
     where
@@ -39,7 +31,7 @@ pub trait GlRender {
         unsafe { self.create_buffer(gl) };
     }
 
-    fn prepare_draw(&mut self, gl: &glow::Context, current_render_mode: GlRenderMode, size: usize);
+    fn prepare_draw(&mut self, gl: &glow::Context);
 
     fn draw(&mut self, gl: &glow::Context);
 

@@ -4,7 +4,7 @@
 use crate::render::adapter::gl::{
     shader::GlShader,
     shader_source::{get_trans_fragment_src, VERTEX_SRC_TRANS},
-    GlRender, GlRenderBase, GlRenderMode,
+    GlRender, GlRenderBase, 
 };
 use glow::HasContext;
 
@@ -93,7 +93,7 @@ impl GlRender for GlRenderTransition {
         self.base.gl_buffers = vec![vertex_buffer, index_buffer];
     }
 
-    fn prepare_draw(&mut self, gl: &glow::Context, current_render_mode: GlRenderMode, size: usize) {
+    fn prepare_draw(&mut self, gl: &glow::Context) {
         self.base.shader[self.shader_idx].bind(gl);
         unsafe {
             gl.bind_vertex_array(self.base.vao);
@@ -149,7 +149,7 @@ impl GlRenderTransition {
     pub fn draw_trans(&mut self, gl: &glow::Context, shader_idx: usize, progress: f32) {
         self.shader_idx = shader_idx;
         self.progress = progress;
-        self.prepare_draw(gl, GlRenderMode::Transition, 0);
+        self.prepare_draw(gl);
         self.draw(gl);
     }
 }

@@ -5,7 +5,7 @@ use crate::render::adapter::{
     gl::{
         color::GlColor, render_general2d::GlRenderGeneral2d, render_symbols::GlRenderSymbols,
         render_transition::GlRenderTransition, texture::GlRenderTexture, transform::GlTransform,
-        GlRender, GlRenderMode,
+        GlRender, 
     },
     RenderCell,
 };
@@ -13,18 +13,16 @@ use glow::HasContext;
 use log::info;
 
 pub struct GlPixel {
-    pub render_mode: GlRenderMode,
+    r_sym: GlRenderSymbols,
+    r_g2d: GlRenderGeneral2d,
+    r_trans: GlRenderTransition,
 
-    pub r_sym: GlRenderSymbols,
-    pub r_g2d: GlRenderGeneral2d,
-    pub r_trans: GlRenderTransition,
+    render_textures: Vec<GlRenderTexture>,
 
-    pub render_textures: Vec<GlRenderTexture>,
+    canvas_width: u32,
+    canvas_height: u32,
 
-    pub canvas_width: u32,
-    pub canvas_height: u32,
-
-    pub clear_color: GlColor,
+    clear_color: GlColor,
 }
 
 impl GlPixel {
@@ -37,15 +35,18 @@ impl GlPixel {
         texh: i32,
         texdata: &[u8],
     ) -> Self {
+        // gl render symbols for draw main buffer
         let mut r_sym = GlRenderSymbols::new(canvas_width as u32, canvas_height as u32);
-        r_sym.init(gl, "#version 330 core");
+        r_sym.init(gl, ver);
         r_sym.load_texture(gl, texw, texh, texdata);
 
+        // gl render general2d for draw render texture
         let mut r_g2d = GlRenderGeneral2d::new(canvas_width as u32, canvas_height as u32);
-        r_g2d.init(gl, "#version 330 core");
+        r_g2d.init(gl, ver);
 
+        // gl render transition for transition effect
         let mut r_trans = GlRenderTransition::new(canvas_width as u32, canvas_height as u32);
-        r_trans.init(gl, "#version 330 core");
+        r_trans.init(gl, ver);
 
         unsafe {
             gl.enable(glow::BLEND);
@@ -67,7 +68,6 @@ impl GlPixel {
         }
 
         Self {
-            render_mode: GlRenderMode::None,
             canvas_width: canvas_width as u32,
             canvas_height: canvas_height as u32,
             r_sym,
@@ -86,11 +86,11 @@ impl GlPixel {
     }
 
     // idx 0 - 3 : render to GlRenderTexture 0 - 3
-    pub fn bind_target(&mut self, gl: &glow::Context, idx: usize) {
+    pub fn bind_target(&mut self, gl: &glow::Context, render_texture_idx: usize) {
         unsafe {
             gl.bind_framebuffer(
                 glow::FRAMEBUFFER,
-                Some(self.render_textures[idx].framebuffer),
+                Some(self.render_textures[render_texture_idx].framebuffer),
             );
             gl.viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
         }
@@ -125,7 +125,7 @@ impl GlPixel {
             .set_area(&area)
             .set_transform(&transform)
             .set_color(&color);
-        self.r_g2d.prepare_draw(gl, GlRenderMode::General2D, 0);
+        self.r_g2d.prepare_draw(gl);
         self.r_g2d.draw(gl);
     }
 

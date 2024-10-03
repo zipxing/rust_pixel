@@ -297,11 +297,12 @@ impl Adapter for SdlAdapter {
             self.drag.dy,
         );
 
-        // render every thing to rbuf
+        // render main_buffer & pixel_sprites to rbuf
         let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
-        // draw main buffer & pixel_sprites to render_texture 2
+        // draw rbuf to render_texture 2
         self.render_rbuf(&rbuf, 2);
 
+        // draw render_texture 2 & 3 to screen
         self.main_render_pass();
 
         // swap window for display

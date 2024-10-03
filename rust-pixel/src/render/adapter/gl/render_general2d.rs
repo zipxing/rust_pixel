@@ -6,7 +6,7 @@ use crate::render::adapter::gl::{
     shader::GlShader,
     shader_source::{GENERAL2D_FRAGMENT_SRC, GENERAL2D_VERTEX_SRC},
     transform::GlTransform,
-    GlRender, GlRenderBase, GlRenderMode,
+    GlRender, GlRenderBase, 
 };
 use glow::HasContext;
 // use log::info;
@@ -100,7 +100,7 @@ impl GlRender for GlRenderGeneral2d {
         self.base.gl_buffers = vec![vbo, ebo];
     }
 
-    fn prepare_draw(&mut self, gl: &glow::Context, current_render_mode: GlRenderMode, size: usize) {
+    fn prepare_draw(&mut self, gl: &glow::Context) {
         self.base.shader[0].bind(gl);
         unsafe {
             gl.bind_vertex_array(self.base.vao);
@@ -159,15 +159,12 @@ impl GlRenderGeneral2d {
     pub fn set_texture(
         &mut self,
         gl: &glow::Context,
-        // w: u32,
-        // h: u32,
         tex1: glow::Texture,
     ) -> &mut Self {
         // textures...
         self.base.textures.clear();
         self.base.textures.push(tex1);
         self.base.textures_binded = false;
-
         self
     }
 

@@ -6,3 +6,4 @@
 [pixel]
 standalone = true
 rust_pixel = "$RUST_PIXEL_ROOT"
+cargo_pixel = "0.3.0"
