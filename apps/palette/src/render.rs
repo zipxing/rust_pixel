@@ -216,11 +216,11 @@ impl PaletteRender {
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 pl.set_pos(1, 9 + idx as u16 * 2);
                 let bcs = [Color::Red, Color::Green, Color::Blue];
-                for i in 0..3 {
+                for (i, item) in bcs.iter().enumerate() {
                     let pl = self
                         .panel
                         .get_layer_sprite("select", &format!("cursor{}", i + 1));
-                    pl.set_color_str(0, 0, "∙", Color::Black, bcs[i]);
+                    pl.set_color_str(0, 0, "∙", Color::Black, *item);
                     let x = d.select.ranges[i].x;
                     pl.set_pos(
                         (x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + 2,
