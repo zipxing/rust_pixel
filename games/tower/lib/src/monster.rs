@@ -61,7 +61,7 @@ impl Monster {
     }
 
     pub fn get_next_pos(&mut self, grids: &mut Vec<Vec<u8>>, rand: &mut Rand) {
-        if self.path.len() == 0 || rand.rand() % 10 == 0 {
+        if self.path.is_empty() || rand.rand() % 10 == 0 {
             self.find_path(grids, self.pos);
         }
         let mut ng = self.path.remove(1);
@@ -99,8 +99,8 @@ impl Monster {
     }
 
     pub fn domove(&mut self) {
-        self.pixel_pos.x = self.pixel_pos.x + self.fspeed.x;
-        self.pixel_pos.y = self.pixel_pos.y + self.fspeed.y;
+        self.pixel_pos.x += self.fspeed.x;
+        self.pixel_pos.y += self.fspeed.y;
     }
 
     fn gid(&self) -> usize {
@@ -132,7 +132,7 @@ impl Monster {
                 s.remove(&mid);
             });
             mmap.entry(self.ngid())
-                .or_insert(HashSet::new())
+                .or_default()
                 .insert(mid);
 
             self.pos = self.next_pos;

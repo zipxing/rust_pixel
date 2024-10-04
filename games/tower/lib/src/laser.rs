@@ -62,7 +62,7 @@ impl Laser {
             //     y: m.obj.pixel_pos.y as u16 % self.csize.y,
             // };
             self.stage -= 1;
-            return true;
+            true
         } else {
             m.obj.life -= self.damage;
             let bpt = (
@@ -79,7 +79,7 @@ impl Laser {
                 // };
                 // bs.create(1, &vec![nbpt]);
             }
-            return false;
+            false
         }
     }
 }

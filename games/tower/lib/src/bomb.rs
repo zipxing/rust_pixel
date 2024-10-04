@@ -26,9 +26,9 @@ impl Bomb {
     pub fn update(&mut self) -> bool {
         if self.stage != 0 {
             self.stage -= 1;
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 }

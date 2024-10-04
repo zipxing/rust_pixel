@@ -114,7 +114,7 @@ impl TowerRender {
                 pl.set_graph_sym(0, 0, 2, 29, Color::Indexed(10));
             }
             pl.set_pos(b.obj.pixel_pos.x as u16, b.obj.pixel_pos.y as u16);
-            pl.set_angle(b.obj.angle as f64 / 3.1415926 * 180.0 + 90.0);
+            pl.set_angle(b.obj.angle as f64 / std::f64::consts::PI * 180.0 + 90.0);
         });
     }
 

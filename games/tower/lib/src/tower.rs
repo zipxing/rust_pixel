@@ -43,7 +43,7 @@ impl GObj for Tower {
 }
 
 impl Tower {
-    pub fn set_in_grid(&self, grid: &mut Vec<Vec<u8>>) {
+    pub fn set_in_grid(&self, grid: &mut [Vec<u8>]) {
         let x = self.pos.x as usize * BW;
         let y = self.pos.y as usize * BH;
         for i in 0..BW {
@@ -67,7 +67,7 @@ impl Tower {
             }
             if self.target.is_none() {
                 let iv: Vec<_> = ms.pool.iter().filter(|m| m.active).collect();
-                if iv.len() != 0 {
+                if !iv.is_empty() {
                     let tid = iv[ctx.rand() as usize % iv.len()].id;
                     self.target = Some(tid);
                     vr.push(tid);

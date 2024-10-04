@@ -6,7 +6,7 @@ fn main() -> Result<(), JsValue> {
     #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
     {
         println!("Run in graphics only...");
-        return Ok(());
+        Ok(())
     }
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     run()
