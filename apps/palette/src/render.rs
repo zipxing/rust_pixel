@@ -71,11 +71,11 @@ impl PaletteRender {
             "a : add input color  d : delete input color  tab ← ↑ → ↓ : change value",
             "← ↑ → ↓ mouse : select PHI(golden ratio) colors",
         ];
-        for i in 0..7 {
+        for (i, item) in help_msg.iter().enumerate() {
             let ls = format!("{}", i);
             panel.add_layer(&ls);
             let mut pl = Sprite::new(ADJX + 1, ADJY + 30, C_WIDTH * 4, 1);
-            pl.set_color_str(0, 0, help_msg[i], Color::Gray, Color::Reset);
+            pl.set_color_str(0, 0, item, Color::Gray, Color::Reset);
             panel.add_layer_sprite(pl, &ls, "help_msg");
             if i != 0 {
                 panel.deactive_layer(&ls);
