@@ -24,7 +24,22 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
 - Graphical Mode (SDL2 & WEB): Built with **glow** & **sdl2**, using **PETSCII & custom graphical symbols** for rendering.
 
-RustPixel implements game loops, a Model/Render common pattern, and a Event/Timer messaging mechanism to support the construction of small games. It also includes some common game algorithms and tool modules. Additionally, RustPixel comes with small games like Tetris, Tower, and Poker, which can serve as references for creating your own games and terminal applications. It also includes examples of wrapping core game algorithms into FFI and WASM.
+### Features
+
+- Implements game loops (game.rs)
+- Model/Render common design pattern (game.rs)
+- Event/Timer messaging mechanism (event.rs)
+- Render: support textmode(crossterm) and graphmode(glow & sdl2) with opengl shader (render.rs, render/)
+- 3 core OpenGl shaders for sdl2 & wasm graphical mode: 
+    - gl instance rendering shader for draw mainbuffer (render/adapter/gl/render_symbols.rs) 
+    - gl transition shader for transition effect (render/adapter/gl/render_transition.rs)
+    - gl general 2d shader for draw render texture (render/adapter/gl/render_general2d.rs)
+- Some common game algorithms (algorithm.rs, algorithm/, util.rs, util/)
+- audio support (audio.rs)
+- log support (log.rs)
+- Demo games, like tetris, tower, poker... (games/)
+- Demo terminal ui apps, palette app (apps/)
+- Examples of wrapping core game algorithms into FFI and WASM (games/poker/ffi, games/poker/wasm)
 
 ### Installation Guide
 
