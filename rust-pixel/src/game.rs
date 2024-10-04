@@ -83,7 +83,7 @@ where
     }
 
     pub fn new_with_project_path(m: M, r: R, name: &str, project_path: Option<&str>) -> Self {
-        let res: Vec<String> = name.to_string().split("/").map(|s| s.to_string()).collect();
+        let res: Vec<String> = name.split("/").map(|s| s.to_string()).collect();
         let path_name;
         let app_name;
         match res.len() {
@@ -105,10 +105,10 @@ where
         // else you can set asset_path by yourself
         // example:
         // context.set_asset_path("./")...
-        let ap = if project_path.is_none() {
-            format!("{}{}{}", path_name, std::path::MAIN_SEPARATOR, app_name).to_string()
+        let ap = if let Some(pp) = project_path {
+            pp.to_string()
         } else {
-            project_path.unwrap().to_string()
+            format!("{}{}{}", path_name, std::path::MAIN_SEPARATOR, app_name).to_string()
         };
         let ctx = Context::new(path_name, app_name, &ap);
         init_log(

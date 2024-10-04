@@ -254,7 +254,7 @@ impl ColorPro {
     }
 
     fn fill_all_spaces(&mut self) -> Result<(), String> {
-        self.to_xyza()?;
+        self.make_xyza()?;
         let xyza = self[XYZA].unwrap();
         self.set_data(SRGBA, xyz_to_srgba(xyza));
         let srgba = self[SRGBA].unwrap();
@@ -278,7 +278,7 @@ impl ColorPro {
         }
     }
 
-    fn to_xyza(&mut self) -> Result<(), String> {
+    fn make_xyza(&mut self) -> Result<(), String> {
         if self[XYZA].is_some() {
             return Ok(());
         }

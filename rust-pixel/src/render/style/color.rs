@@ -34,26 +34,25 @@ pub enum Color {
 
 impl Color {
     pub fn get_rgba(self) -> (u8, u8, u8, u8) {
-        let cidx: usize;
-        match self {
-            Color::Reset => cidx = 8,
-            Color::Black => cidx = 0,
-            Color::Red => cidx = 1,
-            Color::Green => cidx = 2,
-            Color::Yellow => cidx = 3,
-            Color::Blue => cidx = 4,
-            Color::Magenta => cidx = 5,
-            Color::Cyan => cidx = 6,
-            Color::Gray => cidx = 7,
-            Color::DarkGray => cidx = 8,
-            Color::LightRed => cidx = 9,
-            Color::LightGreen => cidx = 10,
-            Color::LightYellow => cidx = 11,
-            Color::LightBlue => cidx = 12,
-            Color::LightMagenta => cidx = 13,
-            Color::LightCyan => cidx = 14,
-            Color::White => cidx = 15,
-            Color::Indexed(i) => cidx = i as usize,
+        let cidx: usize = match self {
+            Color::Reset => 8,
+            Color::Black => 0,
+            Color::Red => 1,
+            Color::Green => 2,
+            Color::Yellow => 3,
+            Color::Blue => 4,
+            Color::Magenta => 5,
+            Color::Cyan => 6,
+            Color::Gray => 7,
+            Color::DarkGray => 8,
+            Color::LightRed => 9,
+            Color::LightGreen => 10,
+            Color::LightYellow => 11,
+            Color::LightBlue => 12,
+            Color::LightMagenta => 13,
+            Color::LightCyan => 14,
+            Color::White => 15,
+            Color::Indexed(i) => i as usize,
             Color::Rgba(r, g, b, a) => return (r, g, b, a),
             Color::Professional(cpro) => return cpro.get_srgba_u8(),
         };
@@ -126,8 +125,8 @@ impl From<Color> for u8 {
 
 fn get_u8_rgb(r: u8, g: u8, b: u8) -> u8 {
     let ret = 0;
-    for i in 0..ANSI_COLOR_RGB.len() {
-        if ANSI_COLOR_RGB[i][0] == r && ANSI_COLOR_RGB[i][1] == g && ANSI_COLOR_RGB[i][2] == b {
+    for (i, item) in ANSI_COLOR_RGB.iter().enumerate() {
+        if item[0] == r && item[1] == g && item[2] == b {
             return i as u8;
         }
     }

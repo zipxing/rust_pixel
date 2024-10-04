@@ -26,7 +26,7 @@ impl GObj for Monster {
         Default::default()
     }
 
-    fn reset(&mut self, mtype: u8, ps: &Vec<u32>) {
+    fn reset(&mut self, mtype: u8, ps: &[u32]) {
         self.mtype = mtype;
         if mtype == 1 {
             self.life = 5800;

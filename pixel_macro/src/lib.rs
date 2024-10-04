@@ -61,7 +61,7 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
         }
         None => {
             let ns = format!("{}", name_ident);
-            format!("{}", ns.to_lowercase())
+            ns.to_lowercase().to_string()
         }
     };
     let game_name_lit = LitStr::new(&game_name_str, name_ident.span());

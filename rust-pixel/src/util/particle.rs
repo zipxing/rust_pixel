@@ -37,7 +37,7 @@ impl GObj for Particle {
         Default::default()
     }
 
-    fn reset(&mut self, _ptype: u8, _pv: &Vec<u32>) {}
+    fn reset(&mut self, _ptype: u8, _pv: &[u32]) {}
 }
 
 #[derive(Debug, Clone)]

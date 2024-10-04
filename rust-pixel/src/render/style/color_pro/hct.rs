@@ -16,10 +16,11 @@ lazy_static! {
             &SURROUND_MAP[2],
             false,
         );
-        let mut rv = vec![];
-        rv.push(v1);
-        rv.push(v2);
-        rv
+        vec![v1, v2]
+        // let mut rv = vec![];
+        // rv.push(v1);
+        // rv.push(v2);
+        // rv
     };
 }
 
@@ -75,8 +76,8 @@ fn copy_sign(x: f64, y: f64) -> f64 {
 fn multiply_matrices(a: [[f64; 3]; 3], b: [f64; 3]) -> [f64; 3] {
     let mut result = [0.0; 3];
     for i in 0..3 {
-        for j in 0..3 {
-            result[i] += a[i][j] * b[j];
+        for (j, item) in b.iter().enumerate() {
+            result[i] += a[i][j] * item;
         }
     }
     result

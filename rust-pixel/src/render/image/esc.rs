@@ -67,7 +67,7 @@ impl Asset for EscAsset {
             let mut bg = Color::Reset;
             let mut span = String::new();
             let mut skip = 0i8;
-            for (_i, cell) in line.iter().enumerate() {
+            for cell in line.iter() {
                 info!(
                     "save_esc symbol={} symwidth={}",
                     cell.symbol,
@@ -126,7 +126,7 @@ impl Asset for EscAsset {
     }
 }
 
-pub fn escstr_to_buffer(l: &String, content: &mut Buffer, row: u16, off_x: u16, off_y: u16) -> u16 {
+pub fn escstr_to_buffer(l: &str, content: &mut Buffer, row: u16, off_x: u16, off_y: u16) -> u16 {
     let mut pos = 0;
     let mut cell_pos = 0;
     let mut lpos = 0;

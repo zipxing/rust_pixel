@@ -112,12 +112,11 @@ impl RandLCG {
     }
 
     pub fn rand(&mut self) -> u64 {
-        let ret;
-        if self.count % 2 == 0 {
+        let ret = if self.count % 2 == 0 {
             //MS LCG
             self.random_next = self.random_next.wrapping_mul(214013).wrapping_add(2531011);
             self.random_next &= 0x7FFFFFFF;
-            ret = (self.random_next >> 16) & 0x7FFF
+            (self.random_next >> 16) & 0x7FFF
         } else {
             //BSD random LCG...
             self.random_next = self
@@ -125,13 +124,13 @@ impl RandLCG {
                 .wrapping_mul(1103515245)
                 .wrapping_add(12345);
             self.random_next &= 0x7FFFFFFF;
-            ret = self.random_next
-        }
+            self.random_next
+        };
         self.count += 1;
         ret
     }
 
-    pub fn shuffle<T: Copy>(&mut self, v: &mut Vec<T>) {
+    pub fn shuffle<T: Copy>(&mut self, v: &mut [T]) {
         let vl = v.len();
         if vl < 2 {
             return;

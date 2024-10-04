@@ -7,7 +7,7 @@ pub mod astar;
 mod bezier;
 pub use bezier::*;
 
-pub fn findv<T: std::cmp::PartialEq>(v1: &Vec<T>, val: &T) -> bool {
+pub fn findv<T: std::cmp::PartialEq>(v1: &[T], val: &T) -> bool {
     v1.contains(val)
 }
 

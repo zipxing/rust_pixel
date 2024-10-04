@@ -13,7 +13,7 @@ use std::collections::HashMap;
 /// game object interface, requires to implement new and reset method
 pub trait GObj {
     fn new() -> Self;
-    fn reset(&mut self, t: u8, ps: &Vec<u32>);
+    fn reset(&mut self, t: u8, ps: &[u32]);
 }
 
 /// game object, id is the index offset in the objpool

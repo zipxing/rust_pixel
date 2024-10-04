@@ -12,7 +12,7 @@ impl GObj for Block {
         Default::default()
     }
 
-    fn reset(&mut self, btype: u8, ps: &Vec<u32>) {
+    fn reset(&mut self, btype: u8, ps: &[u32]) {
         self.btype = btype;
         self.pos = PointU16 {
             x: ps[0] as u16,

@@ -10,7 +10,7 @@ use rust_pixel::render::style::{
 use rust_pixel::util::Rand;
 use std::collections::HashMap;
 
-static COLORS_RGB_WITH_NAME: [(&'static str, u8, u8, u8); 139] = [
+static COLORS_RGB_WITH_NAME: [(&str, u8, u8, u8); 139] = [
     ("aliceblue", 240, 248, 255),
     ("antiquewhite", 250, 235, 215),
     ("aqua", 0, 255, 255),
@@ -186,7 +186,7 @@ pub fn find_similar_colors(color: &ColorPro) -> (usize, usize, usize) {
     }
 }
 
-pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<ColorPro>) {
+pub fn gradient(colors: &[ColorPro], gcount: usize, output_colors: &mut Vec<ColorPro>) {
     let color_count = colors.len();
     output_colors.clear();
     if color_count < 2 {
@@ -194,7 +194,7 @@ pub fn gradient(colors: &Vec<ColorPro>, gcount: usize, output_colors: &mut Vec<C
     }
     let mut color_scale = ColorGradient::empty();
 
-    for (i, color) in colors.into_iter().enumerate() {
+    for (i, color) in colors.iter().enumerate() {
         let position = Fraction::from(i as f64 / (color_count as f64 - 1.0));
         color_scale.add_stop(*color, position);
     }
@@ -229,7 +229,12 @@ pub fn golden(count: usize, rnd: &mut Rand, output_colors: &mut Vec<ColorPro>) {
     for _i in 0..count {
         h += golden;
         h %= 1.0;
-        let cp = ColorPro::from_space(HSVA, ColorData { v: [h * 360.0, s, v, 1.0] });
+        let cp = ColorPro::from_space(
+            HSVA,
+            ColorData {
+                v: [h * 360.0, s, v, 1.0],
+            },
+        );
         output_colors.push(cp);
     }
 }
@@ -238,6 +243,12 @@ pub struct PaletteData {
     pub rand: Rand,
     pub pool: Vec<u8>,
     pub index: usize,
+}
+
+impl Default for PaletteData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PaletteData {
@@ -258,17 +269,6 @@ impl PaletteData {
         }
         self.rand.shuffle(&mut self.pool);
         // println!("shuffle ok...");
-    }
-
-    pub fn next(&mut self) -> u8 {
-        let ret;
-        if self.pool.len() > 0 {
-            ret = self.pool[self.index];
-            self.index = (self.index + 1) % 52;
-        } else {
-            ret = 0;
-        }
-        ret
     }
 }
 

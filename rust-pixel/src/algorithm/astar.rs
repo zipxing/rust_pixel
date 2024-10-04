@@ -7,7 +7,7 @@
 //!
 //! ```no_run
 //! use rust_pixel::algorithm::astar::*;
-//! fn main() {
+//! 
 //!     let map = vec![
 //!         vec![1, 1, 1, 1, 1],
 //!         vec![0, 1, 1, 0, 1],
@@ -23,7 +23,6 @@
 //!     } else {
 //!         println!("No path found");
 //!     }
-//! }
 //! ```
 
 use crate::util::PointU16;
@@ -115,7 +114,7 @@ fn manhattan_distance(a: PointUsize, b: PointUsize) -> usize {
     ((a.0 as isize - b.0 as isize).abs() + (a.1 as isize - b.1 as isize).abs()) as usize
 }
 
-fn is_valid<F>(pos: PointUsize, map: &Vec<Vec<u8>>, f: F) -> bool
+fn is_valid<F>(pos: PointUsize, map: &[Vec<u8>], f: F) -> bool
 where
     F: Fn(u8) -> bool,
 {

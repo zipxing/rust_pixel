@@ -112,11 +112,9 @@ impl Asset for SeqFrameAsset {
 
             if self.texture_id == 257 {
                 let reader = BufReader::new(decoder);
-                let mut row = 0;
-                for line in reader.lines() {
+                for (row, line) in reader.lines().enumerate() {
                     let l = line.unwrap();
-                    escstr_to_buffer(&l, &mut sp, row, 0, 0);
-                    row += 1;
+                    escstr_to_buffer(&l, &mut sp, row as u16, 0, 0);
                 }
             } else if self.texture_id == 256 {
                 let mut decompressed_data = Vec::new();

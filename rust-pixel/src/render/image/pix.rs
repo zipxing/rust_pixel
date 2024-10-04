@@ -142,7 +142,7 @@ impl Asset for PixAsset {
         for row in y1..y2 + 1 {
             let line =
                 &content.content[(row * width + x1) as usize..(row * width + x2 + 1) as usize];
-            for (_i, cell) in line.iter().enumerate() {
+            for cell in line.iter() {
                 let (idx, _, _, _) = cell.get_cell_info();
                 let _ = write!(ptr, "{},{},{} ", idx, u8::from(cell.fg), u8::from(cell.bg));
             }

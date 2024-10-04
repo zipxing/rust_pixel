@@ -24,10 +24,10 @@ fn bezier_interpolation_func(t: f32, points: &[PointF32], count: usize) -> Point
 pub fn draw_bezier_curves(points: &[PointF32], out_points: &mut [PointF32]) {
     let step = 1.0 / out_points.len() as f32;
     let mut t = 0.0;
-    for i in 0..out_points.len() {
+    for item in out_points.iter_mut() {
         let temp_point = bezier_interpolation_func(t, points, points.len());
         t += step;
-        out_points[i] = temp_point;
+        *item = temp_point;
     }
 }
 

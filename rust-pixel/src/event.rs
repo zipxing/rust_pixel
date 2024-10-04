@@ -52,7 +52,7 @@ pub fn event_check(event: &str, func: &str) -> bool {
 
 pub fn event_emit(event: &str) {
     if let Some(ht) = EVENT_CENTER.lock().unwrap().get_mut(event) {
-        for (_key, value) in ht {
+        for value in ht.values_mut() {
             if !(*value) {
                 *value = true;
             }

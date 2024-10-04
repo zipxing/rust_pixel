@@ -63,7 +63,6 @@ pub enum MouseArea {
 
 pub struct PaletteModel {
     pub data: PaletteData,
-    pub card: u8,
     pub main_color: ColorPro,
     pub main_color_similar: (usize, usize, usize),
     pub named_colors: Vec<(&'static str, ColorPro)>,
@@ -83,7 +82,6 @@ impl PaletteModel {
 
         Self {
             data: PaletteData::new(),
-            card: 0,
             main_color: COLORS_WITH_NAME[0].1,
             main_color_similar: (0, 0, 0),
             named_colors: ncolors,
@@ -443,7 +441,6 @@ impl PaletteModel {
 impl Model for PaletteModel {
     fn init(&mut self, context: &mut Context) {
         self.data.shuffle();
-        self.card = self.data.next();
 
         context.state = PaletteState::NameA as u8;
 

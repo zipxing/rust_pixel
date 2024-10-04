@@ -137,10 +137,8 @@ impl Sprites {
         // renders in an order by render_weight
         // bigger render_weight is rendered later（upper level)
         if self.render_index.is_empty() {
-            let mut i = 0usize;
-            for s in &self.sprites {
+            for (i, s) in self.sprites.iter().enumerate() {
                 self.render_index.push((i, s.render_weight));
-                i += 1;
             }
             self.render_index.sort_by_key(|d| Reverse(d.1));
             // info!("render_index...{:?}", self.render_index);

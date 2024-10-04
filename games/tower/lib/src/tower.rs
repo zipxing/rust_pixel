@@ -20,7 +20,7 @@ impl GObj for Tower {
         Default::default()
     }
 
-    fn reset(&mut self, ttype: u8, ps: &Vec<u32>) {
+    fn reset(&mut self, ttype: u8, ps: &[u32]) {
         self.ttype = ttype;
         if ttype == 0 {
             self.range = 100;
