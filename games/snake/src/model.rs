@@ -84,8 +84,8 @@ impl SnakeModel {
     pub fn act(&mut self, d: Dir, context: &mut Context) {
         let dx: i16;
         let dy: i16;
-        let cx: i16;
-        let cy: i16;
+        
+        
         match d {
             Dir::Up => {
                 if self.dir == Dir::Down {
@@ -120,8 +120,8 @@ impl SnakeModel {
                 dy = 0
             }
         }
-        cx = self.body[0].x as i16 + dx;
-        cy = self.body[0].y as i16 + dy;
+        let cx: i16 = self.body[0].x as i16 + dx;
+        let cy: i16 = self.body[0].y as i16 + dy;
         if cx >= SNAKEW as i16 || cy >= SNAKEH as i16 || cx < 0 || cy < 0 {
             context.state = SnakeState::OverBorder as u8;
             event_emit("Snake.RedrawGrid");
@@ -187,21 +187,18 @@ impl Model for SnakeModel {
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
         let es = context.input_events.clone();
         for e in &es {
-            match e {
-                Event::Key(key) => {
-                    let mut d: Option<Dir> = None;
-                    match key.code {
-                        KeyCode::Char('w') => d = Some(Dir::Up),
-                        KeyCode::Char('a') => d = Some(Dir::Left),
-                        KeyCode::Char('s') => d = Some(Dir::Down),
-                        KeyCode::Char('d') => d = Some(Dir::Right),
-                        _ => {}
-                    }
-                    if d != None {
-                        self.act(d.unwrap(), context);
-                    }
+            if let Event::Key(key) = e {
+                let mut d: Option<Dir> = None;
+                match key.code {
+                    KeyCode::Char('w') => d = Some(Dir::Up),
+                    KeyCode::Char('a') => d = Some(Dir::Left),
+                    KeyCode::Char('s') => d = Some(Dir::Down),
+                    KeyCode::Char('d') => d = Some(Dir::Right),
+                    _ => {}
                 }
-                _ => {}
+                if d.is_some() {
+                    self.act(d.unwrap(), context);
+                }
             }
         }
         context.input_events.clear();
