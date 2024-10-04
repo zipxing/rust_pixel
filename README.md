@@ -31,9 +31,9 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 - Event/Timer messaging mechanism (event.rs)
 - Render: support textmode(crossterm) and graphmode(glow & sdl2) with opengl shader (render.rs, render/)
 - 3 core OpenGl shaders for sdl2 & wasm graphical mode: 
-    - gl instance rendering shader for draw mainbuffer (render/adapter/gl/render_symbols.rs) 
-    - gl transition shader for transition effect (render/adapter/gl/render_transition.rs)
-    - gl general 2d shader for draw render texture (render/adapter/gl/render_general2d.rs)
+    - gl instance rendering shader for draw mainbuffer (render_symbols.rs) 
+    - gl transition shader for transition effect (render_transition.rs)
+    - gl general 2d shader for draw render texture (render_general2d.rs)
 - Some common game algorithms (algorithm.rs, algorithm/, util.rs, util/)
 - audio support (audio.rs)
 - log support (log.rs)
