@@ -125,7 +125,7 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                pub fn do_img(&mut self, w: i32, h: i32, d: &js_sys::Uint8ClampedArray) {
+                pub fn upload_imgdata(&mut self, w: i32, h: i32, d: &js_sys::Uint8ClampedArray) {
                     let length = d.length() as usize;
                     let mut pixels = vec![0u8; length];
                     d.copy_to(&mut pixels);
@@ -139,9 +139,7 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                         .downcast_mut::<WebAdapter>()
                         .unwrap();
 
-                    info!("after RUST...pixels.len111");
                     wa.init_glpix(w, h, &pixels);
-                    info!("after RUST...pixels.len222");
                 }
 
                 pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {

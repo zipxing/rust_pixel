@@ -41,7 +41,7 @@ ctx.drawImage(timg, 0, 0);
 const imgdata = ctx.getImageData(0,0,timg.width,timg.height).data;
 
 const sg = PixelGame.new();
-sg.do_img(544, 544, imgdata);
+sg.upload_imgdata(timg.width, timg.height, imgdata);
 
 // send event to rust...
 window.onkeypress = (e) => { sg.key_event(0, e); };
