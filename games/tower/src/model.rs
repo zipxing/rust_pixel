@@ -116,10 +116,7 @@ impl Model for TowerModel {
     fn handle_input(&mut self, ctx: &mut Context, _dt: f32) {
         let es = ctx.input_events.clone();
         for e in &es {
-            match e {
-                Event::Key(_key) => {}
-                _ => {}
-            }
+            if let Event::Key(_key) = e {}
         }
         ctx.input_events.clear();
     }

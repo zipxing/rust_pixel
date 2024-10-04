@@ -152,11 +152,10 @@ impl Panel {
     }
 
     pub fn update_render_index(&mut self) {
-        if self.render_index.len() == 0 {
+        if self.render_index.is_empty() {
             let mut i = 0usize;
-            for s in &self.layers {
+            for (i, s) in self.layers.iter().enumerate() {
                 self.render_index.push((i, s.render_weight));
-                i += 1;
             }
             self.render_index.sort_by_key(|d| Reverse(d.1));
         }
@@ -218,13 +217,10 @@ impl Panel {
         for o in &os.pool {
             // clear inactive objects
             if !o.active {
-                match os.map.remove(&o.id) {
-                    Some(oid) => {
-                        //info!("render set hidden true...");
-                        self.get_pixel_sprite(&format!("{}{}", os.prefix, oid))
-                            .set_hidden(true);
-                    }
-                    _ => {}
+                if let Some(oid) = os.map.remove(&o.id) {
+                    //info!("render set hidden true...");
+                    self.get_pixel_sprite(&format!("{}{}", os.prefix, oid))
+                        .set_hidden(true);
                 }
                 continue;
             }

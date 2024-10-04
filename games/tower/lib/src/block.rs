@@ -22,7 +22,7 @@ impl GObj for Block {
 }
 
 impl Block {
-    pub fn set_in_grid(&self, grid: &mut Vec<Vec<u8>>) {
+    pub fn set_in_grid(&self, grid: &mut [Vec<u8>]) {
         let x = self.pos.x as usize * BW;
         let y = self.pos.y as usize * BH;
         for i in 0..BW {

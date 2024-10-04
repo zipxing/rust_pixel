@@ -125,7 +125,7 @@ impl TowerRender {
                 ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
                 ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
             );
-            if !m.obj.target.is_none() {
+            if m.obj.target.is_some() {
                 pl.set_angle((ctx.stage % 20 * 18) as f64);
             }
         });
