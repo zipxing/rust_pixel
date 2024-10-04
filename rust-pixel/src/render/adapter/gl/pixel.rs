@@ -123,8 +123,8 @@ impl GlPixel {
         self.r_g2d
             .set_texture(gl, self.render_textures[rtidx].texture)
             .set_area(&area)
-            .set_transform(&transform)
-            .set_color(&color);
+            .set_transform(transform)
+            .set_color(color);
         self.r_g2d.prepare_draw(gl);
         self.r_g2d.draw(gl);
     }

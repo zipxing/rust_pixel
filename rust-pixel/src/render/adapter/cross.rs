@@ -113,15 +113,9 @@ impl Adapter for CrosstermAdapter {
             if let Some(et) = input_events_from_cross(&e) {
                 es.push(et);
             }
-            match e {
-                CEvent::Key(key) => match key.code {
-                    CKeyCode::Char('q') => {
-                        return true;
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
+            if let CEvent::Key(key) = e { if let CKeyCode::Char('q') = key.code {
+                return true;
+            } }
         }
         false
     }
@@ -134,9 +128,9 @@ impl Adapter for CrosstermAdapter {
         stage: u32,
     ) -> Result<(), String> {
         if stage <= LOGO_FRAME {
-            let w = current_buffer.area().width as u16;
+            let w = current_buffer.area().width;
             let x = w - self.rd.rand() as u16 % w;
-            let y = current_buffer.area().height as u16 / 2;
+            let y = current_buffer.area().height / 2;
             let cc = CColor::from((
                 self.rd.rand() as u8,
                 self.rd.rand() as u8,
@@ -262,8 +256,8 @@ pub fn input_events_from_cross(e: &CEvent) -> Option<Event> {
             };
             let cte = MouseEvent {
                 kind: mk,
-                column: mouse.column as u16,
-                row: mouse.row as u16,
+                column: mouse.column,
+                row: mouse.row,
                 modifiers: KeyModifiers::NONE,
             };
             mcte = Some(cte);

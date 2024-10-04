@@ -41,7 +41,7 @@ impl UnionFind {
             self.parent[c] = self.parent[self.parent[c]];
             c = self.parent[c];
         }
-        return Ok(c);
+        Ok(c)
     }
 }
 
@@ -49,7 +49,7 @@ impl UF for UnionFind {
     fn is_connect(&mut self, p: usize, q: usize) -> bool {
         let p_root = self.find(p).unwrap();
         let q_root = self.find(q).unwrap();
-        return p_root == q_root;
+        p_root == q_root
     }
 
     fn union(&mut self, p: usize, q: usize) {
@@ -69,7 +69,7 @@ impl UF for UnionFind {
     }
 
     fn get_size(&self) -> usize {
-        return self.parent.len();
+        self.parent.len()
     }
 }
 

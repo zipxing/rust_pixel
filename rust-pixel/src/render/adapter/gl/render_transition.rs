@@ -48,7 +48,7 @@ impl GlRender for GlRenderTransition {
         let fss = get_trans_fragment_src();
         for f in &fss {
             rbs.shader
-                .push(GlShader::new(&gl, ver, VERTEX_SRC_TRANS, f));
+                .push(GlShader::new(gl, ver, VERTEX_SRC_TRANS, f));
         }
     }
 
@@ -65,7 +65,7 @@ impl GlRender for GlRenderTransition {
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            &vertices.align_to::<u8>().1,
+            vertices.align_to::<u8>().1,
             glow::STATIC_DRAW,
         );
 
@@ -73,7 +73,7 @@ impl GlRender for GlRenderTransition {
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
         gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
-            &indices.align_to::<u8>().1,
+            indices.align_to::<u8>().1,
             glow::STATIC_DRAW,
         );
 

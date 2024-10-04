@@ -75,7 +75,7 @@ impl GlRender for GlRenderSymbols {
     ) {
         let rbs = self.get_base();
         rbs.shader
-            .push(GlShader::new(&gl, ver, VERTEX_SRC_SYMBOLS, FRAGMENT_SRC_SYMBOLS));
+            .push(GlShader::new(gl, ver, VERTEX_SRC_SYMBOLS, FRAGMENT_SRC_SYMBOLS));
     }
 
     unsafe fn create_buffer(&mut self, gl: &glow::Context) {
@@ -96,7 +96,7 @@ impl GlRender for GlRenderSymbols {
         let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            &quad_vertices.align_to::<u8>().1,
+            quad_vertices.align_to::<u8>().1,
             glow::STATIC_DRAW,
         );
 
@@ -191,7 +191,7 @@ impl GlRender for GlRenderSymbols {
             gl.buffer_sub_data_u8_slice(
                 glow::ARRAY_BUFFER,
                 0,
-                &self.instance_buffer[0..=(self.instance_buffer_at as usize)]
+                self.instance_buffer[0..=(self.instance_buffer_at as usize)]
                     .align_to::<u8>()
                     .1,
             );
@@ -249,7 +249,7 @@ impl GlRenderSymbols {
             gl.buffer_sub_data_u8_slice(
                 glow::UNIFORM_BUFFER,
                 0,
-                &self.ubo_contents.align_to::<u8>().1,
+                self.ubo_contents.align_to::<u8>().1,
             );
         }
 
@@ -360,7 +360,9 @@ impl GlRenderSymbols {
         let uv_width = width / tex_width;
         let uv_height = height / tex_height;
 
-        let frame = GlCell {
+        
+
+        GlCell {
             texture: sheet.texture,
             width,
             height,
@@ -370,8 +372,6 @@ impl GlRenderSymbols {
             uv_top,
             uv_width,
             uv_height,
-        };
-
-        frame
+        }
     }
 }

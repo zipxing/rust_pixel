@@ -86,7 +86,7 @@ impl Asset for EscAsset {
                     info!("set skip, skip={}", skip);
                 }
                 if cell.fg != fg || cell.bg != bg {
-                    if span.len() != 0 {
+                    if !span.is_empty() {
                         if fg == Color::Reset && bg == Color::Reset {
                             let _ = ptr.write_all(span.as_bytes());
                         } else {
@@ -107,7 +107,7 @@ impl Asset for EscAsset {
                     span.push_str(&cell.symbol);
                 }
             }
-            if span.len() != 0 {
+            if !span.is_empty() {
                 if fg == Color::Reset && bg == Color::Reset {
                     let _ = ptr.write_all(span.as_bytes());
                 } else {

@@ -81,11 +81,9 @@ pub fn cellsym(idx: u8) -> &'static str {
 fn symidx(symbol: &String) -> u8 {
     let sbts = symbol.as_bytes();
     // unicode graphical symbol
-    if sbts.len() == 3 {
-        if sbts[0] == 0xe2 && (sbts[1] >> 2 == 0x22) {
-            let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
-            return idx as u8;
-        }
+    if sbts.len() == 3 && sbts[0] == 0xe2 && (sbts[1] >> 2 == 0x22) {
+        let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
+        return idx;
     }
     let mut ret = 0u8;
     // search in CELL_SYM_MAP

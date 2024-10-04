@@ -77,6 +77,12 @@ pub struct RandLCG {
     random_next: u64,
     count: u64,
 }
+impl Default for RandLCG {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RandLCG {
     pub fn new() -> Self {
         Self {

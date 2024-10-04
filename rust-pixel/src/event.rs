@@ -41,31 +41,22 @@ pub fn event_register(event: &str, func: &str) {
 
 pub fn event_check(event: &str, func: &str) -> bool {
     let mut ec = EVENT_CENTER.lock().unwrap();
-    match ec.get_mut(event) {
-        Some(ht) => match ht.get_mut(func) {
-            Some(flag) => {
-                if *flag {
-                    *flag = false;
-                    return true;
-                }
-            }
-            None => {}
-        },
-        None => {}
-    }
+    if let Some(ht) = ec.get_mut(event) { if let Some(flag) = ht.get_mut(func) {
+        if *flag {
+            *flag = false;
+            return true;
+        }
+    } }
     false
 }
 
 pub fn event_emit(event: &str) {
-    match EVENT_CENTER.lock().unwrap().get_mut(event) {
-        Some(ht) => {
-            for (_key, value) in ht {
-                if *value == false {
-                    *value = true;
-                }
+    if let Some(ht) = EVENT_CENTER.lock().unwrap().get_mut(event) {
+        for (_key, value) in ht {
+            if !(*value) {
+                *value = true;
             }
         }
-        None => {}
     }
 }
 
@@ -142,10 +133,10 @@ impl Timers {
     pub fn stage(&mut self, name: &str) -> u32 {
         match self.timers.get_mut(name) {
             Some(timer) => {
-                return timer.time;
+                timer.time
             }
             None => {
-                return 0;
+                0
             }
         }
     }
@@ -153,10 +144,10 @@ impl Timers {
     pub fn rstage(&mut self, name: &str) -> u32 {
         match self.timers.get_mut(name) {
             Some(timer) => {
-                return timer.count - timer.time;
+                timer.count - timer.time
             }
             None => {
-                return 0;
+                0
             }
         }
     }
@@ -164,35 +155,32 @@ impl Timers {
     pub fn percent(&mut self, name: &str) -> f32 {
         match self.timers.get_mut(name) {
             Some(timer) => {
-                return timer.time as f32 / timer.count as f32;
+                timer.time as f32 / timer.count as f32
             }
             None => {
-                return 0f32;
+                0f32
             }
         }
     }
 
     pub fn set_time(&mut self, name: &str, time: f32) {
-        match self.timers.get_mut(name) {
-            Some(timer) => {
-                timer.count = (time * GAME_FRAME as f32) as u32;
-                //may cause count equals 0 and therefore can not be triggered if time is too small
-                //to prevent this, reset the count to 1
-                if timer.count == 0 {
-                    timer.count += 1;
-                }
+        if let Some(timer) = self.timers.get_mut(name) {
+            timer.count = (time * GAME_FRAME as f32) as u32;
+            //may cause count equals 0 and therefore can not be triggered if time is too small
+            //to prevent this, reset the count to 1
+            if timer.count == 0 {
+                timer.count += 1;
             }
-            None => {}
         }
     }
 
     pub fn exdata(&mut self, name: &str) -> Option<Vec<u8>> {
         match self.timers.get_mut(name) {
             Some(timer) => {
-                return Some(timer.exdata.clone());
+                Some(timer.exdata.clone())
             }
             None => {
-                return None;
+                None
             }
         }
     }
@@ -201,24 +189,18 @@ impl Timers {
     where
         T: Serialize,
     {
-        match self.timers.get_mut(name) {
-            Some(timer) => {
-                timer.time = timer.count;
-                timer.exdata = bincode::serialize(&value).unwrap();
-            }
-            None => {}
+        if let Some(timer) = self.timers.get_mut(name) {
+            timer.time = timer.count;
+            timer.exdata = bincode::serialize(&value).unwrap();
         }
     }
 
     pub fn cancel(&mut self, name: &str, nocall: bool) {
-        match self.timers.get_mut(name) {
-            Some(timer) => {
-                timer.time = 0;
-                if !nocall {
-                    event_emit(name);
-                }
+        if let Some(timer) = self.timers.get_mut(name) {
+            timer.time = 0;
+            if !nocall {
+                event_emit(name);
             }
-            None => {}
         }
     }
 

@@ -16,7 +16,7 @@ pub fn catvv<T: Clone>(v1: &mut Vec<T>, v2: &[T]) {
 }
 
 pub fn remove_nv<T: std::cmp::PartialEq>(vc: &mut Vec<T>, n: usize, v: T) -> usize {
-    if n == 0 || vc.len() == 0 {
+    if n == 0 || vc.is_empty() {
         return 0;
     }
     let mut head: usize = 0;

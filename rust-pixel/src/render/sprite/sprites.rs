@@ -136,7 +136,7 @@ impl Sprites {
     pub fn update_render_index(&mut self) {
         // renders in an order by render_weight
         // bigger render_weight is rendered later（upper level)
-        if self.render_index.len() == 0 {
+        if self.render_index.is_empty() {
             let mut i = 0usize;
             for s in &self.sprites {
                 self.render_index.push((i, s.render_weight));

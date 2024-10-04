@@ -48,7 +48,7 @@ impl GlRender for GlRenderGeneral2d {
         let rbs = self.get_base();
         rbs.shader.clear();
         rbs.shader.push(GlShader::new(
-            &gl,
+            gl,
             ver,
             GENERAL2D_VERTEX_SRC,
             GENERAL2D_FRAGMENT_SRC,
@@ -72,7 +72,7 @@ impl GlRender for GlRenderGeneral2d {
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            &vertices.align_to::<u8>().1,
+            vertices.align_to::<u8>().1,
             glow::STATIC_DRAW,
         );
 
@@ -80,7 +80,7 @@ impl GlRender for GlRenderGeneral2d {
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
         gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
-            &indices.align_to::<u8>().1,
+            indices.align_to::<u8>().1,
             glow::STATIC_DRAW,
         );
 
@@ -169,17 +169,17 @@ impl GlRenderGeneral2d {
     }
 
     pub fn set_area(&mut self, area: &[f32; 4]) -> &mut Self {
-        self.area = area.clone();
+        self.area = *area;
         self
     } 
 
     pub fn set_transform(&mut self, transform: &GlTransform) -> &mut Self {
-        self.transform = transform.clone();
+        self.transform = *transform;
         self
     }
 
     pub fn set_color(&mut self, color: &GlColor) -> &mut Self {
-        self.color = color.clone();
+        self.color = *color;
         self
     }
 }

@@ -19,6 +19,12 @@ pub struct Audio {
     handle: OutputStreamHandle,
 }
 
+impl Default for Audio {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Audio {
     pub fn new() -> Self {
         #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]

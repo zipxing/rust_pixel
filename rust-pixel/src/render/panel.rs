@@ -48,6 +48,12 @@ pub struct Panel {
 }
 
 #[allow(unused)]
+impl Default for Panel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Panel {
     #[allow(unused_mut)]
     pub fn new() -> Self {
@@ -153,7 +159,6 @@ impl Panel {
 
     pub fn update_render_index(&mut self) {
         if self.render_index.is_empty() {
-            let mut i = 0usize;
             for (i, s) in self.layers.iter().enumerate() {
                 self.render_index.push((i, s.render_weight));
             }

@@ -59,9 +59,9 @@ pub fn prepare_line(px0: u16, py0: u16, px1: u16, py1: u16) -> (i16, i16, i16, i
     let fdx = px1 as f32 - px0 as f32;
     let mut angle = fdy.atan2(fdx);
     if angle < 0.0 {
-        angle = angle + std::f32::consts::PI * 2.0;
+        angle += std::f32::consts::PI * 2.0;
     }
-    angle = angle / std::f32::consts::PI;
+    angle /= std::f32::consts::PI;
     let (mut x0, mut y0, x1, y1);
     if (angle > 0.0 && angle < 0.5)
         || (angle > 0.75 && angle < 1.0)

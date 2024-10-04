@@ -101,6 +101,12 @@ pub struct AssetManager {
     pub assets_index: HashMap<String, usize>,
 }
 
+impl Default for AssetManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AssetManager {
     pub fn new() -> Self {
         Self {
@@ -150,14 +156,11 @@ impl AssetManager {
     // when in other modes, this method is called after finishing reading files
     // refer to rust-pixel/web-templates/index.js
     pub fn set_data(&mut self, loc: &str, data: &[u8]) {
-        match self.assets_index.get(loc) {
-            Some(idx) => {
-                self.assets[*idx - 1].set_data(data);
-                self.assets[*idx - 1].set_state(AssetState::Parsing);
-                self.assets[*idx - 1].parse();
-                self.assets[*idx - 1].set_state(AssetState::Ready);
-            }
-            None => {}
+        if let Some(idx) = self.assets_index.get(loc) {
+            self.assets[*idx - 1].set_data(data);
+            self.assets[*idx - 1].set_state(AssetState::Parsing);
+            self.assets[*idx - 1].parse();
+            self.assets[*idx - 1].set_state(AssetState::Ready);
         }
     }
 }

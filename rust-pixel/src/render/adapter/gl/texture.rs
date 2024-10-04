@@ -135,7 +135,7 @@ impl GlTexture {
                 0,
                 glow::RGBA,
                 glow::UNSIGNED_BYTE,
-                Some(&data),
+                Some(data),
             );
 
             gl.tex_parameter_i32(

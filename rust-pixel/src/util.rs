@@ -26,12 +26,11 @@ pub use rand::*;
 /// get flag_file path...
 pub fn get_project_root(flag_file: &str) -> io::Result<PathBuf> {
     let path = env::current_dir()?;
-    let mut path_ancestors = path.as_path().ancestors();
+    let path_ancestors = path.as_path().ancestors();
 
-    while let Some(p) = path_ancestors.next() {
+    for p in path_ancestors {
         let has_cargo = read_dir(p)?
-            .into_iter()
-            .any(|p| p.unwrap().file_name() == OsString::from(flag_file));
+            .any(|p| p.unwrap().file_name() == *flag_file);
         if has_cargo {
             return Ok(PathBuf::from(p));
         }
@@ -52,10 +51,10 @@ pub fn get_pixel_root_path() -> String {
     match get_project_root("Cargo.lock") {
         Ok(p) => {
             let s = format!("{:?}", p);
-            return s[1..s.len() - 1].to_string();
+            s[1..s.len() - 1].to_string()
         }
         Err(_e) => {
-            return ".".to_string();
+            ".".to_string()
         }
     }
 }

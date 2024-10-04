@@ -88,41 +88,37 @@ impl Asset for PixAsset {
                         );
                         col += 1;
                     }
-                } else {
-                    if rel1_v2.is_match(&l) {
-                        for cap in rel1_v2.captures_iter(&l) {
-                            let idx = cap[1].parse::<u8>().unwrap();
-                            let fgc = cap[2].parse::<u8>().unwrap();
-                            let tex = cap[3].parse::<u8>().unwrap();
-                            let bgc = cap[4].parse::<u8>().unwrap();
-                            sp.set_str_tex(
-                                col,
-                                lineidx - 1,
-                                cellsym(idx),
-                                Style::default()
-                                    .fg(Color::Indexed(fgc))
-                                    .bg(Color::Indexed(bgc)),
-                                tex,
-                            );
-                            col += 1;
-                        }
-                    } else {
-                        if rel1.is_match(&l) {
-                            for cap in rel1.captures_iter(&l) {
-                                let idx = cap[1].parse::<u8>().unwrap();
-                                let fgc = cap[2].parse::<u8>().unwrap();
-                                let bgc = cap[3].parse::<u8>().unwrap();
-                                sp.set_str_tex(
-                                    col,
-                                    lineidx - 1,
-                                    cellsym(idx),
-                                    Style::default()
-                                        .fg(Color::Indexed(fgc)),
-                                    bgc,
-                                );
-                                col += 1;
-                            }
-                        }
+                } else if rel1_v2.is_match(&l) {
+                    for cap in rel1_v2.captures_iter(&l) {
+                        let idx = cap[1].parse::<u8>().unwrap();
+                        let fgc = cap[2].parse::<u8>().unwrap();
+                        let tex = cap[3].parse::<u8>().unwrap();
+                        let bgc = cap[4].parse::<u8>().unwrap();
+                        sp.set_str_tex(
+                            col,
+                            lineidx - 1,
+                            cellsym(idx),
+                            Style::default()
+                                .fg(Color::Indexed(fgc))
+                                .bg(Color::Indexed(bgc)),
+                            tex,
+                        );
+                        col += 1;
+                    }
+                } else if rel1.is_match(&l) {
+                    for cap in rel1.captures_iter(&l) {
+                        let idx = cap[1].parse::<u8>().unwrap();
+                        let fgc = cap[2].parse::<u8>().unwrap();
+                        let bgc = cap[3].parse::<u8>().unwrap();
+                        sp.set_str_tex(
+                            col,
+                            lineidx - 1,
+                            cellsym(idx),
+                            Style::default()
+                                .fg(Color::Indexed(fgc)),
+                            bgc,
+                        );
+                        col += 1;
                     }
                 }
             }
@@ -150,7 +146,7 @@ impl Asset for PixAsset {
                 let (idx, _, _, _) = cell.get_cell_info();
                 let _ = write!(ptr, "{},{},{} ", idx, u8::from(cell.fg), u8::from(cell.bg));
             }
-            let _ = write!(ptr, "\n");
+            let _ = writeln!(ptr);
         }
     }
 }

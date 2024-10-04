@@ -273,13 +273,13 @@ impl ColorPro {
     }
 
     fn set_data(&mut self, cs: ColorSpace, data: ColorData) {
-        if self[cs] == None {
+        if self[cs].is_none() {
             self[cs] = Some(data);
         }
     }
 
     fn to_xyza(&mut self) -> Result<(), String> {
-        if self[XYZA] != None {
+        if self[XYZA].is_some() {
             return Ok(());
         }
 
@@ -302,8 +302,8 @@ impl ColorPro {
         }
 
         if let Some(linear_rgba) = self[LinearRGBA] {
-            let xyza;
-            xyza = linear_to_xyz(linear_rgba);
+            
+            let xyza = linear_to_xyz(linear_rgba);
             self.set_data(XYZA, xyza);
         }
 
@@ -338,8 +338,8 @@ impl ColorPro {
         }
 
         if let Some(laba) = self[LabA] {
-            let xyza;
-            xyza = laba_to_xyz(laba);
+            
+            let xyza = laba_to_xyz(laba);
             self.set_data(XYZA, xyza);
         }
 
@@ -352,8 +352,8 @@ impl ColorPro {
         }
 
         if let Some(oklaba) = self[OKLabA] {
-            let xyza;
-            xyza = oklaba_to_xyz(oklaba);
+            
+            let xyza = oklaba_to_xyz(oklaba);
             self.set_data(XYZA, xyza);
         }
 
@@ -366,20 +366,20 @@ impl ColorPro {
         }
 
         if let Some(cam16) = self[CAM16A] {
-            let xyza;
-            xyza = cam16_to_xyz(cam16);
+            
+            let xyza = cam16_to_xyz(cam16);
             self.set_data(XYZA, xyza);
             self.set_data(CAM16A, cam16);
         }
 
         if let Some(hct) = self[HCTA] {
-            let xyza;
-            xyza = hct_to_xyz(hct);
+            
+            let xyza = hct_to_xyz(hct);
             self.set_data(XYZA, xyza);
             self.set_data(HCTA, hct);
         }
 
-        if self[XYZA] == None {
+        if self[XYZA].is_none() {
             return Err("No color data available for conversion".to_string());
         };
 

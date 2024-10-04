@@ -238,12 +238,10 @@ impl ParticleSystem {
 
             self.prev_loc[0] += dx;
             self.prev_loc[1] += dy;
+        } else if self.age == -2.0 {
+            self.prev_loc = [x, y];
         } else {
-            if self.age == -2.0 {
-                self.prev_loc = [x, y];
-            } else {
-                self.prev_loc = self.loc;
-            }
+            self.prev_loc = self.loc;
         }
 
         self.loc = [x, y];

@@ -11,6 +11,12 @@ pub struct GlTransform {
     pub m21: f32,
 }
 
+impl Default for GlTransform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GlTransform {
     pub fn new() -> Self {
         Self {

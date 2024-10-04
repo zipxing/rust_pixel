@@ -90,7 +90,7 @@ where
                 (current.pos.1 as i32 + dy) as usize,
             );
 
-            if !is_valid(neighbor_pos, &map, &func) {
+            if !is_valid(neighbor_pos, map, &func) {
                 continue;
             }
 

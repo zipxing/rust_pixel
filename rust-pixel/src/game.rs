@@ -105,7 +105,7 @@ where
         // else you can set asset_path by yourself
         // example:
         // context.set_asset_path("./")...
-        let ap = if project_path == None {
+        let ap = if project_path.is_none() {
             format!("{}{}{}", path_name, std::path::MAIN_SEPARATOR, app_name).to_string()
         } else {
             project_path.unwrap().to_string()
@@ -130,7 +130,7 @@ where
         info!("Begin run...");
 
         let mut last_tick = Instant::now();
-        let tick_rate = Duration::from_nanos(1000_000_000 / GAME_FRAME as u64);
+        let tick_rate = Duration::from_nanos(1_000_000_000 / GAME_FRAME as u64);
 
         loop {
             let timeout = tick_rate
@@ -147,7 +147,7 @@ where
 
             let et = last_tick.elapsed();
             if et >= tick_rate {
-                let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1000_000_000.0;
+                let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1_000_000_000.0;
                 self.on_tick(dt);
                 last_tick = Instant::now();
             }
