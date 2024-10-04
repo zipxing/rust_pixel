@@ -146,12 +146,12 @@ impl PaletteRender {
             panel.add_layer_sprite(pl, "5", &format!("hsv_pick{}", i));
         }
         for i in 0..GRADIENT_INPUT_COUNT {
-            let pl = Sprite::new(60, i as u16 + ADJY, 8, 1);
+            let pl = Sprite::new(60, i + ADJY, 8, 1);
             panel.add_layer_sprite(pl, "5", &format!("gi_input{}", i));
         }
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
-                let pl = Sprite::new(67 + ADJX, y as u16 + ADJY, 9, 1);
+                let pl = Sprite::new(67 + ADJX, y + ADJY, 9, 1);
                 panel.add_layer_sprite(pl, "5", &format!("gi{}", y * GRADIENT_X + x));
             }
         }
@@ -235,19 +235,17 @@ impl PaletteRender {
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 if state == PickerA {
                     pl.set_pos(1, idx as u16 * 18 + 2);
+                } else if idx < 3 {
+                    pl.set_pos(
+                        1 + idx as u16 / 2 * (PICKER_COUNT_X_GRADIENT + 1),
+                        idx as u16 % 2 * 18 + 2,
+                    );
                 } else {
-                    if idx < 3 {
-                        pl.set_pos(
-                            1 + idx as u16 / 2 * (PICKER_COUNT_X_GRADIENT + 1),
-                            idx as u16 % 2 * 18 + 2,
-                        );
-                    } else {
-                        pl.set_pos(PICKER_COUNT_X_GRADIENT + 11, (idx - 1) as u16 % 2 * 18 + 2);
-                    }
+                    pl.set_pos(PICKER_COUNT_X_GRADIENT + 11, (idx - 1) as u16 % 2 * 18 + 2);
                 }
                 if state == Gradient {
                     let pl = self.panel.get_layer_sprite("select", "cursor3");
-                    if d.gradient_input_colors.len() != 0 {
+                    if !d.gradient_input_colors.is_empty() {
                         let cr = d.gradient_input_colors[d.select.ranges[2].y];
                         pl.set_color_str(
                             0,
@@ -269,7 +267,7 @@ impl PaletteRender {
                         pl.set_hidden(true);
                     }
                     let pl = self.panel.get_layer_sprite("select", "cursor4");
-                    if d.gradient_colors.len() != 0 {
+                    if !d.gradient_colors.is_empty() {
                         let cr = d.gradient_colors[d.select.ranges[3].y];
                         pl.set_color_str(
                             0,

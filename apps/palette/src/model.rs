@@ -122,30 +122,30 @@ impl PaletteModel {
                 let a = 0;
                 let c = x - 2;
                 let d = y - 2;
-                if y >= 2 && y < 20 && x >= 2 && x <= 77 {
+                if (2..20).contains(&y) && (2..=77).contains(&x) {
                     let b = 0;
                     return Some(MouseArea::Picker(a, b, c, d));
                 }
-                if y == 20 && x >= 2 && x <= 77 {
+                if y == 20 && (2..=77).contains(&x) {
                     let b = 1;
                     return Some(MouseArea::Picker(a, b, (c as f64 * 4.0) as u16, 0));
                 }
             }
             PickerB => {
                 let c = ((x - 1) as f64 / PICKER_COUNT_X as f64 * 255.0) as u16;
-                if y == 9 && x >= 2 && x <= 77 {
+                if y == 9 && (2..=77).contains(&x) {
                     return Some(MouseArea::Picker(1, 0, c, 0));
                 }
-                if y == 11 && x >= 2 && x <= 77 {
+                if y == 11 && (2..=77).contains(&x) {
                     return Some(MouseArea::Picker(1, 1, c, 0));
                 }
-                if y == 13 && x >= 2 && x <= 77 {
+                if y == 13 && (2..=77).contains(&x) {
                     return Some(MouseArea::Picker(1, 2, c, 0));
                 }
             }
             // Random(u16, u16) x, y
             Random => {
-                if y >= 2 && y <= 5 && x >= 1 && x <= 78 {
+                if (2..=5).contains(&y) && (1..=78).contains(&x) {
                     let a = (x - 1) / RANDOM_W;
                     let b = y - 2;
                     return Some(MouseArea::Random(a, b));
@@ -153,7 +153,7 @@ impl PaletteModel {
             }
             // Golden(u16, u16) x, y
             Golden => {
-                if y >= 2 && y <= 5 && x >= 1 && x <= 78 {
+                if (2..=5).contains(&y) && (1..=78).contains(&x) {
                     let a = (x - 1) / RANDOM_W;
                     let b = y - 2;
                     return Some(MouseArea::Golden(a, b));
@@ -161,21 +161,17 @@ impl PaletteModel {
             }
             // Gradient(u16, u16, u16) area, x, y
             Gradient => {
-                if y >= 2 && y <= 19 && x >= 2 && x <= 58 {
+                if (2..=19).contains(&y) && (2..=58).contains(&x) {
                     return Some(MouseArea::Gradient(0, x - 2, y - 2));
                 }
-                if y == 20 && x >= 2 && x <= 58 {
+                if y == 20 && (2..=58).contains(&x) {
                     return Some(MouseArea::Gradient(1, ((x - 2) as f64 * 4.0) as u16, 0));
                 }
-                if y >= 2 && y <= 9 && x >= 60 && x <= 67 {
-                    if ((y - 2) as usize) < self.select.ranges[2].count {
-                        return Some(MouseArea::Gradient(2, 0, y - 2));
-                    }
+                if (2..=9).contains(&y) && (60..=67).contains(&x) && ((y - 2) as usize) < self.select.ranges[2].count {
+                    return Some(MouseArea::Gradient(2, 0, y - 2));
                 }
-                if y >= 2 && y <= 20 && x >= 69 && x <= 77 {
-                    if ((y - 2) as usize) < self.select.ranges[3].count {
-                        return Some(MouseArea::Gradient(3, 0, y - 2));
-                    }
+                if (2..=20).contains(&y) && (69..=77).contains(&x) && ((y - 2) as usize) < self.select.ranges[3].count {
+                    return Some(MouseArea::Gradient(3, 0, y - 2));
                 }
             }
         }
@@ -217,8 +213,8 @@ impl PaletteModel {
         );
         self.select.ranges[3] = SelectRange::new(
             1,
-            self.gradient_colors.len() as usize,
-            self.gradient_colors.len() as usize,
+            self.gradient_colors.len(),
+            self.gradient_colors.len(),
         );
         self.update_main_color(context);
         event_emit("Palette.RedrawGradient");
@@ -241,8 +237,8 @@ impl PaletteModel {
         self.gradient_input_colors.push(nc);
         self.select.ranges[2] = SelectRange::new(
             1,
-            self.gradient_input_colors.len() as usize,
-            self.gradient_input_colors.len() as usize,
+            self.gradient_input_colors.len(),
+            self.gradient_input_colors.len(),
         );
         self.do_gradient(context);
     }
@@ -251,14 +247,14 @@ impl PaletteModel {
         if context.state != Gradient as u8 {
             return;
         }
-        if self.gradient_input_colors.len() == 0 {
+        if self.gradient_input_colors.is_empty() {
             return;
         }
         self.gradient_input_colors.pop();
         self.select.ranges[2] = SelectRange::new(
             1,
-            self.gradient_input_colors.len() as usize,
-            self.gradient_input_colors.len() as usize,
+            self.gradient_input_colors.len(),
+            self.gradient_input_colors.len(),
         );
         self.do_gradient(context);
     }
@@ -341,12 +337,12 @@ impl PaletteModel {
                     );
                 }
                 2 => {
-                    if self.gradient_input_colors.len() != 0 {
+                    if !self.gradient_input_colors.is_empty() {
                         self.main_color = self.gradient_input_colors[self.select.ranges[2].y];
                     }
                 }
                 3 => {
-                    if self.gradient_colors.len() != 0 {
+                    if !self.gradient_colors.is_empty() {
                         self.main_color = self.gradient_colors[self.select.ranges[3].y];
                     }
                 }
@@ -416,8 +412,8 @@ impl PaletteModel {
                 // gradient input ...
                 self.select.add_range(SelectRange::new(
                     1,
-                    self.gradient_input_colors.len() as usize,
-                    self.gradient_input_colors.len() as usize,
+                    self.gradient_input_colors.len(),
+                    self.gradient_input_colors.len(),
                 ));
                 // gradient ...
                 self.select.add_range(SelectRange::new(

@@ -29,7 +29,7 @@ impl Select {
     }
 
     pub fn switch_area(&mut self) {
-        if self.ranges.len() == 0 {
+        if self.ranges.is_empty() {
             return;
         }
         self.area = (self.area + 1) % self.ranges.len();
@@ -67,12 +67,10 @@ impl SelectRange {
             } else {
                 self.x += 1;
             }
+        } else if self.x == self.width - 1 {
+            self.x = 0;
         } else {
-            if self.x == self.width - 1 {
-                self.x = 0;
-            } else {
-                self.x += 1;
-            }
+            self.x += 1;
         }
     }
 
@@ -87,12 +85,10 @@ impl SelectRange {
             } else {
                 self.x -= 1;
             }
+        } else if self.x == 0 {
+            self.x = self.width - 1;
         } else {
-            if self.x == 0 {
-                self.x = self.width - 1;
-            } else {
-                self.x -= 1;
-            }
+            self.x -= 1;
         }
     }
 
@@ -109,12 +105,10 @@ impl SelectRange {
             } else {
                 self.y += 1;
             }
+        } else if self.y == self.height - 1 {
+            self.y = 0;
         } else {
-            if self.y == self.height - 1 {
-                self.y = 0;
-            } else {
-                self.y += 1;
-            }
+            self.y += 1;
         }
     }
 
@@ -131,12 +125,10 @@ impl SelectRange {
             } else {
                 self.y -= 1;
             }
+        } else if self.y == 0 {
+            self.y = self.height - 1;
         } else {
-            if self.y == 0 {
-                self.y = self.height - 1;
-            } else {
-                self.y -= 1;
-            }
+            self.y -= 1;
         }
     }
 }
