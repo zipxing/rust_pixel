@@ -6,7 +6,7 @@ use crate::render::adapter::gl::{
     shader::GlShader,
     shader_source::{GENERAL2D_FRAGMENT_SRC, GENERAL2D_VERTEX_SRC},
     transform::GlTransform,
-    GlRender, GlRenderBase, 
+    GlRender, GlRenderBase,
 };
 use glow::HasContext;
 // use log::info;
@@ -55,7 +55,7 @@ impl GlRender for GlRenderGeneral2d {
         ));
     }
 
-    unsafe fn create_buffer(&mut self, gl: &glow::Context) {
+    fn create_buffer(&mut self, gl: &glow::Context) {
         let vertices: [f32; 16] = [
             // positions  // texCoords
             0.0, 0.0, 0.0, 0.0, // 左下角
@@ -65,39 +65,41 @@ impl GlRender for GlRenderGeneral2d {
         ];
         let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
-        let vao = gl.create_vertex_array().unwrap();
-        gl.bind_vertex_array(Some(vao));
+        unsafe {
+            let vao = gl.create_vertex_array().unwrap();
+            gl.bind_vertex_array(Some(vao));
 
-        let vbo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            vertices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
+            let vbo = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                vertices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
 
-        let ebo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            indices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
+            let ebo = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+            gl.buffer_data_u8_slice(
+                glow::ELEMENT_ARRAY_BUFFER,
+                indices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
 
-        let program = self.base.shader[0].program;
-        let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
-        let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
-        gl.enable_vertex_attrib_array(pos_attrib);
-        gl.enable_vertex_attrib_array(tex_attrib);
+            let program = self.base.shader[0].program;
+            let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
+            let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
+            gl.enable_vertex_attrib_array(pos_attrib);
+            gl.enable_vertex_attrib_array(tex_attrib);
 
-        gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
-        gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
+            gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
+            gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
 
-        gl.bind_vertex_array(None);
+            gl.bind_vertex_array(None);
 
-        self.base.vao = Some(vao);
-        self.base.gl_buffers.clear();
-        self.base.gl_buffers = vec![vbo, ebo];
+            self.base.vao = Some(vao);
+            self.base.gl_buffers.clear();
+            self.base.gl_buffers = vec![vbo, ebo];
+        }
     }
 
     fn prepare_draw(&mut self, gl: &glow::Context) {
@@ -156,11 +158,7 @@ impl GlRender for GlRenderGeneral2d {
 }
 
 impl GlRenderGeneral2d {
-    pub fn set_texture(
-        &mut self,
-        gl: &glow::Context,
-        tex1: glow::Texture,
-    ) -> &mut Self {
+    pub fn set_texture(&mut self, gl: &glow::Context, tex1: glow::Texture) -> &mut Self {
         // textures...
         self.base.textures.clear();
         self.base.textures.push(tex1);
@@ -171,7 +169,7 @@ impl GlRenderGeneral2d {
     pub fn set_area(&mut self, area: &[f32; 4]) -> &mut Self {
         self.area = *area;
         self
-    } 
+    }
 
     pub fn set_transform(&mut self, transform: &GlTransform) -> &mut Self {
         self.transform = *transform;

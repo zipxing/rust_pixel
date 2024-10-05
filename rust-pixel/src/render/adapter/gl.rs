@@ -24,11 +24,11 @@ pub trait GlRender {
         ver: &str,
     );
 
-    unsafe fn create_buffer(&mut self, gl: &glow::Context);
+    fn create_buffer(&mut self, gl: &glow::Context);
 
     fn init(&mut self, gl: &glow::Context, ver: &str) {
         self.create_shader(gl, ver);
-        unsafe { self.create_buffer(gl) };
+        self.create_buffer(gl);
     }
 
     fn prepare_draw(&mut self, gl: &glow::Context);

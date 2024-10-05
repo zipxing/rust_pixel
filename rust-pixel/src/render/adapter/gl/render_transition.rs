@@ -4,7 +4,7 @@
 use crate::render::adapter::gl::{
     shader::GlShader,
     shader_source::{get_trans_fragment_src, VERTEX_SRC_TRANS},
-    GlRender, GlRenderBase, 
+    GlRender, GlRenderBase,
 };
 use glow::HasContext;
 
@@ -47,50 +47,51 @@ impl GlRender for GlRenderTransition {
         let rbs = self.get_base();
         let fss = get_trans_fragment_src();
         for f in &fss {
-            rbs.shader
-                .push(GlShader::new(gl, ver, VERTEX_SRC_TRANS, f));
+            rbs.shader.push(GlShader::new(gl, ver, VERTEX_SRC_TRANS, f));
         }
     }
 
-    unsafe fn create_buffer(&mut self, gl: &glow::Context) {
+    fn create_buffer(&mut self, gl: &glow::Context) {
         let vertices: [f32; 16] = [
             -1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0,
         ];
         let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
-        let vao = gl.create_vertex_array().unwrap();
-        gl.bind_vertex_array(Some(vao));
+        unsafe {
+            let vao = gl.create_vertex_array().unwrap();
+            gl.bind_vertex_array(Some(vao));
 
-        let vertex_buffer = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            vertices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
+            let vertex_buffer = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                vertices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
 
-        let index_buffer = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            indices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
+            let index_buffer = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+            gl.buffer_data_u8_slice(
+                glow::ELEMENT_ARRAY_BUFFER,
+                indices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
 
-        let program = self.base.shader[0].program;
-        let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
-        let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
-        gl.enable_vertex_attrib_array(pos_attrib);
-        gl.enable_vertex_attrib_array(tex_attrib);
+            let program = self.base.shader[0].program;
+            let pos_attrib = gl.get_attrib_location(program, "aPos").unwrap();
+            let tex_attrib = gl.get_attrib_location(program, "aTexCoord").unwrap();
+            gl.enable_vertex_attrib_array(pos_attrib);
+            gl.enable_vertex_attrib_array(tex_attrib);
 
-        gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
-        gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
+            gl.vertex_attrib_pointer_f32(pos_attrib, 2, glow::FLOAT, false, 16, 0);
+            gl.vertex_attrib_pointer_f32(tex_attrib, 2, glow::FLOAT, false, 16, 8);
 
-        gl.bind_vertex_array(None);
+            gl.bind_vertex_array(None);
 
-        self.base.vao = Some(vao);
-        self.base.gl_buffers.clear();
-        self.base.gl_buffers = vec![vertex_buffer, index_buffer];
+            self.base.vao = Some(vao);
+            self.base.gl_buffers.clear();
+            self.base.gl_buffers = vec![vertex_buffer, index_buffer];
+        }
     }
 
     fn prepare_draw(&mut self, gl: &glow::Context) {
@@ -128,13 +129,7 @@ impl GlRender for GlRenderTransition {
 }
 
 impl GlRenderTransition {
-    pub fn set_texture(
-        &mut self,
-        w: u32,
-        h: u32,
-        tex1: glow::Texture,
-        tex2: glow::Texture,
-    ) {
+    pub fn set_texture(&mut self, w: u32, h: u32, tex1: glow::Texture, tex2: glow::Texture) {
         // textures...
         self.base.textures.clear();
         self.base.textures.push(tex1);

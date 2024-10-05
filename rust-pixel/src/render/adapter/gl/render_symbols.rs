@@ -78,66 +78,68 @@ impl GlRender for GlRenderSymbols {
         ));
     }
 
-    unsafe fn create_buffer(&mut self, gl: &glow::Context) {
-        let vao_symbolss = gl.create_vertex_array().unwrap();
-        gl.bind_vertex_array(Some(vao_symbolss));
+    fn create_buffer(&mut self, gl: &glow::Context) {
+        unsafe {
+            let vao_symbolss = gl.create_vertex_array().unwrap();
+            gl.bind_vertex_array(Some(vao_symbolss));
 
-        let instances_vbo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
-        let instance_buffer_capacity = 1024;
-        gl.buffer_data_size(
-            glow::ARRAY_BUFFER,
-            (instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
-            glow::DYNAMIC_DRAW,
-        );
+            let instances_vbo = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
+            let instance_buffer_capacity = 1024;
+            gl.buffer_data_size(
+                glow::ARRAY_BUFFER,
+                (instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
+                glow::DYNAMIC_DRAW,
+            );
 
-        let quad_vbo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
-        let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            quad_vertices.align_to::<u8>().1,
-            glow::STATIC_DRAW,
-        );
+            let quad_vbo = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                quad_vertices.align_to::<u8>().1,
+                glow::STATIC_DRAW,
+            );
 
-        let ubo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
-        gl.buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
-        gl.bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
+            let ubo = gl.create_buffer().unwrap();
+            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
+            gl.buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
+            gl.bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(ubo));
 
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
 
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
 
-        let stride = 64;
+            let stride = 64;
 
-        // Attribute 1
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
-        gl.vertex_attrib_divisor(1, 1);
+            // Attribute 1
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
+            gl.vertex_attrib_divisor(1, 1);
 
-        // Attribute 2
-        gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
-        gl.vertex_attrib_divisor(2, 1);
+            // Attribute 2
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
+            gl.vertex_attrib_divisor(2, 1);
 
-        // Attribute 3
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
-        gl.vertex_attrib_divisor(3, 1);
+            // Attribute 3
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
+            gl.vertex_attrib_divisor(3, 1);
 
-        // Attribute 4 (color)
-        gl.enable_vertex_attrib_array(4);
-        gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
-        gl.vertex_attrib_divisor(4, 1);
+            // Attribute 4 (color)
+            gl.enable_vertex_attrib_array(4);
+            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
+            gl.vertex_attrib_divisor(4, 1);
 
-        gl.bind_vertex_array(None);
+            gl.bind_vertex_array(None);
 
-        self.base.vao = Some(vao_symbolss);
-        self.base.gl_buffers.clear();
-        self.base.gl_buffers = vec![instances_vbo, quad_vbo, ubo];
+            self.base.vao = Some(vao_symbolss);
+            self.base.gl_buffers.clear();
+            self.base.gl_buffers = vec![instances_vbo, quad_vbo, ubo];
+        }
     }
 
     fn prepare_draw(&mut self, gl: &glow::Context) {
