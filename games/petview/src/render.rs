@@ -42,12 +42,19 @@ impl PetviewRender {
         p2.set_hidden(true);
         panel.add_pixel_sprite(p2, "petimg2");
 
+        let mut p3 = Sprite::new(160u16, 450u16, PIXW, 1u16);
+        p3.set_color_str(
+            1,
+            0,
+            "RustPixel - x.com/PETSCIIWORLD",
+            Color::Rgba(0, 205, 0, 255),
+            Color::Reset,
+        );
+        panel.add_pixel_sprite(p3, "pet-msg");
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
-        Self {
-            panel,
-        }
+        Self { panel }
     }
 }
 
@@ -96,7 +103,13 @@ impl Render for PetviewRender {
                 if ctx.state == 0 {
                     pix.render_trans_frame(&gl, 0, 40 * 16, 25 * 16, 1.0);
                 } else {
-                    pix.render_trans_frame(&gl, model.trans_effect, 40 * 16, 25 * 16, model.progress);
+                    pix.render_trans_frame(
+                        &gl,
+                        model.trans_effect,
+                        40 * 16,
+                        25 * 16,
+                        model.progress,
+                    );
                 }
             }
             timer_fire("PetView.Timer", 1);
