@@ -8,7 +8,6 @@ pub mod render_symbols;
 pub mod render_transition;
 pub mod render_general2d;
 
-// use crate::render::adapter::gl::shader::GlShader;
 use shader::GlShader;
 
 pub trait GlRender {

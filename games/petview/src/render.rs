@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 use crate::model::{PetviewModel, PETH, PETW};
 use log::info;
+use rust_pixel::render::adapter::Adapter;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -13,7 +14,6 @@ use rust_pixel::{
     render::sprite::Sprite,
     render::style::Color,
 };
-use rust_pixel::render::adapter::Adapter;
 
 use std::fmt::Write;
 use std::io::Cursor;
@@ -23,8 +23,6 @@ const PIXH: u16 = 25;
 
 pub struct PetviewRender {
     pub panel: Panel,
-    pub progress: f32,
-    pub tex_ready: bool,
 }
 
 impl PetviewRender {
@@ -49,8 +47,6 @@ impl PetviewRender {
 
         Self {
             panel,
-            progress: 0.0,
-            tex_ready: false,
         }
     }
 }
@@ -64,30 +60,30 @@ impl Render for PetviewRender {
         self.panel.init(ctx);
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
-        asset2sprite!(p1, ctx, "12.pix");
+        asset2sprite!(p1, ctx, "1.pix");
 
         let p2 = self.panel.get_pixel_sprite("petimg2");
-        asset2sprite!(p2, ctx, "8.pix");
+        asset2sprite!(p2, ctx, "2.pix");
     }
 
-    fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        if event_check("Template.RedrawTile", "draw_tile") {}
-    }
+    fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {}
 
-    fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
-        if !self.tex_ready {
+    fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
+        if !model.tex_ready {
             let p1 = self.panel.get_pixel_sprite("petimg1");
+            asset2sprite!(p1, ctx, &format!("{}.pix", model.img_cur + 1));
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
             if l1 {
                 ctx.adapter.render_buffer_to_texture(&p1.content, 0);
             }
             let p2 = self.panel.get_pixel_sprite("petimg2");
+            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_next + 1));
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
             if l2 {
                 ctx.adapter.render_buffer_to_texture(&p2.content, 1);
             }
             if l1 && l2 {
-                self.tex_ready = true;
+                model.tex_ready = true;
                 info!("tex_ready.........");
             }
         }
@@ -97,12 +93,10 @@ impl Render for PetviewRender {
             let sa = ctx.adapter.get_base();
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_target(gl, 3);
-                // pix.clear(gl);
-                pix.render_trans_frame(&gl, 3, 40 * 16, 25 * 16, self.progress);
-                // sa.sdl_window.as_ref().unwrap().gl_swap_window();
-                self.progress += 0.03;
-                if self.progress >= 1.0 {
-                    self.progress = 0.0;
+                if ctx.state == 0 {
+                    pix.render_trans_frame(&gl, 0, 40 * 16, 25 * 16, 1.0);
+                } else {
+                    pix.render_trans_frame(&gl, model.trans_effect, 40 * 16, 25 * 16, model.progress);
                 }
             }
             timer_fire("PetView.Timer", 1);
