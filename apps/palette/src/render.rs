@@ -256,7 +256,7 @@ impl PaletteRender {
                             } else {
                                 Color::Black
                             },
-                            Color::Professional(cr),
+                            Color::from(cr),
                         );
                         pl.set_pos(
                             d.select.ranges[2].x as u16 + 3 + PICKER_COUNT_X_GRADIENT,
@@ -278,7 +278,7 @@ impl PaletteRender {
                             } else {
                                 Color::Black
                             },
-                            Color::Professional(cr),
+                            Color::from(cr),
                         );
                         pl.set_pos(
                             d.select.ranges[3].x as u16 + 12 + PICKER_COUNT_X_GRADIENT,
@@ -317,7 +317,7 @@ impl PaletteRender {
                     } else {
                         Color::Black
                     },
-                    Color::Professional(cr),
+                    Color::from(cr),
                 );
                 pl.set_pos(
                     d.select.ranges[0].x as u16 + 2,
@@ -345,7 +345,7 @@ impl PaletteRender {
                     } else {
                         Color::Black
                     },
-                    Color::Professional(cr),
+                    Color::from(cr),
                 );
                 pl.set_pos((d.select.ranges[1].x / 4) as u16 + 2, 20);
                 pl.set_hidden(false);
@@ -376,7 +376,7 @@ impl PaletteRender {
                     0,
                     0,
                     "████████",
-                    Color::Professional(d.gradient_input_colors[i as usize]),
+                    Color::from(d.gradient_input_colors[i as usize]),
                     Color::Reset,
                 );
             } else {
@@ -394,7 +394,7 @@ impl PaletteRender {
                         0,
                         "            ",
                         Color::White,
-                        Color::Professional(d.gradient_colors[idx as usize]),
+                        Color::from(d.gradient_colors[idx as usize]),
                     );
                 } else {
                     pl.set_hidden(true);
@@ -417,7 +417,7 @@ impl PaletteRender {
                     0,
                     &format!(" {:width$}", " ", width = C_WIDTH as usize - 1),
                     Color::Reset,
-                    Color::Professional(d.random_colors[i as usize]),
+                    Color::from(d.random_colors[i as usize]),
                 );
             }
         }
@@ -447,7 +447,7 @@ impl PaletteRender {
                             0,
                         );
 
-                        let color = Color::Professional(cr);
+                        let color = Color::from(cr);
                         pl.set_color_str(0, 0, "  ", color, color);
                         pl.set_color_str(0, 0, "  ", color, color);
                     }
@@ -463,7 +463,7 @@ impl PaletteRender {
                         1.0,
                         1.0,
                     );
-                    let color = Color::Professional(cr);
+                    let color = Color::from(cr);
                     pl.set_color_str(0, 0, " ", color, color);
                 }
             }
@@ -485,7 +485,7 @@ impl PaletteRender {
                         .get_layer_sprite(&format!("{}", i), &format!("{}", idx));
                     let s = d.named_colors[idx].0;
                     let cr = d.named_colors[idx].1;
-                    let color = Color::Professional(cr);
+                    let color = Color::from(cr);
                     pl.set_color_str(
                         0,
                         0,
@@ -510,7 +510,7 @@ impl PaletteRender {
                 i,
                 "            ",
                 Color::White,
-                Color::Professional(d.main_color),
+                Color::from(d.main_color),
             );
         }
 
@@ -558,7 +558,7 @@ impl PaletteRender {
 
             let s = COLORS_WITH_NAME[ids[i]].0;
             let cr = COLORS_WITH_NAME[ids[i]].1;
-            let color = Color::Professional(cr);
+            let color = Color::from(cr);
 
             pl.set_color_str(
                 0,

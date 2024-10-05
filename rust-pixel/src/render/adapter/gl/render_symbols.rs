@@ -2,12 +2,12 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 use crate::render::adapter::gl::{
-    shader_source::{VERTEX_SRC_SYMBOLS, FRAGMENT_SRC_SYMBOLS},
     color::GlColor,
     shader::GlShader,
+    shader_source::{FRAGMENT_SRC_SYMBOLS, VERTEX_SRC_SYMBOLS},
     texture::{GlCell, GlTexture},
     transform::GlTransform,
-    GlRender, GlRenderBase, 
+    GlRender, GlRenderBase,
 };
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
@@ -68,14 +68,14 @@ impl GlRender for GlRenderSymbols {
         &mut self.base
     }
 
-    fn create_shader(
-        &mut self,
-        gl: &glow::Context,
-        ver: &str,
-    ) {
+    fn create_shader(&mut self, gl: &glow::Context, ver: &str) {
         let rbs = self.get_base();
-        rbs.shader
-            .push(GlShader::new(gl, ver, VERTEX_SRC_SYMBOLS, FRAGMENT_SRC_SYMBOLS));
+        rbs.shader.push(GlShader::new(
+            gl,
+            ver,
+            VERTEX_SRC_SYMBOLS,
+            FRAGMENT_SRC_SYMBOLS,
+        ));
     }
 
     unsafe fn create_buffer(&mut self, gl: &glow::Context) {
@@ -219,10 +219,6 @@ impl GlRenderSymbols {
                     &mut sprite_sheet,
                     j as f32 * (PIXEL_SYM_WIDTH + 1.0),
                     i as f32 * (PIXEL_SYM_HEIGHT + 1.0),
-                    PIXEL_SYM_WIDTH,
-                    PIXEL_SYM_HEIGHT,
-                    8.0,
-                    8.0,
                 );
                 self.symbols.push(symbol);
             }
@@ -340,32 +336,21 @@ impl GlRenderSymbols {
         self.draw(gl);
     }
 
-    fn make_symbols_frame(
-        &mut self,
-        sheet: &mut GlTexture,
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        x_origin: f32,
-        y_origin: f32,
-    ) -> GlCell {
-        let origin_x = x_origin / width;
-        let origin_y = y_origin / height;
+    fn make_symbols_frame(&mut self, sheet: &mut GlTexture, x: f32, y: f32) -> GlCell {
+        let origin_x = 0.5;
+        let origin_y = 0.5;
         let tex_width = sheet.width as f32;
         let tex_height = sheet.height as f32;
 
         let uv_left = x / tex_width;
         let uv_top = y / tex_height;
-        let uv_width = width / tex_width;
-        let uv_height = height / tex_height;
-
-        
+        let uv_width = PIXEL_SYM_WIDTH / tex_width;
+        let uv_height = PIXEL_SYM_HEIGHT / tex_height;
 
         GlCell {
             texture: sheet.texture,
-            width,
-            height,
+            width: PIXEL_SYM_WIDTH,
+            height: PIXEL_SYM_HEIGHT,
             origin_x,
             origin_y,
             uv_left,

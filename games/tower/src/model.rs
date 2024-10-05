@@ -80,23 +80,23 @@ impl Model for TowerModel {
             (6, 6),
         ];
         for p in &bps {
-            self.blocks.create(0, &vec![p.0, p.1]);
+            self.blocks.create(0, &[p.0, p.1]);
         }
 
         // 创建类型为0的塔
         let mut tps = vec![(5, 3), (10, 4)];
         for p in &tps {
-            self.towers.create(0, &vec![p.0, p.1]);
+            self.towers.create(0, &[p.0, p.1]);
         }
         // 创建类型为1的塔
         tps = vec![(2, 2), (8, 8), (10, 7), (12, 8)];
         for p in &tps {
-            self.towers.create(1, &vec![p.0, p.1]);
+            self.towers.create(1, &[p.0, p.1]);
         }
         // 创建类型为2的塔
         tps = vec![(2, 5), (15, 8)];
         for p in &tps {
-            self.towers.create(2, &vec![p.0, p.1]);
+            self.towers.create(2, &[p.0, p.1]);
         }
 
         // 注册创建怪物定时器，以便延迟创建怪物
@@ -156,7 +156,7 @@ impl Model for TowerModel {
                 if t.obj.ttype == 2 {
                     self.lasers.create(
                         t.obj.ttype,
-                        &vec![
+                        &[
                             cell_size.0,
                             cell_size.1,
                             t.obj.pos.x as u32,
@@ -170,7 +170,7 @@ impl Model for TowerModel {
                 } else {
                     self.bullets.create(
                         t.obj.ttype,
-                        &vec![
+                        &[
                             cell_size.0,
                             cell_size.1,
                             t.obj.pos.x as u32,
@@ -195,9 +195,9 @@ impl Model for TowerModel {
             let tstr = format!("Tower.CreatMonster{}", i);
             if event_check(&tstr, "_") {
                 if i > 3 {
-                    self.monsters.create(1, &vec![csp.0, csp.1]);
+                    self.monsters.create(1, &[csp.0, csp.1]);
                 } else {
-                    self.monsters.create(0, &vec![csp.0, csp.1]);
+                    self.monsters.create(0, &[csp.0, csp.1]);
                 }
             }
         }

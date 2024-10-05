@@ -13,7 +13,7 @@ use crate::{
     // render::image::*,
     render::style::{Color, Style},
     util::shape::{circle, line, prepare_line},
-    util::{PointF32, Rect},
+    util::{PointU16, PointF32, Rect},
 };
 use bitflags::bitflags;
 // use log::info;
@@ -332,15 +332,13 @@ impl Sprite {
 
     pub fn draw_line(
         &mut self,
-        px0: u16,
-        py0: u16,
-        px1: u16,
-        py1: u16,
+        p0: PointU16,
+        p1: PointU16,
         sym: Option<Vec<Option<u8>>>,
         fg_color: u8,
         bg_color: u8,
     ) {
-        let (x0, y0, x1, y1) = prepare_line(px0, py0, px1, py1);
+        let (x0, y0, x1, y1) = prepare_line(p0.x, p0.y, p1.x, p1.y);
         // start, end, v, h, s, bs...
         let mut syms: Vec<Option<u8>> = vec![None, None, Some(119), Some(116), Some(77), Some(78)];
         if let Some(s) = sym {

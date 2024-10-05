@@ -7,7 +7,7 @@
 //!
 //! ```no_run
 //! use rust_pixel::algorithm::astar::*;
-//! 
+//!
 //!     let map = vec![
 //!         vec![1, 1, 1, 1, 1],
 //!         vec![0, 1, 1, 0, 1],
@@ -57,7 +57,12 @@ impl PartialOrd for ANode {
     }
 }
 
-pub fn a_star<F>(map: &Vec<Vec<u8>>, start: PointUsize, end: PointUsize, func: F) -> Option<Vec<PointUsize>>
+pub fn a_star<F>(
+    map: &[Vec<u8>],
+    start: PointUsize,
+    end: PointUsize,
+    func: F,
+) -> Option<Vec<PointUsize>>
 where
     F: Fn(u8) -> bool,
 {

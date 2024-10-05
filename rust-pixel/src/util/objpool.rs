@@ -87,7 +87,7 @@ where
     }
 
     /// create obj by vector...
-    pub fn create(&mut self, otype: u8, ps: &Vec<u32>) {
+    pub fn create(&mut self, otype: u8, ps: &[u32]) {
         self.create_with_func(otype, |t, po| {
             po.obj.reset(t, ps);
         });

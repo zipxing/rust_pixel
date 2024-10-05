@@ -56,14 +56,20 @@ impl UF for UnionFind {
         let p_root = self.find(p).unwrap();
         let q_root = self.find(q).unwrap();
         //re-balancing based on height
+        let rp = self.rank[p_root];
+        let rq = self.rank[q_root];
         if p_root != q_root {
-            if self.rank[p_root] < self.rank[q_root] {
-                self.parent[p_root] = self.parent[q_root];
-            } else if self.rank[q_root] < self.rank[p_root] {
-                self.parent[q_root] = self.parent[p_root];
-            } else {
-                self.parent[q_root] = self.parent[p_root];
-                self.rank[p_root] += 1;
+            match rp.cmp(&rq) {
+                std::cmp::Ordering::Less => {
+                    self.parent[p_root] = self.parent[q_root];
+                }
+                std::cmp::Ordering::Greater => {
+                    self.parent[q_root] = self.parent[p_root];
+                }
+                std::cmp::Ordering::Equal => {
+                    self.parent[q_root] = self.parent[p_root];
+                    self.rank[p_root] += 1;
+                }
             }
         }
     }
@@ -72,4 +78,3 @@ impl UF for UnionFind {
         self.parent.len()
     }
 }
-

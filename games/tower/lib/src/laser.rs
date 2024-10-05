@@ -70,7 +70,7 @@ impl Laser {
                 m.obj.pixel_pos.y as u32,
             );
             if m.obj.life < 0 {
-                bs.create(0, &vec![bpt.0, bpt.1]);
+                bs.create(0, &[bpt.0, bpt.1]);
                 m.active = false;
             } else {
                 // let nbpt = PointU16 {

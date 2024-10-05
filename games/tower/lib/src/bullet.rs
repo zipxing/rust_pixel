@@ -125,14 +125,14 @@ impl Bullet {
                         );
                         m.obj.life -= self.damage;
                         if m.obj.life < 0 {
-                            bs.create(0, &vec![bpt.0, bpt.1]);
+                            bs.create(0, &[bpt.0, bpt.1]);
                             m.active = false;
                         } else {
                             let nbpt = (
                                 ((bpt.0 as f32 + x) / 2.0) as u32,
                                 ((bpt.1 as f32 + y) / 2.0) as u32,
                             );
-                            bs.create(1, &vec![nbpt.0, nbpt.1]);
+                            bs.create(1, &[nbpt.0, nbpt.1]);
                         }
                         return false;
                     }

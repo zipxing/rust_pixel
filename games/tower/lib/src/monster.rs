@@ -1,10 +1,10 @@
 use crate::{check_passable, TOWERH, TOWERW};
 // use log::info;
-use std::collections::{HashMap, HashSet};
 use rust_pixel::{
     algorithm::astar::{a_star, PointUsize},
     util::{objpool::GObj, PointF32, PointU16, Rand},
 };
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 pub struct Monster {
@@ -50,7 +50,7 @@ impl GObj for Monster {
 }
 
 impl Monster {
-    pub fn find_path<P>(&mut self, grids: &mut Vec<Vec<u8>>, start_p: P)
+    pub fn find_path<P>(&mut self, grids: &mut [Vec<u8>], start_p: P)
     where
         P: Into<PointUsize>,
     {
@@ -60,7 +60,7 @@ impl Monster {
         .unwrap();
     }
 
-    pub fn get_next_pos(&mut self, grids: &mut Vec<Vec<u8>>, rand: &mut Rand) {
+    pub fn get_next_pos(&mut self, grids: &mut [Vec<u8>], rand: &mut Rand) {
         if self.path.is_empty() || rand.rand() % 10 == 0 {
             self.find_path(grids, self.pos);
         }
@@ -114,7 +114,7 @@ impl Monster {
     pub fn update(
         &mut self,
         mid: usize,
-        grids: &mut Vec<Vec<u8>>,
+        grids: &mut [Vec<u8>],
         mmap: &mut HashMap<usize, HashSet<usize>>,
         w: f32,
         h: f32,
@@ -131,9 +131,7 @@ impl Monster {
             mmap.entry(self.gid()).and_modify(|s| {
                 s.remove(&mid);
             });
-            mmap.entry(self.ngid())
-                .or_default()
-                .insert(mid);
+            mmap.entry(self.ngid()).or_default().insert(mid);
 
             self.pos = self.next_pos;
 

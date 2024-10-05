@@ -11,7 +11,7 @@ use rust_pixel::{
     render::panel::Panel,
     render::sprite::Sprite,
     render::style::Color,
-    util::shape::lightning,
+    util::{shape::lightning, PointU16},
 };
 use tower_lib::*;
 // use log::info;
@@ -103,7 +103,13 @@ impl TowerRender {
             let y1 = l.obj.dst_pos.y + 1;
             let pts = lightning(x0, y0, x1, y1, 10, 8);
             for p in pts {
-                pl.draw_line(p.0, p.1, p.2, p.3, None, 45, 1);
+                pl.draw_line(
+                    PointU16 { x: p.0, y: p.1 },
+                    PointU16 { x: p.2, y: p.3 },
+                    None,
+                    45,
+                    1,
+                );
             }
         });
 

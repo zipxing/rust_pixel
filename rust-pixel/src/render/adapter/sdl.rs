@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixel,
-        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILES,
+        gl::pixel::GlPixel, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+        PIXEL_TEXTURE_FILES,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -100,10 +100,8 @@ impl SdlAdapter {
             if x > ((sw - 1) as f32 * w) as i32 && x <= (sw as f32 * w) as i32 {
                 return SdlBorderArea::CLOSE;
             }
-        } else {
-            if x > w as i32 && x <= ((sw - 1) as f32 * w) as i32 {
-                return SdlBorderArea::NOPE;
-            }
+        } else if x > w as i32 && x <= ((sw - 1) as f32 * w) as i32 {
+            return SdlBorderArea::NOPE;
         }
         SdlBorderArea::OTHER
     }
@@ -255,29 +253,26 @@ impl Adapter for SdlAdapter {
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
         let mut ses: Vec<SEvent> = vec![];
-        match &mut self.event_pump {
-            Some(ref mut ep) => {
-                for event in ep.poll_iter() {
-                    ses.push(event.clone());
-                    // convert sdl events to pixel events, providing a unified processing interfaces
-                    if let Some(et) =
-                        input_events_from_sdl(&event, self.base.ratio_x, self.base.ratio_y)
-                    {
-                        if !self.drag.draging {
-                            es.push(et);
-                        }
+        if let Some(ref mut ep) = self.event_pump {
+            for event in ep.poll_iter() {
+                ses.push(event.clone());
+                // convert sdl events to pixel events, providing a unified processing interfaces
+                if let Some(et) =
+                    input_events_from_sdl(&event, self.base.ratio_x, self.base.ratio_y)
+                {
+                    if !self.drag.draging {
+                        es.push(et);
                     }
                 }
-                for event in ses {
-                    // sdl window is borderless, we draw the title and border ourselves
-                    // processing mouse events such as dragging of borders, close, etc.
-                    if self.drag_window(&event) {
-                        return true;
-                    }
-                }
-                ::std::thread::sleep(timeout);
             }
-            _ => {}
+            for event in ses {
+                // sdl window is borderless, we draw the title and border ourselves
+                // processing mouse events such as dragging of borders, close, etc.
+                if self.drag_window(&event) {
+                    return true;
+                }
+            }
+            ::std::thread::sleep(timeout);
         }
         false
     }
@@ -355,44 +350,43 @@ macro_rules! sdl_event {
 /// Convert sdl input events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
 pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> {
-    let sym_width = PIXEL_SYM_WIDTH as f32;
-    let sym_height = PIXEL_SYM_HEIGHT as f32;
+    let sym_width = PIXEL_SYM_WIDTH;
+    let sym_height = PIXEL_SYM_HEIGHT;
     let mut mcte: Option<MouseEvent> = None;
     match e {
         SEvent::KeyDown { keycode, .. } => {
-            let kc;
-            match keycode {
-                Some(SKeycode::Space) => kc = ' ',
-                Some(SKeycode::A) => kc = 'a',
-                Some(SKeycode::B) => kc = 'b',
-                Some(SKeycode::C) => kc = 'c',
-                Some(SKeycode::D) => kc = 'd',
-                Some(SKeycode::E) => kc = 'e',
-                Some(SKeycode::F) => kc = 'f',
-                Some(SKeycode::G) => kc = 'g',
-                Some(SKeycode::H) => kc = 'h',
-                Some(SKeycode::I) => kc = 'i',
-                Some(SKeycode::J) => kc = 'j',
-                Some(SKeycode::K) => kc = 'k',
-                Some(SKeycode::L) => kc = 'l',
-                Some(SKeycode::M) => kc = 'm',
-                Some(SKeycode::N) => kc = 'n',
-                Some(SKeycode::O) => kc = 'o',
-                Some(SKeycode::P) => kc = 'p',
-                Some(SKeycode::Q) => kc = 'q',
-                Some(SKeycode::R) => kc = 'r',
-                Some(SKeycode::S) => kc = 's',
-                Some(SKeycode::T) => kc = 't',
-                Some(SKeycode::U) => kc = 'u',
-                Some(SKeycode::V) => kc = 'v',
-                Some(SKeycode::W) => kc = 'w',
-                Some(SKeycode::X) => kc = 'x',
-                Some(SKeycode::Y) => kc = 'y',
-                Some(SKeycode::Z) => kc = 'z',
+            let kc = match keycode {
+                Some(SKeycode::Space) => ' ',
+                Some(SKeycode::A) => 'a',
+                Some(SKeycode::B) => 'b',
+                Some(SKeycode::C) => 'c',
+                Some(SKeycode::D) => 'd',
+                Some(SKeycode::E) => 'e',
+                Some(SKeycode::F) => 'f',
+                Some(SKeycode::G) => 'g',
+                Some(SKeycode::H) => 'h',
+                Some(SKeycode::I) => 'i',
+                Some(SKeycode::J) => 'j',
+                Some(SKeycode::K) => 'k',
+                Some(SKeycode::L) => 'l',
+                Some(SKeycode::M) => 'm',
+                Some(SKeycode::N) => 'n',
+                Some(SKeycode::O) => 'o',
+                Some(SKeycode::P) => 'p',
+                Some(SKeycode::Q) => 'q',
+                Some(SKeycode::R) => 'r',
+                Some(SKeycode::S) => 's',
+                Some(SKeycode::T) => 't',
+                Some(SKeycode::U) => 'u',
+                Some(SKeycode::V) => 'v',
+                Some(SKeycode::W) => 'w',
+                Some(SKeycode::X) => 'x',
+                Some(SKeycode::Y) => 'y',
+                Some(SKeycode::Z) => 'z',
                 _ => {
                     return None;
                 }
-            }
+            };
             let cte = KeyEvent::new(KeyCode::Char(kc), KeyModifiers::NONE);
             return Some(Event::Key(cte));
         }

@@ -11,7 +11,7 @@ use crate::{
 use crate::{
     render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
     render::style::Color,
-    util::{ARect, PointI32},
+    util::{ARect, PointF32, PointI32, PointU16},
     LOGO_FRAME,
 };
 use std::any::Any;
@@ -26,7 +26,7 @@ pub mod gl;
 // c64e1.png c64e2.png
 // Add more files to this list when needed,max 255 textures...
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-pub const PIXEL_TEXTURE_FILES: [&'static str; 1] = ["assets/pix/c64.png"];
+pub const PIXEL_TEXTURE_FILES: [&str; 1] = ["assets/pix/c64.png"];
 
 pub const PIXEL_SYM_WIDTH: f32 = 16.0;
 pub const PIXEL_SYM_HEIGHT: f32 = 16.0;
@@ -215,7 +215,7 @@ pub trait Adapter {
 
             // draw render_texture 2 ( main buffer )
             let mut t = GlTransform::new();
-            t.scale(2.0 as f32, 2.0 as f32);
+            t.scale(2.0, 2.0);
             t.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
@@ -236,7 +236,7 @@ pub trait Adapter {
     }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn render_rbuf(&mut self, rbuf: &Vec<RenderCell>, rtidx: usize) {
+    fn render_rbuf(&mut self, rbuf: &[RenderCell], rtidx: usize) {
         let bs = self.get_base();
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
@@ -319,10 +319,10 @@ pub trait Adapter {
 
         // render pixel_sprites...
         if stage > LOGO_FRAME {
-            for idx in 0..ps.len() {
-                if ps[idx].is_pixel && !ps[idx].is_hidden {
+            for item in ps {
+                if item.is_pixel && !item.is_hidden {
                     render_pixel_sprites(
-                        &mut ps[idx],
+                        item,
                         rx,
                         ry,
                         |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
@@ -349,13 +349,15 @@ fn push_render_buffer(
     angle: f64,
     ccp: &PointI32,
 ) {
-    let mut wc: RenderCell = Default::default();
-    wc.fcolor = (
-        fc.0 as f32 / 255.0,
-        fc.1 as f32 / 255.0,
-        fc.2 as f32 / 255.0,
-        fc.3 as f32 / 255.0,
-    );
+    let mut wc = RenderCell {
+        fcolor: (
+            fc.0 as f32 / 255.0,
+            fc.1 as f32 / 255.0,
+            fc.2 as f32 / 255.0,
+            fc.3 as f32 / 255.0,
+        ),
+        ..Default::default()
+    };
     if let Some(bc) = bgc {
         wc.bcolor = Some((
             bc.0 as f32 / 255.0,
@@ -394,12 +396,14 @@ fn push_render_buffer(
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 fn render_helper(
     cell_w: u16,
-    rx: f32,
-    ry: f32,
+    r: PointF32,
+    // rx: f32,
+    // ry: f32,
     i: usize,
     sh: &(u8, u8, Color, Color),
-    px: u16,
-    py: u16,
+    p: PointU16,
+    // px: u16,
+    // py: u16,
     is_border: bool,
 ) -> (ARect, ARect, ARect, usize, usize) {
     let w = PIXEL_SYM_WIDTH as i32;
@@ -410,8 +414,10 @@ fn render_helper(
     let tx = if sh.1 < tex_count { sh.1 as usize } else { 1 };
     let srcy = sh.0 as u32 / w as u32 + (tx as u32 / 2u32) * w as u32;
     let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
-    let bsrcy = 160u32 / w as u32 + (1u32 / 2u32) * w as u32;
-    let bsrcx = 160u32 % w as u32 + (1u32 % 2u32) * w as u32;
+    // let bsrcy = 160u32 / w as u32 + (1u32 / 2u32) * w as u32;
+    // let bsrcx = 160u32 % w as u32 + (1u32 % 2u32) * w as u32;
+    let bsrcy = 160u32 / w as u32;
+    let bsrcx = 160u32 % w as u32 + w as u32;
 
     (
         // background sym rect in texture(sym=160 tex=1)
@@ -430,10 +436,10 @@ fn render_helper(
         },
         // dst rect in render texture
         ARect {
-            x: (dstx + if is_border { 0 } else { 1 }) as i32 * (w as f32 / rx) as i32 + px as i32,
-            y: (dsty + if is_border { 0 } else { 1 }) as i32 * (h as f32 / ry) as i32 + py as i32,
-            w: (w as f32 / rx) as u32,
-            h: (h as f32 / ry) as u32,
+            x: (dstx + if is_border { 0 } else { 1 }) as i32 * (w as f32 / r.x) as i32 + p.x as i32,
+            y: (dsty + if is_border { 0 } else { 1 }) as i32 * (h as f32 / r.y) as i32 + p.y as i32,
+            w: (w as f32 / r.x) as u32,
+            h: (h as f32 / r.y) as u32,
         },
         // texture id
         tx,
@@ -472,13 +478,20 @@ where
 
         for (i, cell) in s.content.content.iter().enumerate() {
             let sh = &cell.get_cell_info();
-            let (s0, s1, s2, texidx, symidx) = render_helper(pw, rx, ry, i, sh, px, py, false);
+            let (s0, s1, s2, texidx, symidx) = render_helper(
+                pw,
+                PointF32 { x: rx, y: ry },
+                i,
+                sh,
+                PointU16 { x: px, y: py },
+                false,
+            );
             let x = i % pw as usize;
             let y = i / pw as usize;
             // center point ...
             let ccp = PointI32 {
-                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH as f32 / rx) as i32,
-                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT as f32 / ry) as i32,
+                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH / rx) as i32,
+                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT / ry) as i32,
             };
             let mut fc = sh.2.get_rgba();
             fc.3 = s.alpha;
@@ -503,14 +516,20 @@ where
     for (i, cell) in buf.content.iter().enumerate() {
         // symidx, texidx, fg, bg
         let sh = cell.get_cell_info();
-        let (s0, s1, s2, texidx, symidx) = render_helper(width, rx, ry, i, &sh, 0, 0, false);
+        let (s0, s1, s2, texidx, symidx) = render_helper(
+            width,
+            PointF32 { x: rx, y: ry },
+            i,
+            &sh,
+            PointU16 { x: 0, y: 0 },
+            false,
+        );
         let fc = sh.2.get_rgba();
-        let bc;
-        if sh.3 != Color::Reset {
-            bc = Some(sh.3.get_rgba());
+        let bc = if sh.3 != Color::Reset {
+            Some(sh.3.get_rgba())
         } else {
-            bc = None;
-        }
+            None
+        };
         f(&fc, &bc, s0, s1, s2, texidx, symidx);
     }
 }
@@ -541,12 +560,10 @@ where
             }
             let (s0, s1, s2, texidx, symidx) = render_helper(
                 cell_w + 2,
-                rx,
-                ry,
+                PointF32 { x: rx, y: ry },
                 n * (cell_w as usize + 2) + m,
                 rsh,
-                0,
-                0,
+                PointU16 { x: 0, y: 0 },
                 true,
             );
             let fc = rsh.2.get_rgba();
@@ -571,8 +588,7 @@ where
 
             let (_s0, s1, mut s2, texidx, symidx) = render_helper(
                 PIXEL_LOGO_WIDTH as u16,
-                rx,
-                ry,
+                PointF32 { x: rx, y: ry },
                 sci,
                 &(
                     PIXEL_LOGO[sci * 3],
@@ -580,8 +596,10 @@ where
                     Color::Indexed(PIXEL_LOGO[sci * 3 + 1]),
                     Color::Reset,
                 ),
-                spw as u16 / 2 - (PIXEL_LOGO_WIDTH as f32 / 2.0 * symw) as u16,
-                sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,
+                PointU16 {
+                    x: spw as u16 / 2 - (PIXEL_LOGO_WIDTH as f32 / 2.0 * symw) as u16,
+                    y: sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,
+                },
                 false,
             );
             let fc = Color::Indexed(PIXEL_LOGO[sci * 3 + 1]).get_rgba();
@@ -597,14 +615,14 @@ where
                 g = (stage as u8).saturating_mul(10);
                 b = (stage as u8).saturating_mul(10);
                 a = 255;
-                s2.x = s2.x + randadj;
+                s2.x += randadj;
             } else if stage <= sg as u32 * 2 {
                 r = fc.0;
                 g = fc.1;
                 b = fc.2;
                 a = 255;
             } else {
-                let cc = (stage as u8 - sg as u8 * 2).saturating_mul(10);
+                let cc = (stage as u8 - sg * 2).saturating_mul(10);
                 r = fc.0.saturating_sub(cc);
                 g = fc.1.saturating_sub(cc);
                 b = fc.2.saturating_sub(cc);

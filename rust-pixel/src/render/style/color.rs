@@ -29,7 +29,6 @@ pub enum Color {
     White,
     Rgba(u8, u8, u8, u8),
     Indexed(u8),
-    Professional(ColorPro),
 }
 
 impl Color {
@@ -54,7 +53,6 @@ impl Color {
             Color::White => 15,
             Color::Indexed(i) => i as usize,
             Color::Rgba(r, g, b, a) => return (r, g, b, a),
-            Color::Professional(cpro) => return cpro.get_srgba_u8(),
         };
         (
             ANSI_COLOR_RGB[cidx][0],
@@ -88,10 +86,6 @@ impl From<Color> for CColor {
             Color::White => CColor::White,
             Color::Indexed(i) => CColor::AnsiValue(i),
             Color::Rgba(r, g, b, _a) => CColor::Rgb { r, g, b },
-            Color::Professional(cpro) => {
-                let (r, g, b, _a) = cpro.get_srgba_u8();
-                CColor::Rgb { r, g, b }
-            }
         }
     }
 }
@@ -118,8 +112,14 @@ impl From<Color> for u8 {
             Color::White => 15,
             Color::Indexed(i) => i,
             Color::Rgba(r, g, b, _a) => get_u8_rgb(r, g, b),
-            Color::Professional(_cpro) => 0,
         }
+    }
+}
+
+impl From<ColorPro> for Color {
+    fn from(cpro: ColorPro) -> Self {
+        let (r, g, b, _a) = cpro.get_srgba_u8();
+        Color::Rgba(r, g, b, 255)
     }
 }
 
