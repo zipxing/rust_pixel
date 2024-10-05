@@ -26,20 +26,19 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 
 ### Features
 
-- Implements game loops (game.rs)
-- Model/Render common design pattern (game.rs)
+- Game loops & Model/Render design pattern (game.rs)
 - Event/Timer messaging mechanism (event.rs)
-- Render: support textmode(crossterm) and graphmode(glow & sdl2) with opengl shader (render.rs, render/)
-- 3 core OpenGl shaders for sdl2 & wasm graphical mode: 
+- Support text render mode (crossterm) (adapter.rs, cross.rs)
+- Unified OpenGL drawing mode supports sdl and wasm (glow & sdl2) (adapter.rs, sdl.rs, web.rs)
+- 3 core OpenGl shaders for sdl2 & web graphical mode: (gl/) 
     - gl instance rendering shader for draw mainbuffer (render_symbols.rs) 
     - gl transition shader for transition effect (render_transition.rs)
     - gl general 2d shader for draw render texture (render_general2d.rs)
 - Some common game algorithms (algorithm.rs, algorithm/, util.rs, util/)
-- audio support (audio.rs)
-- log support (log.rs)
-- Demo games, like tetris, tower, poker... (games/)
-- Demo terminal ui apps, palette app (apps/)
-- Examples of wrapping core game algorithms into FFI and WASM (games/poker/ffi, games/poker/wasm)
+- audio & log support (audio.rs, log.rs)
+- Demo games: tetris, tower, poker... (games/)
+- Demo terminal ui app: palette... (apps/)
+- Examples of wrapping core algorithms into FFI and WASM (games/poker/ffi, games/poker/wasm)
 
 ### Installation Guide
 
