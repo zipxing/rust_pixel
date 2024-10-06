@@ -24,11 +24,11 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
 - Graphical Mode (SDL2 & WEB): Built with **glow** & **sdl2**, using **PETSCII & custom graphical symbols** for rendering.
 
-[![Watch the video](https://raw.githubusercontent.com/zipxing/rust_pixel/main/screen-shot/petview.jpg)](https://raw.githubusercontent.com/zipxing/rust_pixel/main/screen-shot/petview.mp4)
+[Online demo]: https://zipxing.github.io/rust_pixel
 
-Petview Demo
+Here is a petscii art painting browser made with rust_pixel. Special thanks to x.com/PETSCIIWORLD for the character painting and the transition shader provided by gltransition. Click here for [Online demo]。
 
-https://raw.githubusercontent.com/zipxing/rust_pixel/main/screen-shot/petview.mp4
+https://github.com/user-attachments/assets/8e9e0837-43fd-4f18-a5ad-265a06ddb47e
 
 ### Features
 
