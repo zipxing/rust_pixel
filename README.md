@@ -26,6 +26,10 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 
 [![Watch the video](https://raw.githubusercontent.com/zipxing/rust_pixel/main/screen-shot/petview.jpg)](https://raw.githubusercontent.com/zipxing/rust_pixel/main/screen-shot/petview.mp4)
 
+Petview Demo
+
+https://raw.githubusercontent.com/zipxing/rust_pixel/main/screen-shot/petview.mp4
+
 ### Features
 
 - Game loops & Model/Render design pattern (game.rs)
