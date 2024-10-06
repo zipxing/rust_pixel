@@ -24,6 +24,8 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
 - Graphical Mode (SDL2 & WEB): Built with **glow** & **sdl2**, using **PETSCII & custom graphical symbols** for rendering.
 
+[![Watch the video](https://raw.githubusercontent.com/username/repository/branch/path/to/thumbnail.jpg)](https://raw.githubusercontent.com/username/repository/branch/path/to/video.mp4)
+
 ### Features
 
 - Game loops & Model/Render design pattern (game.rs)
