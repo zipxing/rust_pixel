@@ -48,7 +48,7 @@ pub const VERTEX_SRC_TRANS: &str = r#"
             }
         "#;
 
-pub const TRANS_FS: [&str; 5] = [
+pub const TRANS_FS: [&str; 7] = [
     r#"
           const ivec2 squaresMin = ivec2(20);
           const int steps = 50;
@@ -59,7 +59,7 @@ pub const TRANS_FS: [&str; 5] = [
             vec2 p = dist>0.0 ? (floor(uv / squareSize) + 0.5) * squareSize : uv;
             return mix(getFromColor(p), getToColor(p), progress);
           }
-        "#,
+    "#,
     r#"
           float inHeart (vec2 p, vec2 center, float size) {
           if (size==0.0) return 0.0;
@@ -73,7 +73,8 @@ pub const TRANS_FS: [&str; 5] = [
           getToColor(uv),
           inHeart(uv, vec2(0.5, 0.4), progress)
           );
-          }"#,
+          }
+    "#,
     r#"
             highp float noise(vec2 co)
             {
@@ -92,7 +93,8 @@ pub const TRANS_FS: [&str; 5] = [
               } else {
                 return vec4(vec3(noise(p)), 1.0);
               }
-            }"#,
+            }
+    "#,
     r#"
             vec4 transition(vec2 uv) {
               float phase = progress < 0.5 ? progress * 2.0 : (progress - 0.5) * 2.0;
@@ -107,7 +109,8 @@ pub const TRANS_FS: [&str; 5] = [
               p.y = sin(angle) * dist + 0.5;
               vec4 c = progress < 0.5 ? getFromColor(p) : getToColor(p);
               return c + (progress < 0.5 ? mix(0.0, 1.0, phase) : mix(1.0, 0.0, phase));
-              }"#,
+              }
+    "#,
     r#"
             vec4 transition (vec2 uv) {
                     float time = progress;
@@ -121,7 +124,40 @@ pub const TRANS_FS: [&str; 5] = [
                     vec4 mc = mix( to, from, step(d, 0.0) );
                     return mc;
             }
-        "#,
+    "#,
+    r#"
+            const float size = 0.04;
+            const float zoom = 50.0;
+            const float colorSeparation = 0.3;
+
+            vec4 transition(vec2 p) {
+              float inv = 1. - progress;
+              vec2 disp = size*vec2(cos(zoom*p.x), sin(zoom*p.y));
+              vec4 texTo = getToColor(p + inv*disp);
+              vec4 texFrom = vec4(
+                getFromColor(p + progress*disp*(1.0 - colorSeparation)).r,
+                getFromColor(p + progress*disp).g,
+                getFromColor(p + progress*disp*(1.0 + colorSeparation)).b,
+                1.0);
+              return texTo*progress + texFrom*inv;
+            }
+    "#,
+    r#"
+            const float amplitude = 30.0;
+            const float speed = 30.0;
+
+            vec4 transition(vec2 p) {
+              vec2 dir = p - vec2(.5);
+              float dist = length(dir);
+
+              if (dist > progress) {
+                return mix(getFromColor( p), getToColor( p), progress);
+              } else {
+                vec2 offset = dir * sin(dist * amplitude - progress * speed);
+                return mix(getFromColor( p + offset), getToColor( p), progress);
+              }
+            }
+    "#,
 ];
 
 pub fn get_trans_fragment_src() -> Vec<String> {

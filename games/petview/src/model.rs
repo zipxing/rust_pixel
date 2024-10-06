@@ -35,7 +35,7 @@ impl PetviewModel {
             normal_stage: 0,
             img_cur: 0,
             img_next: 1,
-            img_count: 20,
+            img_count: 25,
             trans_effect: 0,
             tex_ready: false,
             progress: 0.0,
@@ -71,7 +71,7 @@ impl Model for PetviewModel {
                 self.normal_stage += 1;
                 if self.normal_stage > 100 {
                     ctx.state = PetviewState::Trans as u8;
-                    self.trans_effect = (ctx.rand.rand() % 4) as usize;
+                    self.trans_effect = (ctx.rand.rand() % 7) as usize;
                     self.progress = 0.0;
                     self.tex_ready = false;
                 }
