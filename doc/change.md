@@ -1,3 +1,10 @@
+# 0.5.1
+- Update petview game, added a online demo
+- Update README.md and added a petview demo video
+
+# 0.5.0
+- Fixed numerous cargo clippy warnings
+
 # 0.4.9
 - Refactored gl/pixel.rs, Use the GlRender trait to wrap several opengl shaders and facilitate further extension of the shader
 - Updated the cargo-pixel tool so that when it runs, it first compares the version number in pixel.toml. If it is inconsistent, it prompts to update cargo-pixel.
