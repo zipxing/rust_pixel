@@ -47,11 +47,12 @@ jobs:
         run: |
           cargo pixel b petview w -r
           ls -la ./tmp/web_petview
+          cp -r ./tmp/web_petview ./web_petview
 
       # Runs a set of commands using the runners shell
       - name: Deploy to github pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./tmp/web_petview 
+          publish_dir: ./web_petview 
           publish_branch: gh-pages
