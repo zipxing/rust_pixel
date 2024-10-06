@@ -57,3 +57,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./web_petview 
           publish_branch: gh-pages
+          exclude_gitignore: true
