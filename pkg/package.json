@@ -1,0 +1,15 @@
+{
+  "name": "petview",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "petview_bg.wasm",
+    "petview.js",
+    "petview.d.ts"
+  ],
+  "main": "petview.js",
+  "types": "petview.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
