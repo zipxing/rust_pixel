@@ -1,4 +1,4 @@
-import { js_load_asset } from 'rust_pixel/index.js';
+import { js_load_asset } from '/rust_pixel/index.js';
 
 let wasm;
 
