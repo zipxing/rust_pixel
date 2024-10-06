@@ -6,4 +6,4 @@
 [pixel]
 standalone = false
 rust_pixel = "./"
-cargo_pixel = "0.3.0"
+cargo_pixel = "0.4.0"

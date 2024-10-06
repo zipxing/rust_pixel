@@ -59,7 +59,7 @@ fn common_arg(app: App) -> App {
 
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
-        .version("0.3.0")
+        .version("0.4.0")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
@@ -160,24 +160,24 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                     .collect::<Vec<&str>>()
                     .join(" ")
             ));
-            if subcmd == "run" {
-                let tmpwd = format!("tmp/web_{}/", mod_name);
-                cmds.push(format!("rm -r {}/*", tmpwd));
-                cmds.push(format!("mkdir -p {}", tmpwd));
-                cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
-                cmds.push(format!(
+            let tmpwd = format!("tmp/web_{}/", mod_name);
+            cmds.push(format!("rm -r {}/*", tmpwd));
+            cmds.push(format!("mkdir -p {}", tmpwd));
+            cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
+            cmds.push(format!(
                     "cp {}/rust-pixel/web-templates/* {}",
                     ctx.rust_pixel_path, tmpwd
-                ));
-                cmds.push(format!(
+            ));
+            cmds.push(format!(
                     "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
                     capname, tmpwd
-                ));
-                cmds.push(format!(
+            ));
+            cmds.push(format!(
                     "sed -i '' \"s/pixel/{}/g\" {}/index.js",
                     loname, tmpwd
-                ));
-                cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
+            ));
+            cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
+            if subcmd == "run" {
                 cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
             }
         }
@@ -453,7 +453,7 @@ fn check_pixel_toml() -> PixelContext {
         }
         if let Some(cargo_pixel) = pixel.get("cargo_pixel") {
             let cps = cargo_pixel.to_string();
-            if cps != "\"0.3.0\"" {
+            if cps != "\"0.4.0\"" {
                 panic!("Please update cargo pixel: cargo install --path tools/cargo-pixel --root ~/.cargo");
             }
         }
