@@ -20,6 +20,9 @@ jobs:
     # The type of runner that the job will run on
     runs-on: macos-latest
 
+    permissions:
+      contents: write  # 为 GITHUB_TOKEN 设置内容写权限
+
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
