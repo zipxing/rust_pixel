@@ -49,6 +49,7 @@ jobs:
           ls -la ./tmp/web_petview
           cp -r ./tmp/web_petview ./web_petview
           ls -la ./web_petview/pkg/
+          rm -fr ./web_petview/pkg/.gitignore
 
       # Runs a set of commands using the runners shell
       - name: Deploy to github pages
@@ -57,4 +58,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./web_petview 
           publish_branch: gh-pages
-          exclude_gitignore: true
