@@ -48,6 +48,7 @@ jobs:
           cargo pixel b petview w -r
           ls -la ./tmp/web_petview
           cp -r ./tmp/web_petview ./web_petview
+          ls -la ./web_petview/pkg/
 
       # Runs a set of commands using the runners shell
       - name: Deploy to github pages
