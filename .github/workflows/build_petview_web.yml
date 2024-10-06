@@ -25,6 +25,17 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
+      # Runs a set of commands using the runners shell
+      - name: Install deps
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          brew install ffmpeg            
+          brew install sdl2
+          brew install sdl2_image
+          brew install sdl2_gfx
+          brew install sdl2_ttf
+          brew install sdl2_mixer
+
       # Runs a single command using the runners shell
       - name: Install cargo-pixel
         run: cargo install --path tools/cargo-pixel --root ~/.cargo
