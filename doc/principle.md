@@ -2,10 +2,10 @@
 
 ![gameloop](./p1.jpg)
 
-- 每帧会交替执行model和render的update方法
-- 模块之间可以通过消息机制进行通信解耦
-- 在消息总线上，内置了一个定时器模块
-- model管理游戏的状态数据和逻辑，以下主要介绍render原理
+- In each frame, the `update` methods of both `model` and `render` are executed alternately.
+- Modules can communicate and decouple through a messaging mechanism.
+- A timer module is built into the message bus.
+- The `model` manages game state data and logic, while the `render` mechanism is explained in detail below.
 
 <br>
 
@@ -13,10 +13,10 @@
 
 ![textrender](./p2.jpg)
 
-- 文本模式的渲染流程比较简单
-- Panel包含若干layer(精灵集合)
-- 所有layer的精灵，都会merge到main buffer中
-- main buffer经过双缓冲比对后，改变的内容通过crossterm绘制到终端上
+- The rendering process in text mode is relatively simple.
+- A `Panel` contains several layers (sprite collections).
+- All sprites from these layers are merged into the main buffer.
+- After the double-buffering comparison, the changed content is drawn to the terminal using `crossterm`.
 
 <br>
 
@@ -24,12 +24,12 @@
 
 ![graphrender1](./p3.jpg)
 
-- 图形模式的渲染除了普通的精灵集合外，还支持Pixel Layers
-- Pixel Layers管理Pixel Sprite，Pixel Sprite跟普通精灵区别是能够按照单个像素移动
-- 图形模式下普通精灵也会merge到main buffer中，可以用来展现背景元素
-- Pixel Sprites会分别渲染，同时也支持透明度
-- 每个PixelSprite对应的buffer和main buffer都会被添加到RenderBuffer里
-- RenderBuffer的每个元素是RenderCell
+- In graphical mode, rendering supports Pixel Layers in addition to regular sprite collections.
+- Pixel Layers manage Pixel Sprites, which differ from regular sprites by being able to move at the pixel level.
+- In graphical mode, regular sprites are also merged into the main buffer and can be used to display background elements.
+- Pixel Sprites are rendered separately and support transparency.
+- Each Pixel Sprite's buffer, along with the main buffer, is added to the `RenderBuffer`.
+- Each element of the `RenderBuffer` is a `RenderCell`.
 
 <br>
 
@@ -37,8 +37,8 @@
 
 ![graphrender2](./p4.jpg)
 
-- 图形模式的渲染除了普通的精灵集合外，还支持Pixel Layers
-- Pixel Layers管理Pixel Sprite，Pixel Sprite跟普通精灵区别是能够按照单个像素移动
+- In graphical mode, rendering supports Pixel Layers in addition to regular sprite collections.
+- Pixel Layers manage Pixel Sprites, which differ from regular sprites by being able to move at the pixel level.
 
 <br>
 
