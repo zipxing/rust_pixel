@@ -7,7 +7,7 @@
 - 在消息总线上，内置了一个定时器模块
 - model管理游戏的状态数据和逻辑，以下主要介绍render原理
 
-<br><br>
+<br>
 
 ### text mode render
 
@@ -18,7 +18,7 @@
 - 所有layer的精灵，都会merge到main buffer中
 - main buffer经过双缓冲比对后，改变的内容通过crossterm绘制到终端上
 
-<br><br>
+<br>
 
 ### graphical mode render pass 1
 
@@ -31,7 +31,7 @@
 - 每个PixelSprite对应的buffer和main buffer都会被添加到RenderBuffer里
 - RenderBuffer的每个元素是RenderCell
 
-<br><br>
+<br>
 
 ### graphical mode render pass 2
 
@@ -40,5 +40,5 @@
 - 图形模式的渲染除了普通的精灵集合外，还支持Pixel Layers
 - Pixel Layers管理Pixel Sprite，Pixel Sprite跟普通精灵区别是能够按照单个像素移动
 
-<br><br>
+<br>
 
