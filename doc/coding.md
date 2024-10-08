@@ -1,2 +1,2 @@
 ### Principle overview
-![gameloop](./1.jpg)
+![gameloop](./p1.jpg)
