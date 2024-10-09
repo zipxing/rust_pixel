@@ -152,6 +152,7 @@ pub struct GlRenderBase {
 }
 
 // refer to render/adapter/gl/render_symbols.rs render_transition.rs render_general2d.rs 
+...
 
 ```
 
