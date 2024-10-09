@@ -156,11 +156,10 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                 }
             }
 
-            pub fn run() -> Result<(), JsValue> {
+            pub fn run() {
                 let mut g = init_game().g;
                 g.run().unwrap();
                 g.render.panel.reset(&mut g.context);
-                Ok(())
             }
     };
 
