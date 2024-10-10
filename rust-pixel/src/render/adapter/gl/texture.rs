@@ -69,18 +69,18 @@ impl GlRenderTexture {
         }
     }
 
-    pub fn bind(&self, gl: &glow::Context) {
-        unsafe {
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.framebuffer));
-            gl.viewport(0, 0, self.width as i32, self.height as i32);
-        }
-    }
+    // pub fn bind(&self, gl: &glow::Context) {
+    //     unsafe {
+    //         gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.framebuffer));
+    //         gl.viewport(0, 0, self.width as i32, self.height as i32);
+    //     }
+    // }
 
-    pub fn unbind(&self, gl: &glow::Context) {
-        unsafe {
-            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-        }
-    }
+    // pub fn unbind(&self, gl: &glow::Context) {
+    //     unsafe {
+    //         gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+    //     }
+    // }
 
     pub fn get_texture(&self) -> glow::Texture {
         self.texture

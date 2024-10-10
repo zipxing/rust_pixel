@@ -29,11 +29,6 @@ impl PetviewRender {
     pub fn new() -> Self {
         let mut panel = Panel::new();
 
-        // background...
-        let mut gb = Sprite::new(0, 0, PETW, PETH);
-        gb.set_alpha(230);
-        panel.add_sprite(gb, "back");
-
         let mut p1 = Sprite::new(0, 0, PIXW, PIXH);
         p1.set_hidden(true);
         panel.add_pixel_sprite(p1, "petimg1");
@@ -99,6 +94,7 @@ impl Render for PetviewRender {
         if event_check("PetView.Timer", "pet_timer") {
             // info!("timer......{}", ctx.stage);
             // let p1 = self.panel.get_pixel_sprite("petimg2");
+            
             let sa = ctx.adapter.get_base();
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
