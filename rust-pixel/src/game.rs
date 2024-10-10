@@ -168,3 +168,25 @@ where
         self.render.init(&mut self.context, &mut self.model);
     }
 }
+
+#[macro_export]
+macro_rules! only_terminal_mode {
+    () => {
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        {
+            println!("Run in terminal only...");
+            std::process::exit(0);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! only_graphical_mode {
+    () => {
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        {
+            println!("Run in graphics only...");
+            std::process::exit(0);
+        }
+    };
+}
