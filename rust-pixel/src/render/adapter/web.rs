@@ -101,7 +101,7 @@ impl Adapter for WebAdapter {
         // render every thing to rbuf
         let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
         // draw main buffer & pixel_sprites to render_texture 2
-        self.render_rbuf(&rbuf, 2);
+        self.render_rbuf(&rbuf, 2, false);
 
         self.main_render_pass();
 
