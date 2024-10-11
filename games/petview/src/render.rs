@@ -100,13 +100,13 @@ impl Render for PetviewRender {
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_target(gl, 3);
                 if ctx.state == 0 {
-                    pix.render_trans_frame(&gl, 0, 40 * 16, 25 * 16, 1.0);
+                    pix.render_trans_frame(&gl, 0, 864, 512, 1.0);
                 } else {
                     pix.render_trans_frame(
                         &gl,
                         model.trans_effect,
-                        40 * 16,
-                        25 * 16,
+                        864,
+                        512,
                         model.progress,
                     );
                 }

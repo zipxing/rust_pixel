@@ -313,6 +313,7 @@ impl GlRenderSymbols {
         ratio_x: f32,
         ratio_y: f32,
     ) {
+        // info!("ratiox....{} ratioy....{}", ratio_x, ratio_y);
         for r in rbuf {
             let mut transform = GlTransform::new();
             transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT);

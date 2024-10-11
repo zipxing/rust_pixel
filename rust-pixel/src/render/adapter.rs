@@ -214,26 +214,29 @@ pub trait Adapter {
             pix.bind_screen(gl);
 
             // draw render_texture 2 ( main buffer )
-            let mut t = GlTransform::new();
-            t.scale(2.0, 2.0);
-            t.translate(-0.5, -0.5);
+            let t = GlTransform::new();
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
             // draw render_texture 3 ( gl transition )
             let mut t2 = GlTransform::new();
-            // t2.scale(2.0 * 0.512, 2.0 * 0.756);
-            t2.scale(1.0, 1.0);
-            t2.translate(-0.5, -0.5);
+            t2.scale(640.0 / 864.0, 400.0 / 512.0);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 1, [0.0, 0.0, 1.0, 1.0], &t2, &c);
+            pix.draw_general2d(
+                gl,
+                3,
+                [16.0 / 864.0, 96.0 / 512.0, 640.0 / 864.0, 400.0 / 512.0],
+                &t2,
+                &c,
+            );
         }
     }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         let rbuf = self.buffer_to_render_buffer(buf);
-        self.render_rbuf(&rbuf, rtidx, true);
+        // self.render_rbuf(&rbuf, rtidx, true);
+        self.render_rbuf(&rbuf, rtidx, false);
     }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -249,7 +252,7 @@ pub trait Adapter {
                 pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
             }
             pix.clear(gl);
-            // pix.render_rbuf(gl, rbuf, rx, ry);
+            pix.render_rbuf(gl, rbuf, rx, ry);
         }
     }
 
