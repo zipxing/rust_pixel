@@ -112,7 +112,7 @@ where
         };
         let ctx = Context::new(path_name, app_name, &ap);
         init_log(
-            log::LevelFilter::Info,
+            log::LevelFilter::Trace,
             &format!("log{}{}.log", std::path::MAIN_SEPARATOR, app_name),
         );
         info!("{}(rust_pixel) start...{:?}", name, res);

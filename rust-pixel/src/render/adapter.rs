@@ -223,7 +223,7 @@ pub trait Adapter {
             // draw render_texture 3 ( gl transition )
             let mut t2 = GlTransform::new();
             // t2.scale(2.0 * 0.512, 2.0 * 0.756);
-            t2.scale(2.0, 2.0);
+            t2.scale(1.0, 1.0);
             t2.translate(-0.5, -0.5);
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
             pix.draw_general2d(gl, 1, [0.0, 0.0, 1.0, 1.0], &t2, &c);
@@ -249,7 +249,7 @@ pub trait Adapter {
                 pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
             }
             pix.clear(gl);
-            pix.render_rbuf(gl, rbuf, rx, ry);
+            // pix.render_rbuf(gl, rbuf, rx, ry);
         }
     }
 

@@ -9,7 +9,7 @@ use crate::render::adapter::gl::{
     GlRender, GlRenderBase,
 };
 use glow::HasContext;
-// use log::info;
+use log::info;
 
 pub struct GlRenderGeneral2d {
     pub base: GlRenderBase,
@@ -116,6 +116,27 @@ impl GlRender for GlRenderGeneral2d {
             gl.uniform_matrix_4_f32_slice(
                 transform_loc.as_ref(),
                 false,
+                &[
+                    self.transform.m00,
+                    self.transform.m01,
+                    0.0,
+                    0.0,
+                    self.transform.m10,
+                    self.transform.m11,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    self.transform.m20,
+                    self.transform.m21,
+                    0.0,
+                    1.0,
+                ],
+            );
+
+            info!("TRANSFORM....{:?}", 
                 &[
                     self.transform.m00,
                     self.transform.m01,

@@ -293,9 +293,9 @@ impl Adapter for SdlAdapter {
         );
 
         // render main_buffer & pixel_sprites to rbuf
-        let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        // let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
         // draw rbuf to render_texture 2
-        self.render_rbuf(&rbuf, 2, false);
+        // self.render_rbuf(&rbuf, 2, false);
 
         // draw render_texture 2 & 3 to screen
         self.main_render_pass();
