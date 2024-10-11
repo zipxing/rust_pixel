@@ -58,10 +58,10 @@ impl GlRender for GlRenderGeneral2d {
     fn create_buffer(&mut self, gl: &glow::Context) {
         let vertices: [f32; 16] = [
             // positions  // texCoords
-            0.0, 0.0, 0.0, 0.0, // 左下角
-            1.0, 0.0, 1.0, 0.0, // 右下角
+            -1.0, -1.0, 0.0, 0.0, // 左下角
+            1.0, -1.0, 1.0, 0.0, // 右下角
             1.0, 1.0, 1.0, 1.0, // 右上角
-            0.0, 1.0, 0.0, 1.0, // 左上角
+            -1.0, 1.0, 0.0, 1.0, // 左上角
         ];
         let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
 

@@ -20,7 +20,6 @@ num-derive = "0.2"
 keyframe = "=1.1.1"
 wasm-bindgen-futures = "0.4.42"
 web-sys = "0.3.4"
-glow = "0.11"
 petview_lib = { path = "./lib" }
 rust_pixel = { path = "../../rust-pixel", default-features = false }
 pixel_macro = { path = "../../pixel_macro" }

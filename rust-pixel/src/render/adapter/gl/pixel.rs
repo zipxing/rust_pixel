@@ -61,8 +61,12 @@ impl GlPixel {
 
         // create 4 render texture for gl transition...
         let mut render_textures = vec![];
-        for _i in 0..4 {
-            let rt = GlRenderTexture::new(gl, canvas_width as u32, canvas_height as u32).unwrap();
+        for i in 0..4 {
+            // let w = if i == 2 { canvas_width as u32 } else { 40 * 16 };
+            // let h = if i == 2 { canvas_height as u32 } else { 25 * 16 };
+            let w = canvas_width as u32;
+            let h = canvas_height as u32;
+            let rt = GlRenderTexture::new(gl, w, h).unwrap();
             info!("rt...{:?}", rt.texture);
             render_textures.push(rt);
         }
@@ -88,11 +92,13 @@ impl GlPixel {
     // idx 0 - 3 : render to GlRenderTexture 0 - 3
     pub fn bind_target(&mut self, gl: &glow::Context, render_texture_idx: usize) {
         unsafe {
+            let tex = &self.render_textures[render_texture_idx];
             gl.bind_framebuffer(
                 glow::FRAMEBUFFER,
-                Some(self.render_textures[render_texture_idx].framebuffer),
+                Some(tex.framebuffer),
             );
-            gl.viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
+            // info!("bind_target...{} {} {}", render_texture_idx, tex.width, tex.height);
+            gl.viewport(0, 0, tex.width as i32, tex.height as i32);
         }
     }
 

@@ -22,7 +22,7 @@
 //! or wasm libs.
 
 /// framerate per second, set to moderate number to save CPUs
-pub const GAME_FRAME: u32 = 36;
+pub const GAME_FRAME: u32 = 60;
 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
