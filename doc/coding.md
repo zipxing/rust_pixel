@@ -47,6 +47,7 @@ fn main() {
 ```
 
 - src/lib.rs is the main code logic entry
+
 To reduce duplication of code, procedural macros are used:
 (refer to rust_pixel/pixel_macro crate for macro details)
 ```
