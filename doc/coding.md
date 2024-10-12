@@ -47,10 +47,101 @@ fn main() {
 ```
 
 - src/lib.rs is the main code logic entry
+To reduce duplication of code, procedural macros are used:
+(refer to rust_pixel/pixel_macro crate for macro details)
 ```
 mod model;
 mod render;
 
 use pixel_macro::pixel_game;
-pixel_game!(Block, "app", ".");
+pixel_game!(Block, "app", ".");  
 ```
+
+`pixel_game!(Block, "app", ".")` will expand into the following code:
+```
+use crate::{model::BlockModel, render::BlockRender};
+use rust_pixel::game::Game;
+
+#[cfg(target_arch = "wasm32")]
+use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter};
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_futures::js_sys;
+#[cfg(target_arch = "wasm32")]
+use log::info;
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct BlockGame {
+    g: Game<BlockModel, BlockRender>,
+}
+
+pub fn init_game() -> BlockGame {
+    let m = BlockModel::new();
+    let r = BlockRender::new();
+    let mut g = Game::new_with_project_path(m, r, "app/block", Some("."));
+    g.init();
+    BlockGame { g }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+impl BlockGame {
+    pub fn new() -> Self {
+        init_game()
+    }
+
+    pub fn tick(&mut self, dt: f32) {
+        self.g.on_tick(dt);
+    }
+
+    pub fn key_event(&mut self, t: u8, e: web_sys::Event) {
+        let abase = &self
+            .g
+            .context
+            .adapter
+            .as_any()
+            .downcast_ref::<WebAdapter>()
+            .unwrap()
+            .base;
+        if let Some(pe) = input_events_from_web(t, e, abase.ratio_x, abase.ratio_y) {
+            self.g.context.input_events.push(pe);
+        }
+    }
+
+    pub fn upload_imgdata(&mut self, w: i32, h: i32, d: &js_sys::Uint8ClampedArray) {
+        let length = d.length() as usize;
+        let mut pixels = vec![0u8; length];
+        d.copy_to(&mut pixels);
+        info!("RUST...pixels.len={}", pixels.len());
+
+        let wa = &mut self
+            .g
+            .context
+            .adapter
+            .as_any()
+            .downcast_mut::<WebAdapter>()
+            .unwrap();
+
+        wa.init_glpix(w, h, &pixels);
+    }
+
+    pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
+        // info!("asset({:?}): {:?}!!!", url, data);
+        self.g.context.asset_manager.set_data(url, data);
+    }
+
+    pub fn get_ratiox(&mut self) -> f32 {
+        self.g.context.adapter.get_base().ratio_x
+    }
+
+    pub fn get_ratioy(&mut self) -> f32 {
+        self.g.context.adapter.get_base().ratio_y
+    }
+}
+
+pub fn run() {
+    let mut g = init_game().g;
+    g.run().unwrap();
+    g.render.panel.reset(&mut g.context);
+}
+``` 
