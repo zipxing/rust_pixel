@@ -292,14 +292,7 @@ impl Adapter for SdlAdapter {
             self.drag.dy,
         );
 
-        // render main_buffer & pixel_sprites to rbuf
-        let rbuf = self.draw_all_to_render_buffer(current_buffer, _p, pixel_sprites, stage);
-
-        // draw rbuf to render_texture 2
-        self.draw_render_buffer_to_texture(&rbuf, 2, false);
-
-        // draw render_texture 2 & 3 to screen
-        self.main_render_pass();
+        self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
 
         // swap window for display
         self.sdl_window.as_ref().unwrap().gl_swap_window();

@@ -98,14 +98,7 @@ impl Adapter for WebAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // render every thing to rbuf
-        let rbuf = self.draw_all_to_render_buffer(current_buffer, _p, pixel_sprites, stage);
-
-        // draw main buffer & pixel_sprites to render_texture 2
-        self.draw_render_buffer_to_texture(&rbuf, 2, false);
-
-        self.main_render_pass();
-
+        self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
         Ok(())
     }
 

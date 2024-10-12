@@ -206,8 +206,27 @@ pub trait Adapter {
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
+    // sdl & web main render pass...
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn main_render_pass(&mut self) {
+    fn draw_all_graph(
+        &mut self,
+        current_buffer: &Buffer,
+        previous_buffer: &Buffer,
+        pixel_sprites: &mut Vec<Sprites>,
+        stage: u32,
+    ) {
+        // render main_buffer & pixel_sprites to rbuf
+        let rbuf = self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
+
+        // draw rbuf to render_texture 2
+        self.draw_render_buffer_to_texture(&rbuf, 2, false);
+
+        // draw render_texture 2 & 3 to screen
+        self.draw_render_textures_to_screen();
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn draw_render_textures_to_screen(&mut self) {
         let bs = self.get_base();
 
         if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
