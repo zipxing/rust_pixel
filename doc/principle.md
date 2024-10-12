@@ -75,13 +75,13 @@ pub struct Cell {
 
 <br>
 
-### graphical mode render pass 1
+### graphics mode render pass 1
 
 ![graphrender1](./p3.jpg)
 
-- In graphical mode, rendering supports Pixel Layers in addition to regular sprite collections.
+- In graphics mode, rendering supports Pixel Layers in addition to regular sprite collections.
 - Pixel Layers manage Pixel Sprites, which differ from regular sprites by being able to move at the pixel level.
-- In graphical mode, regular sprites are also merged into the main buffer and can be used to display background elements.
+- In graphics mode, regular sprites are also merged into the main buffer and can be used to display background elements.
 - Pixel Sprites are rendered separately and support transparency.
 - Each Pixel Sprite's buffer, along with the main buffer, is appended to the `RenderBuffer`.
 - Each element of the `RenderBuffer` is a `RenderCell`.
@@ -108,7 +108,7 @@ pub struct RenderCell {
 
 <br>
 
-### graphical mode render pass 2
+### graphics mode render pass 2
 
 ![graphrender2](./p4.jpg)
 

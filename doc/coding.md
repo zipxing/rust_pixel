@@ -35,7 +35,7 @@ If the project only runs in graphics mode, you can use macro:
 ```rust
 fn main() {
     // if not graphics mode, exit() will be call
-    rust_pixel::only_graphical_mode!();
+    rust_pixel::only_graphics_mode!();
 
     // if not terminal mode, exit() will be call
     // rust_pixel::only_terminal_mode!();
@@ -49,12 +49,14 @@ fn main() {
 - src/lib.rs is the main code logic entry
 
 To reduce duplication of code, procedural macros are used:
-(refer to rust_pixel/pixel_macro crate for macro details)
+
 ```rust
 mod model;
 mod render;
 
 use pixel_macro::pixel_game;
+
+// refer to rust_pixel/pixel_macro for macro details
 pixel_game!(Block, "app", ".");  
 ```
 
@@ -141,9 +143,13 @@ impl BlockGame {
     }
 }
 
+// call by main.rs
 pub fn run() {
     let mut g = init_game().g;
     g.run().unwrap();
     g.render.panel.reset(&mut g.context);
 }
 ``` 
+
+### Model and Render
+

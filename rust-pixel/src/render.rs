@@ -23,5 +23,5 @@ pub mod sprite;
 /// defines attributes like fore- or back-ground colors
 pub mod style;
 
-/// draw panel, compatible with both text mode (crossterm) and graphical mode (SDL&wasm)
+/// draw panel, compatible with both text mode (crossterm) and graphics mode (SDL&wasm)
 pub mod panel;

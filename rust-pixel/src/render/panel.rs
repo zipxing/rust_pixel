@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Panel supports rendering in both text and graphical modes
+//! Panel supports rendering in both text and graphics modes
 //! The core of it is to draw whatever in the buffer on the screen
 //!
 //! terminal mode relies on the crossterm modules, and it has builtin double buffering
@@ -16,7 +16,7 @@
 //! Please refer to the flush method or the tower defense game in games/tower where pixel_sprite is
 //! massively applied.
 //!
-//! WEB mode is similar to SDL mode, both are graphical modes. However,
+//! WEB mode is similar to SDL mode, both are graphics modes. However,
 //! in WEB mode, RustPixel renders buffer to a shared memory block and shared it
 //! with JavaScript in WEB, then JS calls webgl in the browser to render this memory block.
 //! Refer to the implementation in pixel.js

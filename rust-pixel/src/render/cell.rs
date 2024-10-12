@@ -80,7 +80,7 @@ pub fn cellsym(idx: u8) -> &'static str {
 /// otherwise get index from CELL_SYM_MAP
 fn symidx(symbol: &String) -> u8 {
     let sbts = symbol.as_bytes();
-    // unicode graphical symbol
+    // unicode graphics symbol
     if sbts.len() == 3 && sbts[0] == 0xe2 && (sbts[1] >> 2 == 0x22) {
         let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
         return idx;
@@ -110,7 +110,7 @@ impl Cell {
         self
     }
 
-    /// refers to the comments in buffer.rs, works in graphical mode
+    /// refers to the comments in buffer.rs, works in graphics mode
     /// returns offset and texture id
     ///
     /// maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx

@@ -3,7 +3,7 @@
 
 //! Implements load/save of image files in pix format
 //!
-//! pix file stores the petscii art images in graphical mode, saving the cell sequence row by row
+//! pix file stores the petscii art images in graphics mode, saving the cell sequence row by row
 //! cell: symbol index, fore-color, texture_id 
 //! $ cat assets/snake/back.pix
 //!

@@ -10,7 +10,7 @@
 //! $ cat assets/tetris/back.txt
 //!
 //! pix file stores the art images in GRAPH mode, saving the cell sequence row by row
-//! cell: char sym index, fore- and background colors (background color is used to mark texture in graphical mode)
+//! cell: char sym index, fore- and background colors (background color is used to mark texture in graphics mode)
 //!
 //! $ cat assets/snake/back.pix
 

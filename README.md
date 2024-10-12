@@ -18,12 +18,12 @@
 [FAQ]: doc/faq.md
 [TODO]: doc/todo.md
 
-RustPixel is a **2D game engine** & **rapid prototyping tools**, supporting both **text** and **graphical** rendering modes.<br>
+RustPixel is a **2D game engine** & **rapid prototyping tools**, supporting both **text** and **graphics** rendering modes.<br>
 It is suitable for creating **2D pixel-style games** and developing **terminal applications**.<br>
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
 
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
-- Graphical Mode (SDL2 & WEB): Built with **glow** & **sdl2**, using **PETSCII & custom graphical symbols** for rendering.
+- Graphical Mode (SDL2 & WEB): Built with **glow** & **sdl2**, using **PETSCII & custom graphics symbols** for rendering.
 
 [online demo]: https://zipxing.github.io/rust_pixel
 
@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/8e9e0837-43fd-4f18-a5ad-265a06ddb47e
 - Event/Timer messaging mechanism (event.rs)
 - Support text render mode (crossterm) (adapter.rs, cross.rs)
 - Unified OpenGL drawing mode supports sdl and wasm (glow & sdl2) (adapter.rs, sdl.rs, web.rs)
-- 3 core OpenGl shaders for sdl2 & web graphical mode: (gl/) 
+- 3 core OpenGl shaders for sdl2 & web graphics mode: (gl/) 
     - gl instance rendering shader for draw mainbuffer (render_symbols.rs) 
     - gl transition shader for transition effect (render_transition.rs)
     - gl general 2d shader for draw render texture (render_general2d.rs)
@@ -105,7 +105,7 @@ cargo pixel r palette t -r
 #term mode
 cargo pixel r tedit term assets/screen-shot/tedit.txt
 
-#graphical mode
+#graphics mode
 cargo pixel r tedit sdl assets/screen-shot/tedit.pix 
 ```
  ![tedit_t](./screen-shot/tedit_term.png)
@@ -131,11 +131,11 @@ cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25
 ### Demo games
 1. snake: A snake game with a cool PETSCII animations
 ```
-#graphical mode
+#graphics mode
 cargo pixel r snake s -r
 ```
 
-![graphical mode](./screen-shot/snake_sdl.gif)
+![graphics mode](./screen-shot/snake_sdl.gif)
 
 ``` 
 #term mode
@@ -157,11 +157,11 @@ cargo pixel r tetris t -r
  ![term mode](./screen-shot/tetris_term.gif)
 
 ```
-#graphical mode
+#graphics mode
 cargo pixel r tetris s -r
 ```
 
-![graphical mode](./screen-shot/tetris_sdl.gif)
+![graphics mode](./screen-shot/tetris_sdl.gif)
 
 ```
 #web mode
@@ -192,7 +192,7 @@ make run
 
 4. tower: A tower defense game prototype demonstrating the use of objpool and pixel_sprite for pixel-perfect sprite movement
 ``` 
-#graphical mode
+#graphics mode
 cargo pixel r tower s -r
 
 #web mode

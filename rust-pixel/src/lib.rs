@@ -1,14 +1,14 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! RustPixel is a 2D game engine & rapid prototyping tools supporting both text and graphical rendering modes.
+//! RustPixel is a 2D game engine & rapid prototyping tools supporting both text and graphics rendering modes.
 //! It is suitable for creating 2D pixel-style games and developing terminal applications.
 //! it is also a perfect choice for developing and debugging CPU-heavy core algorithms
 //! You can compile your core algorithms to ffi or wasm libs, and used by other gaming
 //! frontend or backend
 //!
 //! Text Mode: Built with crossterm, runs in the terminal, and uses ASCII & Unicode Emoji for drawing.
-//! Graphical Mode (SDL2): Built with SDL2, using PETSCII & custom graphical symbols for rendering.
+//! Graphical Mode (SDL2): Built with SDL2, using PETSCII & custom graphics symbols for rendering.
 //! Graphical Mode (Web): Similar to the SDL2 mode, but the core logic is compiled into WASM and 
 //! rendered using WebGL and JavaScript (refer to rust-pixel/web-template/pixel.js).
 //!
@@ -57,20 +57,20 @@ pub mod game;
 /// log
 pub mod log;
 
-/// Render module, it supports two rendering mode: text mode and graphical mode.
+/// Render module, it supports two rendering mode: text mode and graphics mode.
 /// adapter: render adapter interface (crossterm, sdl, web).
 /// cell: a base drawing unit i.e. a character.
 /// buffer: a vector comprised of cells, managing screen buffer.
 /// sprite: basic drawing component, encapsulating further the buffer.
 /// style: define drawing attributes such as fore- and back-ground colors.
-/// panel: drawing panel is compatible with text mode and graphical mode.
+/// panel: drawing panel is compatible with text mode and graphics mode.
 ///
 /// cell is a unicode character in text mode，
 ///
 /// cell can be a fixed size dot matrix image, PETSCII char
-/// or other custom images in graphical mode
+/// or other custom images in graphics mode
 ///
 /// It supports offsetting special sprite by pixels to enhance expressiveness
-/// in graphical mode.
+/// in graphics mode.
 #[cfg(not(feature = "base"))]
 pub mod render;

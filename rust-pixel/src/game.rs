@@ -181,7 +181,7 @@ macro_rules! only_terminal_mode {
 }
 
 #[macro_export]
-macro_rules! only_graphical_mode {
+macro_rules! only_graphics_mode {
     () => {
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         {

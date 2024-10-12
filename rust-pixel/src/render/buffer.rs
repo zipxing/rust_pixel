@@ -16,7 +16,7 @@
 //! Display width is a bit tricky, very much relying on the terminal apps(currently the development
 //! work uses iterm2 in macOS). Moreover, bold and italics fonts are also supported in text mode.
 //!
-//! In graphical mode,
+//! In graphics mode,
 //! 256 unicode chars mark the index of a symbol in a SDL texture
 //! unicode: 0x2200 ~ 0x22FF
 //! maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
