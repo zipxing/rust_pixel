@@ -24,7 +24,7 @@ In this way, an independent project named `block` will be created in the upper d
 
 ### Project main entry
 - src/main.rs is the binary main entry
-```
+```rust
 fn main() {
     // block::run is defined in lib.rs
     block::run()
@@ -32,7 +32,7 @@ fn main() {
 ```
 
 If the project only runs in graphics mode, you can use macro:
-```
+```rust
 fn main() {
     // if not graphics mode, exit() will be call
     rust_pixel::only_graphical_mode!();
@@ -50,7 +50,7 @@ fn main() {
 
 To reduce duplication of code, procedural macros are used:
 (refer to rust_pixel/pixel_macro crate for macro details)
-```
+```rust
 mod model;
 mod render;
 
@@ -59,7 +59,8 @@ pixel_game!(Block, "app", ".");
 ```
 
 `pixel_game!(Block, "app", ".")` will expand into the following code:
-```
+
+```rust
 use crate::{model::BlockModel, render::BlockRender};
 use rust_pixel::game::Game;
 
