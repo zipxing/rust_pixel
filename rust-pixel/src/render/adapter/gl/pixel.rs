@@ -19,8 +19,8 @@ pub struct GlPixel {
 
     render_textures: Vec<GlRenderTexture>,
 
-    canvas_width: u32,
-    canvas_height: u32,
+    pub canvas_width: u32,
+    pub canvas_height: u32,
 
     clear_color: GlColor,
 }

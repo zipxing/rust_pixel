@@ -139,11 +139,11 @@ pub trait Adapter {
     fn get_base(&mut self) -> &mut AdapterBase;
     fn poll_event(&mut self, timeout: Duration, ev: &mut Vec<Event>) -> bool;
 
-    fn render_buffer(
+    fn draw_all_to_screen(
         &mut self,
-        cb: &Buffer,
-        pb: &Buffer,
-        ps: &mut Vec<Sprites>,
+        current_buffer: &Buffer,
+        previous_buffer: &Buffer,
+        pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String>;
 
@@ -219,34 +219,42 @@ pub trait Adapter {
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
             // draw render_texture 3 ( gl transition )
+            let pcw = pix.canvas_width as f32;
+            let pch = pix.canvas_height as f32;
+            let pw = 40.0 * PIXEL_SYM_WIDTH;
+            let ph = 25.0 * PIXEL_SYM_HEIGHT;
+
             let mut t2 = GlTransform::new();
-            t2.scale(640.0 / 864.0, 400.0 / 512.0);
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+            t2.scale(pw / pcw, ph / pch);
             pix.draw_general2d(
                 gl,
                 3,
-                [16.0 / 864.0, 96.0 / 512.0, 640.0 / 864.0, 400.0 / 512.0],
+                [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
                 &t2,
                 &c,
             );
         }
     }
 
+    // draw buffer to render texture...
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn render_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+    fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         let rbuf = self.buffer_to_render_buffer(buf);
-        // self.render_rbuf(&rbuf, rtidx, true);
-        self.render_rbuf(&rbuf, rtidx, false);
+        // For debug...
+        // self.draw_render_buffer(&rbuf, rtidx, true);
+        self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
     }
 
+    // draw render buffer to render texture...
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn render_rbuf(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
         let bs = self.get_base();
         let rx = bs.ratio_x;
         let ry = bs.ratio_y;
         if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
             pix.bind_target(gl, rtidx);
             if debug {
+                // set red background for debug...
                 pix.set_clear_color(GlColor::new(1.0, 0.0, 0.0, 1.0));
             } else {
                 pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
@@ -256,6 +264,7 @@ pub trait Adapter {
         }
     }
 
+    // buffer to render buffer...
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
@@ -271,12 +280,13 @@ pub trait Adapter {
                          symidx: usize| {
             push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
-        render_main_buffer(cb, cb.area.width, rx, ry, &mut rfunc);
+        render_main_buffer(cb, cb.area.width, rx, ry, true, &mut rfunc);
         rbuf
     }
 
+    // draw main buffer & pixel sprites to render buffer...
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    fn gen_render_buffer(
+    fn draw_all_to_render_buffer(
         &mut self,
         cb: &Buffer,
         _pb: &Buffer,
@@ -323,7 +333,7 @@ pub trait Adapter {
 
         // render main buffer...
         if stage > LOGO_FRAME {
-            render_main_buffer(cb, width, rx, ry, &mut rfunc);
+            render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
         }
 
         // render pixel_sprites...
@@ -518,7 +528,7 @@ where
 }
 
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, mut f: F)
+pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border: bool, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
 {
@@ -531,7 +541,7 @@ where
             i,
             &sh,
             PointU16 { x: 0, y: 0 },
-            false,
+            border,
         );
         let fc = sh.2.get_rgba();
         let bc = if sh.3 != Color::Reset {

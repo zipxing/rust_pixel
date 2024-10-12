@@ -77,14 +77,14 @@ impl Render for PetviewRender {
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
             if l1 {
                 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-                ctx.adapter.render_buffer_to_texture(&p1.content, 0);
+                ctx.adapter.draw_buffer_to_texture(&p1.content, 0);
             }
             let p2 = self.panel.get_pixel_sprite("petimg2");
             asset2sprite!(p2, ctx, &format!("{}.pix", model.img_next + 1));
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
             if l2 {
                 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-                ctx.adapter.render_buffer_to_texture(&p2.content, 1);
+                ctx.adapter.draw_buffer_to_texture(&p2.content, 1);
             }
             if l1 && l2 {
                 model.tex_ready = true;

@@ -91,7 +91,7 @@ impl Adapter for WebAdapter {
         false
     }
 
-    fn render_buffer(
+    fn draw_all_to_screen(
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
@@ -99,9 +99,10 @@ impl Adapter for WebAdapter {
         stage: u32,
     ) -> Result<(), String> {
         // render every thing to rbuf
-        let rbuf = self.gen_render_buffer(current_buffer, _p, pixel_sprites, stage);
+        let rbuf = self.draw_all_to_render_buffer(current_buffer, _p, pixel_sprites, stage);
+
         // draw main buffer & pixel_sprites to render_texture 2
-        self.render_rbuf(&rbuf, 2, false);
+        self.draw_render_buffer_to_texture(&rbuf, 2, false);
 
         self.main_render_pass();
 

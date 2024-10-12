@@ -113,14 +113,16 @@ impl Adapter for CrosstermAdapter {
             if let Some(et) = input_events_from_cross(&e) {
                 es.push(et);
             }
-            if let CEvent::Key(key) = e { if let CKeyCode::Char('q') = key.code {
-                return true;
-            } }
+            if let CEvent::Key(key) = e {
+                if let CKeyCode::Char('q') = key.code {
+                    return true;
+                }
+            }
         }
         false
     }
 
-    fn render_buffer(
+    fn draw_all_to_screen(
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,

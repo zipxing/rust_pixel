@@ -172,14 +172,14 @@ impl Panel {
             for idx in &self.render_index {
                 if !self.layers[idx.0].is_hidden {
                     self.layers[idx.0]
-                        .render_all(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                        .render_all_to_buffer(&mut ctx.asset_manager, &mut self.buffers[self.current]);
                 }
             }
         }
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];
         ctx.adapter
-            .render_buffer(cb, pb, &mut self.layers, ctx.stage)
+            .draw_all_to_screen(cb, pb, &mut self.layers, ctx.stage)
             .unwrap();
         ctx.adapter.hide_cursor().unwrap();
 
