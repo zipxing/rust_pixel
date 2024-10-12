@@ -10,7 +10,7 @@
 [docs.rs]: https://docs.rs/rust_pixel
 [MSRV]: https://img.shields.io/badge/rust-1.71+-brightgreen.svg?&logo=rust
 
-[Change Log]&nbsp;&nbsp; | &nbsp;&nbsp;[Principle]&nbsp;&nbsp; | &nbsp;&nbsp;[Coding]&nbsp;&nbsp; | &nbsp;&nbsp;[FAQ]&nbsp;&nbsp; | &nbsp;&nbsp;[TODO]
+[Change Log]&nbsp; | &nbsp;[Principle]&nbsp; | &nbsp;[Coding]&nbsp; | &nbsp;[FAQ]&nbsp; | &nbsp;[TODO]
 
 [Change Log]: doc/change.md
 [Principle]: doc/principle.md
