@@ -92,21 +92,16 @@ impl Render for PetviewRender {
             }
         }
         if event_check("PetView.Timer", "pet_timer") {
-            // info!("timer......{}", ctx.stage);
-            // let p1 = self.panel.get_pixel_sprite("petimg2");
-            
             let sa = ctx.adapter.get_base();
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
                 pix.bind_target(gl, 3);
                 if ctx.state == 0 {
-                    pix.render_trans_frame(&gl, 0, 864, 512, 1.0);
+                    pix.render_trans_frame(&gl, 0, 1.0);
                 } else {
                     pix.render_trans_frame(
                         &gl,
                         model.trans_effect,
-                        864,
-                        512,
                         model.progress,
                     );
                 }

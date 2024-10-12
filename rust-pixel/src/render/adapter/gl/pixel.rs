@@ -12,6 +12,7 @@ use crate::render::adapter::{
 use glow::HasContext;
 use log::info;
 
+// open gl shader wrapper...
 pub struct GlPixel {
     r_sym: GlRenderSymbols,
     r_g2d: GlRenderGeneral2d,
@@ -82,6 +83,7 @@ impl GlPixel {
         }
     }
 
+    // bind none for render to screen...
     pub fn bind_screen(&mut self, gl: &glow::Context) {
         unsafe {
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
@@ -149,13 +151,11 @@ impl GlPixel {
         &mut self,
         gl: &glow::Context,
         sidx: usize,
-        width: u32,
-        height: u32,
         progress: f32,
     ) {
         self.r_trans.set_texture(
-            width,
-            height,
+            self.canvas_width,
+            self.canvas_height,
             self.render_textures[0].texture,
             self.render_textures[1].texture,
         );
