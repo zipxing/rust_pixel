@@ -152,8 +152,9 @@ pub fn run() {
 ``` 
 
 ### Model and Render
-Model is an encapsulation of game data and status, and also implements most of the core logic other than rendering.
-Render renders based on game state data. 
+- `Model` is an encapsulation of game data and status, and also implements most of the core logic other than rendering.
+- `Render` renders based on game state data. 
+
 The traits of Model and Render are defined as follows:
 ```rust
 /// The Model interface, main entrance for data and core logic
