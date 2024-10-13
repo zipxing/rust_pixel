@@ -540,3 +540,4 @@ impl Render for BlockRender {
 - You should pay attention not to have too deep coupling between Render and Model.
 - `Event` is an effective decoupling tool.
 - The above code also demonstrates the usage of `objpool` and `timer`.
+- Mode details please refer to demo source and docs
