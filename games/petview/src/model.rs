@@ -12,14 +12,16 @@ pub const PETH: u16 = 30;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
-enum PetviewState {
+pub enum PetviewState {
     Normal,
-    Trans,
+    TransBuf,
+    TransGl,
 }
 
 pub struct PetviewModel {
     pub data: PetviewData,
     pub normal_stage: u32,
+    pub transbuf_stage: u32,
     pub img_cur: usize,
     pub img_next: usize,
     pub img_count: usize,
@@ -33,6 +35,7 @@ impl PetviewModel {
         Self {
             data: PetviewData::new(),
             normal_stage: 0,
+            transbuf_stage: 0,
             img_cur: 0,
             img_next: 1,
             img_count: 25,
@@ -70,13 +73,20 @@ impl Model for PetviewModel {
             PetviewState::Normal => {
                 self.normal_stage += 1;
                 if self.normal_stage > 100 {
-                    ctx.state = PetviewState::Trans as u8;
+                    ctx.state = PetviewState::TransBuf as u8;
+                    self.transbuf_stage = 0;
+                }
+            }
+            PetviewState::TransBuf => {
+                self.transbuf_stage += 1;
+                if self.transbuf_stage > 100 {
+                    ctx.state = PetviewState::TransGl as u8;
                     self.trans_effect = (ctx.rand.rand() % 7) as usize;
                     self.progress = 0.0;
                     self.tex_ready = false;
                 }
             }
-            PetviewState::Trans => {
+            PetviewState::TransGl => {
                 self.progress += 0.01;
                 if self.progress >= 1.0 {
                     ctx.state = PetviewState::Normal as u8;

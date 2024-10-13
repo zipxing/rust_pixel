@@ -109,6 +109,8 @@ pub struct AdapterBase {
     pub gl: Option<glow::Context>,
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub gl_pixel: Option<GlPixel>,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub draw_t3: bool,
 }
 
 impl AdapterBase {
@@ -129,6 +131,8 @@ impl AdapterBase {
             gl: None,
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             gl_pixel: None,
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            draw_t3: true,
         }
     }
 }
@@ -216,7 +220,8 @@ pub trait Adapter {
         stage: u32,
     ) {
         // render main_buffer & pixel_sprites to rbuf
-        let rbuf = self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
+        let rbuf =
+            self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
 
         // draw rbuf to render_texture 2
         self.draw_render_buffer_to_texture(&rbuf, 2, false);
@@ -238,20 +243,22 @@ pub trait Adapter {
             pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
 
             // draw render_texture 3 ( gl transition )
-            let pcw = pix.canvas_width as f32;
-            let pch = pix.canvas_height as f32;
-            let pw = 40.0 * PIXEL_SYM_WIDTH;
-            let ph = 25.0 * PIXEL_SYM_HEIGHT;
+            if bs.draw_t3 {
+                let pcw = pix.canvas_width as f32;
+                let pch = pix.canvas_height as f32;
+                let pw = 40.0 * PIXEL_SYM_WIDTH;
+                let ph = 25.0 * PIXEL_SYM_HEIGHT;
 
-            let mut t2 = GlTransform::new();
-            t2.scale(pw / pcw, ph / pch);
-            pix.draw_general2d(
-                gl,
-                3,
-                [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                &t2,
-                &c,
-            );
+                let mut t2 = GlTransform::new();
+                t2.scale(pw / pcw, ph / pch);
+                pix.draw_general2d(
+                    gl,
+                    3,
+                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
+                    &t2,
+                    &c,
+                );
+            }
         }
     }
 
