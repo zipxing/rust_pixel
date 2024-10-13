@@ -59,7 +59,7 @@ fn common_arg(app: App) -> App {
 
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
-        .version("0.4.0")
+        .version("0.5.0")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
@@ -269,6 +269,8 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
             "cp games/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml",
         );
         exec_cmd("cp games/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
+        exec_cmd("cp games/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
+        exec_cmd("cp games/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
         exec_cmd(
             "cp games/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml",
         );
@@ -460,7 +462,7 @@ fn check_pixel_toml() -> PixelContext {
         }
         if let Some(cargo_pixel) = pixel.get("cargo_pixel") {
             let cps = cargo_pixel.to_string();
-            if cps != "\"0.4.0\"" {
+            if cps != "\"0.5.0\"" {
                 panic!("Please update cargo pixel: cargo install --path tools/cargo-pixel --root ~/.cargo");
             }
         }
