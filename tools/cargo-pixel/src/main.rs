@@ -165,16 +165,16 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             cmds.push(format!("mkdir -p {}", tmpwd));
             cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
             cmds.push(format!(
-                    "cp {}/rust-pixel/web-templates/* {}",
-                    ctx.rust_pixel_path, tmpwd
+                "cp {}/rust-pixel/web-templates/* {}",
+                ctx.rust_pixel_path, tmpwd
             ));
             cmds.push(format!(
-                    "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
-                    capname, tmpwd
+                "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
+                capname, tmpwd
             ));
             cmds.push(format!(
-                    "sed -i '' \"s/pixel/{}/g\" {}/index.js",
-                    loname, tmpwd
+                "sed -i '' \"s/pixel/{}/g\" {}/index.js",
+                loname, tmpwd
             ));
             cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
             if subcmd == "run" {
@@ -299,8 +299,15 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
                         loname,
                     );
                 } else if path.is_file() {
+                    let fname = path.file_name().and_then(OsStr::to_str);
                     let ext = path.extension().and_then(OsStr::to_str);
-                    if ext == Some("rs") || ext == Some("toml") {
+                    if ext == Some("rs")
+                        || ext == Some("toml")
+                        || fname == Some("Makefile")
+                        || fname == Some("index.js")
+                        || fname == Some("test.cc")
+                        || fname == Some("testffi.py")
+                    {
                         let content = fs::read(&path).unwrap();
                         let mut content_str = String::from_utf8_lossy(&content).to_string();
                         if !is_standalone {

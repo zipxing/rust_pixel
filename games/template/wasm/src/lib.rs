@@ -1,6 +1,6 @@
 use template_lib::TemplateData;
 use wasm_bindgen::prelude::*;
-use web_sys::js_sys;
+// use web_sys::js_sys;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct WasmTemplate {
