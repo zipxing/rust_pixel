@@ -1,7 +1,7 @@
 [Readme]: ../README.md
 [Principle]: principle.md
 
-Please read the [Readme] first and install `rust_pixel` then read the [Principle] to understand the basic concepts
+Before coding, please read the [Readme] first and install `rust_pixel` then read the [Principle] to understand the basic concepts
 
 ### Create new project
 - Create game or terminal-app use cargo-pixel tool:
