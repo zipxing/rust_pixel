@@ -435,13 +435,9 @@ fn push_render_buffer(
 fn render_helper(
     cell_w: u16,
     r: PointF32,
-    // rx: f32,
-    // ry: f32,
     i: usize,
     sh: &(u8, u8, Color, Color),
     p: PointU16,
-    // px: u16,
-    // py: u16,
     is_border: bool,
 ) -> (ARect, ARect, ARect, usize, usize) {
     let w = PIXEL_SYM_WIDTH as i32;
@@ -452,8 +448,6 @@ fn render_helper(
     let tx = if sh.1 < tex_count { sh.1 as usize } else { 1 };
     let srcy = sh.0 as u32 / w as u32 + (tx as u32 / 2u32) * w as u32;
     let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
-    // let bsrcy = 160u32 / w as u32 + (1u32 / 2u32) * w as u32;
-    // let bsrcx = 160u32 % w as u32 + (1u32 % 2u32) * w as u32;
     let bsrcy = 160u32 / w as u32;
     let bsrcx = 160u32 % w as u32 + w as u32;
 
