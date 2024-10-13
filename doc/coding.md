@@ -154,6 +154,8 @@ pub fn run() {
 ### Model and Render
 - `Model` is an encapsulation of game data and status, and also implements most of the core logic other than rendering.
 - `Render` renders based on game state data. 
+- Usually, `Model` and `Render` are defined in model.rs and render.rs
+- In particular, in order to further encapsulate it for `ffi` or `wasm`, the core game logic and algorithm are usually further encapsulated in the `lib` module(block/lib/src/lib.rs). 
 
 The traits of Model and Render are defined as follows:
 ```rust
@@ -202,22 +204,77 @@ pub trait Render {
 
 The actual Model code reference is as follows:
 ```rust
+use keyframe::{functions::*, AnimationSequence};
+use rust_pixel::{
+    algorithm::draw_bezier_curves,
+    context::Context,
+    event::{event_emit, Event, KeyCode},
+    game::Model,
+    util::{ParticleSystem, ParticleSystemInfo, PointF32},
+};
+// use log::info;
+use std::f64::consts::PI;
+use block_lib::BlockData;
+
+pub const CARDW: usize = 7;
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+pub const CARDH: usize = 7;
+#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+pub const CARDH: usize = 5;
+pub const BLOCKW: u16 = 80;
+pub const BLOCKH: u16 = 40;
+
 #[repr(u8)]
 enum BlockState {
     Normal,
 }
 
 pub struct BlockModel {
+    // BlockData defined in block/lib/src/lib.rs
     pub data: BlockData,
+    pub pats: ParticleSystem,
     pub bezier: AnimationSequence<PointF32>,
+    pub count: f64,
     pub card: u8,
 }
 
 impl BlockModel {
     pub fn new() -> Self {
+        let particle_system_info = ParticleSystemInfo {
+            emission_rate: 100.0,
+            lifetime: -1.0,
+            particle_life_min: 1.0,
+            particle_life_max: 2.0,
+            direction: PI / 2.0,
+            spread: PI / 4.0,
+            relative: false,
+            speed_min: 50.0,
+            speed_max: 100.0,
+            g_min: 9.0,
+            g_max: 10.0,
+            rad_a_min: 3.0,
+            rad_a_max: 5.0,
+            tan_a_min: 1.0,
+            tan_a_max: 5.0,
+            size_start: 1.0,
+            size_end: 5.0,
+            size_var: 1.0,
+            spin_start: 1.0,
+            spin_end: 5.0,
+            spin_var: 1.0,
+            color_start: [0.0, 0.0, 0.0, 0.0],
+            color_end: [1.0, 1.0, 1.0, 1.0],
+            color_var: 0.1,
+            alpha_var: 1.0,
+        };
+        // create particle system
+        let pats = ParticleSystem::new(particle_system_info);
+
         Self {
+            pats,
             data: BlockData::new(),
             bezier: AnimationSequence::new(),
+            count: 0.0,
             card: 0,
         }
     }
@@ -246,11 +303,17 @@ impl Model for BlockModel {
 
         for i in 0..num {
             ks.push((pts[i], i as f64 / num as f64, EaseIn).into());
+            // ks.push((pts[i], i as f64 / num as f64).into());
         }
 
         self.bezier = AnimationSequence::from(ks);
         self.data.shuffle();
         self.card = self.data.next();
+
+        // Fire particle system...
+        self.pats.fire_at(10.0, 10.0);
+
+        // Emit event...
         event_emit("Block.RedrawTile");
     }
 
@@ -262,10 +325,12 @@ impl Model for BlockModel {
                     KeyCode::Char('s') => {
                         self.data.shuffle();
                         self.card = self.data.next();
+                        // Emit event...
                         event_emit("Block.RedrawTile");
                     }
                     KeyCode::Char('n') => {
                         self.card = self.data.next();
+                        // Emit event...
                         event_emit("Block.RedrawTile");
                     }
                     _ => {
@@ -278,7 +343,16 @@ impl Model for BlockModel {
         context.input_events.clear();
     }
 
-    fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
+    fn handle_auto(&mut self, _context: &mut Context, dt: f32) {
+        self.pats.update(dt as f64);
+        self.count += 1.0;
+        if self.count > 200.0 {
+            self.count = 0.0f64;
+        }
+        self.pats
+            .move_to(10.0 + 2.0 * self.count, 10.0 + 2.0 * self.count, false);
+    }
+
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
 }
@@ -286,6 +360,21 @@ impl Model for BlockModel {
 
 The actual Render code reference is as follows:
 ```rust
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+use crate::model::{BlockModel, CARDH, CARDW, BLOCKH, BLOCKW};
+// use log::info;
+use rust_pixel::{
+    asset::AssetType,
+    asset2sprite,
+    context::Context,
+    event::{event_check, event_register, timer_fire, timer_register},
+    game::{Model, Render},
+    render::panel::Panel,
+    render::sprite::Sprite,
+    render::style::Color,
+};
+
 pub struct BlockRender {
     pub panel: Panel,
 }
@@ -324,10 +413,37 @@ impl BlockRender {
         msg2.set_default_str("press S shuffle cards");
         panel.add_sprite(msg2, "msg2");
 
+        panel.add_sprite(
+            Sprite::new(0, (BLOCKH - 3) as u16, BLOCKW as u16, 1u16),
+            "TIMER-MSG",
+        );
+
         // register Block.RedrawTile event, associated draw_tile method
         event_register("Block.RedrawTile", "draw_tile");
 
+        // register a timer, then fire it...
+        timer_register("Block.TestTimer", 0.1, "test_timer");
+        timer_fire("Block.TestTimer", 0);
+
         Self { panel }
+    }
+
+    // create sprites for particles...
+    // objpool can also be used to manage drawing other objects
+    pub fn create_sprites(&mut self, _ctx: &mut Context, d: &mut BlockModel) {
+        // create objpool sprites and init 
+        self.panel
+            .creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
+                bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
+            });
+    }
+
+    // draw particles
+    pub fn draw_movie(&mut self, _ctx: &mut Context, d: &mut BlockModel) {
+        // draw objects
+        self.panel.draw_objpool(&mut d.pats.particles, |pl, m| {
+            pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
+        });
     }
 
     pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut BlockModel) {
@@ -336,19 +452,15 @@ impl BlockRender {
         // make asset identifier...
         // in graphics mode, poker card asset file named n.pix
         // in text mode, poker card asset file named n.txt
-        // 
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let ext = "pix";
-
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         let ext = "txt";
-
         let cn = if d.card == 0 {
             format!("poker/back.{}", ext)
         } else {
             format!("poker/{}.{}", d.card, ext)
         };
-
         // set sprite content by asset identifier...
         asset2sprite!(l, ctx, &cn);
 
@@ -360,10 +472,11 @@ impl BlockRender {
 impl Render for BlockRender {
     type Model = BlockModel;
 
-    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
+    fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context
             .adapter
             .init(BLOCKW + 2, BLOCKH, 1.0, 1.0, "block".to_string());
+        self.create_sprites(context, data);
         self.panel.init(context);
 
         // set a static back img for text mode...
@@ -381,9 +494,22 @@ impl Render for BlockRender {
         }
     }
 
-    fn handle_timer(&mut self, _context: &mut Context, d: &mut Self::Model, _dt: f32) {}
+    fn handle_timer(&mut self, context: &mut Context, d: &mut Self::Model, _dt: f32) {
+        if event_check("Block.TestTimer", "test_timer") {
+            let ml = self.panel.get_sprite("TIMER-MSG");
+            ml.set_color_str(
+                (context.stage / 6) as u16 % BLOCKW as u16,
+                0,
+                "Block",
+                Color::Yellow,
+                Color::Reset,
+            );
+            timer_fire("Block.TestTimer", 0);
+        }
+    }
 
     fn draw(&mut self, ctx: &mut Context, d: &mut Self::Model, dt: f32) {
+        // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
             // set a animate background for graphic mode...
@@ -403,10 +529,14 @@ impl Render for BlockRender {
                 d.bezier.advance_and_maybe_reverse(-0.01 * i as f64);
             }
         }
+        self.draw_movie(ctx, d);
 
         // draw all compents in panel...
         self.panel.draw(ctx).unwrap();
     }
 }
 ```
-You should pay attention not to have too deep coupling between Render and Model.
+
+- You should pay attention not to have too deep coupling between Render and Model.
+- `Event` is an effective decoupling tool.
+- The above code also demonstrates the usage of `objpool` and `timer`.

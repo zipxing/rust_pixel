@@ -6,7 +6,7 @@ use rust_pixel::{
     asset::AssetType,
     asset2sprite,
     context::Context,
-    event::{event_check, event_register},
+    event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
     render::panel::Panel,
     render::sprite::Sprite,
@@ -21,12 +21,15 @@ impl TemplateRender {
     pub fn new() -> Self {
         let mut panel = Panel::new();
 
-        // Test pixel sprite in graphic mode...
+        // use cfg attribute to differentiate between graphics and text modes
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
+            // create pixel sprites in graphic mode...
             for i in 0..15 {
                 let mut pl = Sprite::new(4, 6, 1, 1);
+                // Use set_graph_sym set char content in graphics mode
                 pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(14));
+                // Alpha only support in graphics mode
                 pl.set_alpha(255 - 15 * (15 - i));
                 panel.add_pixel_sprite(pl, &format!("PL{}", i + 1));
             }
@@ -34,11 +37,12 @@ impl TemplateRender {
 
         // background...
         let mut gb = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
+        // Alpha only support in graphics mode
         gb.set_alpha(30);
         panel.add_sprite(gb, "back");
         panel.add_sprite(Sprite::new(0, 0, CARDW as u16, CARDH as u16), "t0");
 
-        // msg...
+        // msg, work on both text and graphics mode...
         let adj = 2u16;
         let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
         msg1.set_default_str("press N for next card");
@@ -47,15 +51,45 @@ impl TemplateRender {
         msg2.set_default_str("press S shuffle cards");
         panel.add_sprite(msg2, "msg2");
 
+        panel.add_sprite(
+            Sprite::new(0, (TEMPLATEH - 3) as u16, TEMPLATEW as u16, 1u16),
+            "TIMER-MSG",
+        );
+
+        // register Block.RedrawTile event, associated draw_tile method
         event_register("Template.RedrawTile", "draw_tile");
 
+        // register a timer, then fire it...
+        timer_register("Template.TestTimer", 0.1, "test_timer");
+        timer_fire("Template.TestTimer", 0);
+
         Self { panel }
+    }
+
+    // create sprites for particles...
+    // objpool can also be used to manage drawing other objects
+    pub fn create_sprites(&mut self, _ctx: &mut Context, d: &mut TemplateModel) {
+        // create objpool sprites and init 
+        self.panel
+            .creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
+                bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
+            });
+    }
+
+    // draw particles
+    pub fn draw_movie(&mut self, _ctx: &mut Context, d: &mut TemplateModel) {
+        // draw objects
+        self.panel.draw_objpool(&mut d.pats.particles, |pl, m| {
+            pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
+        });
     }
 
     pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut TemplateModel) {
         let l = self.panel.get_sprite("t0");
 
         // make asset identifier...
+        // in graphics mode, poker card asset file named n.pix
+        // in text mode, poker card asset file named n.txt
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         let ext = "pix";
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
@@ -76,10 +110,11 @@ impl TemplateRender {
 impl Render for TemplateRender {
     type Model = TemplateModel;
 
-    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
+    fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context
             .adapter
             .init(TEMPLATEW + 2, TEMPLATEH, 1.0, 1.0, "template".to_string());
+        self.create_sprites(context, data);
         self.panel.init(context);
 
         // set a static back img for text mode...
@@ -91,19 +126,36 @@ impl Render for TemplateRender {
     }
 
     fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
+        // if a Block.RedrawTile event checked, call draw_tile function...
         if event_check("Template.RedrawTile", "draw_tile") {
             self.draw_tile(context, data);
         }
     }
 
-    fn handle_timer(&mut self, _context: &mut Context, d: &mut Self::Model, _dt: f32) {}
+    fn handle_timer(&mut self, context: &mut Context, d: &mut Self::Model, _dt: f32) {
+        if event_check("Template.TestTimer", "test_timer") {
+            let ml = self.panel.get_sprite("TIMER-MSG");
+            ml.set_color_str(
+                (context.stage / 6) as u16 % TEMPLATEW as u16,
+                0,
+                "Template",
+                Color::Yellow,
+                Color::Reset,
+            );
+            timer_fire("Template.TestTimer", 0);
+        }
+    }
 
     fn draw(&mut self, ctx: &mut Context, d: &mut Self::Model, dt: f32) {
         // set a animate back img for graphic mode...
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         {
+            // set a animate background for graphic mode...
+            // asset file is 1.ssf
             let ss = &mut self.panel.get_sprite("back");
             asset2sprite!(ss, ctx, "1.ssf", (ctx.stage / 3) as usize, 40, 1);
+
+            // set a bezier animation for graphic mode...
             for i in 0..15 {
                 let pl = &mut self.panel.get_pixel_sprite(&format!("PL{}", i + 1));
                 d.bezier
@@ -115,7 +167,9 @@ impl Render for TemplateRender {
                 d.bezier.advance_and_maybe_reverse(-0.01 * i as f64);
             }
         }
+        self.draw_movie(ctx, d);
 
+        // draw all compents in panel...
         self.panel.draw(ctx).unwrap();
     }
 }

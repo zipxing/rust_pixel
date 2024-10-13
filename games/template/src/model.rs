@@ -1,8 +1,13 @@
 use keyframe::{functions::*, AnimationSequence};
-use rust_pixel::event::{Event, KeyCode};
-use rust_pixel::util::PointF32;
+use rust_pixel::{
+    algorithm::draw_bezier_curves,
+    context::Context,
+    event::{event_emit, Event, KeyCode},
+    game::Model,
+    util::{ParticleSystem, ParticleSystemInfo, PointF32},
+};
 // use log::info;
-use rust_pixel::{algorithm::draw_bezier_curves, context::Context, event::event_emit, game::Model};
+use std::f64::consts::PI;
 use template_lib::TemplateData;
 
 pub const CARDW: usize = 7;
@@ -19,16 +24,51 @@ enum TemplateState {
 }
 
 pub struct TemplateModel {
+    // TemplateData defined in template/lib/src/lib.rs
     pub data: TemplateData,
+    pub pats: ParticleSystem,
     pub bezier: AnimationSequence<PointF32>,
+    pub count: f64,
     pub card: u8,
 }
 
 impl TemplateModel {
     pub fn new() -> Self {
+        let particle_system_info = ParticleSystemInfo {
+            emission_rate: 100.0,
+            lifetime: -1.0,
+            particle_life_min: 1.0,
+            particle_life_max: 2.0,
+            direction: PI / 2.0,
+            spread: PI / 4.0,
+            relative: false,
+            speed_min: 50.0,
+            speed_max: 100.0,
+            g_min: 9.0,
+            g_max: 10.0,
+            rad_a_min: 3.0,
+            rad_a_max: 5.0,
+            tan_a_min: 1.0,
+            tan_a_max: 5.0,
+            size_start: 1.0,
+            size_end: 5.0,
+            size_var: 1.0,
+            spin_start: 1.0,
+            spin_end: 5.0,
+            spin_var: 1.0,
+            color_start: [0.0, 0.0, 0.0, 0.0],
+            color_end: [1.0, 1.0, 1.0, 1.0],
+            color_var: 0.1,
+            alpha_var: 1.0,
+        };
+        // create particle system
+        let pats = ParticleSystem::new(particle_system_info);
+
         Self {
+            pats,
             data: TemplateData::new(),
             bezier: AnimationSequence::new(),
+            count: 0.0,
             card: 0,
         }
     }
@@ -63,6 +103,11 @@ impl Model for TemplateModel {
         self.bezier = AnimationSequence::from(ks);
         self.data.shuffle();
         self.card = self.data.next();
+
+        // Fire particle system...
+        self.pats.fire_at(10.0, 10.0);
+
+        // Emit event...
         event_emit("Template.RedrawTile");
     }
 
@@ -74,10 +119,12 @@ impl Model for TemplateModel {
                     KeyCode::Char('s') => {
                         self.data.shuffle();
                         self.card = self.data.next();
+                        // Emit event...
                         event_emit("Template.RedrawTile");
                     }
                     KeyCode::Char('n') => {
                         self.card = self.data.next();
+                        // Emit event...
                         event_emit("Template.RedrawTile");
                     }
                     _ => {
@@ -90,7 +137,16 @@ impl Model for TemplateModel {
         context.input_events.clear();
     }
 
-    fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
+    fn handle_auto(&mut self, _context: &mut Context, dt: f32) {
+        self.pats.update(dt as f64);
+        self.count += 1.0;
+        if self.count > 200.0 {
+            self.count = 0.0f64;
+        }
+        self.pats
+            .move_to(10.0 + 2.0 * self.count, 10.0 + 2.0 * self.count, false);
+    }
+
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
 }
