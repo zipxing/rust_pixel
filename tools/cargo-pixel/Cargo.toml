@@ -1,6 +1,6 @@
 [package]
 name = "cargo-pixel"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["<zipxing@hotmail.com>"]
 edition = "2021"
 
