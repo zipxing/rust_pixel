@@ -164,13 +164,10 @@ impl Render for PetviewRender {
                         pix.set_render_texture_hidden(3, true);
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         let cclen = p3.content.content.len();
-                        for i in 0..10 {
-                            let idx = ctx.rand.rand() as usize % cclen;
-                            p3.content.content[idx].fg =
-                                Color::Rgba((model.transbuf_stage % 255) as u8, 255, 255, 255);
-                            p3.content.content[idx].bg =
-                                Color::Rgba((model.transbuf_stage % 255) as u8, 255, 255, 255);
-                        }
+                        let distortion_fn = |u: f32, v: f32| wave_distortion(u, v, model.transbuf_stage as f32 / 100.0, 0.05, 10.0);
+                        let mut tbuf = p3.content.clone();
+                        apply_distortion(&p3.content, &mut tbuf, &distortion_fn);
+                        p3.content = tbuf.clone();
                         p3.set_hidden(false);
                     }
                     PetviewState::TransGl => {
