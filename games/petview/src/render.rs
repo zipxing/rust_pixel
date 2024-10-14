@@ -205,6 +205,7 @@ impl Render for PetviewRender {
 
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         p3.content = tbuf.clone();
+                        p3.set_alpha(((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8);
                         p3.set_hidden(false);
                     }
                     PetviewState::TransGl => {
