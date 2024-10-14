@@ -10,7 +10,9 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    render::{adapter::Adapter, buffer::Buffer, panel::Panel, sprite::Sprite, style::Color},
+    render::{
+        adapter::Adapter, buffer::Buffer, cell::cellsym, panel::Panel, sprite::Sprite, style::Color,
+    },
 };
 
 use std::fmt::Write;
@@ -24,6 +26,20 @@ fn wave_distortion(x: f32, y: f32, time: f32, amplitude: f32, frequency: f32) ->
     let offset_y = y;
     (offset_x, offset_y)
 }
+
+fn ripple_distortion(u: f32, v: f32, time: f32, amplitude: f32, frequency: f32) -> (f32, f32) {
+    let cx = 0.5;
+    let cy = 0.5;
+    let dx = u - cx;
+    let dy = v - cy;
+    let distance = (dx * dx + dy * dy).sqrt();
+
+    let offset = amplitude * (frequency * distance - time).sin();
+    let du = u + (dx / distance) * offset;
+    let dv = v + (dy / distance) * offset;
+    (du, dv)
+}
+
 
 fn apply_distortion(
     src_buffer: &Buffer,
@@ -86,15 +102,19 @@ impl PetviewRender {
         p3.set_hidden(true);
         panel.add_pixel_sprite(p3, "petimg3");
 
-        let mut p4 = Sprite::new(160u16, 450u16, PIXW, 1u16);
-        p4.set_color_str(
+        let mut p4 = Sprite::new(96, 40, PIXW, PIXH);
+        p4.set_hidden(true);
+        panel.add_pixel_sprite(p4, "petimg4");
+
+        let mut p5 = Sprite::new(160u16, 450u16, PIXW, 1u16);
+        p5.set_color_str(
             1,
             0,
             "RustPixel - x.com/PETSCIIWORLD",
             Color::Rgba(0, 205, 0, 255),
             Color::Reset,
         );
-        panel.add_pixel_sprite(p4, "pet-msg");
+        panel.add_pixel_sprite(p5, "pet-msg");
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
@@ -143,6 +163,10 @@ impl Render for PetviewRender {
             asset2sprite!(p3, ctx, &format!("{}.pix", model.img_next + 1));
             p3.set_hidden(true);
 
+            let p4 = self.panel.get_pixel_sprite("petimg4");
+            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_next + 1));
+            p4.set_hidden(true);
+
             if l1 && l2 {
                 model.tex_ready = true;
                 info!("tex_ready.........");
@@ -162,11 +186,24 @@ impl Render for PetviewRender {
                     }
                     PetviewState::TransBuf => {
                         pix.set_render_texture_hidden(3, true);
+                        let p4 = self.panel.get_pixel_sprite("petimg4");
+                        let time = (ctx.rand.rand() % 300) as f32 / 100.0;
+                        let distortion_fn1 =
+                            |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
+                        let mut tbuf = p4.content.clone();
+                        let clen = tbuf.content.len();
+                        apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
+                        let distortion_fn2 =
+                            |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
+                        apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
+
+                        for _ in 0..model.transbuf_stage {
+                            tbuf.content[ctx.rand.rand() as usize % clen]
+                                .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
+                                .set_fg(Color::Rgba(155,155,155,155));
+                        }
+
                         let p3 = self.panel.get_pixel_sprite("petimg3");
-                        let cclen = p3.content.content.len();
-                        let distortion_fn = |u: f32, v: f32| wave_distortion(u, v, model.transbuf_stage as f32 / 100.0, 0.05, 10.0);
-                        let mut tbuf = p3.content.clone();
-                        apply_distortion(&p3.content, &mut tbuf, &distortion_fn);
                         p3.content = tbuf.clone();
                         p3.set_hidden(false);
                     }

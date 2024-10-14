@@ -79,7 +79,7 @@ impl Model for PetviewModel {
             }
             PetviewState::TransBuf => {
                 self.transbuf_stage += 1;
-                if self.transbuf_stage > 100 {
+                if self.transbuf_stage > 40 {
                     ctx.state = PetviewState::TransGl as u8;
                     self.trans_effect = (ctx.rand.rand() % 7) as usize;
                     self.progress = 0.0;
