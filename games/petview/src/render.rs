@@ -4,17 +4,13 @@ use crate::model::{PetviewModel, PetviewState, PETH, PETW};
 use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use rust_pixel::render::adapter::Adapter;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
-    // render::adapter::sdl::SdlAdapter,
-    render::panel::Panel,
-    render::sprite::Sprite,
-    render::style::Color,
+    render::{adapter::Adapter, buffer::Buffer, panel::Panel, sprite::Sprite, style::Color},
 };
 
 use std::fmt::Write;
@@ -22,6 +18,53 @@ use std::io::Cursor;
 
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
+
+fn wave_distortion(x: f32, y: f32, time: f32, amplitude: f32, frequency: f32) -> (f32, f32) {
+    let offset_x = x + amplitude * (frequency * y + time).sin();
+    let offset_y = y;
+    (offset_x, offset_y)
+}
+
+fn apply_distortion(
+    src_buffer: &Buffer,
+    dest_buffer: &mut Buffer,
+    distortion_fn: &dyn Fn(f32, f32) -> (f32, f32),
+) {
+    let width = src_buffer.area.width as i32;
+    let height = src_buffer.area.height as i32;
+
+    for y in 0..height {
+        for x in 0..width {
+            // 计算归一化坐标（0.0 到 1.0）
+            let u = x as f32 / width as f32;
+            let v = y as f32 / height as f32;
+
+            // 应用扭曲函数
+            let (du, dv) = distortion_fn(u, v);
+
+            // 将归一化的源坐标转换为实际坐标
+            let src_x = (du * width as f32).round() as i32;
+            let src_y = (dv * height as f32).round() as i32;
+
+            // 边界处理
+            let src_x = src_x.clamp(0, width - 1);
+            let src_y = src_y.clamp(0, height - 1);
+
+            // 计算索引
+            let src_index = (src_y * width + src_x) as usize;
+            let dest_index = (y * width + x) as usize;
+
+            if let (Some(src_cell), Some(dest_cell)) = (
+                src_buffer.content.get(src_index),
+                dest_buffer.content.get_mut(dest_index),
+            ) {
+                // 复制源 Cell 到目标 Cell
+                *dest_cell = src_cell.clone();
+                // 如果需要，可以更新 dest_cell 的其他属性
+            }
+        }
+    }
+}
 
 pub struct PetviewRender {
     pub panel: Panel,
