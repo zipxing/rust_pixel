@@ -62,12 +62,11 @@ impl GlPixel {
 
         // create 4 render texture for gl transition...
         let mut render_textures = vec![];
+        let rt_hidden = [true, true, false, false];
         for i in 0..4 {
-            // let w = if i == 2 { canvas_width as u32 } else { 40 * 16 };
-            // let h = if i == 2 { canvas_height as u32 } else { 25 * 16 };
             let w = canvas_width as u32;
             let h = canvas_height as u32;
-            let rt = GlRenderTexture::new(gl, w, h).unwrap();
+            let rt = GlRenderTexture::new(gl, w, h, rt_hidden[i]).unwrap();
             info!("rt...{:?}", rt.texture);
             render_textures.push(rt);
         }
@@ -118,6 +117,14 @@ impl GlPixel {
             );
             gl.clear(glow::COLOR_BUFFER_BIT);
         }
+    }
+
+    pub fn get_render_texture_hidden(&mut self, rtidx: usize) -> bool {
+        self.render_textures[rtidx].is_hidden
+    }
+
+    pub fn set_render_texture_hidden(&mut self, rtidx: usize, h: bool) {
+        self.render_textures[rtidx].is_hidden = h;
     }
 
     pub fn draw_general2d(

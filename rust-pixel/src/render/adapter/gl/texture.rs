@@ -11,10 +11,11 @@ pub struct GlRenderTexture {
     pub texture: glow::Texture,
     pub width: u32,
     pub height: u32,
+    pub is_hidden: bool,
 }
 
 impl GlRenderTexture {
-    pub fn new(gl: &glow::Context, width: u32, height: u32) -> Result<Self, String> {
+    pub fn new(gl: &glow::Context, width: u32, height: u32, is_hidden: bool) -> Result<Self, String> {
         unsafe {
             let framebuffer = gl.create_framebuffer()?;
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
@@ -65,6 +66,7 @@ impl GlRenderTexture {
                 texture,
                 width,
                 height,
+                is_hidden,
             })
         }
     }

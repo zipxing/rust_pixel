@@ -109,8 +109,6 @@ pub struct AdapterBase {
     pub gl: Option<glow::Context>,
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub gl_pixel: Option<GlPixel>,
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-    pub draw_t3: bool,
 }
 
 impl AdapterBase {
@@ -131,8 +129,6 @@ impl AdapterBase {
             gl: None,
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             gl_pixel: None,
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-            draw_t3: true,
         }
     }
 }
@@ -236,14 +232,16 @@ pub trait Adapter {
 
         if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
             pix.bind_screen(gl);
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
 
             // draw render_texture 2 ( main buffer )
-            let t = GlTransform::new();
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-            pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+            if !pix.get_render_texture_hidden(2) {
+                let t = GlTransform::new();
+                pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+            }
 
             // draw render_texture 3 ( gl transition )
-            if bs.draw_t3 {
+            if !pix.get_render_texture_hidden(3) {
                 let pcw = pix.canvas_width as f32;
                 let pch = pix.canvas_height as f32;
                 let pw = 40.0 * PIXEL_SYM_WIDTH;

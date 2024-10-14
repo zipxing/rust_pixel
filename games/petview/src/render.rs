@@ -79,7 +79,9 @@ impl Render for PetviewRender {
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         if !model.tex_ready {
-            ctx.adapter.get_base().draw_t3 = true;
+            if let Some(pix) = &mut ctx.adapter.get_base().gl_pixel {
+                pix.set_render_texture_hidden(3, false);
+            }
             let p1 = self.panel.get_pixel_sprite("petimg1");
             asset2sprite!(p1, ctx, &format!("{}.pix", model.img_cur + 1));
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
@@ -110,13 +112,13 @@ impl Render for PetviewRender {
                 pix.bind_target(gl, 3);
                 match PetviewState::from_usize(ctx.state as usize).unwrap() {
                     PetviewState::Normal => {
-                        sa.draw_t3 = true;
+                        pix.set_render_texture_hidden(3, false);
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         p3.set_hidden(true);
                         pix.render_trans_frame(&gl, 0, 1.0);
                     }
                     PetviewState::TransBuf => {
-                        sa.draw_t3 = false;
+                        pix.set_render_texture_hidden(3, true);
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         let cclen = p3.content.content.len();
                         for i in 0..10 {
@@ -129,7 +131,7 @@ impl Render for PetviewRender {
                         p3.set_hidden(false);
                     }
                     PetviewState::TransGl => {
-                        sa.draw_t3 = true;
+                        pix.set_render_texture_hidden(3, false);
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         p3.set_hidden(true);
                         pix.render_trans_frame(&gl, model.trans_effect, model.progress);
