@@ -3,6 +3,12 @@ name = "cargo-pixel"
 version = "0.5.1"
 authors = ["<zipxing@hotmail.com>"]
 edition = "2021"
+repository = "https://github.com/zipxing/rust_pixel"
+readme = "../README.md"
+license = "Apache-2.0"
+description = "2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web..."
+categories = ["game-engines", "gui", "graphics"] # https://crates.io/category_slugs
+
 
 [dependencies]
 clap = { version = "3.2", features = ["derive"] }
