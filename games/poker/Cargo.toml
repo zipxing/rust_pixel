@@ -24,7 +24,7 @@ web-sys = "0.3.4"
 rust_pixel = { path = "../../rust-pixel", default-features = false }
 poker_lib = { path = "./lib" }
 texas_lib = { path = "./texas" }
-pixel_macro = { path = "../../pixel_macro" }
+# pixel_macro = { path = "../../pixel_macro" }
 
 [features]
 web = ["rust_pixel/web"]

@@ -74,3 +74,6 @@ pub mod log;
 /// in graphics mode.
 #[cfg(not(feature = "base"))]
 pub mod render;
+
+// proc macro for pixel_game!
+pub use pixel_macro;

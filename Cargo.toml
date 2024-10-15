@@ -16,7 +16,7 @@ members = [
     'rust-pixel',
     'tools/*',
     'games/*',
-    'apps/*', "pixel_macro",
+    'apps/*', 
 ]
 resolver = '2'
 

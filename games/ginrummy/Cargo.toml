@@ -19,7 +19,7 @@ web-sys = "0.3.4"
 rust_pixel = { path = "../../rust-pixel", default-features = false }
 poker_lib = { path = "../poker/lib" }
 ginrummy_lib = { path = "./lib" }
-pixel_macro = { path = "../../pixel_macro" }
+# pixel_macro = { path = "../../pixel_macro" }
 
 [features]
 sdl = ["rust_pixel/sdl"]

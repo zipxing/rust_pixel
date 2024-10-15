@@ -24,7 +24,7 @@ web-sys = "0.3.4"
 wasm-logger = "0.2.0"
 rust_pixel = { path = "../../rust-pixel", default-features = false }
 tower_lib = { path = "./lib" }
-pixel_macro = { path = "../../pixel_macro" }
+# pixel_macro = { path = "../../pixel_macro" }
 
 [features]
 sdl = ["rust_pixel/sdl"]
