@@ -11,7 +11,7 @@ use crate::render::adapter::gl::{
 };
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
-use log::info;
+// use log::info;
 
 pub struct GlRenderSymbols {
     pub base: GlRenderBase,
@@ -316,14 +316,20 @@ impl GlRenderSymbols {
         // info!("ratiox....{} ratioy....{}", ratio_x, ratio_y);
         for r in rbuf {
             let mut transform = GlTransform::new();
-            transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH / 2.0, r.y + r.cy - PIXEL_SYM_HEIGHT / 2.0);
-            // transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH , r.y + r.cy - PIXEL_SYM_HEIGHT );
+
+            // 1.0:0.0 0.5:8.0 2.0:-4.0 0.25:24.0
+            transform.translate(
+                r.x + r.cx - PIXEL_SYM_WIDTH / ratio_x + PIXEL_SYM_WIDTH / ratio_x
+                    - PIXEL_SYM_WIDTH,
+                r.y + r.cy - PIXEL_SYM_HEIGHT / ratio_y + PIXEL_SYM_HEIGHT / ratio_y
+                    - PIXEL_SYM_HEIGHT,
+            );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + PIXEL_SYM_WIDTH / 2.0,
-                -r.cy + PIXEL_SYM_HEIGHT / 2.0,
+                -r.cx + PIXEL_SYM_WIDTH / ratio_x,
+                -r.cy + PIXEL_SYM_HEIGHT / ratio_y,
             );
             transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
 
@@ -350,7 +356,6 @@ impl GlRenderSymbols {
         let uv_top = y / tex_height;
         let uv_width = PIXEL_SYM_WIDTH / tex_width;
         let uv_height = PIXEL_SYM_HEIGHT / tex_height;
-        info!("xxx{} {} {} {}", PIXEL_SYM_WIDTH, PIXEL_SYM_HEIGHT, tex_width, tex_height);
 
         GlCell {
             texture: sheet.texture,

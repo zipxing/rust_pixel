@@ -11,7 +11,12 @@ use rust_pixel::{
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
     render::{
-        adapter::Adapter, buffer::Buffer, cell::cellsym, panel::Panel, sprite::Sprite, style::Color,
+        adapter::{Adapter, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
+        buffer::Buffer,
+        cell::cellsym,
+        panel::Panel,
+        sprite::Sprite,
+        style::Color,
     },
 };
 
@@ -39,7 +44,6 @@ fn ripple_distortion(u: f32, v: f32, time: f32, amplitude: f32, frequency: f32) 
     let dv = v + (dy / distance) * offset;
     (du, dv)
 }
-
 
 fn apply_distortion(
     src_buffer: &Buffer,
@@ -98,15 +102,15 @@ impl PetviewRender {
         p2.set_hidden(true);
         panel.add_pixel_sprite(p2, "petimg2");
 
-        let mut p3 = Sprite::new(96, 40, PIXW, PIXH);
+        let mut p3 = Sprite::new(0, 0, PIXW, PIXH);
         p3.set_hidden(true);
         panel.add_pixel_sprite(p3, "petimg3");
 
-        let mut p4 = Sprite::new(96, 40, PIXW, PIXH);
+        let mut p4 = Sprite::new(0, 0, PIXW, PIXH);
         p4.set_hidden(true);
         panel.add_pixel_sprite(p4, "petimg4");
 
-        let mut p5 = Sprite::new(160u16, 450u16, PIXW, 1u16);
+        let mut p5 = Sprite::new(0, 0, PIXW, 1u16);
         p5.set_color_str(
             1,
             0,
@@ -127,7 +131,7 @@ impl Render for PetviewRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
-            .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
+            .init(PETW + 2, PETH, 0.4, 0.4, "petview".to_string());
         self.panel.init(ctx);
 
         let p1 = self.panel.get_pixel_sprite("petimg1");
@@ -135,6 +139,24 @@ impl Render for PetviewRender {
 
         let p2 = self.panel.get_pixel_sprite("petimg2");
         asset2sprite!(p2, ctx, "2.pix");
+
+        let rx = ctx.adapter.get_base().ratio_x;
+        let ry = ctx.adapter.get_base().ratio_y;
+        let p3 = self.panel.get_pixel_sprite("petimg3");
+        p3.set_pos(
+            (6.0 * PIXEL_SYM_WIDTH / rx) as u16,
+            (2.5 * PIXEL_SYM_HEIGHT / ry) as u16,
+        );
+        let p4 = self.panel.get_pixel_sprite("petimg4");
+        p4.set_pos(
+            (6.0 * PIXEL_SYM_WIDTH / rx) as u16,
+            (2.5 * PIXEL_SYM_HEIGHT / ry) as u16,
+        );
+        let pmsg = self.panel.get_pixel_sprite("pet-msg");
+        pmsg.set_pos(
+            (10.0 * PIXEL_SYM_WIDTH / rx) as u16,
+            (28.5 * PIXEL_SYM_HEIGHT / rx) as u16,
+        );
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {}
@@ -200,7 +222,7 @@ impl Render for PetviewRender {
                         for _ in 0..model.transbuf_stage {
                             tbuf.content[ctx.rand.rand() as usize % clen]
                                 .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                .set_fg(Color::Rgba(155,155,155,155));
+                                .set_fg(Color::Rgba(155, 155, 155, 155));
                         }
 
                         let p3 = self.panel.get_pixel_sprite("petimg3");

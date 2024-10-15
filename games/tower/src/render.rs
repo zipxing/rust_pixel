@@ -167,8 +167,8 @@ impl Render for TowerRender {
         ctx.adapter.init(
             TOWERW as u16 + 2,
             TOWERH as u16 + 4,
-            1.0,
-            1.0,
+            0.5,
+            0.5,
             "tower".to_string(),
         );
         self.create_sprites(ctx, data);

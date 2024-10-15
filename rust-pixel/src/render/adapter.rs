@@ -244,8 +244,10 @@ pub trait Adapter {
             if !pix.get_render_texture_hidden(3) {
                 let pcw = pix.canvas_width as f32;
                 let pch = pix.canvas_height as f32;
-                let pw = 40.0 * PIXEL_SYM_WIDTH;
-                let ph = 25.0 * PIXEL_SYM_HEIGHT;
+                let rx = bs.ratio_x;
+                let ry = bs.ratio_y;
+                let pw = 40.0 * PIXEL_SYM_WIDTH / rx;
+                let ph = 25.0 * PIXEL_SYM_HEIGHT / ry;
 
                 let mut t2 = GlTransform::new();
                 t2.scale(pw / pcw, ph / pch);
