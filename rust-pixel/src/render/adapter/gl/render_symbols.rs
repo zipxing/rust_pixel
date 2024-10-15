@@ -11,7 +11,7 @@ use crate::render::adapter::gl::{
 };
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
-// use log::info;
+use log::info;
 
 pub struct GlRenderSymbols {
     pub base: GlRenderBase,
@@ -219,8 +219,8 @@ impl GlRenderSymbols {
             for j in 0..32 {
                 let symbol = self.make_symbols_frame(
                     &mut sprite_sheet,
-                    j as f32 * (PIXEL_SYM_WIDTH + 1.0),
-                    i as f32 * (PIXEL_SYM_HEIGHT + 1.0),
+                    j as f32 * (PIXEL_SYM_WIDTH),
+                    i as f32 * (PIXEL_SYM_HEIGHT),
                 );
                 self.symbols.push(symbol);
             }
@@ -316,7 +316,8 @@ impl GlRenderSymbols {
         // info!("ratiox....{} ratioy....{}", ratio_x, ratio_y);
         for r in rbuf {
             let mut transform = GlTransform::new();
-            transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT);
+            transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH / 2.0, r.y + r.cy - PIXEL_SYM_HEIGHT / 2.0);
+            // transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH , r.y + r.cy - PIXEL_SYM_HEIGHT );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
@@ -340,8 +341,8 @@ impl GlRenderSymbols {
     }
 
     fn make_symbols_frame(&mut self, sheet: &mut GlTexture, x: f32, y: f32) -> GlCell {
-        let origin_x = 0.5;
-        let origin_y = 0.5;
+        let origin_x = 1.0;
+        let origin_y = 1.0;
         let tex_width = sheet.width as f32;
         let tex_height = sheet.height as f32;
 
@@ -349,6 +350,7 @@ impl GlRenderSymbols {
         let uv_top = y / tex_height;
         let uv_width = PIXEL_SYM_WIDTH / tex_width;
         let uv_height = PIXEL_SYM_HEIGHT / tex_height;
+        info!("xxx{} {} {} {}", PIXEL_SYM_WIDTH, PIXEL_SYM_HEIGHT, tex_width, tex_height);
 
         GlCell {
             texture: sheet.texture,

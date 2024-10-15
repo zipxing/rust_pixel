@@ -28,8 +28,8 @@ pub mod gl;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub const PIXEL_TEXTURE_FILES: [&str; 1] = ["assets/pix/c64.png"];
 
-pub const PIXEL_SYM_WIDTH: f32 = 16.0;
-pub const PIXEL_SYM_HEIGHT: f32 = 16.0;
+pub const PIXEL_SYM_WIDTH: f32 = 8.0;
+pub const PIXEL_SYM_HEIGHT: f32 = 8.0;
 
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
@@ -459,15 +459,15 @@ fn render_helper(
     (
         // background sym rect in texture(sym=160 tex=1)
         ARect {
-            x: (w + 1) * bsrcx as i32,
-            y: (h + 1) * bsrcy as i32,
+            x: w * bsrcx as i32,
+            y: h * bsrcy as i32,
             w: w as u32,
             h: h as u32,
         },
         // sym rect in texture
         ARect {
-            x: (w + 1) * srcx as i32,
-            y: (h + 1) * srcy as i32,
+            x: w * srcx as i32,
+            y: h * srcy as i32,
             w: w as u32,
             h: h as u32,
         },
