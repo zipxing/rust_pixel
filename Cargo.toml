@@ -15,7 +15,7 @@ exclude = [
 members = [
     'rust-pixel',
     'games/*',
-    'apps/*', 
+    'apps/*',
 ]
 resolver = '2'
 

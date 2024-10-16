@@ -28,6 +28,9 @@ pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
 
+/// proc macro for pixel_game!
+pub use pixel_macro;
+
 /// disjoint-set data structure, astar
 pub mod algorithm;
 
@@ -75,5 +78,3 @@ pub mod log;
 #[cfg(not(feature = "base"))]
 pub mod render;
 
-// proc macro for pixel_game!
-pub use pixel_macro;
