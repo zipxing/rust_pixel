@@ -319,10 +319,8 @@ impl GlRenderSymbols {
 
             // 1.0:0.0 0.5:8.0 2.0:-4.0 0.25:24.0
             transform.translate(
-                r.x + r.cx - PIXEL_SYM_WIDTH / ratio_x + PIXEL_SYM_WIDTH / ratio_x
-                    - PIXEL_SYM_WIDTH,
-                r.y + r.cy - PIXEL_SYM_HEIGHT / ratio_y + PIXEL_SYM_HEIGHT / ratio_y
-                    - PIXEL_SYM_HEIGHT,
+                r.x + r.cx - PIXEL_SYM_WIDTH,
+                r.y + r.cy - PIXEL_SYM_HEIGHT,
             );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
