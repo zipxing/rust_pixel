@@ -19,6 +19,7 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use regex::Regex;
+use std::env;
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, Write};
@@ -446,6 +447,29 @@ struct PixelContext {
 }
 
 fn check_pixel_toml() -> PixelContext {
+    // 获取当前工作目录
+    match env::current_dir() {
+        Ok(current_dir) => {
+            println!("当前工作目录是：{}", current_dir.display());
+        }
+        Err(e) => {
+            println!("获取当前工作目录失败：{}", e);
+        }
+    }
+
+    // 获取可执行文件路径
+    match env::current_exe() {
+        Ok(exe_path) => {
+            println!("可执行文件路径是：{}", exe_path.display());
+        }
+        Err(e) => {
+            println!("获取可执行文件路径失败：{}", e);
+        }
+    }
+
+    let version = env!("CARGO_PKG_VERSION");
+    println!("当前 crate 的版本号是：{}", version);
+
     let ct = fs::read_to_string("pixel.toml")
         .expect("Can't find pixel.toml!\ncargo-pixel must run in rust_pixel or standalone_rust_pixel_project directory.\npixel.toml ");
     let doc = ct.parse::<toml::Value>().unwrap();
