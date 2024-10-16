@@ -46,11 +46,11 @@ path = "cargo-pixel/src/main.rs"
 
 [[bin]]
 name = "pixel_petii"
-path = "tpetii/src/main.rs"
+path = "pixel_petii/src/main.rs"
 
 [[bin]]
 name = "pixel_edit"
-path = "tedit/src/main.rs"
+path = "pixel_edit/src/main.rs"
 
 [target.'cfg(not(any(target_os = "android",target_os = "ios",target_arch = "wasm32")))'.dependencies]
 rodio = {version = "0.18.1", optional = true}
