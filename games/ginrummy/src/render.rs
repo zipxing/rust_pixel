@@ -104,7 +104,7 @@ impl Render for GinRummyRender {
     fn init(&mut self, context: &mut Context, _dat: &mut Self::Model) {
         context
             .adapter
-            .init(65, 25, 1.0, 1.0, "gin_rummy".to_string());
+            .init(65, 25, 0.5, 0.5, "gin_rummy".to_string());
         self.panel.init(context);
     }
 

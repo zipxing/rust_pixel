@@ -80,7 +80,7 @@ impl Render for PokerRender {
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context
             .adapter
-            .init(82, 20, 1.0, 1.0, "redblack".to_string());
+            .init(82, 20, 0.5, 0.5, "redblack".to_string());
         self.panel.init(context);
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         {
