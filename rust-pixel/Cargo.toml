@@ -33,9 +33,20 @@ image = {version = "0.24.6", optional = true }
 glow = {version = "0.14.2"}
 unicode-segmentation = { version = "1.2" }
 unicode-width = { version = "0.1" }
+clap = { version = "3.2", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.5"
+lab = "0.11.0"
+deltae = "0.3.0"
 
-# [workspace]
-# members = ["pixel_macro"]
+[[bin]]
+name = "cargo-pixel"
+path = "cargo-pixel/src/main.rs"
+
+[[bin]]
+name = "pixel_petii"
+path = "tpetii/src/main.rs"
 
 [target.'cfg(not(any(target_os = "android",target_os = "ios",target_arch = "wasm32")))'.dependencies]
 rodio = {version = "0.18.1", optional = true}
@@ -80,7 +91,7 @@ features = [
 [features]
 default = ["log4rs", "crossterm", "rodio"]
 web = []
-term = ["log4rs", "crossterm", "rodio"]
+term = ["log4rs", "crossterm", "rodio", "image"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
 base = ["log4rs"]
 

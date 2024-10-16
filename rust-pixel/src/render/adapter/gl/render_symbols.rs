@@ -317,7 +317,6 @@ impl GlRenderSymbols {
         for r in rbuf {
             let mut transform = GlTransform::new();
 
-            // 1.0:0.0 0.5:8.0 2.0:-4.0 0.25:24.0
             transform.translate(
                 r.x + r.cx - PIXEL_SYM_WIDTH,
                 r.y + r.cy - PIXEL_SYM_HEIGHT,
