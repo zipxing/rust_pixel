@@ -14,7 +14,6 @@ exclude = [
 ]
 members = [
     'rust-pixel',
-    'tools/*',
     'games/*',
     'apps/*', 
 ]

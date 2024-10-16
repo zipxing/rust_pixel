@@ -274,7 +274,7 @@ impl Render for TetrisRender {
 
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        context.adapter.init(35, 24, 0.25, 0.25, "tetris".to_string());
+        context.adapter.init(35, 24, 0.3, 0.3, "tetris".to_string());
         #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         context.adapter.init(80, 30, 1.0, 1.0, "tetris".to_string());
         self.panel.init(context);
