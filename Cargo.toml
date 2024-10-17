@@ -100,6 +100,8 @@ opt-level = 's'
 members = [
     "pixel_macro",
     "demos/*",
+    "tools/pixel_edit",
+    "tools/pixel_petii",
 ]
 
 exclude = [
