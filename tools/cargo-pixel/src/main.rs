@@ -143,11 +143,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             if ctx.standalone {
                 crate_path = ".".to_string();
             } else {
-                let cpath = format!("games/{}", mod_name);
-                if Path::new(&cpath).exists() {
-                    crate_path = cpath;
-                }
-                let cpath = format!("apps/{}", mod_name);
+                let cpath = format!("demos/{}", mod_name);
                 if Path::new(&cpath).exists() {
                     crate_path = cpath;
                 }
@@ -166,7 +162,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             cmds.push(format!("mkdir -p {}", tmpwd));
             cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
             cmds.push(format!(
-                "cp {}/rust-pixel/web-templates/* {}",
+                "cp {}/web-templates/* {}",
                 ctx.rust_pixel_path, tmpwd
             ));
             cmds.push(format!(
