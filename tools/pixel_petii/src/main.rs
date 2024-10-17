@@ -30,7 +30,7 @@ fn main() {
     match args.len() {
         2 | 4 | 5 | 9 => {}
         _ => {
-            println!("Usage: tpetii <image file path> [<width>] [<height>] [<is_petscii>]");
+            println!("Usage: pixel_petii <image file path> [<width>] [<height>] [<is_petscii>]");
             return;
         }
     }

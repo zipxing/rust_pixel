@@ -95,7 +95,6 @@ pub struct RenderCell {
 
 pub struct AdapterBase {
     pub game_name: String,
-    pub path_prefix: String,
     pub project_path: String,
     pub title: String,
     pub cell_w: u16,
@@ -112,10 +111,9 @@ pub struct AdapterBase {
 }
 
 impl AdapterBase {
-    pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
+    pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             game_name: gn.to_string(),
-            path_prefix: pre.to_string(),
             project_path: project_path.to_string(),
             title: "".to_string(),
             cell_w: 0,

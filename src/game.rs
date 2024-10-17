@@ -78,44 +78,14 @@ where
     M: Model,
     R: Render<Model = M>,
 {
-    pub fn new(m: M, r: R, name: &str) -> Self {
-        Self::new_with_project_path(m, r, name, None)
-    }
-
-    pub fn new_with_project_path(m: M, r: R, name: &str, project_path: Option<&str>) -> Self {
-        let res: Vec<String> = name.split("/").map(|s| s.to_string()).collect();
-        let path_name;
-        let app_name;
-        match res.len() {
-            1 => {
-                path_name = "apps";
-                app_name = name;
-            }
-            2 => {
-                path_name = &res[0];
-                app_name = &res[1];
-            }
-            _ => {
-                path_name = "apps";
-                app_name = name;
-            }
-        };
-        // If app embbed in rust_pixel directory, default asset path is
-        // "games/game_name/" or "apps/app_name/"
-        // else you can set asset_path by yourself
-        // example:
-        // context.set_asset_path("./")...
-        let ap = if let Some(pp) = project_path {
-            pp.to_string()
-        } else {
-            format!("{}{}{}", path_name, std::path::MAIN_SEPARATOR, app_name).to_string()
-        };
-        let ctx = Context::new(path_name, app_name, &ap);
+    pub fn new(m: M, r: R, name: &str, project_path: &str) -> Self {
+        let ap = project_path.to_string();
+        let ctx = Context::new(name, &ap);
         init_log(
             log::LevelFilter::Trace,
-            &format!("log{}{}.log", std::path::MAIN_SEPARATOR, app_name),
+            &format!("log{}{}.log", std::path::MAIN_SEPARATOR, name),
         );
-        info!("{}(rust_pixel) start...{:?}", name, res);
+        info!("{}(rust_pixel) start...{:?}", name, &ap);
         Self {
             context: ctx,
             model: m,

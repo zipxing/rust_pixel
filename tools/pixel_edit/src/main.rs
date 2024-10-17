@@ -28,15 +28,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         _ => {
-            println!("Usage: tedit asset_file_path <esc_file_path>");
+            println!("Usage: pixel_edit asset_file_path <esc_file_path>");
             return Ok(());
         }
     }
 
     let m = TeditModel::new();
     let r = TeditRender::new(escfile);
-    let mut g = Game::new_with_project_path(m, r, "tools/tedit", Some(apath));
-    info!("Tedit(pixel.rs) start...{:?}", args);
+    let mut g = Game::new(m, r, "pixel_edit", apath);
+    info!("pixel_edit(rust_pixel) start...{:?}", args);
 
     g.init();
     g.run()?;

@@ -24,9 +24,9 @@ pub struct WebAdapter {
 }
 
 impl WebAdapter {
-    pub fn new(pre: &str, gn: &str, project_path: &str) -> Self {
+    pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
-            base: AdapterBase::new(pre, gn, project_path),
+            base: AdapterBase::new(gn, project_path),
         }
     }
 

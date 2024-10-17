@@ -1047,8 +1047,8 @@ impl Render for TeditRender {
         context.adapter.init(
             SYMW + 2 + EDITW + 2,
             EDITH + 3,
-            1.0,
-            1.0,
+            0.5,
+            0.5,
             "tedit".to_string(),
         );
         self.panel.init(context);

@@ -1,10 +1,10 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, Ident, LitStr, Expr, Result};
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use quote::quote;
+use syn::{parse_macro_input, Expr, Ident, LitStr, Result};
 
 struct VariadicInput {
     exprs: Punctuated<Expr, syn::Token![,]>,
@@ -20,31 +20,14 @@ impl Parse for VariadicInput {
 #[proc_macro]
 pub fn pixel_game(input: TokenStream) -> TokenStream {
     let VariadicInput { exprs } = parse_macro_input!(input as VariadicInput);
-    let args_count = exprs.len();
-
-    let (name, app_path, project_path) = if args_count == 1 {
-        let expr1 = exprs.into_iter().next().unwrap();
-        // Snake, games, None embbed game
-        (expr1, None, None)
-    } else if args_count == 2 {
-        let mut exprs_iter = exprs.into_iter();
-        let expr1 = exprs_iter.next().unwrap();
-        let expr2 = exprs_iter.next().unwrap();
-        // Snake, apps, None embbed app
-        (expr1, Some(expr2), None)
-    } else if args_count == 3 {
-        let mut exprs_iter = exprs.into_iter();
-        let expr1 = exprs_iter.next().unwrap();
-        let expr2 = exprs_iter.next().unwrap();
-        let expr3 = exprs_iter.next().unwrap();
-        // Snake, apps, "." standalone app
-        (expr1, Some(expr2), Some(expr3))
-    } else {
-        panic!("Expected 1 or 2 or 3 arguments");
-    };
+    let name = exprs.into_iter().next().unwrap();
 
     let name_ident = if let Expr::Path(expr_path) = &name {
-        expr_path.path.get_ident().cloned().expect("Expected an identifier")
+        expr_path
+            .path
+            .get_ident()
+            .cloned()
+            .expect("Expected an identifier")
     } else {
         panic!("Expected an identifier as the first argument");
     };
@@ -53,27 +36,11 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
     let model_name = Ident::new(&format!("{}Model", name_ident), name_ident.span());
     let render_name = Ident::new(&format!("{}Render", name_ident), name_ident.span());
 
-    let game_name_str = match &app_path {
-        Some(path_expr) => {
-            let ts = format!("{}", quote! { #path_expr });
-            let ns = format!("{}", name_ident);
-            format!("{}/{}", &ts[1..ts.len() - 1], ns.to_lowercase())
-        }
-        None => {
-            let ns = format!("{}", name_ident);
-            ns.to_lowercase().to_string()
-        }
+    let game_name_str = {
+        let ns = format!("{}", name_ident);
+        ns.to_lowercase().to_string()
     };
     let game_name_lit = LitStr::new(&game_name_str, name_ident.span());
-
-    let prjpath_opt_tokens = match &project_path {
-        Some(path_expr) => {
-            quote! { Some(#path_expr) }
-        }
-        None => {
-            quote! { None }
-        }
-    };
 
     let expanded = quote! {
             use crate::{model::#model_name, render::#render_name};
@@ -87,6 +54,25 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
             #[cfg(target_arch = "wasm32")]
             use log::info;
 
+            fn get_project_path() -> String {
+                let args: Vec<String> = std::env::args().collect();
+                match args.len() {
+                    1 => {
+                        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+                            manifest_dir.to_string()
+                        } else {
+                            ".".to_string()
+                        }
+                    }
+                    2 => {
+                        args[1].to_string()
+                    }
+                    _ => {
+                        ".".to_string()
+                    }
+                }
+            }
+
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             pub struct #game_name {
                 g: Game<#model_name, #render_name>,
@@ -95,7 +81,9 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
             pub fn init_game() -> #game_name {
                 let m = #model_name::new();
                 let r = #render_name::new();
-                let mut g = Game::new_with_project_path(m, r, #game_name_lit, #prjpath_opt_tokens);
+                let pp = get_project_path();
+                println!("asset path : {:?}", pp);
+                let mut g = Game::new(m, r, #game_name_lit, &pp);
                 g.init();
                 #game_name { g }
             }
