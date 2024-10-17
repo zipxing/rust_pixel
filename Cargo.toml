@@ -99,20 +99,20 @@ opt-level = 's'
 [workspace]
 members = [
     "pixel_macro",
-    "demos/*",
+    "apps/*",
     "tools/pixel_edit",
     "tools/pixel_petii",
 ]
 
 exclude = [
-    "demos/poker/ffi",
-    "demos/poker/wasm",
-    "demos/template/ffi",
-    "demos/template/wasm",
-    "demos/palette/ffi",
-    "demos/palette/wasm",
-    "demos/petview/ffi",
-    "demos/petview/wasm",
+    "apps/poker/ffi",
+    "apps/poker/wasm",
+    "apps/template/ffi",
+    "apps/template/wasm",
+    "apps/palette/ffi",
+    "apps/palette/wasm",
+    "apps/petview/ffi",
+    "apps/petview/wasm",
 ]
 
 [workspace.package]
