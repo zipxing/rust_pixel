@@ -88,7 +88,6 @@ fn make_parser() -> ArgMatches {
         .subcommand(common_arg(
             SubCommand::with_name("creat")
                 .alias("c")
-                .arg(Arg::with_name("dir_name").required(true))
                 .arg(Arg::with_name("mod_name").required(true)),
         ))
         .subcommand(common_arg(
@@ -221,7 +220,7 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         println!("Cargo pixel creat must run in rust_pixel root directory.");
         return;
     }
-    let dir_name = args.value_of("dir_name").unwrap();
+    let dir_name = "apps";
     let mod_name = args.value_of("mod_name").unwrap();
     let is_standalone = args.is_present("standalone");
     let upname = mod_name.to_uppercase();
