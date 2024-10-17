@@ -50,12 +50,6 @@ fn common_arg(app: App) -> App {
             .default_value("8080")
             .takes_value(true),
     )
-    .arg(
-        Arg::with_name("standalone")
-            .short('s')
-            .long("standalone")
-            .takes_value(false),
-    )
 }
 
 fn make_parser() -> ArgMatches {
@@ -88,7 +82,8 @@ fn make_parser() -> ArgMatches {
         .subcommand(common_arg(
             SubCommand::with_name("creat")
                 .alias("c")
-                .arg(Arg::with_name("mod_name").required(true)),
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(Arg::with_name("standalone_dir_name").required(false)),
         ))
         .subcommand(common_arg(
             SubCommand::with_name("convert_gif")
@@ -220,35 +215,13 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         println!("Cargo pixel creat must run in rust_pixel root directory.");
         return;
     }
-    let dir_name = "apps";
+    let mut dir_name = "apps".to_string();
+    let sa_dir = args.value_of("standalone_dir_name");
     let mod_name = args.value_of("mod_name").unwrap();
-    let is_standalone = args.is_present("standalone");
+    let mut is_standalone = false;
     let upname = mod_name.to_uppercase();
     let loname = mod_name.to_lowercase();
     let capname = capitalize(mod_name);
-
-    // if !is_standalone {
-    //     println!("🍀 update Cargo.toml...");
-    //     let ct = fs::read_to_string("Cargo.toml").unwrap();
-    //     let mut doc = ct.parse::<toml::Value>().unwrap();
-    //     if let Some(workspace) = doc.get_mut("workspace") {
-    //         if let Some(members) = workspace.get_mut("members") {
-    //             if let Some(members_array) = members.as_array_mut() {
-    //                 let ds = format!("{}/*", dir_name);
-    //                 if !members_array.contains(&ds.clone().into()) {
-    //                     members_array.push(ds.into());
-    //                 }
-    //             }
-    //         }
-    //         if let Some(exclude) = workspace.get_mut("exclude") {
-    //             if let Some(exclude_array) = exclude.as_array_mut() {
-    //                 exclude_array.push(format!("{}/{}/ffi", dir_name, mod_name).into());
-    //                 exclude_array.push(format!("{}/{}/wasm", dir_name, mod_name).into());
-    //             }
-    //         }
-    //     }
-    //     fs::write("Cargo.toml", toml::to_string_pretty(&doc).unwrap()).unwrap();
-    // }
 
     println!(
         "🍀 creat games folder...({})",
@@ -260,16 +233,18 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
 
     exec_cmd("cp -r apps/template tmp/pixel_game_template");
 
-    if is_standalone {
+    if let Some(stand_dir) = sa_dir {
+        is_standalone = true;
         exec_cmd(
-            "cp games/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml",
+            "cp apps/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml",
         );
-        exec_cmd("cp games/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
+        exec_cmd("cp apps/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
+        exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
+        exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
         exec_cmd(
-            "cp games/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml",
+            "cp apps/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml",
         );
+        dir_name = format!("{}", stand_dir);
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
 
