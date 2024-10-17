@@ -88,7 +88,7 @@ where
         let app_name;
         match res.len() {
             1 => {
-                path_name = "demos";
+                path_name = "apps";
                 app_name = name;
             }
             2 => {
@@ -96,7 +96,7 @@ where
                 app_name = &res[1];
             }
             _ => {
-                path_name = "demos";
+                path_name = "apps";
                 app_name = name;
             }
         };

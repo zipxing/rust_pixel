@@ -143,7 +143,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             if ctx.standalone {
                 crate_path = ".".to_string();
             } else {
-                let cpath = format!("demos/{}", mod_name);
+                let cpath = format!("apps/{}", mod_name);
                 if Path::new(&cpath).exists() {
                     crate_path = cpath;
                 }
