@@ -1,24 +1,119 @@
+[package]
+name = "rust_pixel"
+version = "0.5.2"
+edition = "2021"
+authors = ["zipxing@hotmail.com"]
+repository = "https://github.com/zipxing/rust_pixel"
+readme = "README.md"
+license = "Apache-2.0"
+description = "2d pixel art game engine & rapid prototype tools support terminal, sdl2, and web..."
+categories = ["game-engines", "gui", "graphics"]
+
+# Define binaries that will be built for the project.
+[[bin]]
+name = "cargo-pixel"
+path = "tools/cargo-pixel/src/main.rs"
+
+[[bin]]
+name = "pixel_petii"
+path = "tools/pixel_petii/src/main.rs"
+
+[[bin]]
+name = "pixel_edit"
+path = "tools/pixel_edit/src/main.rs"
+
+[dependencies]
+pixel_macro = { path = "pixel_macro" }
+bincode = "1.3.1"
+bitflags = { version = "2.3", features = ["serde"] }
+crossterm = { version = "0.22", optional = true }
+flate2 = "1.0.25"
+itertools = "0.13.0"
+lazy_static = "1.4.0"
+log = "0.4.6"
+log4rs = { version = "1.2.0", optional = true }
+num-traits = "0.2"
+num-derive = "0.2"
+regex = "1.5.6"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"
+keyframe = "=1.1.1"
+keyframe_derive = "1.0.0"
+serde = { version = "1.0.114", features = ["derive"] }
+sdl2 = { version = "0.36.0", optional = true, features = ["image", "gfx", "unsafe_textures"] }
+image = { version = "0.24.6", optional = true }
+glow = { version = "0.14.2" }
+unicode-segmentation = "1.2"
+unicode-width = "0.1"
+clap = { version = "3.2", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.5"
+lab = "0.11.0"
+deltae = "0.3.0"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))'.dependencies]
+rodio = { version = "0.18.1", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { version = "0.1.1", optional = true }
+getrandom = { version = "0.2", features = ["js"] }
+js-sys = "0.3.69"
+wasm-bindgen = "0.2.92"
+wasm-logger = "0.2.0"
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+  "CanvasRenderingContext2d",
+  "CssStyleDeclaration",
+  "Document",
+  "Element",
+  "EventTarget",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "KeyboardEvent",
+  "MouseEvent",
+  "Node",
+  "Window",
+  "WebGlBuffer",
+  "WebGl2RenderingContext",
+  "WebGlProgram",
+  "WebGlShader",
+  "WebGlUniformLocation",
+  "console",
+  "Event",
+  "MouseEventInit"
+]
+
+[features]
+default = ["log4rs", "crossterm", "rodio", "image"]
+web = []
+term = ["log4rs", "crossterm", "rodio", "image"]
+sdl = ["log4rs", "rodio", "sdl2", "image"]
+base = ["log4rs"]
+
 [profile.release]
 opt-level = 's'
 
 [workspace]
-exclude = [
-    'games/poker/ffi',
-    'games/poker/wasm',
-    'games/template/ffi',
-    'games/template/wasm',
-    'apps/palette/ffi',
-    'apps/palette/wasm',
-    'games/petview/ffi',
-    'games/petview/wasm',
-]
 members = [
-    'rust-pixel',
-    'games/*',
-    'apps/*',
+    "pixel_macro",
+    "demos/*",
 ]
-resolver = '2'
+
+exclude = [
+    "demos/poker/ffi",
+    "demos/poker/wasm",
+    "demos/template/ffi",
+    "demos/template/wasm",
+    "demos/palette/ffi",
+    "demos/palette/wasm",
+    "demos/petview/ffi",
+    "demos/petview/wasm",
+]
 
 [workspace.package]
-authors = ['zipxing@hotmail.com']
-description = '2d pixel art game engine & rapid prototype tools support terminal,sdl2 and web...'
+authors = ["zipxing@hotmail.com"]
+description = "2d pixel art game engine & rapid prototype tools support terminal, sdl2, and web..."
+
