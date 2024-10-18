@@ -24,7 +24,7 @@ name = "pixel_edit"
 path = "tools/pixel_edit/src/main.rs"
 
 [dependencies]
-pixel_macro = { version = "0.1.0", path = "tools/pixel_macro" }
+pixel_macro = { path = "tools/pixel_macro" }
 bincode = "1.3.1"
 bitflags = { version = "2.3", features = ["serde"] }
 crossterm = { version = "0.22", optional = true }
