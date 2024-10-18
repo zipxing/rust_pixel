@@ -19,26 +19,26 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::fs;
+use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
 
-mod prepare_env;
-use prepare_env::*;
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PixelContext {
+    // rust_pixel repo local path
+    pub rust_pixel_dir: String,
+    // standalone projects
+    pub standalone: Vec<String>,
+}
 
 fn common_arg(app: App) -> App {
     app.arg(
-        Arg::with_name("dir")
-            .short('d')
-            .long("dir")
-            .default_value(".")
-            .takes_value(true),
-    )
-    .arg(
         Arg::with_name("release")
             .short('r')
             .long("release")
@@ -55,7 +55,6 @@ fn common_arg(app: App) -> App {
 
 fn make_parser() -> ArgMatches {
     let matches = App::new("cargo pixel")
-        .version("0.5.2")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo build tool")
         .arg(Arg::with_name("pixel"))
@@ -135,7 +134,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
         )),
         "web" | "w" => {
             let mut crate_path = "".to_string();
-            if ctx.standalone {
+            if ctx.standalone.contains(&mod_name.to_string()) {
                 crate_path = ".".to_string();
             } else {
                 let cpath = format!("apps/{}", mod_name);
@@ -158,7 +157,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
             cmds.push(format!(
                 "cp {}/web-templates/* {}",
-                ctx.rust_pixel_path, tmpwd
+                ctx.rust_pixel_dir, tmpwd
             ));
             cmds.push(format!(
                 "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
@@ -212,10 +211,10 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
 }
 
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
-    if ctx.standalone {
-        println!("Cargo pixel creat must run in rust_pixel root directory.");
-        return;
-    }
+    // if ctx.standalone {
+    //     println!("Cargo pixel creat must run in rust_pixel root directory.");
+    //     return;
+    // }
     let mut dir_name = "apps".to_string();
     let sa_dir = args.value_of("standalone_dir_name");
     let mod_name = args.value_of("mod_name").unwrap();
@@ -236,15 +235,11 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
 
     if let Some(stand_dir) = sa_dir {
         is_standalone = true;
-        exec_cmd(
-            "cp apps/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml",
-        );
+        exec_cmd("cp apps/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
-        exec_cmd(
-            "cp apps/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml",
-        );
+        exec_cmd("cp apps/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml");
         dir_name = format!("{}", stand_dir);
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
@@ -311,7 +306,7 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     replace_in_files(
         is_standalone,
         Path::new("tmp/pixel_game_template"),
-        &ctx.rust_pixel_path,
+        &ctx.rust_pixel_dir,
         &dir_name,
         &capname,
         &upname,
@@ -409,6 +404,120 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
 
     println!("\n🍀 {} write ok!", ssf);
     exec_cmd("rm tmp/t*.p*");
+}
+
+fn check_pixel_env() -> PixelContext {
+    let mut pc: PixelContext = Default::default();
+
+    // match env::current_dir() {
+    //     Ok(current_dir) => {
+    //         pc.current_dir = current_dir.clone();
+    //         println!("🍭 current_dir：{}", current_dir.display());
+    //     }
+    //     Err(e) => {
+    //         println!("get current_dir error：{}", e);
+    //     }
+    // }
+
+    // match env::current_exe() {
+    //     Ok(exe_path) => {
+    //         pc.current_exe = exe_path.clone();
+    //         println!("🍭 current_exe：{}", exe_path.display());
+    //     }
+    //     Err(e) => {
+    //         println!("get current_exe error：{}", e);
+    //     }
+    // }
+
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    println!("🍭 rust_pixel version：{}", current_version);
+
+    let config_dir = dirs_next::config_dir().expect("Could not find config directory");
+    let pixel_config = config_dir.join("rust_pixel.toml");
+    println!("🍭 config_dir：{:?}", config_dir);
+
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir).expect("Failed to create config directory");
+    }
+
+    if pixel_config.exists() {
+        let config_content = fs::read_to_string(&pixel_config).expect("Failed to read config file");
+        let saved_pc: PixelContext =
+            toml::from_str(&config_content).expect("Failed to parse config file");
+        pc.rust_pixel_dir = saved_pc.rust_pixel_dir;
+        pc.standalone = saved_pc.standalone;
+        println!("🍭 Loaded configuration from rust_pixel.toml");
+    } else {
+        let home_dir = dirs_next::home_dir().expect("Could not find home directory");
+        let repo_dir = home_dir.join("rust_pixel");
+        if !repo_dir.exists() {
+            println!("Cloning rust_pixel from GitHub...");
+            let status = Command::new("git")
+                .args(&[
+                    "clone",
+                    // "-b", "opt_crate",
+                    "https://github.com/zipxing/rust_pixel",
+                    repo_dir.to_str().unwrap(),
+                ])
+                .status()
+                .expect("Failed to execute git command");
+            if status.success() {
+                println!("Repository cloned successfully.");
+                pc.rust_pixel_dir = repo_dir.to_str().unwrap().to_string();
+                write_config(&pc, &pixel_config);
+            } else {
+                eprintln!("Failed to clone rust_pixel repository");
+            }
+        }
+    }
+
+    // match env::set_current_dir(&repo_dir) {
+    //     Ok(_) => {
+    //         println!("Successfully changed to directory: {}", repo_dir.display());
+    //         println!("Updating rust_pixel from GitHub...");
+    //         let status = Command::new("git")
+    //             .args(&["pull"])
+    //             .status()
+    //             .expect("Failed to execute git command");
+    //         if status.success() {
+    //             println!("Repository update successfully.");
+    //         } else {
+    //             eprintln!("Failed to update rust_pixel repository");
+    //         }
+    //     }
+    //     Err(e) => eprintln!("Error changing directory: {}", e),
+    // }
+
+    let ct = fs::read_to_string("pixel.toml").expect("Can't find pixel.toml!");
+    let doc = ct.parse::<toml::Value>().unwrap();
+
+    if let Some(package) = doc.get("package") {
+        if let Some(new_version) = package.get("version") {
+            let nvs = new_version.to_string();
+            let cvs = format!("\"{}\"", current_version);
+            eprintln!("new ver:{:?} ver:{:?}", nvs, cvs);
+            if nvs != cvs {
+                eprintln!("Please update cargo pixel: cargo install rust_pixel --force");
+                std::process::exit(0);
+            }
+        }
+    }
+
+    // if !pc.standalone {
+    //     let srcdir = PathBuf::from(&pc.rust_pixel_dir);
+    //     let rpp = format!("{:?}", fs::canonicalize(&srcdir).unwrap());
+    //     pc.rust_pixel_dir = rpp[1..rpp.len() - 1].to_string();
+    // }
+    pc
+}
+
+fn write_config(pc: &PixelContext, config_path: &Path) {
+    let toml_string = toml::to_string(pc).expect("Failed to serialize PixelContext");
+
+    let mut file = File::create(config_path).expect("Failed to create config file");
+    file.write_all(toml_string.as_bytes())
+        .expect("Failed to write to config file");
+    println!("🍭 Configuration saved to {}", config_path.display());
 }
 
 fn main() {
