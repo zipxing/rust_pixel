@@ -19,15 +19,16 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use regex::Regex;
-use std::env;
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
+
+mod prepare_env;
+use prepare_env::*;
 
 fn common_arg(app: App) -> App {
     app.arg(
@@ -410,68 +411,8 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     exec_cmd("rm tmp/t*.p*");
 }
 
-#[derive(Debug)]
-struct PixelContext {
-    standalone: bool,
-    rust_pixel_path: String,
-}
-
-fn check_pixel_toml() -> PixelContext {
-    // 获取当前工作目录
-    match env::current_dir() {
-        Ok(current_dir) => {
-            println!("当前工作目录是：{}", current_dir.display());
-        }
-        Err(e) => {
-            println!("获取当前工作目录失败：{}", e);
-        }
-    }
-
-    // 获取可执行文件路径
-    match env::current_exe() {
-        Ok(exe_path) => {
-            println!("可执行文件路径是：{}", exe_path.display());
-        }
-        Err(e) => {
-            println!("获取可执行文件路径失败：{}", e);
-        }
-    }
-
-    let version = env!("CARGO_PKG_VERSION");
-    println!("当前 crate 的版本号是：{}", version);
-
-    let ct = fs::read_to_string("pixel.toml")
-        .expect("Can't find pixel.toml!\ncargo-pixel must run in rust_pixel or standalone_rust_pixel_project directory.\npixel.toml ");
-    let doc = ct.parse::<toml::Value>().unwrap();
-    let mut pc = PixelContext {
-        standalone: false,
-        rust_pixel_path: "./".to_string(),
-    };
-    if let Some(pixel) = doc.get("pixel") {
-        if let Some(standalone) = pixel.get("standalone") {
-            pc.standalone = standalone.as_bool().unwrap();
-        }
-        if let Some(rust_pixel) = pixel.get("rust_pixel") {
-            let rpp = rust_pixel.to_string();
-            pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
-        }
-        if let Some(cargo_pixel) = pixel.get("cargo_pixel") {
-            let cps = cargo_pixel.to_string();
-            if cps != "\"0.5.2\"" {
-                panic!("Please update cargo pixel: cargo install --path tools/cargo-pixel --root ~/.cargo");
-            }
-        }
-    }
-    if !pc.standalone {
-        let srcdir = PathBuf::from(&pc.rust_pixel_path);
-        let rpp = format!("{:?}", fs::canonicalize(&srcdir).unwrap());
-        pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
-    }
-    pc
-}
-
 fn main() {
-    let ctx = check_pixel_toml();
+    let ctx = check_pixel_env();
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
