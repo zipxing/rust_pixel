@@ -37,6 +37,23 @@ pub struct PixelContext {
     pub standalone: Vec<String>,
 }
 
+impl PixelContext {
+    /// 检查给定的 `mod_name` 是否存在于 `standalone` 列表中
+    pub fn is_mod_in_standalone(&self, mod_name: &str) -> bool {
+        for path_str in &self.standalone {
+            let path = Path::new(path_str);
+            if let Some(last_component) = path.file_name() {
+                if let Some(name) = last_component.to_str() {
+                    if name == mod_name {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
 fn common_arg(app: App) -> App {
     app.arg(
         Arg::with_name("release")
@@ -134,7 +151,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
         )),
         "web" | "w" => {
             let mut crate_path = "".to_string();
-            if ctx.standalone.contains(&mod_name.to_string()) {
+            if ctx.is_mod_in_standalone(&mod_name) {
                 crate_path = ".".to_string();
             } else {
                 let cpath = format!("apps/{}", mod_name);
