@@ -206,15 +206,7 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
 fn check_pixel_env() -> PixelContext {
     let mut pc: PixelContext = Default::default();
 
-    // match env::current_dir() {
-    //     Ok(current_dir) => {
-    //         pc.current_dir = current_dir.clone();
-    //         println!("🍭 current_dir：{}", current_dir.display());
-    //     }
-    //     Err(e) => {
-    //         println!("get current_dir error：{}", e);
-    //     }
-    // }
+    let cdir = env::current_dir().unwrap();
 
     // match env::current_exe() {
     //     Ok(exe_path) => {
@@ -232,21 +224,20 @@ fn check_pixel_env() -> PixelContext {
     let config_dir = dirs_next::config_dir().expect("Could not find config directory");
     let pixel_config = config_dir.join("rust_pixel.toml");
     println!("🍭 config_dir：{:?}", config_dir);
-
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).expect("Failed to create config directory");
     }
-
     if pixel_config.exists() {
         let config_content = fs::read_to_string(&pixel_config).expect("Failed to read config file");
         let saved_pc: PixelContext =
             toml::from_str(&config_content).expect("Failed to parse config file");
-        pc.rust_pixel_dir = saved_pc.rust_pixel_dir;
-        pc.standalone = saved_pc.standalone;
+        pc = saved_pc.clone();
+        // TODO, check current_dir
+        pc.standalone = 0;
         println!("🍭 Loaded configuration from rust_pixel.toml");
     } else {
         let home_dir = dirs_next::home_dir().expect("Could not find home directory");
-        let repo_dir = home_dir.join("rust_pixel");
+        let repo_dir = home_dir.join("rust_pixel_work");
         if !repo_dir.exists() {
             println!("Cloning rust_pixel from GitHub...");
             let status = Command::new("git")
@@ -260,12 +251,14 @@ fn check_pixel_env() -> PixelContext {
                 .expect("Failed to execute git command");
             if status.success() {
                 println!("Repository cloned successfully.");
-                pc.rust_pixel_dir = repo_dir.to_str().unwrap().to_string();
-                write_config(&pc, &pixel_config);
             } else {
                 eprintln!("Failed to clone rust_pixel repository");
             }
+        } else {
+            println!("repo_dir exists!");
         }
+        pc.rust_pixel_dir = repo_dir.to_str().unwrap().to_string();
+        write_config(&pc, &pixel_config);
     }
 
     // match env::set_current_dir(&repo_dir) {
