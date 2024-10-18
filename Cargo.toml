@@ -106,6 +106,8 @@ members = [
 
 exclude = [
     "tools/cargo-pixel",
+    "tools/pixel-edit",
+    "tools/pixel-petii",
     "apps/poker/ffi",
     "apps/poker/wasm",
     "apps/template/ffi",
