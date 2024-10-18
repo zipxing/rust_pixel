@@ -16,14 +16,6 @@ exclude = ["/screen-shot", "/test", "/assets", "/web-template"]
 name = "cargo-pixel"
 path = "tools/cargo-pixel/src/main.rs"
 
-[[bin]]
-name = "pixel_petii"
-path = "tools/pixel_petii/src/main.rs"
-
-[[bin]]
-name = "pixel_edit"
-path = "tools/pixel_edit/src/main.rs"
-
 [dependencies]
 # pixel_macro = { path = "tools/pixel_macro" }
 pixel_macro = "0.1.0" 
