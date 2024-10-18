@@ -34,184 +34,19 @@ pub struct PixelContext {
     // rust_pixel repo local path
     pub rust_pixel_dir: String,
     // standalone projects
-    pub standalone: Vec<String>,
-}
-
-impl PixelContext {
-    /// 检查给定的 `mod_name` 是否存在于 `standalone` 列表中
-    pub fn is_mod_in_standalone(&self, mod_name: &str) -> bool {
-        for path_str in &self.standalone {
-            let path = Path::new(path_str);
-            if let Some(last_component) = path.file_name() {
-                if let Some(name) = last_component.to_str() {
-                    if name == mod_name {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-}
-
-fn common_arg(app: App) -> App {
-    app.arg(
-        Arg::with_name("release")
-            .short('r')
-            .long("release")
-            .takes_value(false),
-    )
-    .arg(
-        Arg::with_name("webport")
-            .short('p')
-            .long("webport")
-            .default_value("8080")
-            .takes_value(true),
-    )
-}
-
-fn make_parser() -> ArgMatches {
-    let matches = App::new("cargo pixel")
-        .author("zipxing@hotmail.com")
-        .about("RustPixel cargo build tool")
-        .arg(Arg::with_name("pixel"))
-        .subcommand(common_arg(
-            SubCommand::with_name("run")
-                .alias("r")
-                .arg(Arg::with_name("mod_name").required(true))
-                .arg(
-                    Arg::with_name("build_type")
-                        .required(true)
-                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
-                )
-                .arg(Arg::with_name("other").multiple(true)),
-        ))
-        .subcommand(common_arg(
-            SubCommand::with_name("build")
-                .alias("b")
-                .arg(Arg::with_name("mod_name").required(true))
-                .arg(
-                    Arg::with_name("build_type")
-                        .required(true)
-                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
-                ),
-        ))
-        .subcommand(common_arg(
-            SubCommand::with_name("creat")
-                .alias("c")
-                .arg(Arg::with_name("mod_name").required(true))
-                .arg(Arg::with_name("standalone_dir_name").required(false)),
-        ))
-        .subcommand(common_arg(
-            SubCommand::with_name("convert_gif")
-                .alias("cg")
-                .arg(Arg::with_name("gif").required(true))
-                .arg(Arg::with_name("ssf").required(true))
-                .arg(Arg::with_name("width").required(true))
-                .arg(Arg::with_name("height").required(true)),
-        ))
-        .get_matches();
-
-    matches
-}
-
-fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> {
-    let mut cmds = Vec::new();
-    let mod_name = args.value_of("mod_name").unwrap();
-    let loname = mod_name.to_lowercase();
-    let capname = capitalize(mod_name);
-    let build_type = args.value_of("build_type").unwrap();
-    let release = if args.is_present("release") {
-        "--release"
-    } else {
-        ""
-    };
-    let webport = args.value_of("webport").unwrap_or("8080");
-
-    match build_type {
-        "term" | "t" => cmds.push(format!(
-            "cargo {} -p {} --features term {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.values_of("other")
-                .unwrap_or_default()
-                .collect::<Vec<&str>>()
-                .join(" ")
-        )),
-        "sdl" | "s" => cmds.push(format!(
-            "cargo {} -p {} --features sdl {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.values_of("other")
-                .unwrap_or_default()
-                .collect::<Vec<&str>>()
-                .join(" ")
-        )),
-        "web" | "w" => {
-            let mut crate_path = "".to_string();
-            if ctx.is_mod_in_standalone(&mod_name) {
-                crate_path = ".".to_string();
-            } else {
-                let cpath = format!("apps/{}", mod_name);
-                if Path::new(&cpath).exists() {
-                    crate_path = cpath;
-                }
-            }
-            cmds.push(format!(
-                "wasm-pack build --target web {} {} {}",
-                crate_path,
-                release,
-                args.values_of("other")
-                    .unwrap_or_default()
-                    .collect::<Vec<&str>>()
-                    .join(" ")
-            ));
-            let tmpwd = format!("tmp/web_{}/", mod_name);
-            cmds.push(format!("rm -r {}/*", tmpwd));
-            cmds.push(format!("mkdir -p {}", tmpwd));
-            cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
-            cmds.push(format!(
-                "cp {}/web-templates/* {}",
-                ctx.rust_pixel_dir, tmpwd
-            ));
-            cmds.push(format!(
-                "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
-                capname, tmpwd
-            ));
-            cmds.push(format!(
-                "sed -i '' \"s/pixel/{}/g\" {}/index.js",
-                loname, tmpwd
-            ));
-            cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
-            if subcmd == "run" {
-                cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
-            }
-        }
-        _ => {}
-    }
-
-    cmds
-}
-
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
-}
-
-fn exec_cmd(cmd: &str) {
-    Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .expect("failed to execute process");
+    pub projects: Vec<String>,
+    // current dir is root or standalone, 
+    // 0: not pixel dir
+    // 1: pixel root dir
+    // 2: standalone pixel project dir
+    pub standalone: u8,
 }
 
 fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
+    if ctx.standalone == 0 {
+        println!("Not pixel directory.");
+        return;
+    }
     let cmds = get_cmds(ctx, args, "run");
     for cmd in cmds {
         println!("🍀 {}", cmd);
@@ -220,6 +55,10 @@ fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
 }
 
 fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
+    if ctx.standalone == 0 {
+        println!("Not pixel directory.");
+        return;
+    }
     let cmds = get_cmds(ctx, args, "build");
     for cmd in cmds {
         println!("🍀 {}", cmd);
@@ -228,10 +67,10 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
 }
 
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
-    // if ctx.standalone {
-    //     println!("Cargo pixel creat must run in rust_pixel root directory.");
-    //     return;
-    // }
+    if ctx.standalone != 1 {
+        println!("Cargo pixel creat must run in rust_pixel root directory.");
+        return;
+    }
     let mut dir_name = "apps".to_string();
     let sa_dir = args.value_of("standalone_dir_name");
     let mod_name = args.value_of("mod_name").unwrap();
@@ -261,65 +100,6 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
 
-    fn replace_in_files(
-        is_standalone: bool,
-        dir: &Path,
-        rust_pixel_path: &str,
-        dirname: &str,
-        capname: &str,
-        upname: &str,
-        loname: &str,
-    ) {
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir).unwrap() {
-                let entry = entry.unwrap();
-                let path = entry.path();
-                if path.is_dir() {
-                    replace_in_files(
-                        is_standalone,
-                        &path,
-                        rust_pixel_path,
-                        dirname,
-                        capname,
-                        upname,
-                        loname,
-                    );
-                } else if path.is_file() {
-                    let fname = path.file_name().and_then(OsStr::to_str);
-                    let ext = path.extension().and_then(OsStr::to_str);
-                    if ext == Some("rs")
-                        || ext == Some("toml")
-                        || fname == Some("Makefile")
-                        || fname == Some("index.js")
-                        || fname == Some("test.cc")
-                        || fname == Some("testffi.py")
-                    {
-                        let content = fs::read(&path).unwrap();
-                        let mut content_str = String::from_utf8_lossy(&content).to_string();
-                        if !is_standalone {
-                            if dirname == "games" {
-                            } else {
-                                content_str = content_str.replace(
-                                    "pixel_game!(Template)",
-                                    &format!("pixel_game!(Template, \"{}\")", dirname),
-                                );
-                            }
-                        } else {
-                            content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
-                            content_str = content_str.replace(
-                                "pixel_game!(Template)",
-                                &format!("pixel_game!(Template, \"app\", \".\")"),
-                            );
-                        }
-                        content_str = content_str.replace("Template", capname);
-                        content_str = content_str.replace("TEMPLATE", upname);
-                        content_str = content_str.replace("template", loname);
-                        fs::write(path, content_str).unwrap();
-                    }
-                }
-            }
-        }
-    }
     replace_in_files(
         is_standalone,
         Path::new("tmp/pixel_game_template"),
@@ -537,6 +317,66 @@ fn write_config(pc: &PixelContext, config_path: &Path) {
     println!("🍭 Configuration saved to {}", config_path.display());
 }
 
+fn replace_in_files(
+    is_standalone: bool,
+    dir: &Path,
+    rust_pixel_path: &str,
+    dirname: &str,
+    capname: &str,
+    upname: &str,
+    loname: &str,
+) {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                replace_in_files(
+                    is_standalone,
+                    &path,
+                    rust_pixel_path,
+                    dirname,
+                    capname,
+                    upname,
+                    loname,
+                );
+            } else if path.is_file() {
+                let fname = path.file_name().and_then(OsStr::to_str);
+                let ext = path.extension().and_then(OsStr::to_str);
+                if ext == Some("rs")
+                    || ext == Some("toml")
+                    || fname == Some("Makefile")
+                    || fname == Some("index.js")
+                    || fname == Some("test.cc")
+                    || fname == Some("testffi.py")
+                {
+                    let content = fs::read(&path).unwrap();
+                    let mut content_str = String::from_utf8_lossy(&content).to_string();
+                    if !is_standalone {
+                        if dirname == "games" {
+                        } else {
+                            content_str = content_str.replace(
+                                "pixel_game!(Template)",
+                                &format!("pixel_game!(Template, \"{}\")", dirname),
+                            );
+                        }
+                    } else {
+                        content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
+                        content_str = content_str.replace(
+                            "pixel_game!(Template)",
+                            &format!("pixel_game!(Template, \"app\", \".\")"),
+                        );
+                    }
+                    content_str = content_str.replace("Template", capname);
+                    content_str = content_str.replace("TEMPLATE", upname);
+                    content_str = content_str.replace("template", loname);
+                    fs::write(path, content_str).unwrap();
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let ctx = check_pixel_env();
     let args = make_parser();
@@ -548,3 +388,164 @@ fn main() {
         _ => {}
     }
 }
+
+fn common_arg(app: App) -> App {
+    app.arg(
+        Arg::with_name("release")
+            .short('r')
+            .long("release")
+            .takes_value(false),
+    )
+    .arg(
+        Arg::with_name("webport")
+            .short('p')
+            .long("webport")
+            .default_value("8080")
+            .takes_value(true),
+    )
+}
+
+fn make_parser() -> ArgMatches {
+    let matches = App::new("cargo pixel")
+        .author("zipxing@hotmail.com")
+        .about("RustPixel cargo build tool")
+        .arg(Arg::with_name("pixel"))
+        .subcommand(common_arg(
+            SubCommand::with_name("run")
+                .alias("r")
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(
+                    Arg::with_name("build_type")
+                        .required(true)
+                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
+                )
+                .arg(Arg::with_name("other").multiple(true)),
+        ))
+        .subcommand(common_arg(
+            SubCommand::with_name("build")
+                .alias("b")
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(
+                    Arg::with_name("build_type")
+                        .required(true)
+                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
+                ),
+        ))
+        .subcommand(common_arg(
+            SubCommand::with_name("creat")
+                .alias("c")
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(Arg::with_name("standalone_dir_name").required(false)),
+        ))
+        .subcommand(common_arg(
+            SubCommand::with_name("convert_gif")
+                .alias("cg")
+                .arg(Arg::with_name("gif").required(true))
+                .arg(Arg::with_name("ssf").required(true))
+                .arg(Arg::with_name("width").required(true))
+                .arg(Arg::with_name("height").required(true)),
+        ))
+        .get_matches();
+
+    matches
+}
+
+fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> {
+    let mut cmds = Vec::new();
+    let mod_name = args.value_of("mod_name").unwrap();
+    let loname = mod_name.to_lowercase();
+    let capname = capitalize(mod_name);
+    let build_type = args.value_of("build_type").unwrap();
+    let release = if args.is_present("release") {
+        "--release"
+    } else {
+        ""
+    };
+    let webport = args.value_of("webport").unwrap_or("8080");
+
+    match build_type {
+        "term" | "t" => cmds.push(format!(
+            "cargo {} -p {} --features term {} {}",
+            subcmd, // build or run
+            mod_name,
+            release,
+            args.values_of("other")
+                .unwrap_or_default()
+                .collect::<Vec<&str>>()
+                .join(" ")
+        )),
+        "sdl" | "s" => cmds.push(format!(
+            "cargo {} -p {} --features sdl {} {}",
+            subcmd, // build or run
+            mod_name,
+            release,
+            args.values_of("other")
+                .unwrap_or_default()
+                .collect::<Vec<&str>>()
+                .join(" ")
+        )),
+        "web" | "w" => {
+            let mut crate_path = "".to_string();
+            if ctx.standalone == 2 {
+                // standalone
+                crate_path = ".".to_string();
+            } else if ctx.standalone == 1 {
+                // root
+                let cpath = format!("apps/{}", mod_name);
+                if Path::new(&cpath).exists() {
+                    crate_path = cpath;
+                }
+            }
+            cmds.push(format!(
+                "wasm-pack build --target web {} {} {}",
+                crate_path,
+                release,
+                args.values_of("other")
+                    .unwrap_or_default()
+                    .collect::<Vec<&str>>()
+                    .join(" ")
+            ));
+            let tmpwd = format!("tmp/web_{}/", mod_name);
+            cmds.push(format!("rm -r {}/*", tmpwd));
+            cmds.push(format!("mkdir -p {}", tmpwd));
+            cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
+            cmds.push(format!(
+                "cp {}/web-templates/* {}",
+                ctx.rust_pixel_dir, tmpwd
+            ));
+            cmds.push(format!(
+                "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
+                capname, tmpwd
+            ));
+            cmds.push(format!(
+                "sed -i '' \"s/pixel/{}/g\" {}/index.js",
+                loname, tmpwd
+            ));
+            cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
+            if subcmd == "run" {
+                cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
+            }
+        }
+        _ => {}
+    }
+
+    cmds
+}
+
+fn exec_cmd(cmd: &str) {
+    Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .status()
+        .expect("failed to execute process");
+}
+
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
+
