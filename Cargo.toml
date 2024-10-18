@@ -9,7 +9,7 @@ license = "Apache-2.0"
 description = "2d pixel art game engine & rapid prototype tools support terminal, sdl2, and web..."
 categories = ["game-engines", "gui", "graphics"]
 exclude = ["/screen-shot", "/test", "/assets", "/web-template"]
-include = ["/tools/pixel_edit", "tools/pixel_petii"]
+# include = ["/tools/pixel_edit", "tools/pixel_petii"]
 
 # Define binaries that will be built for the project.
 [[bin]]
