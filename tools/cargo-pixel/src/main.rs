@@ -96,14 +96,23 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     let loname = mod_name.to_lowercase();
     let capname = capitalize(mod_name);
 
-    println!(
-        "🍀 creat games folder...({})",
-        format!("{}/{}/", dir_name, mod_name)
-    );
-    let cdir = format!("{}", dir_name);
+    let cdir;
+    if let Some(sdir) = sa_dir {
+        cdir = format!("{}", sdir);
+        println!(
+            "🍀 creat standalone app folder...({})",
+            format!("{}/{}/", sdir, mod_name)
+        );
+    } else {
+        cdir = format!("{}", dir_name);
+        println!(
+            "🍀 creat app folder...({})",
+            format!("{}/{}/", dir_name, mod_name)
+        );
+    }
+
     let _ = fs::remove_dir_all("tmp/pixel_game_template");
     let _ = fs::create_dir_all(cdir);
-
     exec_cmd("cp -r apps/template tmp/pixel_game_template");
 
     if let Some(stand_dir) = sa_dir {
@@ -127,14 +136,25 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         &loname,
     );
 
-    println!("{:?}", format!("./{}/{}", dir_name, mod_name));
-    fs::rename(
-        "tmp/pixel_game_template",
-        format!("{}/{}", dir_name, mod_name),
-    )
-    .unwrap();
+    let new_path = &format!("{}/{}", dir_name, mod_name);
+    println!("{:?}", new_path);
+    fs::rename("tmp/pixel_game_template", new_path).unwrap();
 
     if is_standalone {
+        let path = Path::new(new_path);
+
+        let absolute_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            let current_dir = env::current_dir().unwrap();
+            current_dir.join(path)
+        };
+        let mut ctxc = ctx.clone();
+        ctxc.projects
+            .push(absolute_path.to_str().unwrap().to_string());
+        let config_dir = dirs_next::config_dir().expect("Could not find config directory");
+        let pixel_config = config_dir.join("rust_pixel.toml");
+        write_config(&ctxc, &pixel_config);
         println!(
             "🍀 compile & run: \n   cd {}/{}\n   cargo pixel r {} term\n   cargo pixel r {} sdl",
             dir_name, mod_name, mod_name, mod_name
