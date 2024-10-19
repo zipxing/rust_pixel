@@ -467,6 +467,7 @@ fn check_pixel_toml() -> PixelContext {
                 println!(
                     "The cargo_pixel version in pixel.toml is {cps}, the latest version is 0.5.1"
                 );
+                std::process::exit(0);
             }
         }
     }
