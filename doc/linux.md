@@ -27,8 +27,19 @@ sudo apt-get install libsdl2-gfx-dev
 ``` 
 
 **Download RustPixel and deploy cargo-pixel**
+
+Starting from version 0.5.3, you can deploy **cargo-pixel** directly from crates.io using `cargo install`.
+```
+cargo install rust_pixel         # use crates.io rust_pixel crate deploy cargo-pixel
+cargo pixel                      # first run cargo-pixel will clone rust_pixel to <homedir>/rust_pixel_work automatic 
+cd ~/rust_pixel_work             # cd to workspace
+cargo pixel r petview s          # run demo game...
+```
+
+To use the newest code, you should clone **RustPixel** and deploy **cargo-pixel** tool:
 ``` 
 git clone https://github.com/zipxing/rust_pixel
 cd rust_pixel
-cargo install --path tools/cargo-pixel --root ~/.cargo
-``` 
+cargo install --path . --force
+```
+
