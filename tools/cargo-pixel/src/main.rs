@@ -136,13 +136,13 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         &loname,
     );
 
-    let mut new_path; 
+    let mut new_path;
     new_path = format!("{}/{}", dir_name, mod_name);
     let mut count = 0;
     while Path::new(&new_path).exists() {
         println!("{} dir already exists, append {}!", new_path, count);
         new_path = format!("{}{}", new_path, count);
-        count+=1;
+        count += 1;
         if count > 10 {
             break;
         }
@@ -257,7 +257,6 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
 fn check_pixel_env() -> PixelContext {
     let mut pc: PixelContext = Default::default();
 
-<<<<<<< HEAD
     // match env::current_exe() {
     //     Ok(exe_path) => {
     //         pc.current_exe = exe_path.clone();
