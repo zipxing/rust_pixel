@@ -56,6 +56,7 @@ struct PixelContext {
     cdir_state: PState,
 }
 
+// run subcommand entry...
 fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.cdir_state == PState::NotPixel {
         println!("Not pixel directory.");
@@ -68,6 +69,7 @@ fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
     }
 }
 
+// build subcommand entry...
 fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.cdir_state == PState::NotPixel {
         println!("Not pixel directory.");
@@ -80,6 +82,7 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
     }
 }
 
+// crate subcommand entry...
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.cdir_state != PState::PixelRoot {
         println!("Cargo pixel creat must run in rust_pixel root directory.");
@@ -315,6 +318,7 @@ fn check_pixel_env() -> PixelContext {
                         pc.cdir_state = PState::PixelRoot;
                         pc.rust_pixel_dir.push(cdir_s);
                         pc.rust_pixel_idx = pc.rust_pixel_dir.len() - 1;
+                        write_config(&pc, &pixel_config);
                     }
                     if let Some(new_version) = package.get("version") {
                         let nvs = new_version.to_string();
