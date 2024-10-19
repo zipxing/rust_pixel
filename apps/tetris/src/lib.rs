@@ -1,8 +1,5 @@
 mod model;
 mod render;
-mod select;
 
 use rust_pixel::pixel_macro::pixel_game;
-
-pixel_game!(Palette);
-
+pixel_game!(Tetris);

@@ -19,191 +19,50 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::env;
 use std::ffi::OsStr;
 use std::fs;
+use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
 
-fn common_arg(app: App) -> App {
-    app.arg(
-        Arg::with_name("dir")
-            .short('d')
-            .long("dir")
-            .default_value(".")
-            .takes_value(true),
-    )
-    .arg(
-        Arg::with_name("release")
-            .short('r')
-            .long("release")
-            .takes_value(false),
-    )
-    .arg(
-        Arg::with_name("webport")
-            .short('p')
-            .long("webport")
-            .default_value("8080")
-            .takes_value(true),
-    )
-    .arg(
-        Arg::with_name("standalone")
-            .short('s')
-            .long("standalone")
-            .takes_value(false),
-    )
+// current dir state
+// not pixel dir, rust_pixel root dir, depend rust_pixel project
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum PState {
+    NotPixel,
+    PixelRoot,
+    PixelProject,
 }
 
-fn make_parser() -> ArgMatches {
-    let matches = App::new("cargo pixel")
-        .version("0.5.1")
-        .author("zipxing@hotmail.com")
-        .about("RustPixel cargo build tool")
-        .arg(Arg::with_name("pixel"))
-        .subcommand(common_arg(
-            SubCommand::with_name("run")
-                .alias("r")
-                .arg(Arg::with_name("mod_name").required(true))
-                .arg(
-                    Arg::with_name("build_type")
-                        .required(true)
-                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
-                )
-                .arg(Arg::with_name("other").multiple(true)),
-        ))
-        .subcommand(common_arg(
-            SubCommand::with_name("build")
-                .alias("b")
-                .arg(Arg::with_name("mod_name").required(true))
-                .arg(
-                    Arg::with_name("build_type")
-                        .required(true)
-                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
-                ),
-        ))
-        .subcommand(common_arg(
-            SubCommand::with_name("creat")
-                .alias("c")
-                .arg(Arg::with_name("dir_name").required(true))
-                .arg(Arg::with_name("mod_name").required(true)),
-        ))
-        .subcommand(common_arg(
-            SubCommand::with_name("convert_gif")
-                .alias("cg")
-                .arg(Arg::with_name("gif").required(true))
-                .arg(Arg::with_name("ssf").required(true))
-                .arg(Arg::with_name("width").required(true))
-                .arg(Arg::with_name("height").required(true)),
-        ))
-        .get_matches();
-
-    matches
-}
-
-fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> {
-    let mut cmds = Vec::new();
-    let mod_name = args.value_of("mod_name").unwrap();
-    let loname = mod_name.to_lowercase();
-    let capname = capitalize(mod_name);
-    let build_type = args.value_of("build_type").unwrap();
-    let release = if args.is_present("release") {
-        "--release"
-    } else {
-        ""
-    };
-    let webport = args.value_of("webport").unwrap_or("8080");
-
-    match build_type {
-        "term" | "t" => cmds.push(format!(
-            "cargo {} --bin {} --features term {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.values_of("other")
-                .unwrap_or_default()
-                .collect::<Vec<&str>>()
-                .join(" ")
-        )),
-        "sdl" | "s" => cmds.push(format!(
-            "cargo {} --bin {} --features sdl {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.values_of("other")
-                .unwrap_or_default()
-                .collect::<Vec<&str>>()
-                .join(" ")
-        )),
-        "web" | "w" => {
-            let mut crate_path = "".to_string();
-            if ctx.standalone {
-                crate_path = ".".to_string();
-            } else {
-                let cpath = format!("games/{}", mod_name);
-                if Path::new(&cpath).exists() {
-                    crate_path = cpath;
-                }
-                let cpath = format!("apps/{}", mod_name);
-                if Path::new(&cpath).exists() {
-                    crate_path = cpath;
-                }
-            }
-            cmds.push(format!(
-                "wasm-pack build --target web {} {} {}",
-                crate_path,
-                release,
-                args.values_of("other")
-                    .unwrap_or_default()
-                    .collect::<Vec<&str>>()
-                    .join(" ")
-            ));
-            let tmpwd = format!("tmp/web_{}/", mod_name);
-            cmds.push(format!("rm -r {}/*", tmpwd));
-            cmds.push(format!("mkdir -p {}", tmpwd));
-            cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
-            cmds.push(format!(
-                "cp {}/rust-pixel/web-templates/* {}",
-                ctx.rust_pixel_path, tmpwd
-            ));
-            cmds.push(format!(
-                "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
-                capname, tmpwd
-            ));
-            cmds.push(format!(
-                "sed -i '' \"s/pixel/{}/g\" {}/index.js",
-                loname, tmpwd
-            ));
-            cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
-            if subcmd == "run" {
-                cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
-            }
-        }
-        _ => {}
-    }
-
-    cmds
-}
-
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+impl Default for PState {
+    fn default() -> Self {
+        PState::NotPixel
     }
 }
 
-fn exec_cmd(cmd: &str) {
-    Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .expect("failed to execute process");
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct PixelContext {
+    // rust_pixel repo local path
+    rust_pixel_dir: Vec<String>,
+    rust_pixel_idx: usize,
+    // standalone projects
+    projects: Vec<String>,
+    project_idx: usize,
+    // current dir is root or standalone,
+    cdir_state: PState,
 }
 
+// run subcommand entry...
 fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
+    if ctx.cdir_state == PState::NotPixel {
+        println!("🚫 Not pixel directory.");
+        return;
+    }
     let cmds = get_cmds(ctx, args, "run");
     for cmd in cmds {
         println!("🍀 {}", cmd);
@@ -211,7 +70,12 @@ fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
     }
 }
 
+// build subcommand entry...
 fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
+    if ctx.cdir_state == PState::NotPixel {
+        println!("🚫 Not pixel directory.");
+        return;
+    }
     let cmds = get_cmds(ctx, args, "build");
     for cmd in cmds {
         println!("🍀 {}", cmd);
@@ -219,144 +83,95 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
     }
 }
 
+// crate subcommand entry...
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
-    if ctx.standalone {
-        println!("Cargo pixel creat must run in rust_pixel root directory.");
+    if ctx.cdir_state != PState::PixelRoot {
+        println!("🚫 Cargo pixel creat must run in rust_pixel root directory.");
         return;
     }
-    let dir_name = args.value_of("dir_name").unwrap();
+    let mut dir_name = "apps".to_string();
+    let sa_dir = args.value_of("standalone_dir_name");
     let mod_name = args.value_of("mod_name").unwrap();
-    let is_standalone = args.is_present("standalone");
+    let mut is_standalone = false;
     let upname = mod_name.to_uppercase();
     let loname = mod_name.to_lowercase();
     let capname = capitalize(mod_name);
 
-    if !is_standalone {
-        println!("🍀 update Cargo.toml...");
-        let ct = fs::read_to_string("Cargo.toml").unwrap();
-        let mut doc = ct.parse::<toml::Value>().unwrap();
-        if let Some(workspace) = doc.get_mut("workspace") {
-            if let Some(members) = workspace.get_mut("members") {
-                if let Some(members_array) = members.as_array_mut() {
-                    let ds = format!("{}/*", dir_name);
-                    if !members_array.contains(&ds.clone().into()) {
-                        members_array.push(ds.into());
-                    }
-                }
-            }
-            if let Some(exclude) = workspace.get_mut("exclude") {
-                if let Some(exclude_array) = exclude.as_array_mut() {
-                    exclude_array.push(format!("{}/{}/ffi", dir_name, mod_name).into());
-                    exclude_array.push(format!("{}/{}/wasm", dir_name, mod_name).into());
-                }
-            }
-        }
-        fs::write("Cargo.toml", toml::to_string_pretty(&doc).unwrap()).unwrap();
+    let cdir;
+    if let Some(sdir) = sa_dir {
+        cdir = format!("{}", sdir);
+        println!(
+            "🍀 creat standalone app folder...({})",
+            format!("{}/{}/", sdir, mod_name)
+        );
+    } else {
+        cdir = format!("{}", dir_name);
+        println!(
+            "🍀 creat app folder...({})",
+            format!("{}/{}/", dir_name, mod_name)
+        );
     }
 
-    println!(
-        "🍀 creat games folder...({})",
-        format!("{}/{}/", dir_name, mod_name)
-    );
-    let cdir = format!("{}", dir_name);
     let _ = fs::remove_dir_all("tmp/pixel_game_template");
     let _ = fs::create_dir_all(cdir);
+    exec_cmd("cp -r apps/template tmp/pixel_game_template");
 
-    exec_cmd("cp -r games/template tmp/pixel_game_template");
-
-    if is_standalone {
-        exec_cmd(
-            "cp games/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml",
-        );
-        exec_cmd("cp games/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
-        exec_cmd("cp games/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
-        exec_cmd(
-            "cp games/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml",
-        );
+    if let Some(stand_dir) = sa_dir {
+        is_standalone = true;
+        exec_cmd("cp apps/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml");
+        exec_cmd("cp apps/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
+        exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
+        exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
+        dir_name = format!("{}", stand_dir);
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
 
-    fn replace_in_files(
-        is_standalone: bool,
-        dir: &Path,
-        rust_pixel_path: &str,
-        dirname: &str,
-        capname: &str,
-        upname: &str,
-        loname: &str,
-    ) {
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir).unwrap() {
-                let entry = entry.unwrap();
-                let path = entry.path();
-                if path.is_dir() {
-                    replace_in_files(
-                        is_standalone,
-                        &path,
-                        rust_pixel_path,
-                        dirname,
-                        capname,
-                        upname,
-                        loname,
-                    );
-                } else if path.is_file() {
-                    let fname = path.file_name().and_then(OsStr::to_str);
-                    let ext = path.extension().and_then(OsStr::to_str);
-                    if ext == Some("rs")
-                        || ext == Some("toml")
-                        || fname == Some("Makefile")
-                        || fname == Some("index.js")
-                        || fname == Some("test.cc")
-                        || fname == Some("testffi.py")
-                    {
-                        let content = fs::read(&path).unwrap();
-                        let mut content_str = String::from_utf8_lossy(&content).to_string();
-                        if !is_standalone {
-                            if dirname == "games" {
-                            } else {
-                                content_str = content_str.replace(
-                                    "pixel_game!(Template)",
-                                    &format!("pixel_game!(Template, \"{}\")", dirname),
-                                );
-                            }
-                        } else {
-                            content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
-                            content_str = content_str.replace(
-                                "pixel_game!(Template)",
-                                &format!("pixel_game!(Template, \"app\", \".\")"),
-                            );
-                        }
-                        content_str = content_str.replace("Template", capname);
-                        content_str = content_str.replace("TEMPLATE", upname);
-                        content_str = content_str.replace("template", loname);
-                        fs::write(path, content_str).unwrap();
-                    }
-                }
-            }
-        }
-    }
     replace_in_files(
         is_standalone,
         Path::new("tmp/pixel_game_template"),
-        &ctx.rust_pixel_path,
+        &ctx.rust_pixel_dir[ctx.rust_pixel_idx],
         &dir_name,
         &capname,
         &upname,
         &loname,
     );
 
-    println!("{:?}", format!("./{}/{}", dir_name, mod_name));
-    fs::rename(
-        "tmp/pixel_game_template",
-        format!("{}/{}", dir_name, mod_name),
-    )
-    .unwrap();
+    let mut new_path; 
+    new_path = format!("{}/{}", dir_name, mod_name);
+    let mut count = 0;
+    while Path::new(&new_path).exists() {
+        println!("{} dir already exists, append {}!", new_path, count);
+        new_path = format!("{}{}", new_path, count);
+        count+=1;
+        if count > 10 {
+            break;
+        }
+    }
+    println!("{:?}", new_path);
+    fs::rename("tmp/pixel_game_template", &new_path).unwrap();
 
     if is_standalone {
+        let path = Path::new(&new_path);
+        let absolute_path = if path.is_absolute() {
+            fs::canonicalize(path).unwrap()
+        } else {
+            let current_dir = env::current_dir().unwrap();
+            fs::canonicalize(current_dir.join(path)).unwrap()
+        };
+        let anp = absolute_path.to_str().unwrap().to_string();
+        let mut ctxc = ctx.clone();
+        if !ctxc.projects.contains(&anp) {
+            ctxc.projects
+                .push(absolute_path.to_str().unwrap().to_string());
+        } else {
+            println!("new project but projects already contains path");
+        }
+        let config_dir = dirs_next::config_dir().expect("Could not find config directory");
+        let pixel_config = config_dir.join("rust_pixel.toml");
+        write_config(&ctxc, &pixel_config);
         println!(
-            "🍀 compile & run: \n   cd {}/{}\n   cargo pixel r {} term\n   cargo pixel r {} sdl",
-            dir_name, mod_name, mod_name, mod_name
+            "🍀 compile & run: \n   cd {}\n   cargo pixel r {} term\n   cargo pixel r {} sdl",
+            new_path, mod_name, mod_name
         );
     } else {
         println!(
@@ -386,12 +201,12 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     let frame_count: usize = fg.get(3).unwrap().as_str().parse().unwrap();
     println!("    frame_count = {}", frame_count);
 
-    println!("🍀 tpetii convert png to pix...");
+    println!("🍀 pixel_petii convert png to pix...");
     for x in 0..frame_count {
         print!("\r{}  ", x + 1);
         io::stdout().flush().unwrap();
         let cmd = format!(
-            "cargo r --bin tpetii --release tmp/t{}.png  {} {} > tmp/t{}.pix 2>/dev/null",
+            "cargo r --bin pixel_petii --release tmp/t{}.png  {} {} > tmp/t{}.pix 2>/dev/null",
             x + 1,
             width,
             height,
@@ -439,48 +254,368 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     exec_cmd("rm tmp/t*.p*");
 }
 
-#[derive(Debug)]
-struct PixelContext {
-    standalone: bool,
-    rust_pixel_path: String,
-}
+fn check_pixel_env() -> PixelContext {
+    let mut pc: PixelContext = Default::default();
 
-fn check_pixel_toml() -> PixelContext {
-    let ct = fs::read_to_string("pixel.toml")
-        .expect("Can't find pixel.toml!\ncargo-pixel must run in rust_pixel or standalone_rust_pixel_project directory.\npixel.toml ");
-    let doc = ct.parse::<toml::Value>().unwrap();
-    let mut pc = PixelContext {
-        standalone: false,
-        rust_pixel_path: "./".to_string(),
-    };
-    if let Some(pixel) = doc.get("pixel") {
-        if let Some(standalone) = pixel.get("standalone") {
-            pc.standalone = standalone.as_bool().unwrap();
-        }
-        if let Some(rust_pixel) = pixel.get("rust_pixel") {
-            let rpp = rust_pixel.to_string();
-            pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
-        }
-        if let Some(cargo_pixel) = pixel.get("cargo_pixel") {
-            let cps = cargo_pixel.to_string();
-            if cps != "\"0.5.1\"" {
-                println!(
-                    "The cargo_pixel version in pixel.toml is {cps}, the latest version is 0.5.1"
-                );
-                std::process::exit(0);
+<<<<<<< HEAD
+    // match env::current_exe() {
+    //     Ok(exe_path) => {
+    //         pc.current_exe = exe_path.clone();
+    //         println!("🍭 current_exe：{}", exe_path.display());
+    //     }
+    //     Err(e) => {
+    //         println!("get current_exe error：{}", e);
+    //     }
+    // }
+
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    println!("🍭 Rust_pixel version：{}", current_version);
+
+    let config_dir = dirs_next::config_dir().expect("Could not find config directory");
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir).expect("Failed to create config directory");
+    }
+    println!("🍭 Config_dir：{:?}", config_dir);
+
+    let pixel_config = config_dir.join("rust_pixel.toml");
+    if pixel_config.exists() {
+        let config_content = fs::read_to_string(&pixel_config).expect("Failed to read config file");
+        let saved_pc: PixelContext =
+            toml::from_str(&config_content).expect("Failed to parse config file");
+        pc = saved_pc.clone();
+        println!("🍭 Loaded configuration from {:?}", pixel_config);
+    } else {
+        let home_dir = dirs_next::home_dir().expect("Could not find home directory");
+        let repo_dir = home_dir.join("rust_pixel_work");
+        if !repo_dir.exists() {
+            println!("Cloning rust_pixel from GitHub...");
+            let status = Command::new("git")
+                .args(&[
+                    "clone",
+                    // "-b", "opt_crate",
+                    "https://github.com/zipxing/rust_pixel",
+                    repo_dir.to_str().unwrap(),
+                ])
+                .status()
+                .expect("Failed to execute git command");
+            if status.success() {
+                println!("Repository cloned successfully.");
+            } else {
+                println!("🚫 Failed to clone rust_pixel repository");
             }
+        } else {
+            println!("repo_dir exists!");
+        }
+        pc.rust_pixel_dir
+            .push(repo_dir.to_str().unwrap().to_string());
+        write_config(&pc, &pixel_config);
+    }
+
+    // search current_dir
+    let cdir = env::current_dir().unwrap();
+    let cdir_s = cdir.to_str().unwrap().to_string();
+    pc.cdir_state = PState::NotPixel;
+    if let Some(idx) = pc.rust_pixel_dir.iter().position(|x| x == &cdir_s) {
+        pc.cdir_state = PState::PixelRoot;
+        pc.rust_pixel_idx = idx;
+    } else {
+        if let Some(pidx) = pc.projects.iter().position(|x| x == &cdir_s) {
+            pc.cdir_state = PState::PixelProject;
+            pc.project_idx = pidx;
         }
     }
-    if !pc.standalone {
-        let srcdir = PathBuf::from(&pc.rust_pixel_path);
-        let rpp = format!("{:?}", fs::canonicalize(&srcdir).unwrap());
-        pc.rust_pixel_path = rpp[1..rpp.len() - 1].to_string();
+
+    // match env::set_current_dir(&repo_dir) {
+    //     Ok(_) => {
+    //         println!("Successfully changed to directory: {}", repo_dir.display());
+    //         println!("Updating rust_pixel from GitHub...");
+    //         let status = Command::new("git")
+    //             .args(&["pull"])
+    //             .status()
+    //             .expect("Failed to execute git command");
+    //         if status.success() {
+    //             println!("Repository update successfully.");
+    //         } else {
+    //             println!("Failed to update rust_pixel repository");
+    //         }
+    //     }
+    //     Err(e) => println!("Error changing directory: {}", e),
+    // }
+
+    if let Ok(ct) = fs::read_to_string("Cargo.toml") {
+        let doc = ct.parse::<toml::Value>().unwrap();
+
+        if let Some(package) = doc.get("package") {
+            if let Some(name) = package.get("name") {
+                if &name.to_string() == "\"rust_pixel\"" {
+                    if pc.cdir_state == PState::NotPixel {
+                        println!("🍭 Found a new pixel root:{:?}", cdir_s);
+                        pc.cdir_state = PState::PixelRoot;
+                        pc.rust_pixel_dir.push(cdir_s);
+                        pc.rust_pixel_idx = pc.rust_pixel_dir.len() - 1;
+                        write_config(&pc, &pixel_config);
+                    }
+                    if let Some(new_version) = package.get("version") {
+                        let nvs = new_version.to_string();
+                        let cvs = format!("\"{}\"", current_version);
+                        println!("new ver:{:?} ver:{:?}", nvs, cvs);
+                        if nvs != cvs {
+                            println!(
+                                "🚫 Please update cargo pixel: cargo install rust_pixel --force"
+                            );
+                            std::process::exit(0);
+                        }
+                    }
+                } else {
+                    if pc.cdir_state == PState::NotPixel {
+                        if let Some(dep) = doc.get("dependencies") {
+                            if let Some(_drp) = dep.get("rust_pixel") {
+                                println!("🍭 Found a new pixel project:{:?}", cdir_s);
+                                pc.cdir_state = PState::PixelProject;
+                                pc.projects.push(cdir_s);
+                                pc.project_idx = pc.projects.len() - 1;
+                                write_config(&pc, &pixel_config);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     pc
 }
 
+fn write_config(pc: &PixelContext, config_path: &Path) {
+    let toml_string = toml::to_string(pc).expect("Failed to serialize PixelContext");
+
+    let mut file = File::create(config_path).expect("Failed to create config file");
+    file.write_all(toml_string.as_bytes())
+        .expect("Failed to write to config file");
+    println!("🍭 Configuration saved to {}", config_path.display());
+}
+
+fn replace_in_files(
+    is_standalone: bool,
+    dir: &Path,
+    rust_pixel_path: &str,
+    dirname: &str,
+    capname: &str,
+    upname: &str,
+    loname: &str,
+) {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                replace_in_files(
+                    is_standalone,
+                    &path,
+                    rust_pixel_path,
+                    dirname,
+                    capname,
+                    upname,
+                    loname,
+                );
+            } else if path.is_file() {
+                let fname = path.file_name().and_then(OsStr::to_str);
+                let ext = path.extension().and_then(OsStr::to_str);
+                if ext == Some("rs")
+                    || ext == Some("toml")
+                    || fname == Some("Makefile")
+                    || fname == Some("index.js")
+                    || fname == Some("test.cc")
+                    || fname == Some("testffi.py")
+                {
+                    let content = fs::read(&path).unwrap();
+                    let mut content_str = String::from_utf8_lossy(&content).to_string();
+                    if !is_standalone {
+                        if dirname == "games" {
+                        } else {
+                            content_str = content_str.replace(
+                                "pixel_game!(Template)",
+                                &format!("pixel_game!(Template, \"{}\")", dirname),
+                            );
+                        }
+                    } else {
+                        content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
+                        content_str = content_str.replace(
+                            "pixel_game!(Template)",
+                            &format!("pixel_game!(Template, \"app\", \".\")"),
+                        );
+                    }
+                    content_str = content_str.replace("Template", capname);
+                    content_str = content_str.replace("TEMPLATE", upname);
+                    content_str = content_str.replace("template", loname);
+                    fs::write(path, content_str).unwrap();
+                }
+            }
+        }
+    }
+}
+
+fn common_arg(app: App) -> App {
+    app.arg(
+        Arg::with_name("release")
+            .short('r')
+            .long("release")
+            .takes_value(false),
+    )
+    .arg(
+        Arg::with_name("webport")
+            .short('p')
+            .long("webport")
+            .default_value("8080")
+            .takes_value(true),
+    )
+}
+
+fn make_parser() -> ArgMatches {
+    let matches = App::new("cargo pixel")
+        .author("zipxing@hotmail.com")
+        .about("RustPixel cargo build tool")
+        .arg(Arg::with_name("pixel"))
+        .subcommand(common_arg(
+            SubCommand::with_name("run")
+                .alias("r")
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(
+                    Arg::with_name("build_type")
+                        .required(true)
+                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
+                )
+                .arg(Arg::with_name("other").multiple(true)),
+        ))
+        .subcommand(common_arg(
+            SubCommand::with_name("build")
+                .alias("b")
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(
+                    Arg::with_name("build_type")
+                        .required(true)
+                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
+                ),
+        ))
+        .subcommand(common_arg(
+            SubCommand::with_name("creat")
+                .alias("c")
+                .arg(Arg::with_name("mod_name").required(true))
+                .arg(Arg::with_name("standalone_dir_name").required(false)),
+        ))
+        .subcommand(common_arg(
+            SubCommand::with_name("convert_gif")
+                .alias("cg")
+                .arg(Arg::with_name("gif").required(true))
+                .arg(Arg::with_name("ssf").required(true))
+                .arg(Arg::with_name("width").required(true))
+                .arg(Arg::with_name("height").required(true)),
+        ))
+        .get_matches();
+
+    matches
+}
+
+fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> {
+    let mut cmds = Vec::new();
+    let mod_name = args.value_of("mod_name").unwrap();
+    let loname = mod_name.to_lowercase();
+    let capname = capitalize(mod_name);
+    let build_type = args.value_of("build_type").unwrap();
+    let release = if args.is_present("release") {
+        "--release"
+    } else {
+        ""
+    };
+    let webport = args.value_of("webport").unwrap_or("8080");
+
+    match build_type {
+        "term" | "t" => cmds.push(format!(
+            "cargo {} -p {} --features term {} {}",
+            subcmd, // build or run
+            mod_name,
+            release,
+            args.values_of("other")
+                .unwrap_or_default()
+                .collect::<Vec<&str>>()
+                .join(" ")
+        )),
+        "sdl" | "s" => cmds.push(format!(
+            "cargo {} -p {} --features sdl {} {}",
+            subcmd, // build or run
+            mod_name,
+            release,
+            args.values_of("other")
+                .unwrap_or_default()
+                .collect::<Vec<&str>>()
+                .join(" ")
+        )),
+        "web" | "w" => {
+            let mut crate_path = "".to_string();
+            if ctx.cdir_state == PState::PixelProject {
+                // standalone
+                crate_path = ".".to_string();
+            } else if ctx.cdir_state == PState::PixelRoot {
+                // root
+                let cpath = format!("apps/{}", mod_name);
+                if Path::new(&cpath).exists() {
+                    crate_path = cpath;
+                }
+            }
+            cmds.push(format!(
+                "wasm-pack build --target web {} {} {}",
+                crate_path,
+                release,
+                args.values_of("other")
+                    .unwrap_or_default()
+                    .collect::<Vec<&str>>()
+                    .join(" ")
+            ));
+            let tmpwd = format!("tmp/web_{}/", mod_name);
+            cmds.push(format!("rm -r {}/*", tmpwd));
+            cmds.push(format!("mkdir -p {}", tmpwd));
+            cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
+            cmds.push(format!(
+                "cp {}/web-templates/* {}",
+                ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
+            ));
+            cmds.push(format!(
+                "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
+                capname, tmpwd
+            ));
+            cmds.push(format!(
+                "sed -i '' \"s/pixel/{}/g\" {}/index.js",
+                loname, tmpwd
+            ));
+            cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
+            if subcmd == "run" {
+                cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
+            }
+        }
+        _ => {}
+    }
+
+    cmds
+}
+
+fn exec_cmd(cmd: &str) {
+    Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .status()
+        .expect("failed to execute process");
+}
+
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
 fn main() {
-    let ctx = check_pixel_toml();
+    let ctx = check_pixel_env();
+    println!("{:?}", ctx);
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(&ctx, sub_m),

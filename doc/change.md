@@ -1,3 +1,16 @@
+# 0.5.3
+- Refactored the entire project structure by moving the contents of the rust-pixel directory to the root directory.
+- Refactored the way project directories are managed: in development mode, using env::var("CARGO_MANIFEST_DIR") as the starting directory; after release, you can flexibly pass in the path via command line arguments.
+- Refactored the cargo-pixel tool and set it as the binary file of rust_pixel, so you can directly install cargo-pixel via cargo install rust_pixel.
+
+# 0.5.2
+- Update coding.md and principle.md documents
+- Fix cargo-pixel bug, please update cargo-pixel:
+```
+cargo install --path tools/cargo-pixel --root ~/.cargo
+```
+- Fix gl transition size
+
 # 0.5.1
 - Update petview game, added a online demo
 - Update README.md and added a petview demo video
