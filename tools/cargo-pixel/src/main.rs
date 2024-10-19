@@ -140,14 +140,14 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     new_path = format!("{}/{}", dir_name, mod_name);
     let mut count = 0;
     while Path::new(&new_path).exists() {
-        println!("{} dir already exists, append {}!", new_path, count);
+        // println!("  {} dir already exists, append {}!", new_path, count);
         new_path = format!("{}{}", new_path, count);
         count += 1;
         if count > 10 {
             break;
         }
     }
-    println!("{:?}", new_path);
+    println!("crate path: {:?}", new_path);
     fs::rename("tmp/pixel_game_template", &new_path).unwrap();
 
     if is_standalone {
@@ -164,7 +164,7 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
             ctxc.projects
                 .push(absolute_path.to_str().unwrap().to_string());
         } else {
-            println!("new project but projects already contains path");
+            println!("  new project but projects already contains path");
         }
         let config_dir = dirs_next::config_dir().expect("Could not find config directory");
         let pixel_config = config_dir.join("rust_pixel.toml");
@@ -287,7 +287,7 @@ fn check_pixel_env() -> PixelContext {
         let home_dir = dirs_next::home_dir().expect("Could not find home directory");
         let repo_dir = home_dir.join("rust_pixel_work");
         if !repo_dir.exists() {
-            println!("Cloning rust_pixel from GitHub...");
+            println!("  Cloning rust_pixel from GitHub...");
             let status = Command::new("git")
                 .args(&[
                     "clone",
@@ -298,7 +298,7 @@ fn check_pixel_env() -> PixelContext {
                 .status()
                 .expect("Failed to execute git command");
             if status.success() {
-                println!("Repository cloned successfully.");
+                println!("  Repository cloned successfully.");
             } else {
                 println!("🚫 Failed to clone rust_pixel repository");
             }
@@ -614,7 +614,7 @@ fn capitalize(s: &str) -> String {
 
 fn main() {
     let ctx = check_pixel_env();
-    println!("{:?}", ctx);
+    // println!("{:?}", ctx);
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
