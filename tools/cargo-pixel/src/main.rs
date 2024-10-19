@@ -358,10 +358,10 @@ fn check_pixel_env() -> PixelContext {
                         let nvs = new_version.to_string();
                         let cvs = format!("\"{}\"", current_version);
                         if nvs != cvs {
-                            println!("new ver:{:?} ver:{:?}", nvs, cvs);
-                            println!("Update cargo pixel: cargo install --path . --force");
                             exec_cmd("cargo install --path . --force");
-                            println!("please re-run new version cargo-pixel");
+                            println!("new ver:{:?} ver:{:?}", nvs, cvs);
+                            println!("🍭 Updated cargo-pixel by: cargo install --path . --force");
+                            println!("🍭 Please re-run new version cargo-pixel");
                             std::process::exit(0);
                         }
                     }
