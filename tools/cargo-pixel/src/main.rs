@@ -20,6 +20,7 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
@@ -29,21 +30,34 @@ use std::process::Command;
 use std::process::Stdio;
 use std::str;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct PixelContext {
+#[repr(u8)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum PState {
+    NotPixel,
+    PixelRoot,
+    PixelProject,
+}
+
+impl Default for PState {
+    fn default() -> Self {
+        PState::NotPixel
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct PixelContext {
     // rust_pixel repo local path
-    pub rust_pixel_dir: String,
+    rust_pixel_dir: Vec<String>,
+    rust_pixel_idx: usize,
     // standalone projects
-    pub projects: Vec<String>,
-    // current dir is root or standalone, 
-    // 0: not pixel dir
-    // 1: pixel root dir
-    // 2: standalone pixel project dir
-    pub standalone: u8,
+    projects: Vec<String>,
+    project_idx: usize,
+    // current dir is root or standalone,
+    cdir_state: PState,
 }
 
 fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
-    if ctx.standalone == 0 {
+    if ctx.cdir_state == PState::NotPixel {
         println!("Not pixel directory.");
         return;
     }
@@ -55,7 +69,7 @@ fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
 }
 
 fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
-    if ctx.standalone == 0 {
+    if ctx.cdir_state == PState::NotPixel {
         println!("Not pixel directory.");
         return;
     }
@@ -67,7 +81,7 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
 }
 
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
-    if ctx.standalone != 1 {
+    if ctx.cdir_state != PState::PixelRoot {
         println!("Cargo pixel creat must run in rust_pixel root directory.");
         return;
     }
@@ -103,7 +117,7 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     replace_in_files(
         is_standalone,
         Path::new("tmp/pixel_game_template"),
-        &ctx.rust_pixel_dir,
+        &ctx.rust_pixel_dir[ctx.rust_pixel_idx],
         &dir_name,
         &capname,
         &upname,
@@ -206,8 +220,6 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
 fn check_pixel_env() -> PixelContext {
     let mut pc: PixelContext = Default::default();
 
-    let cdir = env::current_dir().unwrap();
-
     // match env::current_exe() {
     //     Ok(exe_path) => {
     //         pc.current_exe = exe_path.clone();
@@ -222,19 +234,18 @@ fn check_pixel_env() -> PixelContext {
     println!("🍭 rust_pixel version：{}", current_version);
 
     let config_dir = dirs_next::config_dir().expect("Could not find config directory");
-    let pixel_config = config_dir.join("rust_pixel.toml");
-    println!("🍭 config_dir：{:?}", config_dir);
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).expect("Failed to create config directory");
     }
+    println!("🍭 config_dir：{:?}", config_dir);
+
+    let pixel_config = config_dir.join("rust_pixel.toml");
     if pixel_config.exists() {
         let config_content = fs::read_to_string(&pixel_config).expect("Failed to read config file");
         let saved_pc: PixelContext =
             toml::from_str(&config_content).expect("Failed to parse config file");
         pc = saved_pc.clone();
-        // TODO, check current_dir
-        pc.standalone = 0;
-        println!("🍭 Loaded configuration from rust_pixel.toml");
+        println!("🍭 Loaded configuration from {:?}", pixel_config);
     } else {
         let home_dir = dirs_next::home_dir().expect("Could not find home directory");
         let repo_dir = home_dir.join("rust_pixel_work");
@@ -257,8 +268,23 @@ fn check_pixel_env() -> PixelContext {
         } else {
             println!("repo_dir exists!");
         }
-        pc.rust_pixel_dir = repo_dir.to_str().unwrap().to_string();
+        pc.rust_pixel_dir
+            .push(repo_dir.to_str().unwrap().to_string());
         write_config(&pc, &pixel_config);
+    }
+
+    // search current_dir
+    let cdir = env::current_dir().unwrap();
+    let cdir_s = cdir.to_str().unwrap().to_string();
+    pc.cdir_state = PState::NotPixel;
+    if let Some(idx) = pc.rust_pixel_dir.iter().position(|x| x == &cdir_s) {
+        pc.cdir_state = PState::PixelRoot;
+        pc.rust_pixel_idx = idx;
+    } else {
+        if let Some(pidx) = pc.projects.iter().position(|x| x == &cdir_s) {
+            pc.cdir_state = PState::PixelProject;
+            pc.project_idx = pidx;
+        }
     }
 
     // match env::set_current_dir(&repo_dir) {
@@ -278,26 +304,33 @@ fn check_pixel_env() -> PixelContext {
     //     Err(e) => eprintln!("Error changing directory: {}", e),
     // }
 
-    let ct = fs::read_to_string("pixel.toml").expect("Can't find pixel.toml!");
-    let doc = ct.parse::<toml::Value>().unwrap();
+    if let Ok(ct) = fs::read_to_string("Cargo.toml") {
+        let doc = ct.parse::<toml::Value>().unwrap();
 
-    if let Some(package) = doc.get("package") {
-        if let Some(new_version) = package.get("version") {
-            let nvs = new_version.to_string();
-            let cvs = format!("\"{}\"", current_version);
-            eprintln!("new ver:{:?} ver:{:?}", nvs, cvs);
-            if nvs != cvs {
-                eprintln!("Please update cargo pixel: cargo install rust_pixel --force");
-                std::process::exit(0);
+        if let Some(package) = doc.get("package") {
+            if let Some(name) = package.get("name") {
+                if &name.to_string() == "\"rust_pixel\"" {
+                    if pc.cdir_state == PState::NotPixel {
+                        println!("find a new pixel root:{:?}", cdir_s);
+                        pc.cdir_state = PState::PixelRoot;
+                        pc.rust_pixel_dir.push(cdir_s);
+                        pc.rust_pixel_idx = pc.rust_pixel_dir.len() - 1;
+                    }
+                    if let Some(new_version) = package.get("version") {
+                        let nvs = new_version.to_string();
+                        let cvs = format!("\"{}\"", current_version);
+                        eprintln!("new ver:{:?} ver:{:?}", nvs, cvs);
+                        if nvs != cvs {
+                            eprintln!(
+                                "Please update cargo pixel: cargo install rust_pixel --force"
+                            );
+                            std::process::exit(0);
+                        }
+                    }
+                }
             }
         }
     }
-
-    // if !pc.standalone {
-    //     let srcdir = PathBuf::from(&pc.rust_pixel_dir);
-    //     let rpp = format!("{:?}", fs::canonicalize(&srcdir).unwrap());
-    //     pc.rust_pixel_dir = rpp[1..rpp.len() - 1].to_string();
-    // }
     pc
 }
 
@@ -479,10 +512,10 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
         )),
         "web" | "w" => {
             let mut crate_path = "".to_string();
-            if ctx.standalone == 2 {
+            if ctx.cdir_state == PState::PixelProject {
                 // standalone
                 crate_path = ".".to_string();
-            } else if ctx.standalone == 1 {
+            } else if ctx.cdir_state == PState::PixelRoot {
                 // root
                 let cpath = format!("apps/{}", mod_name);
                 if Path::new(&cpath).exists() {
@@ -504,7 +537,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
             cmds.push(format!(
                 "cp {}/web-templates/* {}",
-                ctx.rust_pixel_dir, tmpwd
+                ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
             ));
             cmds.push(format!(
                 "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
@@ -540,5 +573,3 @@ fn capitalize(s: &str) -> String {
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
 }
-
-

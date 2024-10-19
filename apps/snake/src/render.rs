@@ -133,8 +133,8 @@ impl Render for SnakeRender {
         context.adapter.init(
             SNAKEW as u16 + 2,
             SNAKEH as u16 + 4,
-            1.0,
-            1.0,
+            0.5,
+            0.5,
             "snake".to_string(),
         );
         self.create_sprites(context, data);
