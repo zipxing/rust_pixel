@@ -121,7 +121,6 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         exec_cmd("cp apps/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
-        exec_cmd("cp apps/template/stand-alone/pixel.toml.temp tmp/pixel_game_template/pixel.toml");
         dir_name = format!("{}", stand_dir);
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
@@ -253,13 +252,13 @@ fn check_pixel_env() -> PixelContext {
     // }
 
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    println!("🍭 rust_pixel version：{}", current_version);
+    println!("🍭 Rust_pixel version：{}", current_version);
 
     let config_dir = dirs_next::config_dir().expect("Could not find config directory");
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).expect("Failed to create config directory");
     }
-    println!("🍭 config_dir：{:?}", config_dir);
+    println!("🍭 Config_dir：{:?}", config_dir);
 
     let pixel_config = config_dir.join("rust_pixel.toml");
     if pixel_config.exists() {
@@ -426,19 +425,6 @@ fn replace_in_files(
     }
 }
 
-fn main() {
-    let ctx = check_pixel_env();
-    println!("context:{:?}", ctx);
-    let args = make_parser();
-    match args.subcommand() {
-        Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
-        Some(("build", sub_m)) => pixel_build(&ctx, sub_m),
-        Some(("creat", sub_m)) => pixel_creat(&ctx, sub_m),
-        Some(("convert_gif", sub_m)) => pixel_convert_gif(&ctx, sub_m),
-        _ => {}
-    }
-}
-
 fn common_arg(app: App) -> App {
     app.arg(
         Arg::with_name("release")
@@ -597,3 +583,18 @@ fn capitalize(s: &str) -> String {
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
 }
+
+fn main() {
+    let ctx = check_pixel_env();
+    println!("{:?}", ctx);
+    let args = make_parser();
+    match args.subcommand() {
+        Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
+        Some(("build", sub_m)) => pixel_build(&ctx, sub_m),
+        Some(("creat", sub_m)) => pixel_creat(&ctx, sub_m),
+        Some(("convert_gif", sub_m)) => pixel_convert_gif(&ctx, sub_m),
+        _ => {}
+    }
+}
+
+
