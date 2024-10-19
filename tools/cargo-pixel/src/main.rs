@@ -334,7 +334,7 @@ fn check_pixel_env() -> PixelContext {
             if let Some(name) = package.get("name") {
                 if &name.to_string() == "\"rust_pixel\"" {
                     if pc.cdir_state == PState::NotPixel {
-                        println!("find a new pixel root:{:?}", cdir_s);
+                        println!("🍭 Found a new pixel root:{:?}", cdir_s);
                         pc.cdir_state = PState::PixelRoot;
                         pc.rust_pixel_dir.push(cdir_s);
                         pc.rust_pixel_idx = pc.rust_pixel_dir.len() - 1;
