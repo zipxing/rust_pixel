@@ -464,7 +464,9 @@ fn check_pixel_toml() -> PixelContext {
         if let Some(cargo_pixel) = pixel.get("cargo_pixel") {
             let cps = cargo_pixel.to_string();
             if cps != "\"0.5.1\"" {
-                panic!("Please update cargo pixel: cargo install --path tools/cargo-pixel --root ~/.cargo");
+                println!(
+                    "The cargo_pixel version in pixel.toml is {cps}, the latest version is 0.5.1"
+                );
             }
         }
     }
