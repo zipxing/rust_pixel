@@ -1,3 +1,10 @@
+# 0.5.5
+- Update cargo-pixel, added self-update feature. 
+- If ~/rust_pixel_work/Cargo.toml version not equal cargo-pixel version, then auto exec `cargo install --path . --force`
+
+# 0.5.4
+- Update docs 
+
 # 0.5.3
 - Refactored the entire project structure by moving the contents of the rust-pixel directory to the root directory.
 - Refactored the way project directories are managed: in development mode, using env::var("CARGO_MANIFEST_DIR") as the starting directory; after release, you can flexibly pass in the path via command line arguments.
