@@ -59,7 +59,7 @@ struct PixelContext {
 // run subcommand entry...
 fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.cdir_state == PState::NotPixel {
-        println!("Not pixel directory.");
+        println!("🚫 Not pixel directory.");
         return;
     }
     let cmds = get_cmds(ctx, args, "run");
@@ -72,7 +72,7 @@ fn pixel_run(ctx: &PixelContext, args: &ArgMatches) {
 // build subcommand entry...
 fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.cdir_state == PState::NotPixel {
-        println!("Not pixel directory.");
+        println!("🚫 Not pixel directory.");
         return;
     }
     let cmds = get_cmds(ctx, args, "build");
@@ -85,7 +85,7 @@ fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
 // crate subcommand entry...
 fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     if ctx.cdir_state != PState::PixelRoot {
-        println!("Cargo pixel creat must run in rust_pixel root directory.");
+        println!("🚫 Cargo pixel creat must run in rust_pixel root directory.");
         return;
     }
     let mut dir_name = "apps".to_string();
@@ -142,7 +142,6 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
 
     if is_standalone {
         let path = Path::new(new_path);
-
         let absolute_path = if path.is_absolute() {
             fs::canonicalize(path).unwrap()
         } else {
@@ -286,7 +285,7 @@ fn check_pixel_env() -> PixelContext {
             if status.success() {
                 println!("Repository cloned successfully.");
             } else {
-                eprintln!("Failed to clone rust_pixel repository");
+                println!("🚫 Failed to clone rust_pixel repository");
             }
         } else {
             println!("repo_dir exists!");
@@ -321,10 +320,10 @@ fn check_pixel_env() -> PixelContext {
     //         if status.success() {
     //             println!("Repository update successfully.");
     //         } else {
-    //             eprintln!("Failed to update rust_pixel repository");
+    //             println!("Failed to update rust_pixel repository");
     //         }
     //     }
-    //     Err(e) => eprintln!("Error changing directory: {}", e),
+    //     Err(e) => println!("Error changing directory: {}", e),
     // }
 
     if let Ok(ct) = fs::read_to_string("Cargo.toml") {
@@ -343,10 +342,10 @@ fn check_pixel_env() -> PixelContext {
                     if let Some(new_version) = package.get("version") {
                         let nvs = new_version.to_string();
                         let cvs = format!("\"{}\"", current_version);
-                        eprintln!("new ver:{:?} ver:{:?}", nvs, cvs);
+                        println!("new ver:{:?} ver:{:?}", nvs, cvs);
                         if nvs != cvs {
-                            eprintln!(
-                                "Please update cargo pixel: cargo install rust_pixel --force"
+                            println!(
+                                "🚫 Please update cargo pixel: cargo install rust_pixel --force"
                             );
                             std::process::exit(0);
                         }
