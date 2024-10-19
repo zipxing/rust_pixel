@@ -357,8 +357,8 @@ fn check_pixel_env() -> PixelContext {
                     if let Some(new_version) = package.get("version") {
                         let nvs = new_version.to_string();
                         let cvs = format!("\"{}\"", current_version);
-                        println!("new ver:{:?} ver:{:?}", nvs, cvs);
                         if nvs != cvs {
+                            println!("new ver:{:?} ver:{:?}", nvs, cvs);
                             println!(
                                 "🚫 Please update cargo pixel: cargo install rust_pixel --force"
                             );
