@@ -67,7 +67,6 @@ cargo install rust_pixel         # use crates.io rust_pixel crate
 cargo pixel                      # first run cargo-pixel will clone rust_pixel.git automatic 
 cd ~/rust_pixel_work             # clone to <homedir>/rust_pixel_work automatic
 cargo pixel r petview s          # run demo game...
-
 ```
 
 Next, you should clone **RustPixel** and deploy **cargo-pixel** tool:(The old way is still usable.)
