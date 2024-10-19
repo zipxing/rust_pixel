@@ -257,6 +257,7 @@ fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
 fn check_pixel_env() -> PixelContext {
     let mut pc: PixelContext = Default::default();
 
+<<<<<<< HEAD
     // match env::current_exe() {
     //     Ok(exe_path) => {
     //         pc.current_exe = exe_path.clone();
