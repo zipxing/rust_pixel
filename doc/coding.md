@@ -6,15 +6,14 @@ Before coding, please read the [Readme] first, then read the [Principle] to unde
 ### Create new project
 - Create game or terminal-app use cargo-pixel tool:
 ```
-cargo pixel c games block 
-cargo pixel c apps block 
+cargo pixel c block 
 ```
-The above command will create a new project in the `games` or `apps` subdirectory of the rust_pixel directory.
+The above command will create a new project in the `apps` subdirectory of the rust_pixel directory.
 
 
 More commonly, you can create a **standalone** project that depends on rust_pixel, using the following command:
 ```
-cargo pixel c .. block --standalone
+cargo pixel c block .. 
 cd ../block
 cargo pixel r block t -r    # run standalone project in term mode...
 cargo pixel r block s -r    # run standalone project in sdl mode...
@@ -57,10 +56,10 @@ mod render;
 use pixel_macro::pixel_game;
 
 // refer to rust_pixel/pixel_macro for macro details
-pixel_game!(Block, "app", ".");  
+pixel_game!(Block);  
 ```
 
-`pixel_game!(Block, "app", ".")` will expand into the following code:
+`pixel_game!(Block)` will expand into the following code:
 
 ```rust
 use crate::{model::BlockModel, render::BlockRender};
