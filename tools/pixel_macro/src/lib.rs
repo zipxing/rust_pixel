@@ -45,6 +45,7 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
     let expanded = quote! {
             use crate::{model::#model_name, render::#render_name};
             use rust_pixel::game::Game;
+            use rust_pixel::util::get_project_path;
 
             #[cfg(target_arch = "wasm32")]
             use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter};
@@ -53,25 +54,6 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
             use wasm_bindgen_futures::js_sys;
             #[cfg(target_arch = "wasm32")]
             use log::info;
-
-            fn get_project_path() -> String {
-                let args: Vec<String> = std::env::args().collect();
-                match args.len() {
-                    1 => {
-                        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-                            manifest_dir.to_string()
-                        } else {
-                            ".".to_string()
-                        }
-                    }
-                    2 => {
-                        args[1].to_string()
-                    }
-                    _ => {
-                        ".".to_string()
-                    }
-                }
-            }
 
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             pub struct #game_name {

@@ -23,6 +23,26 @@ pub use particle::*;
 mod rand;
 pub use rand::*;
 
+/// smart get project path function
+pub fn get_project_path() -> String {
+    let args: Vec<String> = std::env::args().collect();
+    match args.len() {
+        1 => {
+            if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+                manifest_dir.to_string()
+            } else {
+                ".".to_string()
+            }
+        }
+        2 => {
+            args[1].to_string()
+        }
+        _ => {
+            ".".to_string()
+        }
+    }
+}
+
 /// get flag_file path...
 pub fn get_project_root(flag_file: &str) -> io::Result<PathBuf> {
     let path = env::current_dir()?;
