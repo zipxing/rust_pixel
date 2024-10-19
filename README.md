@@ -69,7 +69,7 @@ cd ~/rust_pixel_work             # clone to <homedir>/rust_pixel_work automatic
 cargo pixel r petview s          # run demo game...
 ```
 
-Next, you should clone **RustPixel** and deploy **cargo-pixel** tool:(The old way is still usable.)
+To use the newest code, you should clone **RustPixel** and deploy **cargo-pixel** tool:
 ``` 
 git clone https://github.com/zipxing/rust_pixel
 cd rust_pixel
