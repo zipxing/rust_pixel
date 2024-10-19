@@ -65,7 +65,7 @@ Next, you should clone **RustPixel** and deploy **cargo-pixel** tool:
 ``` 
 git clone https://github.com/zipxing/rust_pixel
 cd rust_pixel
-cargo install --path tools/cargo-pixel --root ~/.cargo
+cargo install --path . --force
 ``` 
 
 ### Usage Instructions
@@ -81,12 +81,11 @@ cargo pixel r tower w -r              #Run with release mode
 
 You can also use cargo pixel to create your own game or app:
 ```
-cargo pixel c games mygame           #Create mygame in ./games using games/template as a template
-cargo pixel c apps myapp             #Create myapp in ./apps using games/template as a template
+cargo pixel c mygame           #Create mygame in ./apps using apps/template as a template
 ```
 Creat a standalone app in some directory:
 ```
-cargo pixel c .. myapp --standalone  #Create a standalone crate in ../myapp 
+cargo pixel c myapp ..  #Create a standalone crate in ../myapp 
 cd ../myapp 
 cargo pixel r myapp t
 cargo pixel r myapp s
@@ -103,22 +102,22 @@ cargo pixel r palette t -r
 2. **tedit**: Used to edit character art assets, example:
 ``` 
 #term mode
-cargo pixel r tedit term assets/screen-shot/tedit.txt
+cargo pixel r pixel_edit term . assets/logo.txt
 
 #graphics mode
-cargo pixel r tedit sdl assets/screen-shot/tedit.pix 
+cargo pixel r pixel_edit sdl . assets/logo.pix
 ```
  ![tedit_t](./screen-shot/tedit_term.png)
  ![tedit_s](./screen-shot/tedit_sdl.png)
 
 3. **tpetii**: Used to convert regular images into PETSCII character art, example:
 ```
-cargo pixel r tpetii t assets/a.png -r > assets/a.pix
-cargo pixel r tedit s assets/a.pix
+cargo pixel r pixel_petii t assets/a.png -r > assets/a.pix
+cargo pixel r pixel_edit s . assets/a.pix
 ```
 ```
-cargo pixel r tpetii t assets/lion.png 40 40 -r > assets/lion.pix
-cargo pixel r tedit s assets/lion.pix
+cargo pixel r pixel_petii t assets/lion.png 40 40 -r > assets/lion.pix
+cargo pixel r pixel_edit s . assets/lion.pix
 ```
  ![tpetii_1](./screen-shot/a.png)
  ![tpetii_2](./screen-shot/lion.png)
