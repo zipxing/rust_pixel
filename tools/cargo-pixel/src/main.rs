@@ -144,10 +144,10 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         let path = Path::new(new_path);
 
         let absolute_path = if path.is_absolute() {
-            path.to_path_buf()
+            fs::canonicalize(path).unwrap()
         } else {
             let current_dir = env::current_dir().unwrap();
-            current_dir.join(path)
+            fs::canonicalize(current_dir.join(path)).unwrap()
         };
         let mut ctxc = ctx.clone();
         ctxc.projects
@@ -429,6 +429,7 @@ fn replace_in_files(
 
 fn main() {
     let ctx = check_pixel_env();
+    println!("context:{:?}", ctx);
     let args = make_parser();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
