@@ -63,9 +63,9 @@ The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | 
 
 Starting from version 0.5.3, you can deploy **cargo-pixel** directly from crates.io using `cargo install`.
 ```
-cargo install rust_pixel         # use crates.io rust_pixel crate
-cargo pixel                      # first run cargo-pixel will clone rust_pixel.git automatic 
-cd ~/rust_pixel_work             # clone to <homedir>/rust_pixel_work automatic
+cargo install rust_pixel         # use crates.io rust_pixel crate deploy cargo-pixel
+cargo pixel                      # first run cargo-pixel will clone rust_pixel to <homedir>/rust_pixel_work automatic 
+cd ~/rust_pixel_work             # cd to workspace
 cargo pixel r petview s          # run demo game...
 ```
 
