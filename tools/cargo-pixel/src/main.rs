@@ -349,6 +349,18 @@ fn check_pixel_env() -> PixelContext {
                             std::process::exit(0);
                         }
                     }
+                } else {
+                    if pc.cdir_state == PState::NotPixel {
+                        if let Some(dep) = doc.get("dependencies") {
+                            if let Some(_drp) = dep.get("rust_pixel") {
+                                println!("🍭 Found a new pixel project:{:?}", cdir_s);
+                                pc.cdir_state = PState::PixelProject;
+                                pc.projects.push(cdir_s);
+                                pc.project_idx = pc.projects.len() - 1;
+                                write_config(&pc, &pixel_config);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -596,5 +608,3 @@ fn main() {
         _ => {}
     }
 }
-
-
