@@ -136,27 +136,42 @@ fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         &loname,
     );
 
-    let new_path = &format!("{}/{}", dir_name, mod_name);
+    let mut new_path; 
+    new_path = format!("{}/{}", dir_name, mod_name);
+    let mut count = 0;
+    while Path::new(&new_path).exists() {
+        println!("{} dir already exists, append {}!", new_path, count);
+        new_path = format!("{}{}", new_path, count);
+        count+=1;
+        if count > 10 {
+            break;
+        }
+    }
     println!("{:?}", new_path);
-    fs::rename("tmp/pixel_game_template", new_path).unwrap();
+    fs::rename("tmp/pixel_game_template", &new_path).unwrap();
 
     if is_standalone {
-        let path = Path::new(new_path);
+        let path = Path::new(&new_path);
         let absolute_path = if path.is_absolute() {
             fs::canonicalize(path).unwrap()
         } else {
             let current_dir = env::current_dir().unwrap();
             fs::canonicalize(current_dir.join(path)).unwrap()
         };
+        let anp = absolute_path.to_str().unwrap().to_string();
         let mut ctxc = ctx.clone();
-        ctxc.projects
-            .push(absolute_path.to_str().unwrap().to_string());
+        if !ctxc.projects.contains(&anp) {
+            ctxc.projects
+                .push(absolute_path.to_str().unwrap().to_string());
+        } else {
+            println!("new project but projects already contains path");
+        }
         let config_dir = dirs_next::config_dir().expect("Could not find config directory");
         let pixel_config = config_dir.join("rust_pixel.toml");
         write_config(&ctxc, &pixel_config);
         println!(
-            "🍀 compile & run: \n   cd {}/{}\n   cargo pixel r {} term\n   cargo pixel r {} sdl",
-            dir_name, mod_name, mod_name, mod_name
+            "🍀 compile & run: \n   cd {}\n   cargo pixel r {} term\n   cargo pixel r {} sdl",
+            new_path, mod_name, mod_name
         );
     } else {
         println!(
