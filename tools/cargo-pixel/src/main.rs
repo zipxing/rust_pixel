@@ -30,7 +30,8 @@ use std::process::Command;
 use std::process::Stdio;
 use std::str;
 
-#[repr(u8)]
+// current dir state
+// not pixel dir, rust_pixel root dir, depend rust_pixel project
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 enum PState {
     NotPixel,

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rust_pixel = { path = "$RUST_PIXEL_ROOT/rust-pixel", default-features = false, features = ["web"] }
+rust_pixel = { path = "$RUST_PIXEL_ROOT", default-features = false, features = ["web"] }
 template_lib = { path = "../lib" }
 wasm-bindgen = "0.2.92"
 web-sys = "0.3.4"

@@ -6,5 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rust_pixel = { path = "$RUST_PIXEL_ROOT/rust-pixel", default-features = false }
+rust_pixel = { path = "$RUST_PIXEL_ROOT", default-features = false }
 
