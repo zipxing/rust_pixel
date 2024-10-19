@@ -61,7 +61,16 @@ The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | 
 [Windows]: doc/win.md
 [DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
 
-Next, you should clone **RustPixel** and deploy **cargo-pixel** tool:
+Since v0.5.3, you can deploy **cargo-pixel** by `cargo install`
+```
+cargo install rust_pixel         # use crates.io rust_pixel crate
+cargo pixel                      # first run cargo-pixel will auto clone rust_pixel 
+cd ~/rust_pixel_work             # auto clone to <homedir>/rust_pixel_work
+cargo pixel r petview s          # run demo game...
+
+```
+
+Next, you should clone **RustPixel** and deploy **cargo-pixel** tool:(The old way is still usable.)
 ``` 
 git clone https://github.com/zipxing/rust_pixel
 cd rust_pixel
