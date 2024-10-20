@@ -219,7 +219,7 @@ impl Render for PetviewRender {
                             |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
                         apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
 
-                        for _ in 0..model.transbuf_stage {
+                        for _ in 0..model.transbuf_stage / 2 {
                             tbuf.content[ctx.rand.rand() as usize % clen]
                                 .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
                                 .set_fg(Color::Rgba(155, 155, 155, 155));
