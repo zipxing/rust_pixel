@@ -411,9 +411,9 @@ fn push_render_buffer(
     } else {
         wc.bcolor = None;
     }
-    let x = symidx as u32 % 16u32 + (texidx as u32 % 2u32) * 16u32;
-    let y = symidx as u32 / 16u32 + (texidx as u32 / 2u32) * 16u32;
-    wc.texsym = (y * 32u32 + x) as usize;
+    let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
+    let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
+    wc.texsym = (y * 16u32 * 8u32 + x) as usize;
     wc.x = s.x as f32 + PIXEL_SYM_WIDTH;
     wc.y = s.y as f32 + PIXEL_SYM_HEIGHT;
     wc.w = s.w;

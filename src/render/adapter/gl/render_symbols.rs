@@ -11,7 +11,7 @@ use crate::render::adapter::gl::{
 };
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
-// use log::info;
+use log::info;
 
 pub struct GlRenderSymbols {
     pub base: GlRenderBase,
@@ -215,8 +215,10 @@ impl GlRenderSymbols {
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
-        for i in 0..32 {
-            for j in 0..32 {
+        let th = (texh as f32 / PIXEL_SYM_HEIGHT) as usize;
+        let tw = (texw as f32 / PIXEL_SYM_WIDTH) as usize;
+        for i in 0..th {
+            for j in 0..tw {
                 let symbol = self.make_symbols_frame(
                     &mut sprite_sheet,
                     j as f32 * (PIXEL_SYM_WIDTH),
@@ -225,6 +227,14 @@ impl GlRenderSymbols {
                 self.symbols.push(symbol);
             }
         }
+        info!(
+            "symbols len...{}, texh={} texw={} th={} tw={}",
+            self.symbols.len(),
+            texh,
+            texw,
+            th,
+            tw
+        );
         self.base.textures.clear();
         self.base.textures.push(self.symbols[0].texture);
         self.base.textures_binded = false;
@@ -317,10 +327,7 @@ impl GlRenderSymbols {
         for r in rbuf {
             let mut transform = GlTransform::new();
 
-            transform.translate(
-                r.x + r.cx - PIXEL_SYM_WIDTH,
-                r.y + r.cy - PIXEL_SYM_HEIGHT,
-            );
+            transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT);
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
