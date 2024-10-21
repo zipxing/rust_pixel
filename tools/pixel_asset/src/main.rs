@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
 use image::GenericImage;
+use image::imageops::FilterType;
 
 #[derive(Clone, Copy, Debug)]
 struct Rectangle {
@@ -194,8 +195,10 @@ fn main() {
     for path in paths {
         let file_path = path.unwrap().path();
         if file_path.is_file() {
-            let img = image::open(&file_path).unwrap();
-            images.push(img);
+            println!("{}", file_path.display());
+            if let Ok(img) = image::open(&file_path) {
+                images.push(img);
+            }
         }
     }
 
@@ -218,8 +221,10 @@ fn main() {
             img
         };
 
+        let padded_image = padded_image.resize_exact(adjusted_width / 2, adjusted_height / 2, FilterType::Lanczos3);
+
         // 插入到 bin 中
-        if let Some(rect) = bin.insert(adjusted_width, adjusted_height) {
+        if let Some(rect) = bin.insert(adjusted_width / 2, adjusted_height / 2) {
             image_rects.push(ImageRect {
                 image: padded_image,
                 rect,
