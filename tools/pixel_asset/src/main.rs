@@ -1,443 +1,259 @@
-// https://github.com/JuliaPoo/AsciiArtist
-// https://github.com/EgonOlsen71/petsciiator
-
-mod c64;
-use c64::{C64LOW, C64UP};
-use deltae::*;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
-use lab::Lab;
-use rust_pixel::render::style::ANSI_COLOR_RGB;
-use std::collections::HashMap;
-use std::env;
+use std::fs;
 use std::path::Path;
+use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
+use image::GenericImage;
 
-// gray 8x8 image...
-type Image8x8 = Vec<Vec<u8>>;
-struct RGB {
-    r: u8,
-    g: u8,
-    b: u8,
+#[derive(Clone, Copy, Debug)]
+struct Rectangle {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+struct MaxRectsBin {
+    width: u32,
+    height: u32,
+    free_rects: Vec<Rectangle>,
+    used_rects: Vec<Rectangle>,
+}
+
+impl MaxRectsBin {
+    fn new(width: u32, height: u32) -> Self {
+        let initial_rect = Rectangle {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        };
+        MaxRectsBin {
+            width,
+            height,
+            free_rects: vec![initial_rect],
+            used_rects: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, width: u32, height: u32) -> Option<Rectangle> {
+        // 选择最佳的空闲矩形
+        if let Some(best_rect) = self.find_position_for_new_node_best_area_fit(width, height) {
+            let new_node = Rectangle {
+                x: best_rect.x,
+                y: best_rect.y,
+                width,
+                height,
+            };
+            self.place_rectangle(new_node);
+            Some(new_node)
+        } else {
+            // 无法放置矩形
+            None
+        }
+    }
+
+    fn find_position_for_new_node_best_area_fit(&self, width: u32, height: u32) -> Option<Rectangle> {
+        let mut best_area_fit = u32::MAX;
+        let mut best_rect = None;
+
+        for rect in &self.free_rects {
+            if width <= rect.width && height <= rect.height {
+                let area_fit = rect.width * rect.height - width * height;
+                if area_fit < best_area_fit {
+                    best_area_fit = area_fit;
+                    best_rect = Some(Rectangle {
+                        x: rect.x,
+                        y: rect.y,
+                        width,
+                        height,
+                    });
+                }
+            }
+        }
+
+        best_rect
+    }
+
+    fn place_rectangle(&mut self, rect: Rectangle) {
+        self.used_rects.push(rect);
+
+        let mut i = 0;
+        while i < self.free_rects.len() {
+            if self.split_free_node(self.free_rects[i], rect) {
+                self.free_rects.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+
+        self.prune_free_list();
+    }
+
+    fn split_free_node(&mut self, free_rect: Rectangle, used_rect: Rectangle) -> bool {
+        // 如果两矩形不重叠，返回 false
+        if !self.is_overlapping(free_rect, used_rect) {
+            return false;
+        }
+
+        let mut new_rects = Vec::new();
+
+        // 上方
+        if used_rect.y > free_rect.y && used_rect.y < free_rect.y + free_rect.height {
+            new_rects.push(Rectangle {
+                x: free_rect.x,
+                y: free_rect.y,
+                width: free_rect.width,
+                height: used_rect.y - free_rect.y,
+            });
+        }
+
+        // 下方
+        if used_rect.y + used_rect.height < free_rect.y + free_rect.height {
+            new_rects.push(Rectangle {
+                x: free_rect.x,
+                y: used_rect.y + used_rect.height,
+                width: free_rect.width,
+                height: free_rect.y + free_rect.height - (used_rect.y + used_rect.height),
+            });
+        }
+
+        // 左侧
+        if used_rect.x > free_rect.x && used_rect.x < free_rect.x + free_rect.width {
+            new_rects.push(Rectangle {
+                x: free_rect.x,
+                y: free_rect.y,
+                width: used_rect.x - free_rect.x,
+                height: free_rect.height,
+            });
+        }
+
+        // 右侧
+        if used_rect.x + used_rect.width < free_rect.x + free_rect.width {
+            new_rects.push(Rectangle {
+                x: used_rect.x + used_rect.width,
+                y: free_rect.y,
+                width: free_rect.x + free_rect.width - (used_rect.x + used_rect.width),
+                height: free_rect.height,
+            });
+        }
+
+        for new_rect in new_rects {
+            self.free_rects.push(new_rect);
+        }
+
+        true
+    }
+
+    fn is_overlapping(&self, a: Rectangle, b: Rectangle) -> bool {
+        !(a.x + a.width <= b.x || a.x >= b.x + b.width || a.y + a.height <= b.y || a.y >= b.y + b.height)
+    }
+
+    fn prune_free_list(&mut self) {
+        let mut i = 0;
+        while i < self.free_rects.len() {
+            let mut j = i + 1;
+            while j < self.free_rects.len() {
+                if self.is_contained_in(self.free_rects[i], self.free_rects[j]) {
+                    self.free_rects.remove(i);
+                    i -= 1;
+                    break;
+                } else if self.is_contained_in(self.free_rects[j], self.free_rects[i]) {
+                    self.free_rects.remove(j);
+                } else {
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    fn is_contained_in(&self, a: Rectangle, b: Rectangle) -> bool {
+        a.x >= b.x && a.y >= b.y && a.x + a.width <= b.x + b.width && a.y + a.height <= b.y + b.height
+    }
+}
+
+fn adjust_size_to_multiple_of_eight(width: u32, height: u32) -> (u32, u32) {
+    let adjusted_width = ((width + 7) / 8) * 8;
+    let adjusted_height = ((height + 7) / 8) * 8;
+    (adjusted_width, adjusted_height)
+}
+
+struct ImageRect {
+    image: DynamicImage,
+    rect: Rectangle,
 }
 
 fn main() {
-    let input_image_path;
-    let mut width: u32 = 40;
-    let mut height: u32 = 25;
-    let mut is_petii: bool = false;
+    let folder_path = "./cc";
+    let atlas_width = 1024;
+    let atlas_height = 1024;
 
-    let args: Vec<String> = env::args().collect();
+    // 1. 加载小图片
+    let mut images = Vec::new();
+    let paths = fs::read_dir(folder_path).unwrap();
 
-    match args.len() {
-        2 | 4 | 5 | 9 => {}
-        _ => {
-            println!("Usage: pixel_petii <image file path> [<width>] [<height>] [<is_petscii>]");
-            return;
+    for path in paths {
+        let file_path = path.unwrap().path();
+        if file_path.is_file() {
+            let img = image::open(&file_path).unwrap();
+            images.push(img);
         }
     }
-    input_image_path = Path::new(&args[1]);
-    let mut img = image::open(&input_image_path).expect("Failed to open the input image");
-    if args.len() > 2 {
-        width = args[2].parse().unwrap();
-        height = args[3].parse().unwrap();
-    }
-    if args.len() > 4 {
-        is_petii = args[4].parse().unwrap();
-    }
-    if args.len() == 9 {
-        let cx = args[5].parse().unwrap();
-        let cy = args[6].parse().unwrap();
-        let cw = args[7].parse().unwrap();
-        let ch = args[8].parse().unwrap();
-        img = img.crop(cx, cy, cw, ch);
-        img.save("tmp/out0.png").unwrap();
-    }
 
-    let resized_img =
-        img.resize_exact(width * 8, height * 8, image::imageops::FilterType::Lanczos3);
-    resized_img.save("tmp/out1.png").unwrap();
-    let gray_img = resized_img.clone().into_luma8();
-    gray_img.save("tmp/out2.png").unwrap();
+    // 2. 创建 MaxRectsBin
+    let mut bin = MaxRectsBin::new(atlas_width, atlas_height);
 
-    // get petscii images...
-    let vcs = gen_charset_images(false);
+    let mut image_rects = Vec::new();
 
-    // find background color...
-    let bret = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
-    let back_gray = bret.0;
-    let back_rgb = bret.1;
+    for img in images {
+        let (orig_width, orig_height) = img.dimensions();
+        // 调整尺寸为 8 的倍数
+        let (adjusted_width, adjusted_height) = adjust_size_to_multiple_of_eight(orig_width, orig_height);
 
-    println!("width={},height={},texture=255", width, height);
-    for i in 0..height {
-        for j in 0..width {
-            let block_at = get_block_at(&gray_img, j, i);
-            let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
-            if !is_petii {
-                let block_color = get_block_color(&resized_img, j, i);
-                let bc = find_best_color(block_color);
-                print!("{},{},1 ", bm, bc,);
-            } else {
-                let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb);
-                // sym, fg, tex, bg
-                print!("{},{},1,{} ", bm, bc.1, bc.0);
-            }
-        }
-        println!("");
-    }
-}
-
-// get color distance
-fn color_distance(e1: &RGB, e2: &RGB) -> f32 {
-    let l1 = Lab::from_rgb(&[e1.r, e1.g, e1.b]);
-    let l2 = Lab::from_rgb(&[e2.r, e2.g, e2.b]);
-    let lab1 = LabValue {
-        l: l1.l,
-        a: l1.a,
-        b: l1.b,
-    };
-    let lab2 = LabValue {
-        l: l2.l,
-        a: l2.a,
-        b: l2.b,
-    };
-    *DeltaE::new(&lab1, &lab2, DE2000).value()
-}
-
-// generate 256 petscii image with 0 and 255
-fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
-    let data = if low_up { &C64LOW } else { &C64UP };
-    let mut vcs = vec![vec![vec![0u8; 8]; 8]; 256];
-
-    for i in 0..128 {
-        for row in 0..8 {
-            for bit in 0..8 {
-                if data[i][row] >> bit & 1 == 1 {
-                    vcs[i][row][7 - bit] = 255;
-                    vcs[128 + i][row][7 - bit] = 0;
-                } else {
-                    vcs[i][row][7 - bit] = 0;
-                    vcs[128 + i][row][7 - bit] = 255;
-                }
-            }
-        }
-    }
-    vcs
-}
-
-// find background colors...
-fn count_img_colors(
-    img: &DynamicImage,
-    image: &ImageBuffer<Luma<u8>, Vec<u8>>,
-    w: u32,
-    h: u32,
-) -> (u8, u32) {
-    // (first_x, first_y, count)
-    let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
-    for i in 0..h {
-        for j in 0..w {
-            let p = img.get_pixel(j, i);
-            let k: u32 = ((p[0] as u32) << 24)
-                + ((p[1] as u32) << 16)
-                + ((p[2] as u32) << 8)
-                + (p[3] as u32);
-            (*cc.entry(k).or_insert((j, i, 0))).2 += 1;
-        }
-    }
-    let mut cv: Vec<_> = cc.iter().collect();
-    cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
-    let bx = cv[0].1 .0;
-    let by = cv[0].1 .1;
-    let bc = cv[0].0;
-    // for c in cv {
-    //     println!("cc..{:x} {:?}", c.0, c.1);
-    // }
-    // for i in 0..h {
-    //     for j in 0..w {
-    //         print!("{:?} ", image.get_pixel(j, i).0[0]);
-    //     }
-    //     println!("");
-    // }
-    let gray = image.get_pixel(bx, by).0[0];
-    // println!("gray..{}", gray);
-    (gray, *bc)
-}
-
-// get petscii block color
-fn get_petii_block_color(
-    image: &DynamicImage,
-    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
-    x: u32,
-    y: u32,
-    back_rgb: u32,
-) -> (usize, usize) {
-    let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
-    for i in 0..8usize {
-        for j in 0..8usize {
-            let pixel_x = x * 8 + j as u32;
-            let pixel_y = y * 8 + i as u32;
-            if pixel_x < image.width() && pixel_y < image.height() {
-                let p = image.get_pixel(pixel_x, pixel_y);
-                let k: u32 = ((p[0] as u32) << 24)
-                    + ((p[1] as u32) << 16)
-                    + ((p[2] as u32) << 8)
-                    + (p[3] as u32);
-                cc.entry(k).or_insert((pixel_x, pixel_y));
-            }
-        }
-    }
-    let cv: Vec<_> = cc.iter().collect();
-    let mut include_back = false;
-    let clen = cv.len();
-    for c in &cv {
-        if *c.0 == back_rgb {
-            include_back = true;
-        }
-    }
-    let mut ret = None;
-    if include_back {
-        if clen == 1 {
-            ret = Some((back_rgb, back_rgb));
-            // println!("<B>{:?}", ret);
-        } else if clen == 2 {
-            let mut r = (back_rgb, back_rgb);
-            if *cv[0].0 != back_rgb {
-                r.1 = *cv[0].0;
-            } 
-            if *cv[1].0 != back_rgb {
-                r.1 = *cv[1].0;
-            } 
-            ret = Some(r);
-            // println!("<B,F>{:?}", ret);
+        // 如果调整后的尺寸与原始尺寸不同，需要填充图片
+        let padded_image = if adjusted_width != orig_width || adjusted_height != orig_height {
+            let mut padded_image = DynamicImage::new_rgba8(adjusted_width, adjusted_height);
+            padded_image.copy_from(&img, 0, 0).unwrap();
+            padded_image
         } else {
-            println!("ERROR!!!");
-        }
-    } else {
-        if clen == 1 {
-            ret = Some((*cv[0].0, *cv[0].0));
-            // println!("<F>{:?}", ret);
-        } else if clen == 2 {
-            let g0 = img.get_pixel(cv[0].1.0, cv[0].1.1).0[0];
-            let g1 = img.get_pixel(cv[1].1.0, cv[1].1.1).0[0];
-            if g0 <= g1 {
-                ret = Some((*cv[0].0, *cv[1].0));
-            } else {
-                ret = Some((*cv[1].0, *cv[0].0));
-            }
-            // println!("<F1,F2>{:?}", ret);
-        } else {
-            println!("ERROR2!!!");
-        }
-    }
-    match ret {
-        Some(r) => {
-            (find_best_color_u32(r.0), find_best_color_u32(r.1))
-        }
-        _ => {
-            (0, 0)
-        }
-    }
-}
-
-// get block average color(for not petscii image)
-fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
-    let mut r = 0u32;
-    let mut g = 0u32;
-    let mut b = 0u32;
-
-    let mut count = 0u32;
-
-    for i in 0..8usize {
-        for j in 0..8usize {
-            let pixel_x = x * 8 + j as u32;
-            let pixel_y = y * 8 + i as u32;
-
-            if pixel_x < image.width() && pixel_y < image.height() {
-                let p = image.get_pixel(pixel_x, pixel_y);
-                if p[0] != 0 || p[1] != 0 || p[2] != 0 {
-                    r += p[0] as u32;
-                    g += p[1] as u32;
-                    b += p[2] as u32;
-                    count += 1;
-                }
-            }
-        }
-    }
-
-    if count == 0 {
-        return RGB { r: 0, g: 0, b: 0 };
-    }
-
-    RGB {
-        r: (r / count) as u8,
-        g: (g / count) as u8,
-        b: (b / count) as u8,
-    }
-}
-
-fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image8x8 {
-    let mut block = vec![vec![0u8; 8]; 8];
-
-    for i in 0..8usize {
-        for j in 0..8usize {
-            let pixel_x = x * 8 + j as u32;
-            let pixel_y = y * 8 + i as u32;
-
-            if pixel_x < image.width() && pixel_y < image.height() {
-                block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
-            }
-        }
-    }
-
-    block
-}
-
-fn find_best_match(
-    input_image: &Image8x8,
-    char_images: &[Image8x8],
-    back: u8,
-    is_petii: bool,
-) -> usize {
-    let mut min_mse = f64::MAX;
-    let mut best_match = 0;
-
-    for (i, char_image) in char_images.iter().enumerate() {
-        let mse = calculate_mse(input_image, char_image, back, is_petii);
-        // println!("i..{} mse..{}", i, mse);
-
-        if mse < min_mse {
-            min_mse = mse;
-            best_match = i;
-        }
-    }
-
-    best_match
-}
-
-fn find_best_color_u32(c: u32) -> usize {
-    find_best_color(RGB{
-        r: (c >> 24) as u8,
-        g: (c >> 16) as u8,
-        b: (c >> 8) as u8,
-    })
-}
-
-fn find_best_color(color: RGB) -> usize {
-    let mut min_mse = f32::MAX;
-    let mut best_match = 0;
-
-    for (i, pcolor) in ANSI_COLOR_RGB.iter().enumerate() {
-        let pcrgb = RGB {
-            r: pcolor[0],
-            g: pcolor[1],
-            b: pcolor[2],
+            img
         };
-        let mse = color_distance(&pcrgb, &color);
 
-        if mse < min_mse {
-            min_mse = mse;
-            best_match = i;
+        // 插入到 bin 中
+        if let Some(rect) = bin.insert(adjusted_width, adjusted_height) {
+            image_rects.push(ImageRect {
+                image: padded_image,
+                rect,
+            });
+        } else {
+            println!("无法放置图片，纹理空间不足。");
+            // 您可以在此处处理未能放置的图片，例如创建新的纹理
         }
     }
 
-    best_match
-}
+    // 3. 创建大纹理
+    let mut atlas = RgbaImage::new(atlas_width, atlas_height);
 
-fn calc_eigenvector(img: &Image8x8, back: u8, is_petii: bool, is_source: bool) -> Vec<i32> {
-    let mut v = vec![0i32; 10];
-    let mut min = u8::MAX;
-    let mut max = 0u8;
-    let mut include_back = false;
-
-    // find min & max gray value...
-    if is_petii {
-        for x in 0..8 {
-            for y in 0..8 {
-                let p = img[y][x];
-                if !include_back {
-                    if p == back {
-                        include_back = true;
-                    }
-                }
-                if p > max {
-                    max = p;
-                }
-                if p < min {
-                    min = p;
-                }
-            }
-        }
+    for image_rect in &image_rects {
+        atlas.copy_from(
+            &image_rect.image,
+            image_rect.rect.x,
+            image_rect.rect.y,
+        ).unwrap();
     }
 
-    for x in 0..8 {
-        for y in 0..8 {
-            let p;
-            if is_petii {
-                // gray image8x8 binarization...
-                let iyx = img[y][x];
-                if is_source {
-                    // for petscii source...
-                    p = if iyx == 0 { 0i32 } else { 1i32 };
-                } else {
-                    if include_back {
-                        // if block include back colors...
-                        p = if iyx == back { 0i32 } else { 1i32 };
-                    } else {
-                        if min == max {
-                            // if only 1 color...
-                            p = 1i32;
-                        } else {
-                            // min to 0 and max to 1...
-                            p = if iyx == min { 0i32 } else { 1i32 };
-                        }
-                    }
-                }
-            } else {
-                // normal image...
-                p = img[y][x] as i32;
-            }
+    // 4. 保存大纹理
+    atlas.save("texture_atlas.png").unwrap();
 
-            if x < 4 && y < 4 {
-                v[0] += p;
-            }
-            if x > 3 && y < 4 {
-                v[1] += p;
-            }
-            if x < 4 && y > 3 {
-                v[2] += p;
-            }
-            if x > 3 && y > 3 {
-                v[3] += p;
-            }
-            if x > 2 && x < 6 && y > 2 && y < 6 {
-                v[4] += p;
-            }
-            if x == y || x == (7 - y) {
-                v[5] += p;
-            }
-            if x == 0 {
-                v[6] += p;
-            }
-            if x == 7 {
-                v[7] += p;
-            }
-            if y == 0 {
-                v[8] += p;
-            }
-            if y == 7 {
-                v[9] += p;
-            }
-        }
+    // 5. 记录每个图片的位置和尺寸
+    for (i, image_rect) in image_rects.iter().enumerate() {
+        println!(
+            "图片 {}: 位置=({}, {}), 尺寸={}x{}",
+            i,
+            image_rect.rect.x,
+            image_rect.rect.y,
+            image_rect.rect.width,
+            image_rect.rect.height
+        );
     }
-    v
 }
 
-fn calculate_mse(img1: &Image8x8, img2: &Image8x8, back: u8, is_petii: bool) -> f64 {
-    let mut mse = 0.0f64;
-    let v1 = calc_eigenvector(img1, back, is_petii, false);
-    let v2 = calc_eigenvector(img2, back, is_petii, true);
-    // println!("input......{:?}", v1);
-    // println!("petii......{:?}", v2);
-    for i in 0..10usize {
-        mse += ((v1[i] - v2[i]) * (v1[i] - v2[i])) as f64;
-    }
-    mse.sqrt()
-}
