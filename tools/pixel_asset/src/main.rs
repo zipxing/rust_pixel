@@ -1,8 +1,10 @@
-use std::fs;
-use std::path::Path;
-use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
-use image::GenericImage;
 use image::imageops::FilterType;
+use image::GenericImage;
+use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
+use std::fs;
+use std::io::Write;
+use std::fs::File;
+use std::path::Path;
 
 #[derive(Clone, Copy, Debug)]
 struct Rectangle {
@@ -36,7 +38,6 @@ impl MaxRectsBin {
     }
 
     fn insert(&mut self, width: u32, height: u32) -> Option<Rectangle> {
-        // 选择最佳的空闲矩形
         if let Some(best_rect) = self.find_position_for_new_node_best_area_fit(width, height) {
             let new_node = Rectangle {
                 x: best_rect.x,
@@ -47,12 +48,15 @@ impl MaxRectsBin {
             self.place_rectangle(new_node);
             Some(new_node)
         } else {
-            // 无法放置矩形
             None
         }
     }
 
-    fn find_position_for_new_node_best_area_fit(&self, width: u32, height: u32) -> Option<Rectangle> {
+    fn find_position_for_new_node_best_area_fit(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Option<Rectangle> {
         let mut best_area_fit = u32::MAX;
         let mut best_rect = None;
 
@@ -145,7 +149,10 @@ impl MaxRectsBin {
     }
 
     fn is_overlapping(&self, a: Rectangle, b: Rectangle) -> bool {
-        !(a.x + a.width <= b.x || a.x >= b.x + b.width || a.y + a.height <= b.y || a.y >= b.y + b.height)
+        !(a.x + a.width <= b.x
+            || a.x >= b.x + b.width
+            || a.y + a.height <= b.y
+            || a.y >= b.y + b.height)
     }
 
     fn prune_free_list(&mut self) {
@@ -168,7 +175,10 @@ impl MaxRectsBin {
     }
 
     fn is_contained_in(&self, a: Rectangle, b: Rectangle) -> bool {
-        a.x >= b.x && a.y >= b.y && a.x + a.width <= b.x + b.width && a.y + a.height <= b.y + b.height
+        a.x >= b.x
+            && a.y >= b.y
+            && a.x + a.width <= b.x + b.width
+            && a.y + a.height <= b.y + b.height
     }
 }
 
@@ -179,6 +189,7 @@ fn adjust_size_to_multiple_of_eight(width: u32, height: u32) -> (u32, u32) {
 }
 
 struct ImageRect {
+    path: String,
     image: DynamicImage,
     rect: Rectangle,
 }
@@ -186,7 +197,7 @@ struct ImageRect {
 fn main() {
     let folder_path = "./cc";
     let atlas_width = 1024;
-    let atlas_height = 1024;
+    let atlas_height = 768;
 
     // 1. 加载小图片
     let mut images = Vec::new();
@@ -197,68 +208,78 @@ fn main() {
         if file_path.is_file() {
             println!("{}", file_path.display());
             if let Ok(img) = image::open(&file_path) {
-                images.push(img);
+                images.push((file_path, img));
             }
         }
     }
 
-    // 2. 创建 MaxRectsBin
     let mut bin = MaxRectsBin::new(atlas_width, atlas_height);
-
     let mut image_rects = Vec::new();
-
     for img in images {
-        let (orig_width, orig_height) = img.dimensions();
-        // 调整尺寸为 8 的倍数
-        let (adjusted_width, adjusted_height) = adjust_size_to_multiple_of_eight(orig_width, orig_height);
+        let (orig_width, orig_height) = img.1.dimensions();
+        let (adjusted_width, adjusted_height) =
+            adjust_size_to_multiple_of_eight(orig_width, orig_height);
 
-        // 如果调整后的尺寸与原始尺寸不同，需要填充图片
         let padded_image = if adjusted_width != orig_width || adjusted_height != orig_height {
             let mut padded_image = DynamicImage::new_rgba8(adjusted_width, adjusted_height);
-            padded_image.copy_from(&img, 0, 0).unwrap();
-            padded_image
+            padded_image.copy_from(&img.1, 0, 0).unwrap();
+            (img.0, padded_image)
         } else {
             img
         };
 
-        let padded_image = padded_image.resize_exact(adjusted_width / 2, adjusted_height / 2, FilterType::Lanczos3);
+        let padded_image = (
+            padded_image.0,
+            padded_image.1.resize_exact(
+                adjusted_width / 2,
+                adjusted_height / 2,
+                FilterType::Lanczos3,
+            ),
+        );
 
-        // 插入到 bin 中
         if let Some(rect) = bin.insert(adjusted_width / 2, adjusted_height / 2) {
             image_rects.push(ImageRect {
-                image: padded_image,
+                path: padded_image.0.to_str().unwrap().to_string(),
+                image: padded_image.1,
                 rect,
             });
         } else {
             println!("无法放置图片，纹理空间不足。");
-            // 您可以在此处处理未能放置的图片，例如创建新的纹理
         }
     }
 
-    // 3. 创建大纹理
     let mut atlas = RgbaImage::new(atlas_width, atlas_height);
 
     for image_rect in &image_rects {
-        atlas.copy_from(
-            &image_rect.image,
-            image_rect.rect.x,
-            image_rect.rect.y,
-        ).unwrap();
+        atlas
+            .copy_from(&image_rect.image, image_rect.rect.x, image_rect.rect.y)
+            .unwrap();
     }
-
-    // 4. 保存大纹理
     atlas.save("texture_atlas.png").unwrap();
 
     // 5. 记录每个图片的位置和尺寸
     for (i, image_rect) in image_rects.iter().enumerate() {
-        println!(
-            "图片 {}: 位置=({}, {}), 尺寸={}x{}",
-            i,
-            image_rect.rect.x,
-            image_rect.rect.y,
-            image_rect.rect.width,
-            image_rect.rect.height
-        );
+        let x0 = image_rect.rect.x / 8;
+        let y0 = image_rect.rect.y / 8;
+        let w = image_rect.rect.width / 8;
+        let h = image_rect.rect.height / 8;
+        let pathp = Path::new(&image_rect.path).with_extension("pix");
+        // let path = pathp.file_name().unwrap().to_str().unwrap();
+        // println!("{}. {}: 位置=({}, {}), 尺寸={}x{}", i, path, x0, y0, w, h);
+        let mut file = File::create(pathp).unwrap();
+        let line = &format!("width={},height={},texture=255\n", w, h);
+        file.write_all(line.as_bytes()).unwrap();
+
+        for a in 0..h {
+            for b in 0..w {
+                let x = x0 + b;
+                let y = y0 + a;
+                let s = y % 16 * 16 + x % 16;
+                let t = y / 16 * 8 + x / 16;
+                let line = &format!("{},{},{},{} ", s, 15, t, 0);
+                file.write_all(line.as_bytes()).unwrap();
+            }
+            file.write_all("\n".as_bytes()).unwrap();
+        }
     }
 }
-

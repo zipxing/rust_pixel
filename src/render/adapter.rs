@@ -449,7 +449,7 @@ fn render_helper(
     let h = PIXEL_SYM_HEIGHT as i32;
     let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
-    let tex_count = PIXEL_TEXTURE_FILES.len() as u8 * 4;
+    let tex_count = PIXEL_TEXTURE_FILES.len() as u8 * 64;
     let tx = if sh.1 < tex_count { sh.1 as usize } else { 1 };
     let srcy = sh.0 as u32 / w as u32 + (tx as u32 / 2u32) * w as u32;
     let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
