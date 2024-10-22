@@ -195,11 +195,11 @@ struct ImageRect {
 }
 
 fn main() {
+    let rawimage = image::open("assets/pix/c64.png").unwrap();
     let folder_path = "./cc";
     let atlas_width = 1024;
-    let atlas_height = 768;
+    let atlas_height = 1024 - 128;
 
-    // 1. 加载小图片
     let mut images = Vec::new();
     let paths = fs::read_dir(folder_path).unwrap();
 
@@ -248,11 +248,12 @@ fn main() {
         }
     }
 
-    let mut atlas = RgbaImage::new(atlas_width, atlas_height);
+    let mut atlas = RgbaImage::new(atlas_width, atlas_height + 128);
+    atlas.copy_from(&rawimage, 0, 0).unwrap();
 
     for image_rect in &image_rects {
         atlas
-            .copy_from(&image_rect.image, image_rect.rect.x, image_rect.rect.y)
+            .copy_from(&image_rect.image, image_rect.rect.x, image_rect.rect.y + 128)
             .unwrap();
     }
     atlas.save("texture_atlas.png").unwrap();
@@ -276,7 +277,7 @@ fn main() {
                 let y = y0 + a;
                 let s = y % 16 * 16 + x % 16;
                 let t = y / 16 * 8 + x / 16;
-                let line = &format!("{},{},{},{} ", s, 15, t, 0);
+                let line = &format!("{},{},{},{} ", s, 15, t + 8, 0);
                 file.write_all(line.as_bytes()).unwrap();
             }
             file.write_all("\n".as_bytes()).unwrap();

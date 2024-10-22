@@ -68,6 +68,8 @@ impl CityRender {
         //msg块
         t.add_sprite(Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16), "msg");
 
+        t.add_pixel_sprite(Sprite::new(0, 0, 8, 8), "test");
+
         //注册重绘事件
         event_register("redraw_grid", "draw_grid");
 
@@ -255,10 +257,12 @@ impl Render for CityRender {
     type Model = CityModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(70, 40, 2.0, 1.0, "city".to_string());
+        ctx.adapter.init(70, 40, 0.5, 0.5, "city".to_string());
         self.panel.init(ctx);
         let l = self.panel.get_sprite("back");
         asset2sprite!(l, ctx, &format!("back.txt"));
+        let t = self.panel.get_pixel_sprite("test");
+        asset2sprite!(t, ctx, &format!("cc15.pix"));
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
