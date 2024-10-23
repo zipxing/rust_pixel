@@ -2,6 +2,7 @@ use image::imageops::FilterType;
 use image::GenericImage;
 use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
 use std::fs;
+use std::env;
 use std::io::Write;
 use std::fs::File;
 use std::path::Path;
@@ -195,8 +196,22 @@ struct ImageRect {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let folder_path: &str;
+    let dst_dir: &str;
+
+    match args.len() {
+        3 => {
+            folder_path = &args[1];
+            dst_dir = &args[2];
+        }
+        _ => {
+            return;
+        }
+    }
+
     let rawimage = image::open("assets/pix/c64.png").unwrap();
-    let folder_path = "./cc";
     let atlas_width = 1024;
     let atlas_height = 1024 - 128;
 
@@ -208,7 +223,7 @@ fn main() {
         if file_path.is_file() {
             println!("{}", file_path.display());
             if let Ok(img) = image::open(&file_path) {
-                images.push((file_path, img));
+                images.push((file_path.file_name().unwrap().to_str().unwrap().to_string(), img));
             }
         }
     }
@@ -239,12 +254,12 @@ fn main() {
 
         if let Some(rect) = bin.insert(adjusted_width / 2, adjusted_height / 2) {
             image_rects.push(ImageRect {
-                path: padded_image.0.to_str().unwrap().to_string(),
+                path: padded_image.0.to_string(),
                 image: padded_image.1,
                 rect,
             });
         } else {
-            println!("无法放置图片，纹理空间不足。");
+            println!("No Space");
         }
     }
 
@@ -256,17 +271,14 @@ fn main() {
             .copy_from(&image_rect.image, image_rect.rect.x, image_rect.rect.y + 128)
             .unwrap();
     }
-    atlas.save("texture_atlas.png").unwrap();
+    atlas.save(&format!("{}/texture_atlas.png", dst_dir)).unwrap();
 
-    // 5. 记录每个图片的位置和尺寸
     for (i, image_rect) in image_rects.iter().enumerate() {
         let x0 = image_rect.rect.x / 8;
         let y0 = image_rect.rect.y / 8;
         let w = image_rect.rect.width / 8;
         let h = image_rect.rect.height / 8;
-        let pathp = Path::new(&image_rect.path).with_extension("pix");
-        // let path = pathp.file_name().unwrap().to_str().unwrap();
-        // println!("{}. {}: 位置=({}, {}), 尺寸={}x{}", i, path, x0, y0, w, h);
+        let pathp = Path::new(&format!("{}/{}", dst_dir, image_rect.path)).with_extension("pix");
         let mut file = File::create(pathp).unwrap();
         let line = &format!("width={},height={},texture=255\n", w, h);
         file.write_all(line.as_bytes()).unwrap();
