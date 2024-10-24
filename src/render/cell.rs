@@ -173,8 +173,7 @@ impl Cell {
 
     #[cfg(any(target_arch = "wasm32", feature = "sdl"))]
     pub fn is_blank(&self) -> bool {
-        let bg = u8::from(self.bg);
-        (self.symbol == " " || self.symbol == cellsym(32)) && (bg == 0 || bg == 1)
+        (self.symbol == " " || self.symbol == cellsym(32)) && (self.tex == 0 || self.tex == 1)
     }
 
     #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
