@@ -12,7 +12,13 @@ use std::fmt;
 
 pub const NROW: usize = 5;
 pub const NCOL: usize = 5;
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+pub const CELLW: usize = 8;
+#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const CELLW: usize = 10;
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+pub const CELLH: usize = 8;
+#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const CELLH: usize = 5;
 //四种基本颜色 + Tower
 pub const COLOR_COUNT: usize = 5;

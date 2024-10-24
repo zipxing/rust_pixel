@@ -54,7 +54,7 @@ impl CityRender {
         let mut t = Panel::new();
 
         //背景
-        let tsback = Sprite::new(0, 0, 70, 40);
+        let tsback = Sprite::new(0, 0, 70, 70);
         t.add_sprite(tsback, "back");
 
         //25个单元块
@@ -68,7 +68,7 @@ impl CityRender {
         //msg块
         t.add_sprite(Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16), "msg");
 
-        t.add_pixel_sprite(Sprite::new(0, 0, 8, 8), "test");
+        // t.add_pixel_sprite(Sprite::new(0, 0, 8, 8), "test");
 
         //注册重绘事件
         event_register("redraw_grid", "draw_grid");
@@ -112,37 +112,42 @@ impl CityRender {
         is_del: bool,
     ) {
         let l = self.panel.get_sprite(&format!("cc{}", id));
-        let area = Rect::new(0, 0, 10, 5);
-        l.content.resize(area);
-        l.content.reset();
-        let cn = format!("cc{}.txt", border_type);
+        // #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        // let area = Rect::new(0, 0, 8, 8);
+        // #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        // let area = Rect::new(0, 0, 10, 5);
+        // l.content.resize(area);
+        // l.content.reset();
+        // let cn = format!("cc{}.txt", border_type);
+        let cn = format!("cc{}.pix", border_type);
+        info!("....{:?}", cn);
         asset2sprite!(l, ctx, &cn);
         l.set_pos(x, y);
         //设置颜色
-        #[cfg(not(feature = "sdl"))]
-        l.content.set_style(
-            l.content.area,
-            Style::default().fg(COLORS[border_color as usize % COLORS.len()]),
-        );
-        #[cfg(feature = "sdl")]
-        l.content.set_style(
-            l.content.area,
-            Style::default()
-                .fg(COLORS[border_color as usize % COLORS.len()])
-                .bg(Color::Indexed(1)),
-        );
+        // #[cfg(not(feature = "sdl"))]
+        // l.content.set_style(
+        //     l.content.area,
+        //     Style::default().fg(COLORS[border_color as usize % COLORS.len()]),
+        // );
+        // #[cfg(feature = "sdl")]
+        // l.content.set_style(
+        //     l.content.area,
+        //     Style::default()
+        //         .fg(COLORS[border_color as usize % COLORS.len()])
+        //         .bg(Color::Indexed(1)),
+        // );
         //设置内容
-        l.set_color_str(
-            3,
-            2,
-            msg,
-            COLORS[msg_color as usize % COLORS.len()],
-            Color::Reset,
-        );
+        // l.set_color_str(
+        //     3,
+        //     2,
+        //     msg,
+        //     COLORS[msg_color as usize % COLORS.len()],
+        //     Color::Reset,
+        // );
         //绘制是否删除标记
-        if is_del {
-            l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
-        }
+        // if is_del {
+        //     l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
+        // }
     }
 
     pub fn draw_moving(
@@ -194,14 +199,14 @@ impl CityRender {
                 let sy = ny * CELLH as f32 + 8.0;
                 if sx >= 0.0 && sy >= 0.0 {
                     self.draw_cell(
-                        ctx, *cid, sx as u16, sy as u16, ctype, dc.color, &msg, 3, false,
+                        ctx, *cid, sx as u16, sy as u16, ctype, dc.color, "", 3, false,
                     );
                 }
             } else {
                 let sx = x * CELLW + 3;
                 let sy = y * CELLH + 8;
                 self.draw_cell(
-                    ctx, *cid, sx as u16, sy as u16, ctype, dc.color, &msg, 3, false,
+                    ctx, *cid, sx as u16, sy as u16, ctype, dc.color, "", 3, false,
                 );
             }
         }
@@ -245,8 +250,10 @@ impl CityRender {
                 sy as u16,
                 dc.border,
                 bcol,
-                &msg,
-                msgcol as i8,
+                // &msg,
+                "",
+                0,
+                // msgcol as i8,
                 dc.color >= 100,
             );
         }
@@ -257,12 +264,12 @@ impl Render for CityRender {
     type Model = CityModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(70, 40, 0.5, 0.5, "city".to_string());
+        ctx.adapter.init(70, 70, 1.0, 1.0, "city".to_string());
         self.panel.init(ctx);
-        let l = self.panel.get_sprite("back");
-        asset2sprite!(l, ctx, &format!("back.txt"));
-        let t = self.panel.get_pixel_sprite("test");
-        asset2sprite!(t, ctx, &format!("cc15.pix"));
+        // let l = self.panel.get_sprite("back");
+        // asset2sprite!(l, ctx, &format!("back.txt"));
+        // let t = self.panel.get_pixel_sprite("test");
+        // asset2sprite!(t, ctx, &format!("cc15.pix"));
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
@@ -274,7 +281,7 @@ impl Render for CityRender {
     fn handle_timer(&mut self, _ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        self.draw_movie(ctx, data);
+        // self.draw_movie(ctx, data);
         self.panel.draw(ctx).unwrap();
     }
 }
