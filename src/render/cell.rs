@@ -168,6 +168,7 @@ impl Cell {
         self.symbol.push(' ');
         self.fg = Color::Reset;
         self.bg = Color::Reset;
+        self.tex = 0;
         self.modifier = Modifier::empty();
     }
 

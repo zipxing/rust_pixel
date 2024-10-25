@@ -281,7 +281,7 @@ impl Render for CityRender {
     fn handle_timer(&mut self, _ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        // self.draw_movie(ctx, data);
+        self.draw_movie(ctx, data);
         self.panel.draw(ctx).unwrap();
     }
 }

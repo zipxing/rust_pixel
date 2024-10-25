@@ -217,6 +217,16 @@ pub trait Adapter {
         let rbuf =
             self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
 
+        // for y in 0..24 {
+        //     let mut s = "".to_string();
+        //     for x in 0..24 {
+        //         let cc = &current_buffer.content[y * 24 + x];
+        //         s.push_str(&format!("{}.{} ", cc.tex, cc.symbol));
+        //     }
+        //     info!("...{}", s);
+        // }
+        // info!("{:?} len={}", current_buffer.content.len(), rbuf.len());
+
         // draw rbuf to render_texture 2
         self.draw_render_buffer_to_texture(&rbuf, 2, false);
 
