@@ -119,9 +119,12 @@ impl CityRender {
         // l.content.resize(area);
         // l.content.reset();
         // let cn = format!("cc{}.txt", border_type);
-        let cn = format!("cc{}.pix", border_type);
-        info!("....{:?}", cn);
-        asset2sprite!(l, ctx, &cn);
+        let ss = ["cc", "dd", "ee", "ff"];
+        if border_color <= 4 && border_color >= 1 {
+            let cn = format!("{}{}.pix", ss[border_color as usize - 1], border_type);
+            info!("....{:?}", cn);
+            asset2sprite!(l, ctx, &cn);
+        }
         l.set_pos(x, y);
         //设置颜色
         // #[cfg(not(feature = "sdl"))]

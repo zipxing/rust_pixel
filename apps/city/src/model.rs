@@ -1,9 +1,11 @@
 use log::info;
-use rust_pixel::event::{Event, MouseButton, MouseEventKind::*};
 use rust_pixel::{
     algorithm::union_find::{UnionFind, UF},
     context::Context,
-    event::{event_check, event_emit, timer_fire, timer_register, timer_set_time},
+    event::{
+        event_check, event_emit, timer_fire, timer_register, timer_set_time, Event, MouseButton,
+        MouseEventKind::*,
+    },
     game::Model,
     util::Rand,
 };
