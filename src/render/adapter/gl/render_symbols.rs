@@ -340,7 +340,7 @@ impl GlRenderSymbols {
             if let Some(b) = r.bcolor {
                 let back_color = GlColor::new(b.0, b.1, b.2, b.3);
                 // fill instance buffer for opengl instance rendering
-                self.draw_symbol(gl, 320, &transform, &back_color);
+                self.draw_symbol(gl, 1280, &transform, &back_color);
             }
 
             let color = GlColor::new(r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3);

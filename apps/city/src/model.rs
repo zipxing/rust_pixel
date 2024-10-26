@@ -55,18 +55,15 @@ pub struct CityCell {
     pub to_id: Option<i16>,
 
     //1,2,3,4:base, 5:tower, 6,7,8,9...:wonder
-    //-1表示空洞
     //-1 means blank
     pub color: i8,
 
     //1~29:base, 30:tower, 60,90,120...:wonder
     pub level: i16,
 
-    //标识拥有的边
     //marks the border
     pub border: u8,
 
-    //标识是否可以合成tower了
     //marks is ready to consolidate to tower
     pub ready2t: bool,
 }
@@ -183,8 +180,6 @@ pub struct CityModel {
     pub ready2t: bool,
 }
 
-//from_id可能为负，这个时候先返回y为0
-//然后在代码中调整处理，render.rs:draw_moving:112行
 //from_id might be negative, in this case returns y = 1
 //and amend in the code render.rs:draw_moving line 112
 pub fn get_xy(id: i16) -> (usize, usize) {
@@ -274,6 +269,8 @@ impl CityModel {
         if event_check("merge", "_") {
             ctx.state = CityState::LevelUpMovie as u8;
             let lc = self.post_merge();
+            info!("POST_MERGE........");
+            info!("{:?}\n {:?}\n {:?}\n {:?}\n", self.grid, self.units, self.cell2unit, self.move_cells);
             //lc有时候返回为0或1，导致set_time中timer.count未0
             //在timer_set_time中加了保护，让count至少为1
             timer_set_time("levelup", lc as f32 * LEVELUP_TIME);

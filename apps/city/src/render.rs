@@ -125,6 +125,9 @@ impl CityRender {
             info!("....{:?}", cn);
             asset2sprite!(l, ctx, &cn);
         }
+        if border_type == 16 {
+            asset2sprite!(l, ctx, "cc16.pix");
+        }
         l.set_pos(x, y);
         //设置颜色
         // #[cfg(not(feature = "sdl"))]
@@ -163,7 +166,7 @@ impl CityRender {
         for cid in &d.move_cells {
             let (x, y) = get_xy(*cid);
             let dc = &d.grid[y][x];
-            let ctype;
+            let mut ctype;
             let mut msg;
             //飞行的块
             if dc.color >= 0 {
