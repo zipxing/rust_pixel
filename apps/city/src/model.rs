@@ -259,8 +259,8 @@ impl CityModel {
             }
         }
         self.get_units_two_pass(0, NCOL);
-        timer_register("merge", 0.2, "_");
-        timer_register("levelup", 0.2, "_");
+        timer_register("merge", 0.1, "_");
+        timer_register("levelup", 0.5, "_");
         timer_register("drop", 0.2, "_");
         event_emit("redraw_grid");
     }

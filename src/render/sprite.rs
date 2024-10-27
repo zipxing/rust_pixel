@@ -142,6 +142,10 @@ impl Sprite {
         self.alpha = a;
     }
 
+    pub fn set_fg(&mut self, color: Color) {
+        self.content.set_fg(color);
+    }
+
     /// set string content at (x,y) with fg/bg color...
     pub fn set_color_str<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
     where

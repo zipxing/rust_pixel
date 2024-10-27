@@ -297,6 +297,12 @@ impl Buffer {
         }
     }
 
+    pub fn set_fg(&mut self, color: Color) {
+        for c in &mut self.content {
+            c.set_fg(color);
+        }
+    }
+
     #[allow(unused_variables)]
     pub fn copy_cell(&mut self, pos_self: usize, other: &Buffer, alpha: u8, pos_other: usize) {
         // self.content[pos_self].symbol = other.content[pos_other].symbol.clone();
