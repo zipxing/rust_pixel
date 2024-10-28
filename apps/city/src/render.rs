@@ -34,14 +34,13 @@ const TOWER_SYMS: &str = "🏛";
 const WONDER_SYMS: &str = "W";
 
 pub fn level_info(l: i16) -> String {
-    // let dcl = (l as f32 / 4.0).ceil() as usize;
-    // let mut msg = format!("{}", SYMS[dcl % SYMS.len()]);
-    // if l == 30 {
-    //     msg = TOWER_SYMS.to_string();
-    // } else if l > 30 {
-    //     msg = format!("{}{:02}", WONDER_SYMS, l / 30);
-    // }
-    format!("{}", l)
+    let mut msg = format!("{}", l);
+    if l == 30 {
+        msg = "T".to_string();
+    } else if l > 30 {
+        msg = format!("W{:02}", l / 30);
+    }
+    msg
 }
 
 pub struct CityRender {
@@ -210,16 +209,16 @@ impl CityRender {
                 let sx = nx * CELLW as f32 + 3.0;
                 let sy = ny * CELLH as f32 + 8.0;
                 if sx >= 0.0 && sy >= 0.0 {
-                    info!("sx...{} sy...{}", sx * 16.0, sy * 16.0);
+                    info!("sx...{} sy...{}", sx * 8.0, sy * 8.0);
                     self.draw_cell(
-                        ctx, *cid, (sx * 16.0) as u16, (sy * 16.0) as u16, ctype, dc.color, &msg, 3, false,
+                        ctx, *cid, (sx * 8.0) as u16, (sy * 8.0) as u16, ctype, dc.color, &msg, 3, false,
                     );
                 }
             } else {
                 let sx = x * CELLW + 3;
                 let sy = y * CELLH + 8;
                 self.draw_cell(
-                    ctx, *cid, sx as u16 * 16, sy as u16 * 16, ctype, dc.color, &msg, 3, false,
+                    ctx, *cid, sx as u16 * 8, sy as u16 * 8, ctype, dc.color, &msg, 3, false,
                 );
             }
         }
@@ -259,8 +258,8 @@ impl CityRender {
             self.draw_cell(
                 ctx,
                 i as i16,
-                sx as u16 * 16,
-                sy as u16 * 16,
+                sx as u16 * 8,
+                sy as u16 * 8,
                 dc.border,
                 bcol,
                 &msg,
@@ -276,7 +275,7 @@ impl Render for CityRender {
     type Model = CityModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(60, 60, 0.5, 0.5, "city".to_string());
+        ctx.adapter.init(60, 60, 1.0, 1.0, "city".to_string());
         self.panel.init(ctx);
         // let l = self.panel.get_sprite("back");
         // asset2sprite!(l, ctx, &format!("back.txt"));
