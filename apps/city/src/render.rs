@@ -51,49 +51,31 @@ impl CityRender {
     pub fn new() -> Self {
         info!("create city render...");
         let mut t = Panel::new();
-
-        //背景
-        let tsback = Sprite::new(0, 0, 70, 70);
-        t.add_sprite(tsback, "back");
-
-        //25个单元块
         for i in 0..NCOL * NROW {
             t.add_pixel_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
                 &format!("cc{}", i),
             );
         }
-
-        //msg块
         t.add_sprite(Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16), "msg");
-
-        // t.add_pixel_sprite(Sprite::new(0, 0, 8, 8), "test");
-
-        //注册重绘事件
         event_register("redraw_grid", "draw_grid");
-
         Self { panel: t }
     }
 
     pub fn draw_movie(&mut self, ctx: &mut Context, data: &mut CityModel) {
         let ss: CityState = ctx.state.into();
         match ss {
-            //飞行合并
             CityState::MergeMovie => {
                 info!("merge....{}", timer_percent("merge"));
                 self.draw_moving(ctx, data, ss, timer_percent("merge"));
             }
-            //数字升级
             CityState::LevelUpMovie => {
                 self.draw_moving(ctx, data, ss, timer_percent("levelup"));
             }
-            //掉落补齐
             CityState::DropMovie => {
                 self.draw_moving(ctx, data, ss, timer_percent("drop"));
             }
             _ => {
-                //当model.ready2t时工作
-                //对于将要合并成T的unit，闪烁边框
                 self.draw_ready2t(ctx, data);
             }
         }
@@ -112,13 +94,6 @@ impl CityRender {
         is_del: bool,
     ) {
         let l = self.panel.get_pixel_sprite(&format!("cc{}", id));
-        // #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-        // let area = Rect::new(0, 0, 8, 8);
-        // #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-        // let area = Rect::new(0, 0, 10, 5);
-        // l.content.resize(area);
-        // l.content.reset();
-        // let cn = format!("cc{}.txt", border_type);
         let ss = ["cc", "dd", "ee", "ff", "gg"];
         if border_color <= 5 && border_color >= 1 {
             let cn = format!("{}{}.pix", ss[border_color as usize - 1], border_type);
@@ -134,31 +109,17 @@ impl CityRender {
             asset2sprite!(l, ctx, "cc16.pix");
         }
         l.set_pos(x, y);
-        //设置颜色
-        // #[cfg(not(feature = "sdl"))]
-        // l.content.set_style(
-        //     l.content.area,
-        //     Style::default().fg(COLORS[border_color as usize % COLORS.len()]),
-        // );
-        // #[cfg(feature = "sdl")]
-        // l.content.set_style(
-        //     l.content.area,
-        //     Style::default()
-        //         .fg(COLORS[border_color as usize % COLORS.len()])
-        //         .bg(Color::Indexed(1)),
-        // );
-        //设置内容
         l.set_color_str(
             3,
             3,
             msg,
-            Color::White,
+            COLORS[msg_color as usize],
             Color::Reset,
         );
         //绘制是否删除标记
-        // if is_del {
-        //     l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
-        // }
+        if is_del {
+            l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
+        }
     }
 
     pub fn draw_moving(
@@ -171,13 +132,11 @@ impl CityRender {
         for cid in &d.move_cells {
             let (x, y) = get_xy(*cid);
             let dc = &d.grid[y][x];
-            let mut ctype;
+            let ctype;
             let mut msg;
-            //飞行的块
             if dc.color >= 0 {
                 ctype = 15;
                 msg = level_info(dc.level);
-                //升级变换数字
                 if state == CityState::LevelUpMovie {
                     let l;
                     let s = timer_rstage("levelup") as f32;
@@ -196,13 +155,11 @@ impl CityRender {
             if dc.from_id != None && dc.to_id != None {
                 let (fx, fy) = get_xy(dc.from_id.unwrap());
 
-                //from_id可能为负，调整fy
                 let mut ffy = fy as f32;
                 if dc.from_id.unwrap() < 0 {
                     ffy = (dc.from_id.unwrap() as f32 / NCOL as f32).floor();
                 }
 
-                //根据per绘制移动中的块
                 let (tx, ty) = get_xy(dc.to_id.unwrap());
                 let nx = fx as f32 + (tx as f32 - fx as f32) * (1.0 - per);
                 let ny = ffy + (ty as f32 - ffy) * (1.0 - per);
@@ -231,8 +188,6 @@ impl CityRender {
         self.draw_grid(ctx, d);
     }
 
-    //如果有ready2t，则每帧调用
-    //其他情况，只在接收到RedrawGrid事件时调用
     pub fn draw_grid(&mut self, ctx: &mut Context, d: &mut CityModel) {
         for i in 0..NCOL * NROW {
             let (x, y) = get_xy(i as i16);
@@ -263,8 +218,7 @@ impl CityRender {
                 dc.border,
                 bcol,
                 &msg,
-                0,
-                // msgcol as i8,
+                msgcol as i8,
                 dc.color >= 100,
             );
         }
@@ -277,10 +231,6 @@ impl Render for CityRender {
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter.init(60, 60, 1.0, 1.0, "city".to_string());
         self.panel.init(ctx);
-        // let l = self.panel.get_sprite("back");
-        // asset2sprite!(l, ctx, &format!("back.txt"));
-        // let t = self.panel.get_pixel_sprite("test");
-        // asset2sprite!(t, ctx, &format!("cc15.pix"));
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
