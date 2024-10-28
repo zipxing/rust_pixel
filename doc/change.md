@@ -1,3 +1,15 @@
+# 0.5.6
+- Added pixel asset tool, which can package scattered png images into c64.png and generate pix files corresponding to each image
+```
+cargo pixel r pixel_asset t ./png_sources ./out
+cp out/*.pix apps/city/assets
+cp out/texture_atlas.png apps/city/assets/pix
+```
+- Please refer to apps/city games, now this game supports a better graphics mode
+```
+cargo pixel r city s -r
+```
+
 # 0.5.5
 - Update cargo-pixel, added self-update feature. 
 - If ~/rust_pixel_work/Cargo.toml version not equal cargo-pixel version, then auto exec `cargo install --path . --force`
