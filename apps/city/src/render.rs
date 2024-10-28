@@ -33,12 +33,25 @@ const SYMS: [&str; 8] = ["🏠", "🏡", "🏘", "🏢", "🏰", "🏯", "🎡",
 const TOWER_SYMS: &str = "🏛";
 const WONDER_SYMS: &str = "W";
 
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub fn level_info(l: i16) -> String {
     let mut msg = format!("{}", l);
     if l == 30 {
         msg = "T".to_string();
     } else if l > 30 {
         msg = format!("W{:02}", l / 30);
+    }
+    msg
+}
+
+#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+pub fn level_info(l: i16) -> String {
+    let dcl = (l as f32 / 4.0).ceil() as usize;
+    let mut msg = format!("{}", SYMS[dcl % SYMS.len()]);
+    if l == 30 {
+        msg = TOWER_SYMS.to_string();
+    } else if l > 30 {
+        msg = format!("{}{:02}", WONDER_SYMS, l / 30);
     }
     msg
 }
@@ -51,8 +64,18 @@ impl CityRender {
     pub fn new() -> Self {
         info!("create city render...");
         let mut t = Panel::new();
+
+        let tsback = Sprite::new(0, 0, 70, 40);
+        t.add_sprite(tsback, "back");
         for i in 0..NCOL * NROW {
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             t.add_pixel_sprite(
+                Sprite::new(0, 0, CELLW as u16, CELLH as u16),
+                &format!("cc{}", i),
+            );
+
+            #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+            t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
                 &format!("cc{}", i),
             );
@@ -66,7 +89,6 @@ impl CityRender {
         let ss: CityState = ctx.state.into();
         match ss {
             CityState::MergeMovie => {
-                info!("merge....{}", timer_percent("merge"));
                 self.draw_moving(ctx, data, ss, timer_percent("merge"));
             }
             CityState::LevelUpMovie => {
@@ -81,6 +103,54 @@ impl CityRender {
         }
     }
 
+    #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+    pub fn draw_cell(
+        &mut self,
+        ctx: &mut Context,
+        id: i16,
+        x: u16,
+        y: u16,
+        border_type: u8,
+        border_color: i8,
+        msg: &str,
+        msg_color: i8,
+        is_del: bool,
+    ) {
+        let l = self.panel.get_sprite(&format!("cc{}", id));
+        let area = Rect::new(0, 0, 10, 5);
+        l.content.resize(area);
+        l.content.reset();
+        let cn = format!("cc{}.txt", border_type);
+        asset2sprite!(l, ctx, &cn);
+        l.set_pos(x, y);
+        //设置颜色
+        #[cfg(not(feature = "sdl"))]
+        l.content.set_style(
+            l.content.area,
+            Style::default().fg(COLORS[border_color as usize % COLORS.len()]),
+        );
+        #[cfg(feature = "sdl")]
+        l.content.set_style(
+            l.content.area,
+            Style::default()
+                .fg(COLORS[border_color as usize % COLORS.len()])
+                .bg(Color::Indexed(1)),
+        );
+        //设置内容
+        l.set_color_str(
+            3,
+            2,
+            msg,
+            COLORS[msg_color as usize % COLORS.len()],
+            Color::Reset,
+        );
+        //绘制是否删除标记
+        if is_del {
+            l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
+        }
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub fn draw_cell(
         &mut self,
         ctx: &mut Context,
@@ -100,7 +170,7 @@ impl CityRender {
             asset2sprite!(l, ctx, &cn);
         }
         // wornder...
-        if border_color >5 {
+        if border_color > 5 {
             let cn = format!("hh{}.pix", border_type);
             asset2sprite!(l, ctx, &cn);
             l.set_fg(Color::Red);
@@ -109,14 +179,7 @@ impl CityRender {
             asset2sprite!(l, ctx, "cc16.pix");
         }
         l.set_pos(x, y);
-        l.set_color_str(
-            3,
-            3,
-            msg,
-            COLORS[msg_color as usize],
-            Color::Reset,
-        );
-        //绘制是否删除标记
+        l.set_color_str(3, 3, msg, COLORS[msg_color as usize], Color::Reset);
         if is_del {
             l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
         }
@@ -166,17 +229,29 @@ impl CityRender {
                 let sx = nx * CELLW as f32 + 3.0;
                 let sy = ny * CELLH as f32 + 8.0;
                 if sx >= 0.0 && sy >= 0.0 {
-                    info!("sx...{} sy...{}", sx * 8.0, sy * 8.0);
-                    self.draw_cell(
-                        ctx, *cid, (sx * 8.0) as u16, (sy * 8.0) as u16, ctype, dc.color, &msg, 3, false,
-                    );
+                    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                    let usx = (sx * 8.0) as u16;
+                    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                    let usy = (sy * 8.0) as u16;
+                    #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                    let usx = sx as u16;
+                    #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                    let usy = sy as u16;
+
+                    self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
                 }
             } else {
                 let sx = x * CELLW + 3;
                 let sy = y * CELLH + 8;
-                self.draw_cell(
-                    ctx, *cid, sx as u16 * 8, sy as u16 * 8, ctype, dc.color, &msg, 3, false,
-                );
+                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                let usx = (sx * 8) as u16;
+                #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                let usy = (sy * 8) as u16;
+                #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                let usx = sx as u16;
+                #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                let usy = sy as u16;
+                self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
             }
         }
     }
@@ -210,11 +285,20 @@ impl CityRender {
                 msgcol = 3u32;
             }
 
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            let usx = (sx * 8) as u16;
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            let usy = (sy * 8) as u16;
+            #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+            let usx = sx as u16;
+            #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+            let usy = sy as u16;
+
             self.draw_cell(
                 ctx,
                 i as i16,
-                sx as u16 * 8,
-                sy as u16 * 8,
+                usx,
+                usy,
                 dc.border,
                 bcol,
                 &msg,
@@ -229,8 +313,15 @@ impl Render for CityRender {
     type Model = CityModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         ctx.adapter.init(60, 60, 1.0, 1.0, "city".to_string());
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        ctx.adapter.init(70, 40, 1.0, 1.0, "city".to_string());
         self.panel.init(ctx);
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        let l = self.panel.get_sprite("back");
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
