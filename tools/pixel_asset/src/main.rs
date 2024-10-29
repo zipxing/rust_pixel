@@ -1,6 +1,6 @@
 use image::imageops::FilterType;
 use image::GenericImage;
-use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
+use image::{DynamicImage, GenericImageView, RgbaImage};
 use std::fs;
 use std::env;
 use std::io::Write;
@@ -16,8 +16,8 @@ struct Rectangle {
 }
 
 struct MaxRectsBin {
-    width: u32,
-    height: u32,
+    // width: u32,
+    // height: u32,
     free_rects: Vec<Rectangle>,
     used_rects: Vec<Rectangle>,
 }
@@ -31,8 +31,8 @@ impl MaxRectsBin {
             height,
         };
         MaxRectsBin {
-            width,
-            height,
+            // width,
+            // height,
             free_rects: vec![initial_rect],
             used_rects: Vec::new(),
         }
@@ -273,7 +273,7 @@ fn main() {
     }
     atlas.save(&format!("{}/texture_atlas.png", dst_dir)).unwrap();
 
-    for (i, image_rect) in image_rects.iter().enumerate() {
+    for (_i, image_rect) in image_rects.iter().enumerate() {
         let x0 = image_rect.rect.x / 8;
         let y0 = image_rect.rect.y / 8;
         let w = image_rect.rect.width / 8;

@@ -25,6 +25,10 @@ use crate::PState;
 use crate::exec_cmd;
 
 pub fn check_pixel_env() -> PixelContext {
+    let args: Vec<String> = env::args().collect();
+    let command_line = args.join(" ");
+    println!("🍭 Current command line：{}", command_line);
+    
     let mut pc: PixelContext = Default::default();
 
     // match env::current_exe() {
@@ -131,7 +135,8 @@ pub fn check_pixel_env() -> PixelContext {
                             exec_cmd("cargo install --path . --force");
                             println!("new ver:{:?} ver:{:?}", nvs, cvs);
                             println!("🍭 Updated cargo-pixel by: cargo install --path . --force");
-                            println!("🍭 Please re-run new version cargo-pixel");
+                            println!("🍭 Re-run new version cargo-pixel");
+                            exec_cmd(&command_line);
                             std::process::exit(0);
                         }
                     }
