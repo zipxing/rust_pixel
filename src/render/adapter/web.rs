@@ -10,7 +10,7 @@ use crate::event::{
 use crate::render::{
     adapter::{
         gl::pixel::GlPixel, 
-        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -30,14 +30,21 @@ impl WebAdapter {
         }
     }
 
-    pub fn init_glpix(&mut self, w: i32, h: i32, tex: &[u8]) {
+    pub fn init_glpix(&mut self, texwidth: i32, texheight: i32, tex: &[u8]) {
+        PIXEL_SYM_WIDTH
+            .set(init_sym_width(texwidth as u32))
+            .expect("lazylock init");
+        PIXEL_SYM_HEIGHT
+            .set(init_sym_height(texheight as u32))
+            .expect("lazylock init");
+        self.set_pixel_size();
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
             "#version 300 es",
             self.base.pixel_w as i32,
             self.base.pixel_h as i32,
-            w as i32,
-            h as i32,
+            texwidth,
+            texheight,
             tex,
         ));
     }
@@ -48,7 +55,7 @@ impl Adapter for WebAdapter {
         self.set_size(w, h)
             .set_ratiox(rx)
             .set_ratioy(ry)
-            .set_pixel_size()
+            // .set_pixel_size()
             .set_title(s);
 
         use wasm_bindgen::JsCast;
@@ -80,11 +87,11 @@ impl Adapter for WebAdapter {
     fn reset(&mut self) {}
 
     fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH / self.base.ratio_x
+        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
     }
 
     fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT / self.base.ratio_y
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
     }
 
     fn poll_event(&mut self, _timeout: Duration, _es: &mut Vec<Event>) -> bool {
@@ -137,8 +144,8 @@ macro_rules! web_event {
 /// Convert web I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
 pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32) -> Option<Event> {
-    let sym_width = PIXEL_SYM_WIDTH as f32;
-    let sym_height = PIXEL_SYM_HEIGHT as f32;
+    let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
+    let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
     let mut mcte: Option<MouseEvent> = None;
 
     if let Some(key_e) = wasm_bindgen::JsCast::dyn_ref::<web_sys::KeyboardEvent>(&e) {

@@ -166,17 +166,17 @@ impl CityRender {
         let l = self.panel.get_pixel_sprite(&format!("cc{}", id));
         let ss = ["cc", "dd", "ee", "ff", "gg"];
         if border_color <= 5 && border_color >= 1 {
-            let cn = format!("{}{}.pix", ss[border_color as usize - 1], border_type);
+            let cn = format!("pix/{}{}.pix", ss[border_color as usize - 1], border_type);
             asset2sprite!(l, ctx, &cn);
         }
         // wornder...
         if border_color > 5 {
-            let cn = format!("hh{}.pix", border_type);
+            let cn = format!("pix/hh{}.pix", border_type);
             asset2sprite!(l, ctx, &cn);
             l.set_fg(Color::Red);
         }
         if border_type == 16 {
-            asset2sprite!(l, ctx, "cc16.pix");
+            asset2sprite!(l, ctx, "pix/cc16.pix");
         }
         l.set_pos(x, y);
         l.set_color_str(3, 3, msg, COLORS[msg_color as usize], Color::Reset);

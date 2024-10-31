@@ -3,9 +3,8 @@
 
 //! code for rendering
 
-//! An adapter interface is defined here, to interface between different renders.
-//! Currently, web, SDL and crossterm renders are supported.
-
+/// An adapter interface is defined here, to interface between different renders.
+/// Currently, web, SDL and crossterm renders are supported.
 pub mod adapter;
 
 /// draw a base unit cell

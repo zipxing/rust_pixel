@@ -215,14 +215,14 @@ impl GlRenderSymbols {
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
-        let th = (texh as f32 / PIXEL_SYM_HEIGHT) as usize;
-        let tw = (texw as f32 / PIXEL_SYM_WIDTH) as usize;
+        let th = (texh as f32 / PIXEL_SYM_HEIGHT.get().expect("lazylock init")) as usize;
+        let tw = (texw as f32 / PIXEL_SYM_WIDTH.get().expect("lazylock init")) as usize;
         for i in 0..th {
             for j in 0..tw {
                 let symbol = self.make_symbols_frame(
                     &mut sprite_sheet,
-                    j as f32 * (PIXEL_SYM_WIDTH),
-                    i as f32 * (PIXEL_SYM_HEIGHT),
+                    j as f32 * (PIXEL_SYM_WIDTH.get().expect("lazylock init")),
+                    i as f32 * (PIXEL_SYM_HEIGHT.get().expect("lazylock init")),
                 );
                 self.symbols.push(symbol);
             }
@@ -327,13 +327,16 @@ impl GlRenderSymbols {
         for r in rbuf {
             let mut transform = GlTransform::new();
 
-            transform.translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT);
+            transform.translate(
+                r.x + r.cx - PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+                r.y + r.cy - PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+            );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + PIXEL_SYM_WIDTH / ratio_x,
-                -r.cy + PIXEL_SYM_HEIGHT / ratio_y,
+                -r.cx + PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x,
+                -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
             );
             transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
 
@@ -358,13 +361,13 @@ impl GlRenderSymbols {
 
         let uv_left = x / tex_width;
         let uv_top = y / tex_height;
-        let uv_width = PIXEL_SYM_WIDTH / tex_width;
-        let uv_height = PIXEL_SYM_HEIGHT / tex_height;
+        let uv_width = PIXEL_SYM_WIDTH.get().expect("lazylock init") / tex_width;
+        let uv_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / tex_height;
 
         GlCell {
             texture: sheet.texture,
-            width: PIXEL_SYM_WIDTH,
-            height: PIXEL_SYM_HEIGHT,
+            width: *PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+            height: *PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
             origin_x,
             origin_y,
             uv_left,

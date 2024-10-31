@@ -10,7 +10,7 @@ use crate::event::{
 use crate::render::{
     adapter::{
         gl::pixel::GlPixel, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
-        PIXEL_TEXTURE_FILES,
+        PIXEL_TEXTURE_FILE, init_sym_width, init_sym_height,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -157,8 +157,32 @@ impl Adapter for SdlAdapter {
         self.set_size(w, h)
             .set_ratiox(rx)
             .set_ratioy(ry)
-            .set_pixel_size()
             .set_title(s);
+
+        let texture_path = format!(
+            "{}{}{}",
+            self.base.project_path,
+            std::path::MAIN_SEPARATOR,
+            PIXEL_TEXTURE_FILE
+        );
+        info!("gl_pixel load texture...{}", texture_path);
+        let teximg = image::open(texture_path)
+            .map_err(|e| e.to_string())
+            .unwrap()
+            .to_rgba8();
+        let texwidth = teximg.width();
+        let texheight = teximg.height();
+        PIXEL_SYM_WIDTH
+            .set(init_sym_width(texwidth))
+            .expect("lazylock init");
+        PIXEL_SYM_HEIGHT
+            .set(init_sym_height(texheight))
+            .expect("lazylock init");
+        self.set_pixel_size();
+        info!(
+            "gl_pixel load texture...{} {}",
+            self.base.pixel_w, self.base.pixel_h
+        );
 
         let video_subsystem = self.sdl_context.video().unwrap();
         let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG).unwrap();
@@ -195,30 +219,15 @@ impl Adapter for SdlAdapter {
         self.base.gl = Some(gl);
         self.sdl_window = Some(window);
 
-        for texture_file in PIXEL_TEXTURE_FILES.iter() {
-            let texture_path = format!(
-                "{}{}{}",
-                self.base.project_path,
-                std::path::MAIN_SEPARATOR,
-                texture_file
-            );
-            info!("gl_pixel load texture...{}", texture_path);
-            let img = image::open(texture_path)
-                .map_err(|e| e.to_string())
-                .unwrap()
-                .to_rgba8();
-            let width = img.width();
-            let height = img.height();
-            self.base.gl_pixel = Some(GlPixel::new(
-                self.base.gl.as_ref().unwrap(),
-                "#version 330 core",
-                self.base.pixel_w as i32,
-                self.base.pixel_h as i32,
-                width as i32,
-                height as i32,
-                &img,
-            ));
-        }
+        self.base.gl_pixel = Some(GlPixel::new(
+            self.base.gl.as_ref().unwrap(),
+            "#version 330 core",
+            self.base.pixel_w as i32,
+            self.base.pixel_h as i32,
+            texwidth as i32,
+            texheight as i32,
+            &teximg,
+        ));
 
         info!("Window & gl init ok...");
 
@@ -244,11 +253,11 @@ impl Adapter for SdlAdapter {
     fn reset(&mut self) {}
 
     fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH / self.base.ratio_x
+        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
     }
 
     fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT / self.base.ratio_y
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
     }
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
@@ -344,8 +353,8 @@ macro_rules! sdl_event {
 /// Convert sdl input events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
 pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> {
-    let sym_width = PIXEL_SYM_WIDTH;
-    let sym_height = PIXEL_SYM_HEIGHT;
+    let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
+    let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
     let mut mcte: Option<MouseEvent> = None;
     match e {
         SEvent::KeyDown { keycode, .. } => {

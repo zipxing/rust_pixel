@@ -15,6 +15,7 @@ use crate::{
     LOGO_FRAME,
 };
 use std::any::Any;
+use std::sync::OnceLock;
 use std::time::Duration;
 // use log::info;
 
@@ -26,10 +27,16 @@ pub mod gl;
 // c64e1.png c64e2.png
 // Add more files to this list when needed,max 255 textures...
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-pub const PIXEL_TEXTURE_FILES: [&str; 1] = ["assets/pix/c64.png"];
+pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/c64.png";
 
-pub const PIXEL_SYM_WIDTH: f32 = 8.0;
-pub const PIXEL_SYM_HEIGHT: f32 = 8.0;
+pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
+pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
+pub fn init_sym_width(width: u32) -> f32 {
+    width as f32 / 128.0
+}
+pub fn init_sym_height(height: u32) -> f32 {
+    height as f32 / 128.0
+}
 
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
@@ -183,8 +190,10 @@ pub trait Adapter {
         Self: Sized,
     {
         let bs = self.get_base();
-        bs.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH / bs.ratio_x) as u32;
-        bs.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT / bs.ratio_y) as u32;
+        bs.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
+            / bs.ratio_x) as u32;
+        bs.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+            / bs.ratio_y) as u32;
         self
     }
 
@@ -254,8 +263,8 @@ pub trait Adapter {
                 let pch = pix.canvas_height as f32;
                 let rx = bs.ratio_x;
                 let ry = bs.ratio_y;
-                let pw = 40.0 * PIXEL_SYM_WIDTH / rx;
-                let ph = 25.0 * PIXEL_SYM_HEIGHT / ry;
+                let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = 25.0 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
                 let mut t2 = GlTransform::new();
                 t2.scale(pw / pcw, ph / pch);
@@ -424,8 +433,8 @@ fn push_render_buffer(
     let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
     let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
     wc.texsym = (y * 16u32 * 8u32 + x) as usize;
-    wc.x = s.x as f32 + PIXEL_SYM_WIDTH;
-    wc.y = s.y as f32 + PIXEL_SYM_HEIGHT;
+    wc.x = s.x as f32 + PIXEL_SYM_WIDTH.get().expect("lazylock init");
+    wc.y = s.y as f32 + PIXEL_SYM_HEIGHT.get().expect("lazylock init");
     wc.w = s.w;
     wc.h = s.h;
     if angle == 0.0 {
@@ -455,11 +464,11 @@ fn render_helper(
     p: PointU16,
     is_border: bool,
 ) -> (ARect, ARect, ARect, usize, usize) {
-    let w = PIXEL_SYM_WIDTH as i32;
-    let h = PIXEL_SYM_HEIGHT as i32;
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;
+    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32;
     let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
-    let tex_count = PIXEL_TEXTURE_FILES.len() as u8 * 64;
+    let tex_count = 64;
     let tx = if sh.1 < tex_count { sh.1 as usize } else { 1 };
     let srcy = sh.0 as u32 / w as u32 + (tx as u32 / 2u32) * w as u32;
     let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
@@ -537,8 +546,8 @@ where
             let y = i / pw as usize;
             // center point ...
             let ccp = PointI32 {
-                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH / rx) as i32,
-                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT / ry) as i32,
+                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as i32,
+                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as i32,
             };
             let mut fc = sh.2.get_rgba();
             fc.3 = s.alpha;
@@ -630,8 +639,8 @@ where
     for y in 0usize..PIXEL_LOGO_HEIGHT {
         for x in 0usize..PIXEL_LOGO_WIDTH {
             let sci = y * PIXEL_LOGO_WIDTH + x;
-            let symw = PIXEL_SYM_WIDTH / rx;
-            let symh = PIXEL_SYM_HEIGHT / ry;
+            let symw = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+            let symh = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
             let (_s0, s1, mut s2, texidx, symidx) = render_helper(
                 PIXEL_LOGO_WIDTH as u16,
