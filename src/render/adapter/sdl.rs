@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixel, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
-        PIXEL_TEXTURE_FILE, init_sym_width, init_sym_height,
+        gl::pixel::GlPixel, init_sym_height, init_sym_width, Adapter, AdapterBase,
+        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -154,19 +154,13 @@ impl SdlAdapter {
 
 impl Adapter for SdlAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, s: String) {
-        self.set_size(w, h)
-            .set_ratiox(rx)
-            .set_ratioy(ry)
-            .set_title(s);
-
         let texture_path = format!(
             "{}{}{}",
             self.base.project_path,
             std::path::MAIN_SEPARATOR,
             PIXEL_TEXTURE_FILE
         );
-        info!("gl_pixel load texture...{}", texture_path);
-        let teximg = image::open(texture_path)
+        let teximg = image::open(&texture_path)
             .map_err(|e| e.to_string())
             .unwrap()
             .to_rgba8();
@@ -178,9 +172,19 @@ impl Adapter for SdlAdapter {
         PIXEL_SYM_HEIGHT
             .set(init_sym_height(texheight))
             .expect("lazylock init");
-        self.set_pixel_size();
+        info!("gl_pixel load texture...{}", texture_path);
         info!(
-            "gl_pixel load texture...{} {}",
+            "symbol_w={} symbol_h={}",
+            PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+            PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+        );
+        self.set_size(w, h)
+            .set_ratiox(rx)
+            .set_ratioy(ry)
+            .set_pixel_size()
+            .set_title(s);
+        info!(
+            "pixel_w={} pixel_h={}",
             self.base.pixel_w, self.base.pixel_h
         );
 

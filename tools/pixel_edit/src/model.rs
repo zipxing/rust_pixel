@@ -2,8 +2,6 @@ use rust_pixel::event::{Event, KeyCode, MouseButton, MouseEventKind::*};
 //use log::info;
 #[cfg(feature = "sdl")]
 use crate::render::{SYMBOL_SDL, SYMBOL_SDL_LOW};
-#[cfg(feature = "sdl")]
-use rust_pixel::render::adapter::PIXEL_TEXTURE_FILES;
 use rust_pixel::{context::Context, event::event_emit, game::Model};
 
 pub const COLORW: u16 = 18;
@@ -48,7 +46,7 @@ impl TeditModel {
         #[cfg(not(feature = "sdl"))]
         let stc = 3;
         #[cfg(feature = "sdl")]
-        let stc = PIXEL_TEXTURE_FILES.len() as u8 * 4u8;
+        let stc = 4u8;
 
         Self {
             curpen: TeditPen::SYMBOL(0),
