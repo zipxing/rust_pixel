@@ -22,6 +22,15 @@ pub const CELLW: usize = 10;
 pub const CELLH: usize = 8;
 #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
 pub const CELLH: usize = 5;
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+pub const ADJX: usize = 9;
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+pub const ADJY: usize = 10;
+#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+pub const ADJX: usize = 3;
+#[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+pub const ADJY: usize = 8;
+
 //四种基本颜色 + Tower
 pub const COLOR_COUNT: usize = 5;
 pub const LEVELUP_TIME: f32 = 0.03;
@@ -198,12 +207,12 @@ pub fn check_neighbor(x: i8, y: i8, u: &CityUnit, x1: usize, x2: usize) -> bool 
 }
 
 pub fn mouse_in(x: i16, y: i16) -> Option<(i16, i16)> {
-    let sx = 3i16;
-    let sy = 8i16;
-    info!("mouse_in({}, {})", x, y);
+    let sx = ADJX as i16;
+    let sy = ADJY as i16;
+    info!("mouse_in...1({}, {})", x, y);
     if x >= sx && y >= sy && x <= sx + (NCOL * CELLW) as i16 && y <= sy + (NROW * CELLH) as i16 {
         let s = Some(((x - sx) / CELLW as i16, (y - sy) / CELLH as i16));
-        info!("mouse_in({:?})", s);
+        info!("mouse_in...2({:?})", s);
         return s;
     }
     None

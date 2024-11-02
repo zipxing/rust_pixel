@@ -43,7 +43,16 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
     let game_name_lit = LitStr::new(&game_name_str, name_ident.span());
 
     let expanded = quote! {
-            use crate::{model::#model_name, render::#render_name};
+            mod model;
+            #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+            mod render_terminal;
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            mod render_graphics;
+
+            #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+            use crate::{model::#model_name, render_terminal::#render_name};
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            use crate::{model::#model_name, render_graphics::#render_name};
             use rust_pixel::game::Game;
             use rust_pixel::util::get_project_path;
 
