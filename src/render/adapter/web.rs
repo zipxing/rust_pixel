@@ -143,7 +143,7 @@ macro_rules! web_event {
 
 /// Convert web I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
-pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32) -> Option<Event> {
+pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32, ratioy: f32) -> Option<Event> {
     let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
     let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
     let mut mcte: Option<MouseEvent> = None;
@@ -194,6 +194,8 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, ratiox: f32, ratioy: f32)
     }
     if let Some(mut mc) = mcte {
         mc.column /= (sym_width / ratiox) as u16;
+        // adjust row by upper space
+        mc.row -= 600 - pixel_h as u16;
         mc.row /= (sym_height / ratioy) as u16;
         if mc.column >= 1 {
             mc.column -= 1;

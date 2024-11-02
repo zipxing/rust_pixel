@@ -99,7 +99,7 @@ pub fn pixel_game(input: TokenStream) -> TokenStream {
                         .downcast_ref::<WebAdapter>()
                         .unwrap()
                         .base;
-                    if let Some(pe) = input_events_from_web(t, e, abase.ratio_x, abase.ratio_y) {
+                    if let Some(pe) = input_events_from_web(t, e, abase.pixel_h, abase.ratio_x, abase.ratio_y) {
                         self.g.context.input_events.push(pe);
                     }
                 }
