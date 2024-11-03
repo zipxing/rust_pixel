@@ -13,14 +13,18 @@ export const js_load_asset = (url) => {
 const utils = {};
 
 utils.loop = update => {
-    let lastDate = new Date();
-    const loopFunction = function(step) {
-        const date = new Date();
-        const delta = date - lastDate;
-        if (delta > 0.0) {
-            if(update((date - lastDate) * 0.001)){}
-            lastDate = date;
+    let lastTime = performance.now();
+    const frameDuration = 1000 / 60; 
+
+    const loopFunction = function(currentTime) {
+        const deltaTime = currentTime - lastTime;
+
+        if (deltaTime >= frameDuration) {
+            const times = Math.floor(deltaTime / frameDuration);
+            update((times * frameDuration) * 0.001); // 将毫秒转换为秒
+            lastTime += times * frameDuration;
         }
+
         requestAnimationFrame(loopFunction);
     };
 
