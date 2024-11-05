@@ -16,8 +16,6 @@ struct Rectangle {
 }
 
 struct MaxRectsBin {
-    // width: u32,
-    // height: u32,
     free_rects: Vec<Rectangle>,
     used_rects: Vec<Rectangle>,
 }
@@ -31,8 +29,6 @@ impl MaxRectsBin {
             height,
         };
         MaxRectsBin {
-            // width,
-            // height,
             free_rects: vec![initial_rect],
             used_rects: Vec::new(),
         }

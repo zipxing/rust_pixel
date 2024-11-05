@@ -50,9 +50,9 @@ fn main() {
             for y in 0..18 {
                 for x in 0..18 {
                     let pixel_value = if k[y as usize][x as usize] == 1 {
-                        255u8 
+                        255u8
                     } else {
-                        0u8 
+                        0u8
                     };
                     nimg.put_pixel(i * 18 + x, j * 18 + y, Luma([pixel_value]));
                 }
@@ -71,12 +71,42 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, n: usize, x: u32, y: u32
         for j in 0..n {
             let pixel_x = x * n as u32 + j as u32;
             let pixel_y = y * n as u32 + i as u32;
-
             if pixel_x < image.width() && pixel_y < image.height() {
                 block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
                 pm.insert(block[i][j], 1);
-                if block[i][j] < min {
-                    min = block[i][j];
+            }
+        }
+    }
+
+    if x == 2 && y == 22 {
+        println!("{:?}", block);
+    }
+
+    if pm.len() > 2 {
+        let mut keys: Vec<u8> = pm.keys().cloned().collect();
+        keys.sort();
+        let mut nm = HashMap::new();
+        let mut base: Option<u8> = None;
+        for k in &keys {
+            if base.is_none() {
+                base = Some(*k);
+            } else {
+                if *k - base.unwrap() < 4 {
+                    nm.insert(*k, base.unwrap());
+                } else {
+                    base = Some(*k);
+                }
+            }
+        }
+        for i in 0..n {
+            for j in 0..n {
+                let pixel_x = x * n as u32 + j as u32;
+                let pixel_y = y * n as u32 + i as u32;
+                if pixel_x < image.width() && pixel_y < image.height() {
+                    block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
+                    if nm.contains_key(&block[i][j]) {
+                        block[i][j] = nm[&block[i][j]]
+                    }
                 }
             }
         }
@@ -85,8 +115,17 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, n: usize, x: u32, y: u32
     if x == 2 && y == 22 {
         println!("{:?}", block);
     }
-    if pm.len() > 2 {
-        println!("...{:?}", pm);
+
+    for i in 0..n {
+        for j in 0..n {
+            let pixel_x = x * n as u32 + j as u32;
+            let pixel_y = y * n as u32 + i as u32;
+            if pixel_x < image.width() && pixel_y < image.height() {
+                if block[i][j] < min {
+                    min = block[i][j];
+                }
+            }
+        }
     }
 
     for i in 0..n {

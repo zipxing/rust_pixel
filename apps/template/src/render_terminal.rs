@@ -22,13 +22,11 @@ impl TemplateRender {
         let mut panel = Panel::new();
 
         // background...
-        let mut gb = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
-        // Alpha only support in graphics mode
-        gb.set_alpha(30);
+        let gb = Sprite::new(0, 0, TEMPLATEW, TEMPLATEH);
         panel.add_sprite(gb, "back");
         panel.add_sprite(Sprite::new(0, 0, CARDW as u16, CARDH as u16), "t0");
 
-        // msg, work on both text and graphics mode...
+        // msg...
         let adj = 2u16;
         let mut msg1 = Sprite::new(0 + adj, 14, 40, 1);
         msg1.set_default_str("press N for next card");
@@ -42,10 +40,10 @@ impl TemplateRender {
             "TIMER-MSG",
         );
 
-        // register Block.RedrawTile event, associated draw_tile method
+        // Register Block.RedrawTile event, associated draw_tile method
         event_register("Template.RedrawTile", "draw_tile");
 
-        // register a timer, then fire it...
+        // Register a timer, then fire it...
         timer_register("Template.TestTimer", 0.1, "test_timer");
         timer_fire("Template.TestTimer", 0);
 

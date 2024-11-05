@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use crate::model::{TemplateModel, CARDH, CARDW, TEMPLATEH, TEMPLATEW};
 // use log::info;
+use crate::model::{TemplateModel, CARDH, CARDW, TEMPLATEH, TEMPLATEW};
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
