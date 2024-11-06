@@ -210,7 +210,7 @@ impl Adapter for SdlAdapter {
 
         let gl_context = window.gl_create_context().unwrap();
         self.gl_context = Some(gl_context);
-        video_subsystem.gl_set_swap_interval(1).unwrap(); // Enable vsync
+        // video_subsystem.gl_set_swap_interval(1).unwrap(); // Enable vsync
 
         // Create the OpenGL context using glow
         let gl = unsafe {
