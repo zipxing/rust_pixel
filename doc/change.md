@@ -1,3 +1,6 @@
+# 0.5.8
+- Fix a runtime error in linux / wsl
+
 # 0.5.7
 - Split the app's render.rs into two files, render_terminal.rs and render_graphics.rs, to make the code logic clearer.
 - Added pixel_symbol tool for extract the symbol set used in pixel art picture.
