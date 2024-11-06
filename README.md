@@ -61,7 +61,7 @@ The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | 
 [Windows]: doc/win.md
 [DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
 
-Starting from version 0.5.3, you can deploy **cargo-pixel** directly from crates.io using `cargo install`.
+Starting from version 0.5.3, you can deploy **cargo-pixel** directly from crates.io:
 ```
 cargo install rust_pixel         # use crates.io rust_pixel crate deploy cargo-pixel
 cargo pixel                      # first run cargo-pixel will clone rust_pixel to <homedir>/rust_pixel_work automatic 
@@ -75,6 +75,13 @@ git clone https://github.com/zipxing/rust_pixel
 cd rust_pixel
 cargo install --path . --force
 ``` 
+
+If you have installed an old version of cargo-pixel, you may get an error when running it. git update is required and the new version of cargo-pixel is deployed manually:
+```
+cd rust_pixel
+git pull
+cargo install --path . --force
+```
 
 ### Usage Instructions
 ``` 
