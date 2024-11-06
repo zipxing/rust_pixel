@@ -1,3 +1,7 @@
+# 0.5.7
+- Split the app's render.rs into two files, render_terminal.rs and render_graphics.rs, to make the code logic clearer.
+- Added pixel_symbol tool for extract the symbol set used in pixel art picture.
+
 # 0.5.6
 - Added pixel asset tool, which can package scattered png images into c64.png and generate pix files corresponding to each image
 ```
