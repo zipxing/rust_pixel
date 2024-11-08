@@ -16,8 +16,8 @@ fn main() {
     let height: u32;
     let mut imap = HashMap::new();
 
+    // parse command line...
     let args: Vec<String> = env::args().collect();
-
     if args.len() != 5 {
         println!("Usage: pixel_symbol <image file path> <symsize> <width> <height>");
         return;
@@ -27,9 +27,12 @@ fn main() {
     symsize = args[2].parse().unwrap();
     width = args[3].parse().unwrap();
     height = args[4].parse().unwrap();
+
+    // make gray img...
     let gray_img = img.clone().into_luma8();
     gray_img.save("tmp/gray.png").unwrap();
 
+    // dig symbols...
     for i in 0..height {
         for j in 0..width {
             let block_at = get_block_at(&gray_img, symsize as usize, j, i);
@@ -63,6 +66,12 @@ fn main() {
         }
     }
     nimg.save("bout.png").expect("save image error");
+
+    for i in 0..height {
+        for j in 0..width {
+            let _ = get_block_color(&img, &gray_img, symsize as usize, j, i, b2);
+        }
+    }
 }
 
 // find background colors...
@@ -101,6 +110,82 @@ fn find_background_color(
     let gray = image.get_pixel(bx, by).0[0];
     // println!("gray..{}", gray);
     (gray, *bc)
+}
+
+// get petscii block color
+fn get_block_color(
+    image: &DynamicImage,
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    n: usize,
+    x: u32,
+    y: u32,
+    back_rgb: u32,
+) -> (usize, usize) {
+    let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
+    for i in 0..n {
+        for j in 0..n {
+            let pixel_x = x * n as u32 + j as u32;
+            let pixel_y = y * n as u32 + i as u32;
+            if pixel_x < image.width() && pixel_y < image.height() {
+                let p = image.get_pixel(pixel_x, pixel_y);
+                let k: u32 = ((p[0] as u32) << 24)
+                    + ((p[1] as u32) << 16)
+                    + ((p[2] as u32) << 8)
+                    + (p[3] as u32);
+                cc.entry(k).or_insert((pixel_x, pixel_y));
+            }
+        }
+    }
+    let cv: Vec<_> = cc.iter().collect();
+    let mut include_back = false;
+    let clen = cv.len();
+    for c in &cv {
+        if *c.0 == back_rgb {
+            include_back = true;
+        }
+    }
+    let mut ret = None;
+    if include_back {
+        if clen == 1 {
+            ret = Some((back_rgb, back_rgb));
+            println!("<B>{:?}", ret);
+        } else if clen == 2 {
+            let mut r = (back_rgb, back_rgb);
+            if *cv[0].0 != back_rgb {
+                r.1 = *cv[0].0;
+            }
+            if *cv[1].0 != back_rgb {
+                r.1 = *cv[1].0;
+            }
+            ret = Some(r);
+            println!("<B,F>{:?}", ret);
+        } else {
+            println!("ERROR!!! clen={} cv={:?}", clen, cv);
+        }
+    } else {
+        if clen == 1 {
+            ret = Some((*cv[0].0, *cv[0].0));
+            println!("<F>{:?}", ret);
+        } else if clen == 2 {
+            let g0 = img.get_pixel(cv[0].1 .0, cv[0].1 .1).0[0];
+            let g1 = img.get_pixel(cv[1].1 .0, cv[1].1 .1).0[0];
+            if g0 <= g1 {
+                ret = Some((*cv[0].0, *cv[1].0));
+            } else {
+                ret = Some((*cv[1].0, *cv[0].0));
+            }
+            println!("<F1,F2>{:?}", ret);
+        } else {
+            println!("ERROR2!!! clen={} cv={:?}", clen, cv);
+        }
+    }
+    match ret {
+        Some(r) => {
+            (0, 0)
+            // (find_best_color_u32(r.0), find_best_color_u32(r.1))
+        }
+        _ => (0, 0),
+    }
 }
 
 fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, n: usize, x: u32, y: u32) -> ImageNxN {
