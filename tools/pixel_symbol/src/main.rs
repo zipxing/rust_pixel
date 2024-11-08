@@ -1,8 +1,7 @@
 // https://github.com/JuliaPoo/AsciiArtist
 // https://github.com/EgonOlsen71/petsciiator
 
-// use image::{DynamicImage, GenericImageView, GrayImage, ImageBuffer, Luma};
-use image::{GrayImage, ImageBuffer, Luma};
+use image::{DynamicImage, GenericImageView, GrayImage, ImageBuffer, Luma};
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
@@ -12,54 +11,96 @@ type ImageNxN = Vec<Vec<u8>>;
 
 fn main() {
     let input_image_path;
+    let symsize: u32;
     let width: u32;
     let height: u32;
     let mut imap = HashMap::new();
 
     let args: Vec<String> = env::args().collect();
 
-    match args.len() {
-        4 => {}
-        _ => {
-            println!("Usage: pixel_symbol <image file path> <width> <height>");
-            return;
-        }
+    if args.len() != 5 {
+        println!("Usage: pixel_symbol <image file path> <symsize> <width> <height>");
+        return;
     }
     input_image_path = Path::new(&args[1]);
     let img = image::open(&input_image_path).expect("Failed to open the input image");
-    width = args[2].parse().unwrap();
-    height = args[3].parse().unwrap();
-
+    symsize = args[2].parse().unwrap();
+    width = args[3].parse().unwrap();
+    height = args[4].parse().unwrap();
     let gray_img = img.clone().into_luma8();
-    gray_img.save("tmp/out2.png").unwrap();
+    gray_img.save("tmp/gray.png").unwrap();
 
     for i in 0..height {
         for j in 0..width {
-            let block_at = get_block_at(&gray_img, 18, j, i);
+            let block_at = get_block_at(&gray_img, symsize as usize, j, i);
+            // key : ImageNxN, value : index vector
             imap.entry(block_at)
                 .or_insert(Vec::new())
                 .push(i * width + j);
         }
     }
+    println!("imap len = {}", imap.len());
 
-    let mut nimg = GrayImage::new(18 * width, 18 * height);
+    let (b1, b2) = find_background_color(&img, &gray_img, width * symsize, height * symsize);
+    println!("gray_back={} back={}", b1, b2);
+
+    // redraw gray image...
+    let mut nimg = GrayImage::new(symsize * width, symsize * height);
     for (k, v) in imap.iter() {
         for b in v {
             let i = b % width;
             let j = b / width;
-            for y in 0..18 {
-                for x in 0..18 {
+            for y in 0..symsize {
+                for x in 0..symsize {
                     let pixel_value = if k[y as usize][x as usize] == 1 {
                         255u8
                     } else {
                         0u8
                     };
-                    nimg.put_pixel(i * 18 + x, j * 18 + y, Luma([pixel_value]));
+                    nimg.put_pixel(i * symsize + x, j * symsize + y, Luma([pixel_value]));
                 }
             }
         }
     }
     nimg.save("bout.png").expect("save image error");
+}
+
+// find background colors...
+fn find_background_color(
+    img: &DynamicImage,
+    image: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    w: u32,
+    h: u32,
+) -> (u8, u32) {
+    // (first_x, first_y, count)
+    let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
+    for i in 0..h {
+        for j in 0..w {
+            let p = img.get_pixel(j, i);
+            let k: u32 = ((p[0] as u32) << 24)
+                + ((p[1] as u32) << 16)
+                + ((p[2] as u32) << 8)
+                + (p[3] as u32);
+            (*cc.entry(k).or_insert((j, i, 0))).2 += 1;
+        }
+    }
+    let mut cv: Vec<_> = cc.iter().collect();
+    cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
+    let bx = cv[0].1 .0;
+    let by = cv[0].1 .1;
+    let bc = cv[0].0;
+    // for c in cv {
+    //     println!("cc..{:x} {:?}", c.0, c.1);
+    // }
+    // for i in 0..h {
+    //     for j in 0..w {
+    //         print!("{:?} ", image.get_pixel(j, i).0[0]);
+    //     }
+    //     println!("");
+    // }
+    let gray = image.get_pixel(bx, by).0[0];
+    // println!("gray..{}", gray);
+    (gray, *bc)
 }
 
 fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, n: usize, x: u32, y: u32) -> ImageNxN {

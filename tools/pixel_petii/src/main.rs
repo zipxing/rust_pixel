@@ -62,7 +62,7 @@ fn main() {
     let vcs = gen_charset_images(false);
 
     // find background color...
-    let bret = count_img_colors(&resized_img, &gray_img, width * 8, height * 8);
+    let bret = find_background_color(&resized_img, &gray_img, width * 8, height * 8);
     let back_gray = bret.0;
     let back_rgb = bret.1;
 
@@ -124,7 +124,7 @@ fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
 }
 
 // find background colors...
-fn count_img_colors(
+fn find_background_color(
     img: &DynamicImage,
     image: &ImageBuffer<Luma<u8>, Vec<u8>>,
     w: u32,
