@@ -2,6 +2,8 @@
 // https://github.com/EgonOlsen71/petsciiator
 
 use image::{DynamicImage, GenericImageView, GrayImage, ImageBuffer, Luma};
+use deltae::*;
+use lab::Lab;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
@@ -32,20 +34,10 @@ fn main() {
     let gray_img = img.clone().into_luma8();
     gray_img.save("tmp/gray.png").unwrap();
 
-    // dig symbols...
-    for i in 0..height {
-        for j in 0..width {
-            let block_at = get_block_at(&gray_img, symsize as usize, j, i);
-            // key : ImageNxN, value : index vector
-            imap.entry(block_at)
-                .or_insert(Vec::new())
-                .push(i * width + j);
-        }
-    }
-    println!("imap len = {}", imap.len());
-
     let (b1, b2) = find_background_color(&img, &gray_img, width * symsize, height * symsize);
     println!("gray_back={} back={}", b1, b2);
+
+    dig_symbols(&mut imap, &gray_img, width, height, symsize);
 
     // redraw gray image...
     let mut nimg = GrayImage::new(symsize * width, symsize * height);
@@ -72,6 +64,26 @@ fn main() {
             let _ = get_block_color(&img, &gray_img, symsize as usize, j, i, b2);
         }
     }
+}
+
+fn dig_symbols(
+    imap: &mut HashMap<ImageNxN, Vec<u32>>,
+    gray_img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    width: u32,
+    height: u32,
+    symsize: u32,
+) {
+    // dig symbols...
+    for i in 0..height {
+        for j in 0..width {
+            let block_at = get_block_at(&gray_img, symsize as usize, j, i);
+            // key : ImageNxN, value : index vector
+            imap.entry(block_at)
+                .or_insert(Vec::new())
+                .push(i * width + j);
+        }
+    }
+    println!("imap len = {}", imap.len());
 }
 
 // find background colors...
@@ -112,7 +124,31 @@ fn find_background_color(
     (gray, *bc)
 }
 
-// get petscii block color
+// get color distance
+fn color_distance(e1: u32, e2: u32) -> f32 {
+    let e1r = (e1 >> 24 & 0xff) as u8;
+    let e1g = (e1 >> 16 & 0xff) as u8;
+    let e1b = (e1 >> 8 & 0xff) as u8;
+    let e2r = (e2 >> 24 & 0xff) as u8;
+    let e2g = (e2 >> 16 & 0xff) as u8;
+    let e2b = (e2 >> 8 & 0xff) as u8;
+    
+    let l1 = Lab::from_rgb(&[e1r, e1g, e1b]);
+    let l2 = Lab::from_rgb(&[e2r, e2g, e2b]);
+    let lab1 = LabValue {
+        l: l1.l,
+        a: l1.a,
+        b: l1.b,
+    };
+    let lab2 = LabValue {
+        l: l2.l,
+        a: l2.a,
+        b: l2.b,
+    };
+    *DeltaE::new(&lab1, &lab2, DE2000).value()
+}
+
+// get symbol block color
 fn get_block_color(
     image: &DynamicImage,
     img: &ImageBuffer<Luma<u8>, Vec<u8>>,
@@ -142,13 +178,18 @@ fn get_block_color(
     for c in &cv {
         if *c.0 == back_rgb {
             include_back = true;
+        } else {
+            let cd = color_distance(*c.0, back_rgb);
+            if cd < 5.0 {
+                println!("c1={} c2={}", *c.0, back_rgb);
+            }
         }
     }
     let mut ret = None;
     if include_back {
         if clen == 1 {
             ret = Some((back_rgb, back_rgb));
-            println!("<B>{:?}", ret);
+            // println!("<B>{:?}", ret);
         } else if clen == 2 {
             let mut r = (back_rgb, back_rgb);
             if *cv[0].0 != back_rgb {
@@ -158,14 +199,15 @@ fn get_block_color(
                 r.1 = *cv[1].0;
             }
             ret = Some(r);
-            println!("<B,F>{:?}", ret);
+            // println!("<B,F>{:?}", ret);
         } else {
-            println!("ERROR!!! clen={} cv={:?}", clen, cv);
+            // TODO: select bigest distance color to forecolor
+            // println!("ERROR!!! clen={} cv={:?}", clen, cv);
         }
     } else {
         if clen == 1 {
             ret = Some((*cv[0].0, *cv[0].0));
-            println!("<F>{:?}", ret);
+            // println!("<F>{:?}", ret);
         } else if clen == 2 {
             let g0 = img.get_pixel(cv[0].1 .0, cv[0].1 .1).0[0];
             let g1 = img.get_pixel(cv[1].1 .0, cv[1].1 .1).0[0];
@@ -174,9 +216,9 @@ fn get_block_color(
             } else {
                 ret = Some((*cv[1].0, *cv[0].0));
             }
-            println!("<F1,F2>{:?}", ret);
+            // println!("<F1,F2>{:?}", ret);
         } else {
-            println!("ERROR2!!! clen={} cv={:?}", clen, cv);
+            // println!("ERROR2!!! clen={} cv={:?}", clen, cv);
         }
     }
     match ret {
