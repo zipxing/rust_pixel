@@ -1,15 +1,13 @@
 // https://github.com/JuliaPoo/AsciiArtist
 // https://github.com/EgonOlsen71/petsciiator
 use deltae::*;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgba};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use lab::Lab;
 use rust_pixel::render::style::ANSI_COLOR_RGB;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
-// gray 8x8 image...
-type ImageNxN = Vec<Vec<u8>>;
 struct RGB {
     r: u8,
     g: u8,
@@ -21,7 +19,9 @@ fn main() {
     let symsize: u32;
     let width: u32;
     let height: u32;
+    // key: binary image, value: block index list
     let mut imap = HashMap::new();
+    // key: block index, value: bg color, fg color) 
     let mut cmap = HashMap::new();
 
     // parse command line...
@@ -36,23 +36,20 @@ fn main() {
     width = args[3].parse().unwrap();
     height = args[4].parse().unwrap();
 
-    // make gray img...
-    let gray_img = img.clone().into_luma8();
-    gray_img.save("tmp/gray.png").unwrap();
-    let (_, b2) = find_background_color(&img, &gray_img, width * symsize, height * symsize);
-
-    // find block symbols...
-    dig_symbols(&mut imap, &gray_img, width, height, symsize);
+    let b2 = find_background_color(&img, width * symsize, height * symsize);
 
     // find block colors...
     for i in 0..height {
         for j in 0..width {
-            let c = get_block_color(&img, &gray_img, symsize as usize, j, i, b2);
-            cmap.entry(i * width + j).or_insert(c);
+            let c = process_block(&img, symsize as usize, j, i, b2);
+            cmap.entry(i * width + j).or_insert((c.0, c.1));
+            imap.entry(c.2)
+                .or_insert(Vec::new())
+                .push(i * width + j);
         }
     }
 
-    // redraw gray image...
+    // redraw image...
     let mut nimg = ImageBuffer::new(symsize * width, symsize * height);
     for (k, v) in imap.iter() {
         for b in v {
@@ -76,33 +73,13 @@ fn main() {
     nimg.save("bout.png").expect("save image error");
 }
 
-fn dig_symbols(
-    imap: &mut HashMap<ImageNxN, Vec<u32>>,
-    gray_img: &ImageBuffer<Luma<u8>, Vec<u8>>,
-    width: u32,
-    height: u32,
-    symsize: u32,
-) {
-    // dig symbols...
-    for i in 0..height {
-        for j in 0..width {
-            let block_at = get_block_at(&gray_img, symsize as usize, j, i);
-            // key : ImageNxN, value : index vector
-            imap.entry(block_at)
-                .or_insert(Vec::new())
-                .push(i * width + j);
-        }
-    }
-    println!("imap len = {}", imap.len());
-}
-
 // find background colors...
 fn find_background_color(
     img: &DynamicImage,
-    image: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    // image: &ImageBuffer<Luma<u8>, Vec<u8>>,
     w: u32,
     h: u32,
-) -> (u8, u32) {
+) -> u32 {
     // (first_x, first_y, count)
     let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
     for i in 0..h {
@@ -117,8 +94,8 @@ fn find_background_color(
     }
     let mut cv: Vec<_> = cc.iter().collect();
     cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
-    let bx = cv[0].1 .0;
-    let by = cv[0].1 .1;
+    // let bx = cv[0].1 .0;
+    // let by = cv[0].1 .1;
     let bc = cv[0].0;
     // for c in cv {
     //     println!("cc..{:x} {:?}", c.0, c.1);
@@ -129,9 +106,9 @@ fn find_background_color(
     //     }
     //     println!("");
     // }
-    let gray = image.get_pixel(bx, by).0[0];
+    // let gray = image.get_pixel(bx, by).0[0];
     // println!("gray..{}", gray);
-    (gray, *bc)
+    *bc
 }
 
 fn luminance(e1: u32) -> f32 {
@@ -166,15 +143,16 @@ fn color_distance(e1: u32, e2: u32) -> f32 {
 }
 
 // get symbol block color
-fn get_block_color(
+fn process_block(
     image: &DynamicImage,
-    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
     n: usize,
     x: u32,
     y: u32,
     back_rgb: u32,
-) -> (usize, usize) {
+) -> (usize, usize, Vec<Vec<u8>>) {
     let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
+    let mut cm: Vec<u32> = vec![];
+    let mut block = vec![vec![0u8; n]; n];
     for i in 0..n {
         for j in 0..n {
             let pixel_x = x * n as u32 + j as u32;
@@ -186,6 +164,7 @@ fn get_block_color(
                     + ((p[2] as u32) << 8)
                     + (p[3] as u32);
                 cc.entry(k).or_insert((pixel_x, pixel_y));
+                cm.push(k);
             }
         }
     }
@@ -240,9 +219,9 @@ fn get_block_color(
             ret = Some((*cv[0].0, *cv[0].0));
             // println!("<F>{:?}", ret);
         } else if clen == 2 {
-            let g0 = img.get_pixel(cv[0].1 .0, cv[0].1 .1).0[0];
-            let g1 = img.get_pixel(cv[1].1 .0, cv[1].1 .1).0[0];
-            if g0 <= g1 {
+            let l1 = luminance(*cv[0].0);
+            let l2 = luminance(*cv[1].0);
+            if l2 > l1 {
                 ret = Some((*cv[0].0, *cv[1].0));
             } else {
                 ret = Some((*cv[1].0, *cv[0].0));
@@ -271,81 +250,13 @@ fn get_block_color(
             // println!("ccv = {:?}", ccv);
         }
     }
-    match ret {
-        Some(r) => (find_best_color_u32(r.0), find_best_color_u32(r.1)),
-        _ => (0, 0),
-    }
-}
-
-fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, n: usize, x: u32, y: u32) -> ImageNxN {
-    let mut block = vec![vec![0u8; n]; n];
-    let mut min = 255u8;
-    let mut pm = HashMap::new();
 
     for i in 0..n {
         for j in 0..n {
-            let pixel_x = x * n as u32 + j as u32;
-            let pixel_y = y * n as u32 + i as u32;
-            if pixel_x < image.width() && pixel_y < image.height() {
-                block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
-                pm.insert(block[i][j], 1);
-            }
-        }
-    }
-
-    // if x == 2 && y == 22 {
-    //     println!("{:?}", block);
-    // }
-
-    if pm.len() > 2 {
-        let mut keys: Vec<u8> = pm.keys().cloned().collect();
-        keys.sort();
-        let mut nm = HashMap::new();
-        let mut base: Option<u8> = None;
-        for k in &keys {
-            if base.is_none() {
-                base = Some(*k);
-            } else {
-                if *k - base.unwrap() < 4 {
-                    nm.insert(*k, base.unwrap());
-                } else {
-                    base = Some(*k);
-                }
-            }
-        }
-        for i in 0..n {
-            for j in 0..n {
-                let pixel_x = x * n as u32 + j as u32;
-                let pixel_y = y * n as u32 + i as u32;
-                if pixel_x < image.width() && pixel_y < image.height() {
-                    block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
-                    if nm.contains_key(&block[i][j]) {
-                        block[i][j] = nm[&block[i][j]]
-                    }
-                }
-            }
-        }
-    }
-
-    // if x == 2 && y == 22 {
-    //     println!("{:?}", block);
-    // }
-
-    for i in 0..n {
-        for j in 0..n {
-            let pixel_x = x * n as u32 + j as u32;
-            let pixel_y = y * n as u32 + i as u32;
-            if pixel_x < image.width() && pixel_y < image.height() {
-                if block[i][j] < min {
-                    min = block[i][j];
-                }
-            }
-        }
-    }
-
-    for i in 0..n {
-        for j in 0..n {
-            if block[i][j] == min {
+            let color = cm[i * n + j];
+            let cd0 = color_distance(color, ret.unwrap().0);
+            let cd1 = color_distance(color, ret.unwrap().1);
+            if cd0 <= cd1 {
                 block[i][j] = 0;
             } else {
                 block[i][j] = 1;
@@ -353,7 +264,10 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, n: usize, x: u32, y: u32
         }
     }
 
-    block
+    match ret {
+        Some(r) => (find_best_color_u32(r.0), find_best_color_u32(r.1), block),
+        _ => (0, 0, block),
+    }
 }
 
 fn find_best_color_u32(c: u32) -> usize {
