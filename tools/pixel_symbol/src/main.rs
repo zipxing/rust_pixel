@@ -20,21 +20,22 @@ fn main() {
     let width: u32;
     let height: u32;
     // key: binary image, value: block index list
-    let mut imap = HashMap::new();
+    let mut symbol_map = HashMap::new();
     // key: block index, value: bg color, fg color) 
-    let mut cmap = HashMap::new();
+    let mut color_map = HashMap::new();
 
     // parse command line...
     let args: Vec<String> = env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: pixel_symbol <image file path> <symsize> <width> <height>");
+    if args.len() != 3 {
+        println!("Usage: pixel_symbol <image file path> <symsize>");
         return;
     }
     input_image_path = Path::new(&args[1]);
     let img = image::open(&input_image_path).expect("Failed to open the input image");
     symsize = args[2].parse().unwrap();
-    width = args[3].parse().unwrap();
-    height = args[4].parse().unwrap();
+    width = img.width() as u32 / symsize;
+    height = img.height() as u32 / symsize;
+    println!("width={} h={}", width, height);
 
     let b2 = find_background_color(&img, width * symsize, height * symsize);
 
@@ -42,20 +43,21 @@ fn main() {
     for i in 0..height {
         for j in 0..width {
             let c = process_block(&img, symsize as usize, j, i, b2);
-            cmap.entry(i * width + j).or_insert((c.0, c.1));
-            imap.entry(c.2)
+            color_map.entry(i * width + j).or_insert((c.0, c.1));
+            symbol_map.entry(c.2)
                 .or_insert(Vec::new())
                 .push(i * width + j);
         }
     }
+    println!("symbol count...{}", symbol_map.len());
 
     // redraw image...
     let mut nimg = ImageBuffer::new(symsize * width, symsize * height);
-    for (k, v) in imap.iter() {
+    for (k, v) in symbol_map.iter() {
         for b in v {
             let i = b % width;
             let j = b / width;
-            let color = cmap.get(b).unwrap();
+            let color = color_map.get(b).unwrap();
             for y in 0..symsize {
                 for x in 0..symsize {
                     let pixel_value = if k[y as usize][x as usize] == 1 {
