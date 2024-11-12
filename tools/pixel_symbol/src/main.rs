@@ -21,7 +21,7 @@ fn main() {
     let height: u32;
     // key: binary image, value: block index list
     let mut symbol_map = HashMap::new();
-    // key: block index, value: bg color, fg color) 
+    // key: block index, value: bg color, fg color)
     let mut color_map = HashMap::new();
 
     // parse command line...
@@ -37,23 +37,42 @@ fn main() {
     height = img.height() as u32 / symsize;
     println!("width={} h={}", width, height);
 
+    // count pixels for dig background color
     let b2 = find_background_color(&img, width * symsize, height * symsize);
 
-    // find block colors...
+    // scan blocks
     for i in 0..height {
         for j in 0..width {
             let c = process_block(&img, symsize as usize, j, i, b2);
             color_map.entry(i * width + j).or_insert((c.0, c.1));
-            symbol_map.entry(c.2)
+            symbol_map
+                .entry(c.2)
                 .or_insert(Vec::new())
                 .push(i * width + j);
         }
     }
-    println!("symbol count...{}", symbol_map.len());
+    let symlen = symbol_map.len();
+    let symw = 16;
+    let symh = symlen / 16 + if symlen % 16 == 0 { 0 } else { 1 };
+    println!("symbol count...{} {} {}", symlen, symh, symw);
 
     // redraw image...
+    let mut simg = ImageBuffer::new(symsize * symw as u32, symsize * symh as u32);
     let mut nimg = ImageBuffer::new(symsize * width, symsize * height);
+    let mut scount = 0;
     for (k, v) in symbol_map.iter() {
+        for y in 0..symsize {
+            for x in 0..symsize {
+                let pixel_value = if k[y as usize][x as usize] == 1 {
+                    [255u8, 255, 255, 255]
+                } else {
+                    [0u8, 0, 0, 255]
+                };
+                simg.put_pixel((scount % 16) * symsize + x, (scount / 16) * symsize + y, Rgba(pixel_value));
+            }
+        }
+        scount += 1;
+
         for b in v {
             let i = b % width;
             let j = b / width;
@@ -72,6 +91,7 @@ fn main() {
             }
         }
     }
+    simg.save("sout.png").expect("save image error");
     nimg.save("bout.png").expect("save image error");
 }
 
@@ -247,7 +267,7 @@ fn process_block(
             if l2 > l1 {
                 ret = Some((*ccv[0].0, *ccv[1].0));
             } else {
-                ret = Some((*ccv[1].0, *ccv[2].0));
+                ret = Some((*ccv[1].0, *ccv[0].0));
             }
             // println!("ccv = {:?}", ccv);
         }
