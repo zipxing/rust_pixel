@@ -68,7 +68,11 @@ fn main() {
                 } else {
                     [0u8, 0, 0, 255]
                 };
-                simg.put_pixel((scount % 16) * symsize + x, (scount / 16) * symsize + y, Rgba(pixel_value));
+                simg.put_pixel(
+                    (scount % 16) * symsize + x,
+                    (scount / 16) * symsize + y,
+                    Rgba(pixel_value),
+                );
             }
         }
         scount += 1;
