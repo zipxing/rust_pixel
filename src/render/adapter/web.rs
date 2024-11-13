@@ -47,6 +47,7 @@ impl WebAdapter {
             texheight,
             tex,
         ));
+        info!("web glpix init ok...");
     }
 }
 

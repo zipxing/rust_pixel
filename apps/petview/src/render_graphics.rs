@@ -88,6 +88,7 @@ fn apply_distortion(
 
 pub struct PetviewRender {
     pub panel: Panel,
+    pub init: bool,
 }
 
 impl PetviewRender {
@@ -122,7 +123,34 @@ impl PetviewRender {
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
-        Self { panel }
+        Self { panel, init: false }
+    }
+
+    fn do_init(&mut self, ctx: &mut Context) {
+        if self.init {
+            return;
+        }
+
+        let rx = ctx.adapter.get_base().ratio_x;
+        let ry = ctx.adapter.get_base().ratio_y;
+        let p3 = self.panel.get_pixel_sprite("petimg3");
+        p3.set_pos(
+            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
+            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+        );
+        let p4 = self.panel.get_pixel_sprite("petimg4");
+        p4.set_pos(
+            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
+            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+        );
+        let pmsg = self.panel.get_pixel_sprite("pet-msg");
+        pmsg.set_pos(
+            (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
+            (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
+        );
+
+        self.init = true;
+        info!("PETVIEW INIT OK...!!!!");
     }
 }
 
@@ -144,18 +172,25 @@ impl Render for PetviewRender {
         let ry = ctx.adapter.get_base().ratio_y;
         let p3 = self.panel.get_pixel_sprite("petimg3");
         p3.set_pos(
-            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+            // (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
+            // (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+            (6.0 * 8.0 / rx) as u16,
+            (2.5 * 8.0 / ry) as u16,
         );
+        info!("INIT OK4...!!!!");
         let p4 = self.panel.get_pixel_sprite("petimg4");
         p4.set_pos(
-            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+            // (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
+            // (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+            (6.0 * 8.0 / rx) as u16,
+            (2.5 * 8.0 / ry) as u16,
         );
         let pmsg = self.panel.get_pixel_sprite("pet-msg");
         pmsg.set_pos(
-            (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
+            // (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
+            // (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
+            (10.0 * 8.0 / rx) as u16,
+            (28.5 * 8.0 / ry) as u16,
         );
     }
 
@@ -241,6 +276,7 @@ impl Render for PetviewRender {
     }
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
+        self.do_init(ctx);
         self.panel.draw(ctx).unwrap();
     }
 }
