@@ -112,6 +112,10 @@ pub struct AdapterBase {
     pub ratio_y: f32,
     pub rd: Rand,
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub rflag: bool,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    pub rbuf: Vec<RenderCell>,
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub gl: Option<glow::Context>,
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub gl_pixel: Option<GlPixel>,
@@ -130,6 +134,10 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            rflag: true,
+            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            rbuf: vec![],
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             gl: None,
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -236,11 +244,21 @@ pub trait Adapter {
         // }
         // info!("{:?} len={}", current_buffer.content.len(), rbuf.len());
 
-        // draw rbuf to render_texture 2
-        self.draw_render_buffer_to_texture(&rbuf, 2, false);
+        if self.get_base().rflag {
+            // draw rbuf to render_texture 2
+            self.draw_render_buffer_to_texture(&rbuf, 2, false);
 
-        // draw render_texture 2 & 3 to screen
-        self.draw_render_textures_to_screen();
+            // draw render_texture 2 & 3 to screen
+            self.draw_render_textures_to_screen();
+        } else {
+            // copy rbuf to base.rbuf
+            self.get_base().rbuf = rbuf;
+        }
+    }
+
+    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    fn only_render_buffer(&mut self) {
+        self.get_base().rflag = false;
     }
 
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
