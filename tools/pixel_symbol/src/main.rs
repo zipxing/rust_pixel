@@ -1,5 +1,3 @@
-// https://github.com/JuliaPoo/AsciiArtist
-// https://github.com/EgonOlsen71/petsciiator
 use deltae::*;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use lab::Lab;
@@ -132,20 +130,6 @@ fn find_background_color(img: &DynamicImage, w: u32, h: u32) -> u32 {
     }
     let mut cv: Vec<_> = cc.iter().collect();
     cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
-    // let bx = cv[0].1 .0;
-    // let by = cv[0].1 .1;
-    // let bc = cv[0].0;
-    // for c in cv {
-    //     println!("cc..{:x} {:?}", c.0, c.1);
-    // }
-    // for i in 0..h {
-    //     for j in 0..w {
-    //         print!("{:?} ", image.get_pixel(j, i).0[0]);
-    //     }
-    //     println!("");
-    // }
-    // let gray = image.get_pixel(bx, by).0[0];
-    // println!("gray..{}", gray);
     *cv[0].0
 }
 
