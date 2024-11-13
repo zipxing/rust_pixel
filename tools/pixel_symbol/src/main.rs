@@ -17,8 +17,10 @@ struct RGB {
 fn main() {
     let input_image_path;
     let symsize: u32;
-    let width: u32;
-    let height: u32;
+    let mut width: u32;
+    let mut height: u32;
+    let start_x: u32;
+    let start_y: u32;
     // key: binary image, value: block index list
     let mut symbol_map = HashMap::new();
     // key: block index, value: bg color, fg color)
@@ -26,24 +28,38 @@ fn main() {
 
     // parse command line...
     let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        println!("Usage: pixel_symbol <image file path> <symsize>");
+    let arglen = args.len();
+    if arglen != 3 && arglen != 7 {
+        println!(
+            "Usage: pixel_symbol image_file_path symsize <start_x> <start_y> <width> <height>"
+        );
         return;
     }
     input_image_path = Path::new(&args[1]);
-    let img = image::open(&input_image_path).expect("Failed to open the input image");
     symsize = args[2].parse().unwrap();
+
+    // open image...
+    let mut img = image::open(&input_image_path).expect("Failed to open the input image");
     width = img.width() as u32 / symsize;
     height = img.height() as u32 / symsize;
-    println!("width={} h={}", width, height);
+
+    // if set sx,sy,w,h then crop image...
+    if arglen == 7 {
+        start_x = args[3].parse().unwrap();
+        start_y = args[4].parse().unwrap();
+        width = args[5].parse::<u32>().unwrap() / symsize;
+        height = args[6].parse::<u32>().unwrap() / symsize;
+        img = img.crop(start_x, start_y, width * symsize, height * symsize);
+    }
+    println!("width={} height={}", width, height);
 
     // count pixels for dig background color
-    let b2 = find_background_color(&img, width * symsize, height * symsize);
+    let back_color = find_background_color(&img, width * symsize, height * symsize);
 
     // scan blocks
     for i in 0..height {
         for j in 0..width {
-            let c = process_block(&img, symsize as usize, j, i, b2);
+            let c = process_block(&img, symsize as usize, j, i, back_color);
             color_map.entry(i * width + j).or_insert((c.0, c.1));
             symbol_map
                 .entry(c.2)
@@ -54,7 +70,6 @@ fn main() {
     let symlen = symbol_map.len();
     let symw = 16;
     let symh = symlen / 16 + if symlen % 16 == 0 { 0 } else { 1 };
-    println!("symbol count...{} {} {}", symlen, symh, symw);
 
     // redraw image...
     let mut simg = ImageBuffer::new(symsize * symw as u32, symsize * symh as u32);
@@ -95,18 +110,15 @@ fn main() {
             }
         }
     }
+    println!("dump symbols to sout.png({}symbols {}rows {}cols)", symlen, symh, symw);
     simg.save("sout.png").expect("save image error");
+    println!("redraw to bout.png");
     nimg.save("bout.png").expect("save image error");
 }
 
 // find background colors...
-fn find_background_color(
-    img: &DynamicImage,
-    // image: &ImageBuffer<Luma<u8>, Vec<u8>>,
-    w: u32,
-    h: u32,
-) -> u32 {
-    // (first_x, first_y, count)
+fn find_background_color(img: &DynamicImage, w: u32, h: u32) -> u32 {
+    // color_u32 : (first_x, first_y, count)
     let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
     for i in 0..h {
         for j in 0..w {
@@ -122,7 +134,7 @@ fn find_background_color(
     cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
     // let bx = cv[0].1 .0;
     // let by = cv[0].1 .1;
-    let bc = cv[0].0;
+    // let bc = cv[0].0;
     // for c in cv {
     //     println!("cc..{:x} {:?}", c.0, c.1);
     // }
@@ -134,7 +146,7 @@ fn find_background_color(
     // }
     // let gray = image.get_pixel(bx, by).0[0];
     // println!("gray..{}", gray);
-    *bc
+    *cv[0].0
 }
 
 fn luminance(e1: u32) -> f32 {
