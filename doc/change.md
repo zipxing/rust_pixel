@@ -1,3 +1,10 @@
+# 0.5.9
+- Added pixel_symbol tool, which can dig symbols from a pixel art picture.
+```
+cargo pixel r pixel_symbol t -r assets/pixel.png 16
+```
+- Fix petview app web mode bug
+
 # 0.5.8
 - Fix a runtime error in linux / wsl
 
