@@ -18,7 +18,7 @@ use crate::render::{
 use log::info;
 use sdl2::{
     event::Event as SEvent,
-    image::{InitFlag, LoadSurface},
+    image::LoadSurface,
     keyboard::Keycode as SKeycode,
     mouse::*,
     surface::Surface,
@@ -153,7 +153,8 @@ impl SdlAdapter {
 }
 
 impl Adapter for SdlAdapter {
-    fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, s: String) {
+    fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
+        // load texture file...
         let texture_path = format!(
             "{}{}{}",
             self.base.project_path,
@@ -182,21 +183,19 @@ impl Adapter for SdlAdapter {
             .set_ratiox(rx)
             .set_ratioy(ry)
             .set_pixel_size()
-            .set_title(s);
+            .set_title(title);
         info!(
             "pixel_w={} pixel_h={}",
             self.base.pixel_w, self.base.pixel_h
         );
 
+        // init video subsystem...
         let video_subsystem = self.sdl_context.video().unwrap();
-        let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG).unwrap();
 
         // Set OpenGL attributes
-        {
-            let gl_attr = video_subsystem.gl_attr();
-            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-            gl_attr.set_context_version(3, 3);
-        }
+        let gl_attr = video_subsystem.gl_attr();
+        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+        gl_attr.set_context_version(3, 3);
 
         let window = video_subsystem
             .window(&self.base.title, self.base.pixel_w, self.base.pixel_h)
@@ -210,7 +209,6 @@ impl Adapter for SdlAdapter {
 
         let gl_context = window.gl_create_context().unwrap();
         self.gl_context = Some(gl_context);
-        // video_subsystem.gl_set_swap_interval(1).unwrap(); // Enable vsync
 
         // Create the OpenGL context using glow
         let gl = unsafe {

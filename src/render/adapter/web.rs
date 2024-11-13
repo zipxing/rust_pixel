@@ -55,7 +55,6 @@ impl Adapter for WebAdapter {
         self.set_size(w, h)
             .set_ratiox(rx)
             .set_ratioy(ry)
-            // .set_pixel_size()
             .set_title(s);
 
         use wasm_bindgen::JsCast;
