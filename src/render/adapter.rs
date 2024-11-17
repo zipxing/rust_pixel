@@ -233,7 +233,6 @@ pub trait Adapter {
         // render main_buffer & pixel_sprites to rbuf
         let rbuf =
             self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
-
         // for y in 0..24 {
         //     let mut s = "".to_string();
         //     for x in 0..24 {
@@ -243,16 +242,15 @@ pub trait Adapter {
         //     info!("...{}", s);
         // }
         // info!("{:?} len={}", current_buffer.content.len(), rbuf.len());
-
         if self.get_base().rflag {
             // draw rbuf to render_texture 2
             self.draw_render_buffer_to_texture(&rbuf, 2, false);
-
             // draw render_texture 2 & 3 to screen
             self.draw_render_textures_to_screen();
         } else {
             // copy rbuf to base.rbuf
             self.get_base().rbuf = rbuf;
+            // info!("rbuf len...{}", self.get_base().rbuf.len());
         }
     }
 

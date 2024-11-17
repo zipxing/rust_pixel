@@ -173,6 +173,7 @@ impl Render for TowerRender {
         );
         self.create_sprites(ctx, data);
         self.panel.init(ctx);
+        // ctx.adapter.only_render_buffer();
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
