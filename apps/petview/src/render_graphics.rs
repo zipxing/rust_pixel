@@ -178,25 +178,25 @@ impl Render for PetviewRender {
                 pix.set_render_texture_hidden(3, false);
             }
             let p1 = self.panel.get_pixel_sprite("petimg1");
-            asset2sprite!(p1, ctx, &format!("{}.pix", model.img_cur + 1));
+            asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
             if l1 {
                 ctx.adapter.draw_buffer_to_texture(&p1.content, 0);
             }
 
             let p2 = self.panel.get_pixel_sprite("petimg2");
-            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_next + 1));
+            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
             if l2 {
                 ctx.adapter.draw_buffer_to_texture(&p2.content, 1);
             }
 
             let p3 = self.panel.get_pixel_sprite("petimg3");
-            asset2sprite!(p3, ctx, &format!("{}.pix", model.img_next + 1));
+            asset2sprite!(p3, ctx, &format!("{}.pix", model.img_count - model.img_next));
             p3.set_hidden(true);
 
             let p4 = self.panel.get_pixel_sprite("petimg4");
-            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_next + 1));
+            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_count - model.img_next));
             p4.set_hidden(true);
 
             if l1 && l2 {
