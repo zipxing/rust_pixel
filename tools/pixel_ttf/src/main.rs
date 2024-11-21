@@ -21,6 +21,7 @@ fn main() {
                 let (metrics, bitmap) = font.rasterize(character, n as f32);
 
                 // 将位图调整为 nxn（如果渲染结果不是 nxn，需要进行缩放或裁剪）
+                println!("w={} h={}", metrics.width, metrics.height);
                 let bitmap_nxn = resize_bitmap(&bitmap, metrics.width, metrics.height, n, n);
 
                 // 4. 输出点阵数据
@@ -36,8 +37,10 @@ fn resize_bitmap(bitmap: &[u8], width: usize, height: usize, new_width: usize, n
     let mut resized = vec![vec![0u8; new_width]; new_height];
     for y in 0..new_height {
         for x in 0..new_width {
-            let src_x = x * width / new_width;
-            let src_y = y * height / new_height;
+            let src_x = x ;
+            let src_y = y ;
+            // let src_x = x * width / new_width;
+            // let src_y = y * height / new_height;
             if src_x < width && src_y < height {
                 resized[y][x] = bitmap[src_y * width + src_x];
             }
