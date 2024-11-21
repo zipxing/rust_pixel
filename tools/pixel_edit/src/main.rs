@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         _ => {
-            println!("Usage: pixel_edit asset_file_path <esc_file_path>");
+            println!("Usage: pixel_edit asset_file_path <image_file_path>");
             return Ok(());
         }
     }
