@@ -48,7 +48,7 @@ pub fn check_pixel_env() -> PixelContext {
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).expect("Failed to create config directory");
     }
-    println!("🍭 Config_dir：{:?}", config_dir);
+    // println!("🍭 Config_dir：{:?}", config_dir);
 
     let pixel_config = config_dir.join("rust_pixel.toml");
     if pixel_config.exists() {
