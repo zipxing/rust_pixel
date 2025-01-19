@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 itertools = "0.10.3"
-rust_pixel = { path = "../../.." }
+rust_pixel = { path = "../../..", default-features = false }
 poker_lib = { path = "../../poker/lib" }
 

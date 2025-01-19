@@ -7,6 +7,9 @@
 /// Currently, web, SDL and crossterm renders are supported.
 pub mod adapter;
 
+/// symbols util
+pub mod symbols;
+
 /// draw a base unit cell
 pub mod cell;
 

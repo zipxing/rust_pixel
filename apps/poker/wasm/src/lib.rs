@@ -1,6 +1,6 @@
 // use poker_lib::{Counter, PokerCard, PokerCards, Suit};
 // use texas_lib::{TexasCards, TexasType};
-use gin_rummy_lib::cards::GinRummyCards;
+use ginrummy_lib::cards::GinRummyCards;
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys;
 

@@ -83,7 +83,7 @@ features = [
 
 [features]
 default = ["log4rs", "crossterm", "rodio", "image"]
-web = []
+web = ["image"]
 term = ["log4rs", "crossterm", "rodio", "image"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
 base = ["log4rs"]
