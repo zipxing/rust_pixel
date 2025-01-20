@@ -19,25 +19,43 @@ use std::sync::OnceLock;
 use std::time::Duration;
 // use log::info;
 
-// opengl codes...
+/// opengl codes for sdl & web mode
 pub mod gl;
 
-// merge l, u, ext1, ext2 to a single image
-// c64l.png  c64u.png    -->  c64.png
-// c64e1.png c64e2.png
-// Add more files to this list when needed,max 255 textures...
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/c64.png";
+/// sdl adapter
+#[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
+pub mod sdl;
 
-pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
-pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
+/// web adapter
+#[cfg(target_arch = "wasm32")]
+pub mod web;
+
+/// crossterm adapter
+#[cfg(not(any(
+    feature = "sdl",
+    target_os = "android",
+    target_os = "ios",
+    target_arch = "wasm32"
+)))]
+pub mod cross;
+
+/// symbols texture contains 8x8 blocks
+/// each block contain 16x16 symbols
+/// total 128 * 128 symbols
+#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
+
+/// symbol size is calculated based on the size of the texture
 pub fn init_sym_width(width: u32) -> f32 {
     width as f32 / 128.0
 }
 pub fn init_sym_height(height: u32) -> f32 {
     height as f32 / 128.0
 }
+pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
+pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
+/// logo data
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
 pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
@@ -84,8 +102,8 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
     15, 1, 32, 15, 1, 32, 15, 1,
 ];
 
-// pre-render cell...
-// this struct used for opengl render and webgl render...
+/// pre-render cell...
+/// this struct used for opengl render and webgl render...
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
     pub fcolor: (f32, f32, f32, f32),
@@ -705,19 +723,3 @@ where
     }
 }
 
-/// sdl driver...
-#[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
-pub mod sdl;
-
-/// web driver...
-#[cfg(target_arch = "wasm32")]
-pub mod web;
-
-/// crossterm driver...
-#[cfg(not(any(
-    feature = "sdl",
-    target_os = "android",
-    target_os = "ios",
-    target_arch = "wasm32"
-)))]
-pub mod cross;
