@@ -1,3 +1,7 @@
+# 0.6.0
+- Bug fix
+- Rename c64.png to symbols.png 
+
 # 0.5.9
 - Added pixel_symbol tool, which can dig symbols from a pixel art picture.
 ```
