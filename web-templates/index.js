@@ -35,7 +35,7 @@ import init, {PixelGame} from "./pkg/pixel.js";
 const wasm = await init();
 
 const timg = new Image();
-timg.src = "assets/pix/c64.png";
+timg.src = "assets/pix/symbols.png";
 await timg.decode();
 const canvas = document.createElement("canvas");
 canvas.width = timg.width;

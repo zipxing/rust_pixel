@@ -18,7 +18,7 @@ use lazy_static::lazy_static;
 // use log::info;
 
 lazy_static! {
-    /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64.png
+    /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/pix/symbols.png
     /// instead of using unicode chars
     /// Some common chars a-Z and tabs are preset in SDL_SYM_MAP,
     /// for easier set of latin letters using set_str in SDL mode

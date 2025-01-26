@@ -207,7 +207,7 @@ fn main() {
         }
     }
 
-    let rawimage = image::open("assets/pix/c64.png").unwrap();
+    let rawimage = image::open("assets/pix/symbols.png").unwrap();
     let atlas_width = 1024;
     let atlas_height = 1024 - 128;
 
