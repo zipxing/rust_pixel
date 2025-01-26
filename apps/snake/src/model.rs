@@ -10,7 +10,7 @@ use rust_pixel::{
 use std::f64::consts::PI;
 
 pub const SNAKEW: usize = 60;
-pub const SNAKEH: usize = 36;
+pub const SNAKEH: usize = 33;
 
 enum SnakeState {
     Normal,
