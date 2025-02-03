@@ -6,13 +6,13 @@
 //!
 //!
 
+use crate::render::style::ANSI_COLOR_RGB;
 use deltae::*;
 use image::{DynamicImage, GenericImageView};
-use crate::render::style::ANSI_COLOR_RGB;
 use lab::Lab;
 use std::collections::HashMap;
 
-struct RGB {
+pub struct RGB {
     r: u8,
     g: u8,
     b: u8,
@@ -83,6 +83,38 @@ pub fn color_distance_rgb(e1: &RGB, e2: &RGB) -> f32 {
     *DeltaE::new(&lab1, &lab2, DE2000).value()
 }
 
+pub fn luminance(e1: u32) -> f32 {
+    let e1r = (e1 >> 24 & 0xff) as u8;
+    let e1g = (e1 >> 16 & 0xff) as u8;
+    let e1b = (e1 >> 8 & 0xff) as u8;
+    0.299 * e1r as f32 + 0.587 * e1g as f32 + 0.114 * e1b as f32
+}
+
+// get color distance
+pub fn color_distance(e1: u32, e2: u32) -> f32 {
+    let e1r = (e1 >> 24 & 0xff) as u8;
+    let e1g = (e1 >> 16 & 0xff) as u8;
+    let e1b = (e1 >> 8 & 0xff) as u8;
+    let e2r = (e2 >> 24 & 0xff) as u8;
+    let e2g = (e2 >> 16 & 0xff) as u8;
+    let e2b = (e2 >> 8 & 0xff) as u8;
+
+    let l1 = Lab::from_rgb(&[e1r, e1g, e1b]);
+    let l2 = Lab::from_rgb(&[e2r, e2g, e2b]);
+    let lab1 = LabValue {
+        l: l1.l,
+        a: l1.a,
+        b: l1.b,
+    };
+    let lab2 = LabValue {
+        l: l2.l,
+        a: l2.a,
+        b: l2.b,
+    };
+    *DeltaE::new(&lab1, &lab2, DE2000).value()
+}
+
+
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Symbol {
@@ -120,27 +152,21 @@ impl Symbol {
             data,
             binary_data,
         };
-        sym.make_binary();
+        sym.make_binary(0);
         sym
     }
 
-    pub fn make_binary(&mut self) {
+    pub fn make_binary(&mut self, back_rgb: u32) {
         let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
         let mut cm: Vec<u32> = vec![];
-        let mut block = vec![vec![0u8; n]; n];
-        for i in 0..n {
-            for j in 0..n {
-                let pixel_x = x * n as u32 + j as u32;
-                let pixel_y = y * n as u32 + i as u32;
-                if pixel_x < image.width() && pixel_y < image.height() {
-                    let p = image.get_pixel(pixel_x, pixel_y);
-                    let k: u32 = ((p[0] as u32) << 24)
-                        + ((p[1] as u32) << 16)
-                        + ((p[2] as u32) << 8)
-                        + (p[3] as u32);
-                    cc.entry(k).or_insert((pixel_x, pixel_y));
-                    cm.push(k);
-                }
+        self.binary_data = vec![vec![0u8; self.width as usize]; self.height as usize];
+        for i in 0..self.height {
+            for j in 0..self.width {
+                let pixel_x = j as u32;
+                let pixel_y = i as u32;
+                let k = self.data[pixel_y as usize][pixel_x as usize];
+                cc.entry(k).or_insert((pixel_x, pixel_y));
+                cm.push(k);
             }
         }
         let mut cv: Vec<_> = cc.iter().collect();
@@ -226,22 +252,28 @@ impl Symbol {
             }
         }
 
-        for i in 0..n {
-            for j in 0..n {
-                let color = cm[i * n + j];
+        for i in 0..self.height as usize {
+            for j in 0..self.width as usize {
+                let color = cm[i * self.width as usize + j];
                 let cd0 = color_distance(color, ret.unwrap().0);
                 let cd1 = color_distance(color, ret.unwrap().1);
                 if cd0 <= cd1 {
-                    block[i][j] = 0;
+                    self.binary_data[i][j] = 0;
                 } else {
-                    block[i][j] = 1;
+                    self.binary_data[i][j] = 1;
                 }
             }
         }
 
         match ret {
-            Some(r) => (find_best_color_u32(r.0), find_best_color_u32(r.1), block),
-            _ => (0, 0, block),
+            Some(r) => {
+                self.back_color = find_best_color_u32(r.0) as u32;
+                self.fore_color = find_best_color_u32(r.1) as u32;
+            }
+            _ => {
+                self.back_color = 0;
+                self.fore_color = 0;
+            }
         }
     }
 }
