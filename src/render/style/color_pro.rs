@@ -85,8 +85,6 @@ pub const WHITE: [f64; 3] = [0.9504559270516716, 1.0, 1.0890577507598784];
 pub const EPSILON_LSTAR: f64 = 216.0 / 24389.0;
 pub const KAPPA: f64 = 24389.0 / 27.0;
 
-pub const COLOR_SPACE_COUNT: usize = 13;
-
 #[derive(Debug, Clone, Copy, FromPrimitive)]
 pub enum ColorSpace {
     SRGBA,
@@ -103,6 +101,9 @@ pub enum ColorSpace {
     HCTA,
     XYZA,
 }
+
+// 使用 ColorSpace 枚举的最后一个元素 + 1 计算颜色空间的数量
+pub const COLOR_SPACE_COUNT: usize = ColorSpace::XYZA as usize + 1;
 
 impl fmt::Display for ColorSpace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
