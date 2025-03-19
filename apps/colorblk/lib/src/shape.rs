@@ -14,8 +14,8 @@ pub struct BlockData {
     pub rect: Rect,
 }
 
-pub const SHAPE_IDX: [usize; 10] = [
-    0, 1, 2, 5, 6, 7, 8, 9, 10, 15,
+pub const SHAPE_IDX: [usize; 23] = [
+    0, 1, 2, 5, 6, 7, 8, 9, 10, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 50
 ];
 
 pub const SHAPE: [BlockData; 50] = [
