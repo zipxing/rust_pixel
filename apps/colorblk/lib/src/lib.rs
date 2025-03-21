@@ -45,6 +45,8 @@ impl ColorblkData {
 
 pub mod shape;
 use crate::shape::*;
+pub mod solver;
+use crate::solver::*;
 
 pub const BOARD_WIDTH: usize = 5;
 pub const BOARD_HEIGHT: usize = 6;

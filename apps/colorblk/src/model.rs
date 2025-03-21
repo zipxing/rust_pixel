@@ -9,6 +9,7 @@ use rust_pixel::{
 // use log::info;
 use std::f64::consts::PI;
 use colorblk_lib::ColorblkData;
+use colorblk_lib::solver::solve_main;
 
 pub const CARDW: usize = 7;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
@@ -109,6 +110,7 @@ impl Model for ColorblkModel {
 
         // Emit event...
         event_emit("Colorblk.RedrawTile");
+        solve_main();
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
