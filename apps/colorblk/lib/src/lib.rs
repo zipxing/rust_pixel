@@ -1,3 +1,48 @@
+//
+// implement core algorithm...
+//
+
+#![allow(dead_code)]
+use rust_pixel::util::Rand;
+
+pub struct ColorblkData {
+    pub rand: Rand,
+    pub pool: Vec<u8>,
+    pub index: usize,
+}
+
+impl ColorblkData {
+    pub fn new() -> Self {
+        let mut rd = Rand::new();
+        rd.srand_now();
+        Self {
+            rand: rd,
+            pool: vec![],
+            index: 0,
+        }
+    }
+
+    pub fn shuffle(&mut self) {
+        self.pool.clear();
+        for i in 1..=52u8 {
+            self.pool.push(i);
+        }
+        self.rand.shuffle(&mut self.pool);
+        // println!("shuffle ok...");
+    }
+
+    pub fn next(&mut self) -> u8 {
+        let ret;
+        if self.pool.len() > 0 {
+            ret = self.pool[self.index];
+            self.index = (self.index + 1) % 52;
+        } else {
+            ret = 0;
+        }
+        ret
+    }
+}
+
 pub mod shape;
 use crate::shape::*;
 
@@ -293,115 +338,12 @@ pub fn remove_block_and_update_links(blocks: &[Block], removed_id: u8) -> Vec<Bl
 }
 
 
-
-// /// 根据门的方向计算候选位置集合，返回所有候选位置 (candidate_x, candidate_y)
-// /// 使用 BlockData.rect 作为块的有效区域
-// pub fn candidate_positions_for_gate(gate: &Gate, block_rect: Rect) -> Vec<(usize, usize)> {
-//     let mut positions = Vec::new();
-//     // 上方门：gate.y == 0, gate.height == 0
-//     if gate.y == 0 && gate.height == 0 {
-//         if block_rect.width > gate.width as usize {
-//             return positions;
-//         }
-//         let start_x = gate.x as usize;
-//         let end_x = start_x + (gate.width as usize - block_rect.width);
-//         for offset in 0..=(end_x.saturating_sub(start_x)) {
-//             positions.push((start_x + offset, 0));
-//         }
-//     }
-//     // 下方门：gate.y == BOARD_HEIGHT - 1, gate.height == 0
-//     else if (gate.y as usize) == BOARD_HEIGHT - 1 && gate.height == 0 {
-//         if block_rect.width > gate.width as usize {
-//             return positions;
-//         }
-//         let candidate_y = BOARD_HEIGHT - block_rect.height - 1;
-//         let start_x = gate.x as usize;
-//         let end_x = start_x + (gate.width as usize - block_rect.width);
-//         for offset in 0..=(end_x.saturating_sub(start_x)) {
-//             positions.push((start_x + offset, candidate_y));
-//         }
-//     }
-//     // 左侧门：gate.x == 0, gate.width == 0
-//     else if gate.x == 0 && gate.width == 0 {
-//         if block_rect.height > gate.height as usize {
-//             return positions;
-//         }
-//         let start_y = gate.y as usize;
-//         let end_y = start_y + (gate.height as usize - block_rect.height);
-//         for offset in 0..=(end_y.saturating_sub(start_y)) {
-//             positions.push((0, start_y + offset));
-//         }
-//     }
-//     // 右侧门：gate.x == BOARD_WIDTH - 1, gate.width == 0
-//     else if (gate.x as usize) == BOARD_WIDTH - 1 && gate.width == 0 {
-//         if block_rect.height > gate.height as usize {
-//             return positions;
-//         }
-//         let candidate_x = BOARD_WIDTH - block_rect.width - 1;
-//         let start_y = gate.y as usize;
-//         let end_y = start_y + (gate.height as usize - block_rect.height);
-//         for offset in 0..=(end_y.saturating_sub(start_y)) {
-//             positions.push((candidate_x, start_y + offset));
-//         }
-//     }
-//     positions
-// }
-
-// /// 检查在候选位置 (candidate_x, candidate_y) 上，整个块是否能放置（使用 BlockData.grid 检查 5x5 中所有1）
-// pub fn can_place_at(
-//     sim_board: &Board,
-//     grid: &[[u8; 5]; 5],
-//     candidate_x: usize,
-//     candidate_y: usize,
-// ) -> bool {
-//     for i in 0..5 {
-//         for j in 0..5 {
-//             if grid[i][j] == 1 {
-//                 let bx = candidate_x + j;
-//                 let by = candidate_y + i;
-//                 if bx >= BOARD_WIDTH || by >= BOARD_HEIGHT || sim_board[by][bx] != 0 {
-//                     return false;
-//                 }
-//             }
-//         }
-//     }
-//     true
-// }
-
-// /// 根据方向计算偏移量
-// fn offset(direction: Direction) -> (isize, isize) {
-//     match direction {
-//         Direction::Up => (0, -1),
-//         Direction::Down => (0, 1),
-//         Direction::Left => (-1, 0),
-//         Direction::Right => (1, 0),
-//     }
-// }
-
-// /// 检查单个块是否可以整体向指定方向移动一格
-// pub fn can_move_block(sim_board: &Board, block: &Block, direction: Direction) -> bool {
-//     let (dx, dy) = offset(direction);
-//     let block_data = &SHAPE[block.shape as usize];
-//     let mut current_positions = vec![];
-//     for i in 0..5 {
-//         for j in 0..5 {
-//             if block_data.grid[i][j] == 1 {
-//                 let cx = block.x as isize + j as isize;
-//                 let cy = block.y as isize + i as isize;
-//                 current_positions.push((cx, cy));
-//             }
-//         }
-//     }
-//     for &(cx, cy) in current_positions.iter() {
-//         let nx = cx + dx;
-//         let ny = cy + dy;
-//         if nx < 0 || nx >= BOARD_WIDTH as isize || ny < 0 || ny >= BOARD_HEIGHT as isize {
-//             return false;
-//         }
-//         if sim_board[ny as usize][nx as usize] != 0 && !current_positions.contains(&(nx, ny)) {
-//             return false;
-//         }
-//     }
-//     true
-// }
+#[cfg(test)]
+mod tests {
+    // use super::*;
+    #[test]
+    fn it_works() {
+        // let result = ColorblkData::new();
+    }
+}
 

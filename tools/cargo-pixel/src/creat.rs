@@ -58,6 +58,7 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
 
     let _ = fs::remove_dir_all("tmp/pixel_game_template");
     let _ = fs::create_dir_all(cdir);
+    exec_cmd("mkdir tmp");
     exec_cmd("cp -r apps/template tmp/pixel_game_template");
 
     if let Some(stand_dir) = sa_dir {
