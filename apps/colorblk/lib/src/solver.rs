@@ -376,7 +376,7 @@ fn create_default_gates() -> Vec<Gate> {
     ]
 }
 
-pub fn solve_main() {
+pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>, u8)>>) {
     // 创建一个简单的测试布局，便于快速测试
     let blocks = vec![
         Block {
@@ -446,7 +446,11 @@ pub fn solve_main() {
     match solve(blocks.clone(), &gates) {
         Some(solution) => {
             println!("solve ok!!!");
+            (blocks, gates, Some(solution.history))
         }
-        None => println!("未找到解决方案！"),
+        None => {
+            println!("未找到解决方案！");
+            (blocks, gates, None)
+        }
     }
 }

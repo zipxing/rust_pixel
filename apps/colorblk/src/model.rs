@@ -8,7 +8,7 @@ use rust_pixel::{
 };
 // use log::info;
 use std::f64::consts::PI;
-use colorblk_lib::ColorblkData;
+use colorblk_lib::{ColorblkData, Block, Gate, Direction};
 use colorblk_lib::solver::solve_main;
 
 pub const CARDW: usize = 7;
@@ -31,6 +31,11 @@ pub struct ColorblkModel {
     pub bezier: AnimationSequence<PointF32>,
     pub count: f64,
     pub card: u8,
+    // 存储计算结果的字段
+    pub initial_blocks: Vec<Block>,
+    pub gates: Vec<Gate>,
+    pub solution: Option<Vec<(u8, Option<Direction>, u8)>>, // 存储移动步骤
+    pub current_step: usize, // 当前执行到哪一步
 }
 
 impl ColorblkModel {
@@ -71,6 +76,10 @@ impl ColorblkModel {
             bezier: AnimationSequence::new(),
             count: 0.0,
             card: 0,
+            initial_blocks: Vec::new(),
+            gates: Vec::new(),
+            solution: None,
+            current_step: 0,
         }
     }
 }
@@ -98,7 +107,6 @@ impl Model for ColorblkModel {
 
         for i in 0..num {
             ks.push((pts[i], i as f64 / num as f64, EaseIn).into());
-            // ks.push((pts[i], i as f64 / num as f64).into());
         }
 
         self.bezier = AnimationSequence::from(ks);
@@ -110,7 +118,13 @@ impl Model for ColorblkModel {
 
         // Emit event...
         event_emit("Colorblk.RedrawTile");
-        solve_main();
+
+        // 保存初始布局和门
+        let (blocks, gates, solution) = solve_main();
+        self.initial_blocks = blocks;
+        self.gates = gates;
+        self.solution = solution;
+        self.current_step = 0;
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
