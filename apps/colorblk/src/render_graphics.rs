@@ -66,18 +66,11 @@ impl ColorblkRender {
     // objpool can also be used to manage drawing other objects
     pub fn create_sprites(&mut self, _ctx: &mut Context, d: &mut ColorblkModel) {
         // create objpool sprites and init
-        self.panel
-            .creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
-                bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
-            });
     }
 
     // draw particles
     pub fn draw_movie(&mut self, _ctx: &mut Context, d: &mut ColorblkModel) {
         // draw objects
-        self.panel.draw_objpool(&mut d.pats.particles, |pl, m| {
-            pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
-        });
     }
 
     pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut ColorblkModel) {
@@ -138,17 +131,6 @@ impl Render for ColorblkRender {
         let ss = &mut self.panel.get_sprite("back");
         asset2sprite!(ss, ctx, "1.ssf", (ctx.stage / 3) as usize, 40, 1);
 
-        // set a bezier animation for graphic mode...
-        for i in 0..15 {
-            let pl = &mut self.panel.get_pixel_sprite(&format!("PL{}", i + 1));
-            d.bezier
-                .advance_and_maybe_reverse(dt as f64 * 0.1 + 0.01 * i as f64);
-            let kf_now = d.bezier.now_strict().unwrap();
-            pl.set_pos(kf_now.x as u16, kf_now.y as u16);
-            let c = ((ctx.stage / 10) % 255) as u8;
-            pl.set_graph_sym(0, 0, 1, 83, Color::Indexed(c));
-            d.bezier.advance_and_maybe_reverse(-0.01 * i as f64);
-        }
         self.draw_movie(ctx, d);
 
         // draw all compents in panel...

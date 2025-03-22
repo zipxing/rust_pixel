@@ -1,13 +1,10 @@
-use crate::shape::{SHAPE, SHAPE_IDX};
+use crate::shape::SHAPE_IDX;
 use crate::*;
-use rand::Rng;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::io;
-use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 /// 状态只包含 blocks，用于状态去重；history 用于记录路径，但不参与状态比较
@@ -51,7 +48,7 @@ fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
                 return None;
             }
 
-            if let Some(dir) = can_exit(block, gates) {
+            if let Some(_dir) = can_exit(block, gates) {
                 let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
                 let mut new_history = state.history.clone();
                 new_history.push((block.id, None, 0)); // None 表示退出
