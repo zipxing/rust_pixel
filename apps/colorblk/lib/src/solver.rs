@@ -1,8 +1,8 @@
 use crate::shape::SHAPE_IDX;
 use crate::*;
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::IndexedParallelIterator;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
