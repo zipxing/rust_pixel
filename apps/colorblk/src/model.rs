@@ -14,6 +14,8 @@ pub const CARDH: usize = 7;
 pub const CARDH: usize = 5;
 pub const COLORBLKW: u16 = 80;
 pub const COLORBLKH: u16 = 40;
+pub const CELLW: usize = 10;
+pub const CELLH: usize = 5;
 
 #[repr(u8)]
 enum ColorblkState {

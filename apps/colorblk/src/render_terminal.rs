@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use crate::model::{ColorblkModel, CARDH, CARDW, COLORBLKH, COLORBLKW};
+use crate::model::{ColorblkModel, CARDH, CARDW, CELLH, CELLW, COLORBLKH, COLORBLKW};
 use colorblk_lib::{Block, Direction, Gate, BOARD_HEIGHT, BOARD_WIDTH, SHAPE, SHAPE_IDX};
 use log::info;
 use rust_pixel::{
@@ -74,7 +74,10 @@ impl ColorblkRender {
 
         // 为每个格子创建精灵
         for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
-            t.add_sprite(Sprite::new(0, 0, 10, 5), &format!("cc{}", i));
+            t.add_sprite(
+                Sprite::new(0, 0, CELLW as u16, CELLH as u16),
+                &format!("cc{}", i),
+            );
         }
 
         // 创建消息精灵
@@ -107,7 +110,7 @@ impl ColorblkRender {
         msg_color: i8,
     ) {
         let l = self.panel.get_sprite(&format!("cc{}", id));
-        let area = Rect::new(0, 0, 10, 5);
+        let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
         l.content.resize(area);
         l.content.reset();
         let cn = format!("cc{}.txt", border_type);
@@ -246,8 +249,8 @@ impl ColorblkRender {
                         let board_y = block.y as usize + (grid_y - shape_data.rect.y);
 
                         // 计算屏幕上的坐标
-                        let sx = board_x * 8;
-                        let sy = board_y * 4;
+                        let sx = board_x * CELLW;
+                        let sy = board_y * CELLH;
 
                         // 计算边框类型
                         let border_type = calculate_border_type(&shape_data.grid, grid_x, grid_y);
@@ -276,8 +279,8 @@ impl Render for ColorblkRender {
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter.init(70, 40, 1.0, 1.0, "colorblk".to_string());
         self.panel.init(ctx);
-        let l = self.panel.get_sprite("back");
-        asset2sprite!(l, ctx, &format!("back.txt"));
+        // let l = self.panel.get_sprite("back");
+        // asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
