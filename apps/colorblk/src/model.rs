@@ -17,6 +17,7 @@ pub const COLORBLKH: u16 = 40;
 
 #[repr(u8)]
 enum ColorblkState {
+    Solving,
     Normal,
 }
 
@@ -79,7 +80,7 @@ impl Model for ColorblkModel {
                         event_emit("Colorblk.RedrawTile");
                     }
                     _ => {
-                        context.state = ColorblkState::Normal as u8;
+                        context.state = ColorblkState::Solving as u8;
                     }
                 },
                 _ => {}

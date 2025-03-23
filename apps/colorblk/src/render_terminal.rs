@@ -111,6 +111,7 @@ impl ColorblkRender {
         l.content.resize(area);
         l.content.reset();
         let cn = format!("cc{}.txt", border_type);
+        info!("cn....{}", cn);
         asset2sprite!(l, ctx, &cn);
         l.set_pos(x, y);
         //设置颜色
@@ -129,20 +130,20 @@ impl ColorblkRender {
     }
 
     pub fn draw_grid(&mut self, ctx: &mut Context) {
-        for y in 0..BOARD_HEIGHT {
-            for x in 0..BOARD_WIDTH {
-                let sx = x * 8;
-                let sy = y * 4;
-                let l = self.panel.get_sprite(&format!("cc{}", y * 8 + x));
-                let area = Rect::new(0, 0, 8, 4);
-                l.content.resize(area);
-                l.content.reset();
-                l.set_pos(sx as u16, sy as u16);
-                l.content
-                    .set_style(l.content.area, Style::default().fg(COLORS[7]));
-                l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
-            }
-        }
+        // for y in 0..BOARD_HEIGHT {
+        //     for x in 0..BOARD_WIDTH {
+        //         let sx = x * 8;
+        //         let sy = y * 4;
+        //         let l = self.panel.get_sprite(&format!("cc{}", y * 8 + x));
+        //         let area = Rect::new(0, 0, 8, 4);
+        //         l.content.resize(area);
+        //         l.content.reset();
+        //         l.set_pos(sx as u16, sy as u16);
+        //         l.content
+        //             .set_style(l.content.area, Style::default().fg(COLORS[7]));
+        //         l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
+        //     }
+        // }
     }
 
     pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
@@ -254,7 +255,7 @@ impl ColorblkRender {
                         // 绘制格子
                         self.draw_cell(
                             ctx,
-                            (board_y * 8 + board_x) as i16,
+                            (board_y * BOARD_WIDTH + board_x) as i16,
                             sx as u16,
                             sy as u16,
                             border_type,
@@ -288,7 +289,8 @@ impl Render for ColorblkRender {
     fn handle_timer(&mut self, _ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        self.draw_solution(ctx, data);
+        // self.draw_solution(ctx, data);
+        self.draw_ready(ctx, data);
         self.panel.draw(ctx).unwrap();
     }
 }
