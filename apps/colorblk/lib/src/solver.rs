@@ -447,8 +447,8 @@ pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>
     let blocks = create_default_blocks();
     let gates = create_default_gates();
 
-    // match solve(blocks.clone(), &gates, true) {
-    match solve(blocks.clone(), &gates, false) {
+    match solve(blocks.clone(), &gates, true) {
+    // match solve(blocks.clone(), &gates, false) {
         Some(solution) => {
             println!("solve ok!!!");
             (blocks, gates, Some(solution.history))

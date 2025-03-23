@@ -59,6 +59,20 @@ const BLOCK_SYMS: [&str; 6] = ["█", "█", "█", "█", "█", "█"];
 const GATE_SYMS: &str = "═";
 const GRID_SYMS: &str = "·";
 
+const RESET: &str = "\x1b[0m";
+
+// 获取颜色ANSI代码的辅助函数
+fn get_color_code(color: u8) -> &'static str {
+    match color {
+        1 => "\x1b[31m", // 红色
+        2 => "\x1b[34m", // 蓝色
+        3 => "\x1b[32m", // 绿色
+        4 => "\x1b[33m", // 黄色
+        5 => "\x1b[33m", // 为颜色5使用黄色
+        _ => "\x1b[0m",  // 默认
+    }
+}
+
 pub struct ColorblkRender {
     pub panel: Panel,
 }
@@ -220,21 +234,37 @@ impl ColorblkRender {
         self.draw_grid(ctx);
 
         // 绘制门
-        // for gate in &d.gates {
-        //     let sx = gate.x * 8;
-        //     let sy = gate.y * 4;
-        //     self.draw_cell(
-        //         ctx,
-        //         (gate.y * 8 + gate.x) as i16,
-        //         sx as u16,
-        //         sy as u16,
-        //         0,
-        //         gate.color as i8,
-        //         "",
-        //         0,
-        //         true,
-        //     );
-        // }
+        let back = self.panel.get_sprite("back");
+        for gate in &d.gates {
+            let color_code = get_color_code(gate.color);
+            if gate.height == 0 {
+                // 上下门：绘制一行彩色字符
+                for x in gate.x..gate.x + gate.width {
+                    let screen_x = (x as usize + 1) * 2; // 向右偏移一个字符
+                    let screen_y = if gate.y == 0 { 0 } else { BOARD_HEIGHT };
+                    back.set_color_str(
+                        screen_x as u16,
+                        screen_y as u16,
+                        "▔▔",
+                        COLORS[gate.color as usize % COLORS.len()],
+                        Color::Reset,
+                    );
+                }
+            } else {
+                // 左右门：绘制一列彩色字符
+                for y in gate.y..gate.y + gate.height {
+                    let screen_x = if gate.x == 0 { 0 } else { BOARD_WIDTH * 2 };
+                    let screen_y = y as usize + 1; // 向下偏移一个字符
+                    back.set_color_str(
+                        screen_x as u16,
+                        screen_y as u16,
+                        "▏",
+                        COLORS[gate.color as usize % COLORS.len()],
+                        Color::Reset,
+                    );
+                }
+            }
+        }
 
         // 绘制方块
         for block in &d.initial_blocks {
@@ -248,9 +278,9 @@ impl ColorblkRender {
                         let board_x = block.x as usize + (grid_x - shape_data.rect.x);
                         let board_y = block.y as usize + (grid_y - shape_data.rect.y);
 
-                        // 计算屏幕上的坐标
-                        let sx = board_x * CELLW;
-                        let sy = board_y * CELLH;
+                        // 计算屏幕上的坐标（向右下偏移一个字符）
+                        let sx = (board_x + 1) * CELLW;
+                        let sy = (board_y + 1) * CELLH;
 
                         // 计算边框类型
                         let border_type = calculate_border_type(&shape_data.grid, grid_x, grid_y);
