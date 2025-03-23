@@ -6,6 +6,8 @@ use rayon::iter::IndexedParallelIterator;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
+use rayon::prelude::*;
 
 /// 状态只包含 blocks，用于状态去重；history 用于记录路径，但不参与状态比较
 #[derive(Clone, Debug)]
@@ -182,8 +184,22 @@ fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
     next_states
 }
 
-/// 广度优先搜索求解（并行版）
-fn solve(initial_blocks: Vec<Block>, gates: &[Gate]) -> Option<State> {
+#[derive(Clone)]
+struct SharedData {
+    gates: Vec<Gate>,
+    blocks: Vec<Block>,
+    visited: Arc<Mutex<HashSet<State>>>,
+    solution: Arc<Mutex<Option<Vec<Direction>>>>,
+    max_depth: Arc<Mutex<usize>>,
+    total_states: Arc<Mutex<usize>>,
+    start_time: Arc<Mutex<Instant>>,
+    last_report_time: Arc<Mutex<Instant>>,
+    last_states: Arc<Mutex<usize>>,
+    last_depth: Arc<Mutex<usize>>,
+}
+
+/// 广度优先搜索求解（支持并行和串行）
+fn solve(initial_blocks: Vec<Block>, gates: &[Gate], use_parallel: bool) -> Option<State> {
     let initial_state = State {
         blocks: initial_blocks,
         history: Vec::new(),
@@ -191,7 +207,7 @@ fn solve(initial_blocks: Vec<Block>, gates: &[Gate]) -> Option<State> {
 
     let visited = Arc::new(Mutex::new(HashSet::new()));
     let queue = Arc::new(Mutex::new(VecDeque::new()));
-    let solution = Arc::new(Mutex::new(None));
+    let solution: Arc<Mutex<Option<State>>> = Arc::new(Mutex::new(None));
     let steps = Arc::new(Mutex::new(0));
 
     // 添加初始状态
@@ -204,14 +220,20 @@ fn solve(initial_blocks: Vec<Block>, gates: &[Gate]) -> Option<State> {
     }
 
     // 设置并行度，这个值可以根据系统的CPU核心数调整
-    let num_threads = rayon::current_num_threads();
+    let num_threads = if use_parallel {
+        rayon::current_num_threads()
+    } else {
+        1
+    };
     let chunk_size = 50; // 每次从队列取出的状态数，可以根据需要调整
 
     // 确保线程池已初始化
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
-        .build_global()
-        .unwrap_or(());
+    if use_parallel {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build_global()
+            .unwrap_or(());
+    }
 
     loop {
         // 从队列中获取一批状态进行处理
@@ -246,57 +268,40 @@ fn solve(initial_blocks: Vec<Block>, gates: &[Gate]) -> Option<State> {
             }
         }
 
-        // 并行处理每个状态
-        let all_next_states: Vec<Vec<State>> = states_to_process
-            .par_iter()
-            .map(|state| {
-                // 检查是否已找到解
-                {
-                    let sol = solution.lock().unwrap();
-                    if sol.is_some() {
-                        return Vec::new();
-                    }
-                }
+        // 并行处理状态
+        let next_states = if use_parallel {
+            states_to_process.par_iter()
+                .flat_map(|state| expand(state, gates))
+                .collect::<Vec<_>>()
+        } else {
+            states_to_process.iter()
+                .flat_map(|state| expand(state, gates))
+                .collect()
+        };
 
-                // 检查是否达到目标
-                if is_goal(state) {
-                    let mut sol = solution.lock().unwrap();
-                    *sol = Some(state.clone());
-                    return Vec::new();
-                }
-
-                // 扩展当前状态
-                expand(state, gates)
-            })
-            .collect();
-
-        // 检查是否已找到解
-        {
-            let sol = solution.lock().unwrap();
-            if sol.is_some() {
-                break;
+        // 处理新状态
+        for state in next_states {
+            // 检查是否已访问过该状态
+            let mut v = visited.lock().unwrap();
+            if v.contains(&state) {
+                continue;
             }
-        }
+            v.insert(state.clone());
 
-        // 处理展开的新状态
-        for next_states in all_next_states {
-            for next_state in next_states {
-                let mut v = visited.lock().unwrap();
-                if !v.contains(&next_state) {
-                    v.insert(next_state.clone());
-
-                    let mut q = queue.lock().unwrap();
-                    q.push_back(next_state);
-                }
+            // 检查是否达到目标
+            if is_goal(&state) {
+                let mut s = solution.lock().unwrap();
+                *s = Some(state.clone());
+                return Some(state);
             }
+
+            // 将新状态加入队列
+            let mut q = queue.lock().unwrap();
+            q.push_back(state);
         }
     }
 
-    let final_steps = *steps.lock().unwrap();
-    println!("共探索 {} 个状态", final_steps);
-
-    let x = solution.lock().unwrap().clone();
-    x
+    None
 }
 
 /// 获取颜色名称
@@ -373,9 +378,8 @@ fn create_default_gates() -> Vec<Gate> {
     ]
 }
 
-pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>, u8)>>) {
-    // 创建一个简单的测试布局，便于快速测试
-    let blocks = vec![
+fn create_default_blocks() -> Vec<Block> {
+    vec![
         Block {
             id: 1,
             shape: SHAPE_IDX[9] as u8, // 单个方块
@@ -436,17 +440,21 @@ pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>
             y: 4,
             link: Vec::new(),
         },
-    ];
+    ]
+}
 
+pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>, u8)>>) {
+    let blocks = create_default_blocks();
     let gates = create_default_gates();
 
-    match solve(blocks.clone(), &gates) {
+    // match solve(blocks.clone(), &gates, true) {
+    match solve(blocks.clone(), &gates, false) {
         Some(solution) => {
             println!("solve ok!!!");
             (blocks, gates, Some(solution.history))
         }
         None => {
-            println!("未找到解决方案！");
+            println!("no solution found");
             (blocks, gates, None)
         }
     }
