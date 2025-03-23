@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use crate::model::{ColorblkModel, CARDH, CARDW, COLORBLKH, COLORBLKW};
-use colorblk_lib::{Block, Gate, Direction};
+use colorblk_lib::{Block, Direction, Gate, BOARD_HEIGHT, BOARD_WIDTH, SHAPE, SHAPE_IDX};
 use log::info;
 use rust_pixel::{
     asset::AssetType,
@@ -16,15 +16,41 @@ use rust_pixel::{
     GAME_FRAME,
 };
 
+fn calculate_border_type(grid: &[[u8; 5]; 5], x: usize, y: usize) -> u8 {
+    // 检查四个方向的邻居
+    let mut border_bits = 0u8;
+
+    // 上邻居
+    if y == 0 || grid[y - 1][x] == 0 {
+        border_bits |= 0b1000;
+    }
+
+    // 下邻居
+    if y == 4 || grid[y + 1][x] == 0 {
+        border_bits |= 0b0100;
+    }
+
+    // 左邻居
+    if x == 0 || grid[y][x - 1] == 0 {
+        border_bits |= 0b0010;
+    }
+
+    // 右邻居
+    if x == 4 || grid[y][x + 1] == 0 {
+        border_bits |= 0b0001;
+    }
+    border_bits
+}
+
 // 颜色定义
 const COLORS: [Color; 8] = [
-    Color::LightRed,    // 红色方块
-    Color::LightBlue,   // 蓝色方块
-    Color::LightGreen,  // 绿色方块
-    Color::LightYellow, // 黄色方块
+    Color::LightRed,     // 红色方块
+    Color::LightBlue,    // 蓝色方块
+    Color::LightGreen,   // 绿色方块
+    Color::LightYellow,  // 黄色方块
     Color::LightMagenta, // 紫色方块
-    Color::LightCyan,   // 青色方块
-    Color::Indexed(38), // 门颜色
+    Color::LightCyan,    // 青色方块
+    Color::Indexed(38),  // 门颜色
     Color::Indexed(202), // 边框颜色
 ];
 
@@ -47,11 +73,8 @@ impl ColorblkRender {
         t.add_sprite(tsback, "back");
 
         // 为每个格子创建精灵
-        for i in 0..8 * 8 {
-            t.add_sprite(
-                Sprite::new(0, 0, 8, 4),
-                &format!("cc{}", i),
-            );
+        for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
+            t.add_sprite(Sprite::new(0, 0, 10, 5), &format!("cc{}", i));
         }
 
         // 创建消息精灵
@@ -59,7 +82,7 @@ impl ColorblkRender {
 
         // 注册重绘网格事件
         event_register("redraw_grid", "draw_grid");
-        
+
         Self { panel: t }
     }
 
@@ -78,37 +101,36 @@ impl ColorblkRender {
         id: i16,
         x: u16,
         y: u16,
-        block_type: u8,
-        block_color: i8,
+        border_type: u8,
+        border_color: i8,
         msg: &str,
         msg_color: i8,
-        is_gate: bool,
     ) {
         let l = self.panel.get_sprite(&format!("cc{}", id));
-        let area = Rect::new(0, 0, 8, 4);
+        let area = Rect::new(0, 0, 10, 5);
         l.content.resize(area);
         l.content.reset();
-        
-        // 设置位置
+        let cn = format!("cc{}.txt", border_type);
+        asset2sprite!(l, ctx, &cn);
         l.set_pos(x, y);
-        
-        // 设置颜色
+        //设置颜色
         l.content.set_style(
             l.content.area,
-            Style::default().fg(COLORS[block_color as usize % COLORS.len()]),
+            Style::default().fg(COLORS[border_color as usize % COLORS.len()]),
         );
-        
-        // 设置内容
-        if is_gate {
-            l.set_color_str(3, 2, GATE_SYMS, COLORS[6], Color::Reset);
-        } else {
-            l.set_color_str(3, 2, msg, COLORS[msg_color as usize % COLORS.len()], Color::Reset);
-        }
+        //设置内容
+        l.set_color_str(
+            3,
+            2,
+            msg,
+            COLORS[msg_color as usize % COLORS.len()],
+            Color::Reset,
+        );
     }
 
     pub fn draw_grid(&mut self, ctx: &mut Context) {
-        for y in 0..8 {
-            for x in 0..8 {
+        for y in 0..BOARD_HEIGHT {
+            for x in 0..BOARD_WIDTH {
                 let sx = x * 8;
                 let sy = y * 4;
                 let l = self.panel.get_sprite(&format!("cc{}", y * 8 + x));
@@ -116,10 +138,8 @@ impl ColorblkRender {
                 l.content.resize(area);
                 l.content.reset();
                 l.set_pos(sx as u16, sy as u16);
-                l.content.set_style(
-                    l.content.area,
-                    Style::default().fg(COLORS[7]),
-                );
+                l.content
+                    .set_style(l.content.area, Style::default().fg(COLORS[7]));
                 l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
             }
         }
@@ -127,44 +147,35 @@ impl ColorblkRender {
 
     pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
         let msg = if let Some(solution) = &data.solution {
-            format!(
-                "Step: {}/{}",
-                data.current_step,
-                solution.len()
-            )
+            format!("Step: {}/{}", data.current_step, solution.len())
         } else {
             "No solution found".to_string()
         };
-        
+
         let l = self.panel.get_sprite("msg");
         l.set_color_str(0, 0, &msg, Color::White, Color::Reset);
     }
 
-    pub fn draw_moving(
-        &mut self,
-        ctx: &mut Context,
-        d: &mut ColorblkModel,
-        per: f32,
-    ) {
+    pub fn draw_moving(&mut self, ctx: &mut Context, d: &mut ColorblkModel, per: f32) {
         // 绘制网格
         self.draw_grid(ctx);
 
-        // 绘制门
-        for gate in &d.gates {
-            let sx = gate.x * 8;
-            let sy = gate.y * 4;
-            self.draw_cell(
-                ctx,
-                (gate.y * 8 + gate.x) as i16,
-                sx as u16,
-                sy as u16,
-                0,
-                gate.color as i8,
-                "",
-                0,
-                true,
-            );
-        }
+        // // 绘制门
+        // for gate in &d.gates {
+        //     let sx = gate.x * 8;
+        //     let sy = gate.y * 4;
+        //     self.draw_cell(
+        //         ctx,
+        //         (gate.y * 8 + gate.x) as i16,
+        //         sx as u16,
+        //         sy as u16,
+        //         0,
+        //         gate.color as i8,
+        //         "",
+        //         0,
+        //         true,
+        //     );
+        // }
 
         // 绘制移动中的方块
         if let Some(solution) = &d.solution {
@@ -193,7 +204,6 @@ impl ColorblkRender {
                             block.color as i8,
                             BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
                             0,
-                            false,
                         );
                     }
                 }
@@ -206,37 +216,55 @@ impl ColorblkRender {
         self.draw_grid(ctx);
 
         // 绘制门
-        for gate in &d.gates {
-            let sx = gate.x * 8;
-            let sy = gate.y * 4;
-            self.draw_cell(
-                ctx,
-                (gate.y * 8 + gate.x) as i16,
-                sx as u16,
-                sy as u16,
-                0,
-                gate.color as i8,
-                "",
-                0,
-                true,
-            );
-        }
+        // for gate in &d.gates {
+        //     let sx = gate.x * 8;
+        //     let sy = gate.y * 4;
+        //     self.draw_cell(
+        //         ctx,
+        //         (gate.y * 8 + gate.x) as i16,
+        //         sx as u16,
+        //         sy as u16,
+        //         0,
+        //         gate.color as i8,
+        //         "",
+        //         0,
+        //         true,
+        //     );
+        // }
 
         // 绘制方块
         for block in &d.initial_blocks {
-            let sx = block.x * 8;
-            let sy = block.y * 4;
-            self.draw_cell(
-                ctx,
-                (block.y * 8 + block.x) as i16,
-                sx as u16,
-                sy as u16,
-                0,
-                block.color as i8,
-                BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
-                0,
-                false,
-            );
+            let shape_data = &SHAPE[block.shape as usize];
+
+            // 遍历形状的每个格子
+            for grid_y in 0..5 {
+                for grid_x in 0..5 {
+                    if shape_data.grid[grid_y][grid_x] == 1 {
+                        // 计算棋盘上的实际坐标
+                        let board_x = block.x as usize + (grid_x - shape_data.rect.x);
+                        let board_y = block.y as usize + (grid_y - shape_data.rect.y);
+
+                        // 计算屏幕上的坐标
+                        let sx = board_x * 8;
+                        let sy = board_y * 4;
+
+                        // 计算边框类型
+                        let border_type = calculate_border_type(&shape_data.grid, grid_x, grid_y);
+
+                        // 绘制格子
+                        self.draw_cell(
+                            ctx,
+                            (board_y * 8 + board_x) as i16,
+                            sx as u16,
+                            sy as u16,
+                            border_type,
+                            block.color as i8,
+                            BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
+                            0,
+                        );
+                    }
+                }
+            }
         }
     }
 }

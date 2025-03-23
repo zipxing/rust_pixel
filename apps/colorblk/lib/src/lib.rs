@@ -44,7 +44,7 @@ impl ColorblkData {
 }
 
 pub mod shape;
-use crate::shape::*;
+pub use crate::shape::*;
 pub mod solver;
 // use crate::solver::*;
 
