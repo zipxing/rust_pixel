@@ -3,7 +3,7 @@ use rust_pixel::{
     event::{event_emit, Event, KeyCode},
     game::Model,
 };
-// use log::info;
+use log::info;
 use colorblk_lib::{ColorblkData, Block, Gate, Direction};
 use colorblk_lib::solver::solve_main;
 
@@ -50,7 +50,7 @@ impl ColorblkModel {
 }
 
 impl Model for ColorblkModel {
-    fn init(&mut self, _context: &mut Context) {
+    fn init(&mut self, context: &mut Context) {
         self.data.shuffle();
         self.card = self.data.next();
 
@@ -58,10 +58,12 @@ impl Model for ColorblkModel {
         event_emit("Colorblk.RedrawTile");
 
         // 保存初始布局和门
+        context.state = ColorblkState::Solving as u8;
         let (blocks, gates, solution) = solve_main();
         self.initial_blocks = blocks;
         self.gates = gates;
         self.solution = solution;
+        info!("solution....{:?}", self.solution);
         self.current_step = 0;
     }
 
@@ -93,8 +95,11 @@ impl Model for ColorblkModel {
 
     fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {
         self.count += 1.0;
-        if self.count > 200.0 {
+        info!("@@@@@@@@@@@@@count{}", self.count);
+        if self.count > 20.0 {
             self.count = 0.0f64;
+            self.current_step += 1;
+            info!("@@@@@@@@@@@@@cs{}", self.current_step);
         }
     }
 

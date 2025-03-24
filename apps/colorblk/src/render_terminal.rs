@@ -103,14 +103,14 @@ impl ColorblkRender {
         Self { panel: t }
     }
 
-    pub fn draw_solution(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
-        if data.solution.is_some() {
-            self.draw_moving(ctx, data, timer_percent("solution"));
-        } else {
-            self.draw_ready(ctx, data);
-        }
-        self.draw_status(ctx, data);
-    }
+    // pub fn draw_solution(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
+    //     if data.solution.is_some() {
+    //         self.draw_moving(ctx, data, timer_percent("solution"));
+    //     } else {
+    //         self.draw_ready(ctx, data);
+    //     }
+    //     self.draw_status(ctx, data);
+    // }
 
     pub fn draw_cell(
         &mut self,
@@ -123,12 +123,15 @@ impl ColorblkRender {
         msg: &str,
         msg_color: i8,
     ) {
+        info!("id......{}", id);
+        if id >= 30 {
+            return;
+        }
         let l = self.panel.get_sprite(&format!("cc{}", id));
         let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
         l.content.resize(area);
         l.content.reset();
         let cn = format!("cc{}.txt", border_type);
-        info!("cn....{}", cn);
         asset2sprite!(l, ctx, &cn);
         l.set_pos(x, y);
         //设置颜色
@@ -174,100 +177,168 @@ impl ColorblkRender {
         l.set_color_str(0, 0, &msg, Color::White, Color::Reset);
     }
 
-    pub fn draw_moving(&mut self, ctx: &mut Context, d: &mut ColorblkModel, per: f32) {
-        // 绘制网格
-        self.draw_grid(ctx);
+    // pub fn draw_moving(&mut self, ctx: &mut Context, d: &mut ColorblkModel, per: f32) {
+    //     // 绘制网格
+    //     self.draw_grid(ctx);
 
-        // // 绘制门
-        // for gate in &d.gates {
-        //     let sx = gate.x * 8;
-        //     let sy = gate.y * 4;
-        //     self.draw_cell(
-        //         ctx,
-        //         (gate.y * 8 + gate.x) as i16,
-        //         sx as u16,
-        //         sy as u16,
-        //         0,
-        //         gate.color as i8,
-        //         "",
-        //         0,
-        //         true,
-        //     );
-        // }
+    //     // // 绘制门
+    //     // for gate in &d.gates {
+    //     //     let sx = gate.x * 8;
+    //     //     let sy = gate.y * 4;
+    //     //     self.draw_cell(
+    //     //         ctx,
+    //     //         (gate.y * 8 + gate.x) as i16,
+    //     //         sx as u16,
+    //     //         sy as u16,
+    //     //         0,
+    //     //         gate.color as i8,
+    //     //         "",
+    //     //         0,
+    //     //         true,
+    //     //     );
+    //     // }
 
-        // 绘制移动中的方块
-        if let Some(solution) = &d.solution {
-            if d.current_step < solution.len() {
-                let (block_id, direction, steps) = solution[d.current_step];
-                if let Some(block) = d.initial_blocks.iter().find(|b| b.id == block_id) {
-                    if let Some(dir) = direction {
-                        // 计算移动后的位置
-                        let (dx, dy) = match dir {
-                            Direction::Up => (0, -1),
-                            Direction::Down => (0, 1),
-                            Direction::Left => (-1, 0),
-                            Direction::Right => (1, 0),
-                        };
-                        let new_x = block.x as i16 + dx;
-                        let new_y = block.y as i16 + dy;
+    //     // 绘制移动中的方块
+    //     if let Some(solution) = &d.solution {
+    //         if d.current_step < solution.len() {
+    //             let (block_id, direction, steps) = solution[d.current_step];
+    //             if let Some(block) = d.initial_blocks.iter().find(|b| b.id == block_id) {
+    //                 if let Some(dir) = direction {
+    //                     // 计算移动后的位置
+    //                     let (dx, dy) = match dir {
+    //                         Direction::Up => (0, -1),
+    //                         Direction::Down => (0, 1),
+    //                         Direction::Left => (-1, 0),
+    //                         Direction::Right => (1, 0),
+    //                     };
+    //                     let new_x = block.x as i16 + dx;
+    //                     let new_y = block.y as i16 + dy;
 
-                        let sx = new_x * 8;
-                        let sy = new_y * 4;
-                        self.draw_cell(
-                            ctx,
-                            (new_y * 8 + new_x) as i16,
-                            sx as u16,
-                            sy as u16,
-                            0,
-                            block.color as i8,
-                            BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
-                            0,
-                        );
-                    }
-                }
-            }
-        }
-    }
+    //                     let sx = new_x * 8;
+    //                     let sy = new_y * 4;
+    //                     self.draw_cell(
+    //                         ctx,
+    //                         (new_y * 8 + new_x) as i16,
+    //                         sx as u16,
+    //                         sy as u16,
+    //                         0,
+    //                         block.color as i8,
+    //                         BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
+    //                         0,
+    //                     );
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     pub fn draw_ready(&mut self, ctx: &mut Context, d: &mut ColorblkModel) {
+        // 清空所有内容
+        {
+            let back = self.panel.get_sprite("back");
+            back.content.reset();
+
+            // 清空所有格子
+            for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
+                let l = self.panel.get_sprite(&format!("cc{}", i));
+                l.content.reset();
+            }
+        }
+
         // 绘制网格
         self.draw_grid(ctx);
 
         // 绘制门
-        let back = self.panel.get_sprite("back");
-        for gate in &d.gates {
-            let color_code = get_color_code(gate.color);
-            if gate.height == 0 {
-                // 上下门：绘制一行彩色字符
-                for x in gate.x..gate.x + gate.width {
-                    let screen_x = (x as usize + 1) * 2; // 向右偏移一个字符
-                    let screen_y = if gate.y == 0 { 0 } else { BOARD_HEIGHT };
-                    back.set_color_str(
-                        screen_x as u16,
-                        screen_y as u16,
-                        "▔▔",
-                        COLORS[gate.color as usize % COLORS.len()],
-                        Color::Reset,
-                    );
+        {
+            let back = self.panel.get_sprite("back");
+            for gate in &d.gates {
+                if gate.height == 0 {
+                    // 上下门：绘制一行彩色字符
+                    for x in gate.x..gate.x + gate.width {
+                        let screen_x = ((x as usize + 1) * 10) as u16; // 每个单元格宽度为10
+                        let screen_y = if gate.y == 0 {
+                            0
+                        } else {
+                            (BOARD_HEIGHT * 5) as u16
+                        }; // 每个单元格高度为5
+                        back.set_color_str(
+                            screen_x as u16, // 居中显示
+                            screen_y as u16,
+                            "BBBBBBBBBB", // 使用10个字符的宽度
+                            COLORS[gate.color as usize % COLORS.len()],
+                            Color::Reset,
+                        );
+                    }
+                } else {
+                    // 左右门：绘制一列彩色字符
+                    for y in gate.y..gate.y + gate.height {
+                        let screen_x = if gate.x == 0 {
+                            0
+                        } else {
+                            (BOARD_WIDTH * 13) as u16
+                        }; // 每个单元格宽度为10
+                        let screen_y = ((y as usize + 1) * 5) as u16; // 每个单元格高度为5
+
+                        for r in 0..5 {
+                            back.set_color_str(
+                                screen_x as u16, // 居中显示
+                                screen_y + r as u16,
+                                "B", // 使用单个字符的宽度
+                                COLORS[gate.color as usize % COLORS.len()],
+                                Color::Reset,
+                            );
+                        }
+                    }
                 }
-            } else {
-                // 左右门：绘制一列彩色字符
-                for y in gate.y..gate.y + gate.height {
-                    let screen_x = if gate.x == 0 { 0 } else { BOARD_WIDTH * 2 };
-                    let screen_y = y as usize + 1; // 向下偏移一个字符
-                    back.set_color_str(
-                        screen_x as u16,
-                        screen_y as u16,
-                        "▏",
-                        COLORS[gate.color as usize % COLORS.len()],
-                        Color::Reset,
-                    );
+            }
+        }
+
+        // 创建一个数组来跟踪每个方块的当前位置和是否被移除
+        let mut current_positions: Vec<(i16, i16, bool)> = d
+            .initial_blocks
+            .iter()
+            .map(|block| (block.x as i16, block.y as i16, true))
+            .collect();
+
+        info!("cpos...{:?}", current_positions);
+        // 根据solution更新方块位置
+        if let Some(solution) = &d.solution {
+            for step in 0..d.current_step {
+                if step >= solution.len() {
+                    break;
+                } 
+                let (block_id, direction, mstep) = solution[step];
+                if let Some(dir) = direction {
+                    let (dx, dy) = match dir {
+                        Direction::Up => (0, -1),
+                        Direction::Down => (0, 1),
+                        Direction::Left => (-1, 0),
+                        Direction::Right => (1, 0),
+                    };
+                    for _ in 0..mstep {
+                        if let Some(pos) = current_positions.get_mut(block_id as usize - 1) {
+                            pos.0 += dx;
+                            pos.1 += dy;
+                        }
+                    }
+                } else {
+                    // 标记方块为已移除
+                    if let Some(pos) = current_positions.get_mut(block_id as usize - 1) {
+                        pos.2 = false;
+                    }
                 }
             }
         }
 
         // 绘制方块
-        for block in &d.initial_blocks {
+        for (block, &(current_x, current_y, is_active)) in
+            d.initial_blocks.iter().zip(current_positions.iter())
+        {
+            // 如果方块已被移除，跳过绘制
+            if !is_active {
+                continue;
+            }
+
             let shape_data = &SHAPE[block.shape as usize];
 
             // 遍历形状的每个格子
@@ -275,12 +346,12 @@ impl ColorblkRender {
                 for grid_x in 0..5 {
                     if shape_data.grid[grid_y][grid_x] == 1 {
                         // 计算棋盘上的实际坐标
-                        let board_x = block.x as usize + (grid_x - shape_data.rect.x);
-                        let board_y = block.y as usize + (grid_y - shape_data.rect.y);
+                        let board_x = current_x as usize + (grid_x - shape_data.rect.x);
+                        let board_y = current_y as usize + (grid_y - shape_data.rect.y);
 
                         // 计算屏幕上的坐标（向右下偏移一个字符）
-                        let sx = (board_x + 1) * CELLW;
-                        let sy = (board_y + 1) * CELLH;
+                        let sx = ((board_x + 1) * 10) as u16; // 每个单元格宽度为10
+                        let sy = ((board_y + 1) * 5) as u16; // 每个单元格高度为5
 
                         // 计算边框类型
                         let border_type = calculate_border_type(&shape_data.grid, grid_x, grid_y);
@@ -289,9 +360,9 @@ impl ColorblkRender {
                         self.draw_cell(
                             ctx,
                             (board_y * BOARD_WIDTH + board_x) as i16,
-                            sx as u16,
-                            sy as u16,
-                            border_type,
+                            sx,
+                            sy,
+                            border_type as u8,
                             block.color as i8,
                             BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
                             0,
