@@ -7,7 +7,6 @@ use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use rayon::prelude::*;
 
 /// 状态只包含 blocks，用于状态去重；history 用于记录路径，但不参与状态比较
 #[derive(Clone, Debug)]

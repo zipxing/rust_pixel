@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use crate::model::{ColorblkModel, CARDH, CARDW, CELLH, CELLW, COLORBLKH, COLORBLKW};
+use crate::model::{ColorblkModel, CELLH, CELLW, COLORBLKH, COLORBLKW};
 use colorblk_lib::{Block, Direction, Gate, BOARD_HEIGHT, BOARD_WIDTH, SHAPE, SHAPE_IDX};
 use log::info;
 use rust_pixel::{
@@ -15,32 +15,6 @@ use rust_pixel::{
     util::Rect,
     GAME_FRAME,
 };
-
-fn calculate_border_type(grid: &[[u8; 5]; 5], x: usize, y: usize) -> u8 {
-    // 检查四个方向的邻居
-    let mut border_bits = 0u8;
-
-    // 上邻居
-    if y == 0 || grid[y - 1][x] == 0 {
-        border_bits |= 0b1000;
-    }
-
-    // 下邻居
-    if y == 4 || grid[y + 1][x] == 0 {
-        border_bits |= 0b0100;
-    }
-
-    // 左邻居
-    if x == 0 || grid[y][x - 1] == 0 {
-        border_bits |= 0b0010;
-    }
-
-    // 右邻居
-    if x == 4 || grid[y][x + 1] == 0 {
-        border_bits |= 0b0001;
-    }
-    border_bits
-}
 
 // 颜色定义
 const COLORS: [Color; 8] = [
@@ -83,7 +57,7 @@ impl ColorblkRender {
         let mut t = Panel::new();
 
         // 创建背景精灵
-        let tsback = Sprite::new(0, 0, 70, 40);
+        let tsback = Sprite::new(0, 0, COLORBLKW, COLORBLKH);
         t.add_sprite(tsback, "back");
 
         // 为每个格子创建精灵
@@ -123,7 +97,6 @@ impl ColorblkRender {
         msg: &str,
         msg_color: i8,
     ) {
-        info!("id......{}", id);
         if id >= 30 {
             return;
         }
@@ -237,7 +210,7 @@ impl ColorblkRender {
         {
             let back = self.panel.get_sprite("back");
             back.content.reset();
-
+            
             // 清空所有格子
             for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
                 let l = self.panel.get_sprite(&format!("cc{}", i));
@@ -259,12 +232,12 @@ impl ColorblkRender {
                         let screen_y = if gate.y == 0 {
                             0
                         } else {
-                            (BOARD_HEIGHT * 5) as u16
+                            (BOARD_HEIGHT * 6) as u16
                         }; // 每个单元格高度为5
                         back.set_color_str(
                             screen_x as u16, // 居中显示
                             screen_y as u16,
-                            "BBBBBBBBBB", // 使用10个字符的宽度
+                            "██████████", // 使用10个字符的宽度
                             COLORS[gate.color as usize % COLORS.len()],
                             Color::Reset,
                         );
@@ -283,7 +256,7 @@ impl ColorblkRender {
                             back.set_color_str(
                                 screen_x as u16, // 居中显示
                                 screen_y + r as u16,
-                                "B", // 使用单个字符的宽度
+                                "█", // 使用单个字符的宽度
                                 COLORS[gate.color as usize % COLORS.len()],
                                 Color::Reset,
                             );
@@ -293,82 +266,15 @@ impl ColorblkRender {
             }
         }
 
-        // 创建一个数组来跟踪每个方块的当前位置和是否被移除
-        let mut current_positions: Vec<(i16, i16, bool)> = d
-            .initial_blocks
-            .iter()
-            .map(|block| (block.x as i16, block.y as i16, true))
-            .collect();
-
-        info!("cpos...{:?}", current_positions);
-        // 根据solution更新方块位置
-        if let Some(solution) = &d.solution {
-            for step in 0..d.current_step {
-                if step >= solution.len() {
-                    break;
-                } 
-                let (block_id, direction, mstep) = solution[step];
-                if let Some(dir) = direction {
-                    let (dx, dy) = match dir {
-                        Direction::Up => (0, -1),
-                        Direction::Down => (0, 1),
-                        Direction::Left => (-1, 0),
-                        Direction::Right => (1, 0),
-                    };
-                    for _ in 0..mstep {
-                        if let Some(pos) = current_positions.get_mut(block_id as usize - 1) {
-                            pos.0 += dx;
-                            pos.1 += dy;
-                        }
-                    }
-                } else {
-                    // 标记方块为已移除
-                    if let Some(pos) = current_positions.get_mut(block_id as usize - 1) {
-                        pos.2 = false;
-                    }
-                }
-            }
-        }
-
-        // 绘制方块
-        for (block, &(current_x, current_y, is_active)) in
-            d.initial_blocks.iter().zip(current_positions.iter())
-        {
-            // 如果方块已被移除，跳过绘制
-            if !is_active {
-                continue;
-            }
-
-            let shape_data = &SHAPE[block.shape as usize];
-
-            // 遍历形状的每个格子
-            for grid_y in 0..5 {
-                for grid_x in 0..5 {
-                    if shape_data.grid[grid_y][grid_x] == 1 {
-                        // 计算棋盘上的实际坐标
-                        let board_x = current_x as usize + (grid_x - shape_data.rect.x);
-                        let board_y = current_y as usize + (grid_y - shape_data.rect.y);
-
-                        // 计算屏幕上的坐标（向右下偏移一个字符）
-                        let sx = ((board_x + 1) * 10) as u16; // 每个单元格宽度为10
-                        let sy = ((board_y + 1) * 5) as u16; // 每个单元格高度为5
-
-                        // 计算边框类型
-                        let border_type = calculate_border_type(&shape_data.grid, grid_x, grid_y);
-
-                        // 绘制格子
-                        self.draw_cell(
-                            ctx,
-                            (board_y * BOARD_WIDTH + board_x) as i16,
-                            sx,
-                            sy,
-                            border_type as u8,
-                            block.color as i8,
-                            BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
-                            0,
-                        );
-                    }
-                }
+        // 使用model中的render_state绘制方块
+        for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
+            let (border_type, color, symbol) = d.render_state[i as usize];
+            if color >= 0 {
+                let x = i % BOARD_WIDTH;
+                let y = i / BOARD_WIDTH;
+                let sx = ((x + 1) * 10) as u16;
+                let sy = ((y + 1) * 5) as u16;
+                self.draw_cell(ctx, i as i16, sx, sy, border_type, color, symbol, 0);
             }
         }
     }
@@ -378,7 +284,7 @@ impl Render for ColorblkRender {
     type Model = ColorblkModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(70, 40, 1.0, 1.0, "colorblk".to_string());
+        ctx.adapter.init(COLORBLKW, COLORBLKH, 1.0, 1.0, "colorblk".to_string());
         self.panel.init(ctx);
         // let l = self.panel.get_sprite("back");
         // asset2sprite!(l, ctx, &format!("back.txt"));
