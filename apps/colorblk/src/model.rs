@@ -1,5 +1,5 @@
 use colorblk_lib::solver::solve_main;
-use colorblk_lib::{Block, ColorBlkStage, ColorblkData, Direction, Gate, SHAPE};
+use colorblk_lib::{Block, ColorBlkStage, Direction, Gate, SHAPE};
 use log::info;
 use rust_pixel::{
     context::Context,
@@ -44,10 +44,7 @@ enum ColorblkState {
 }
 
 pub struct ColorblkModel {
-    // ColorblkData defined in colorblk/lib/src/lib.rs
-    pub data: ColorblkData,
     pub count: i16,
-    pub card: i16,
     // 存储初始关卡状态
     pub stage: ColorBlkStage,
     // 存储计算结果的字段
@@ -63,9 +60,7 @@ impl ColorblkModel {
     pub fn new() -> Self {
         let stage = ColorBlkStage::new(5, 6); // 默认使用5x6的棋盘
         Self {
-            data: ColorblkData::new(),
             count: 0,
-            card: 0,
             stage,
             solution: None,
             current_step: 0,
@@ -76,9 +71,7 @@ impl ColorblkModel {
     }
 
     pub fn reset(&mut self) {
-        self.data = ColorblkData::new();
         self.count = 0;
-        self.card = 0;
         self.stage = ColorBlkStage::new(5, 6); // 重置为默认大小
         self.solution = None;
         self.current_step = 0;
@@ -87,11 +80,9 @@ impl ColorblkModel {
         self.render_state = vec![(0, -1, ""); (5 * 6)];
     }
 
-    pub fn init(&mut self, data: ColorblkData) {
-        self.data = data;
+    pub fn init(&mut self) {
         // 从data中获取初始状态
         self.count = 0;
-        self.card = 0;
         self.stage = ColorBlkStage::new(5, 6); // 使用默认大小
         self.solution = None;
         self.current_step = 0;
@@ -143,7 +134,8 @@ impl ColorblkModel {
 
         // 创建一个数组来跟踪每个方块的当前位置和是否被移除
         let mut current_positions: Vec<(i16, i16, bool)> = self
-            .stage.blocks
+            .stage
+            .blocks
             .iter()
             .map(|block| (block.x as i16, block.y as i16, true))
             .collect();
@@ -210,22 +202,19 @@ impl ColorblkModel {
 
 impl Model for ColorblkModel {
     fn init(&mut self, context: &mut Context) {
-        self.data.shuffle();
-        self.card = self.data.next() as i16;
-
         // Emit event...
         event_emit("Colorblk.RedrawTile");
 
         // 保存初始布局和门
         context.state = ColorblkState::Normal as u8;
         let (blocks, gates, solution) = solve_main();
-        
+
         // 设置关卡数据
         self.stage = ColorBlkStage::new(5, 6); // 默认大小
         self.stage.blocks = blocks;
         self.stage.gates = gates;
         self.solution = solution;
-        
+
         info!("solution....{:?}", self.solution);
         self.current_step = 0;
         self.update_render_state();
@@ -237,13 +226,10 @@ impl Model for ColorblkModel {
             match e {
                 Event::Key(key) => match key.code {
                     KeyCode::Char('s') => {
-                        self.data.shuffle();
-                        self.card = self.data.next() as i16;
                         // Emit event...
                         event_emit("Colorblk.RedrawTile");
                     }
                     KeyCode::Char('n') => {
-                        self.card = self.data.next() as i16;
                         // Emit event...
                         event_emit("Colorblk.RedrawTile");
                     }

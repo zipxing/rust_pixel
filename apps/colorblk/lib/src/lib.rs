@@ -1,52 +1,6 @@
-//
-// implement core algorithm...
-//
-
-#![allow(dead_code)]
-use rust_pixel::util::Rand;
-
-pub struct ColorblkData {
-    pub rand: Rand,
-    pub pool: Vec<u8>,
-    pub index: usize,
-}
-
-impl ColorblkData {
-    pub fn new() -> Self {
-        let mut rd = Rand::new();
-        rd.srand_now();
-        Self {
-            rand: rd,
-            pool: vec![],
-            index: 0,
-        }
-    }
-
-    pub fn shuffle(&mut self) {
-        self.pool.clear();
-        for i in 1..=52u8 {
-            self.pool.push(i);
-        }
-        self.rand.shuffle(&mut self.pool);
-        // println!("shuffle ok...");
-    }
-
-    pub fn next(&mut self) -> u8 {
-        let ret;
-        if self.pool.len() > 0 {
-            ret = self.pool[self.index];
-            self.index = (self.index + 1) % 52;
-        } else {
-            ret = 0;
-        }
-        ret
-    }
-}
-
 pub mod shape;
 pub use crate::shape::*;
 pub mod solver;
-// use crate::solver::*;
 
 pub type Board = Vec<Vec<u32>>;
 pub const OBSTACLE: u32 = 100_000_000;
@@ -82,14 +36,16 @@ impl ColorBlkStage {
     /// 创建一个新的棋盘
     pub fn create_board(&self) -> Board {
         let mut board = vec![vec![0; self.board_width]; self.board_height];
-        
+
         // 放置障碍物
         for obstacle in &self.obstacles {
-            if ((obstacle.x as usize) < self.board_width) && ((obstacle.y as usize) < self.board_height) {
+            if ((obstacle.x as usize) < self.board_width)
+                && ((obstacle.y as usize) < self.board_height)
+            {
                 board[obstacle.y as usize][obstacle.x as usize] = OBSTACLE;
             }
         }
-        
+
         board
     }
 }
@@ -100,8 +56,8 @@ pub struct Gate {
     pub x: u8, // 对于上/下门：x ∈ [0, BOARD_WIDTH - gate.width]
     pub y: u8, // 对于左/右门：y ∈ [0, BOARD_HEIGHT - gate.height]
     pub color: u8,
-    pub width: u8,  // 上/下门的宽度 ∈ [1,3]；左/右门的宽度应为 0
-    pub height: u8, // 左/右门的高度 ∈ [1,3]；上/下门的高度应为 0
+    pub width: u8,    // 上/下门的宽度 ∈ [1,3]；左/右门的宽度应为 0
+    pub height: u8,   // 左/右门的高度 ∈ [1,3]；上/下门的高度应为 0
     pub switch: bool, // 门的开关状态，默认为 true（开启状态）
 }
 
@@ -124,8 +80,8 @@ pub struct Block {
     pub ice: u8,       // 冰层厚度（0 表示无冰）
     pub key: u8,       // 是否有钥匙（0 或 1）
     pub lock: u8,      // 是否上锁（0 或 1）
-    pub x: u8,         // 在棋盘中左上角的 x 坐标, 注意为bound_box(由BlockData.rect描述)的坐标，不是grid的坐标
-    pub y: u8,         // 在棋盘中左上角的 y 坐标, 注意为bound_box(由BlockData.rect描述)的坐标，不是grid的坐标
+    pub x: u8, // 在棋盘中左上角的 x 坐标, 注意为bound_box(由BlockData.rect描述)的坐标，不是grid的坐标
+    pub y: u8, // 在棋盘中左上角的 y 坐标, 注意为bound_box(由BlockData.rect描述)的坐标，不是grid的坐标
     pub link: Vec<u8>, // 如果属于一个组，则保存组内所有块的id
 }
 
@@ -172,7 +128,13 @@ pub fn layout_to_board(blocks: &[Block], stage: &ColorBlkStage) -> Board {
 }
 
 /// move_block_to 函数，正确理解 BlockData 结构
-fn move_block_to(board: &mut Board, block: &mut Block, new_x: u8, new_y: u8, stage: &ColorBlkStage) -> bool {
+fn move_block_to(
+    board: &mut Board,
+    block: &mut Block,
+    new_x: u8,
+    new_y: u8,
+    stage: &ColorBlkStage,
+) -> bool {
     let shape_data = &SHAPE[block.shape as usize];
     let code = encode_block(&block);
 
@@ -237,7 +199,12 @@ fn move_block_to(board: &mut Board, block: &mut Block, new_x: u8, new_y: u8, sta
 }
 
 /// move_entire_block 函数，仅计算新位置
-pub fn move_entire_block(board: &mut Board, block: &mut Block, direction: Direction, stage: &ColorBlkStage) -> bool {
+pub fn move_entire_block(
+    board: &mut Board,
+    block: &mut Block,
+    direction: Direction,
+    stage: &ColorBlkStage,
+) -> bool {
     if direction == Direction::Up && block.y == 0 {
         return false;
     }
@@ -257,13 +224,20 @@ pub fn move_entire_block(board: &mut Board, block: &mut Block, direction: Direct
 }
 
 /// move_group 函数
-pub fn move_group(board: &mut Board, blocks: &mut [Block], group_ids: &[u8], direction: Direction, stage: &ColorBlkStage) -> bool {
+pub fn move_group(
+    board: &mut Board,
+    blocks: &mut [Block],
+    group_ids: &[u8],
+    direction: Direction,
+    stage: &ColorBlkStage,
+) -> bool {
     // 复制一个棋盘用于尝试移动
     let mut test_board = board.clone();
     let mut test_blocks = blocks.to_vec();
 
     // 找出组中的所有方块
-    let group_blocks: Vec<usize> = blocks.iter()
+    let group_blocks: Vec<usize> = blocks
+        .iter()
         .enumerate()
         .filter(|(_, b)| group_ids.contains(&b.id))
         .map(|(idx, _)| idx)
@@ -287,24 +261,24 @@ pub fn move_group(board: &mut Board, blocks: &mut [Block], group_ids: &[u8], dir
 /// 重构后的 can_exit 函数：合并四个方位门的处理逻辑
 pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
     let shape_data = &SHAPE[block.shape as usize];
-    
+
     // 计算方块的边界
     let block_left = block.x;
     let block_right = block.x + (shape_data.rect.width - shape_data.rect.x) as u8;
     let block_top = block.y;
     let block_bottom = block.y + (shape_data.rect.height - shape_data.rect.y) as u8;
-    
+
     // 检查每个门
     for gate in gates {
         if !gate.switch {
             continue; // 如果门关闭，跳过
         }
-        
+
         // 检查方块颜色与门颜色是否匹配
         if block.color != gate.color {
             continue;
         }
-        
+
         // 根据门的类型（由width和height确定）确定方向和检查位置
         match (gate.y, gate.height, gate.x, gate.width) {
             // 上方门
@@ -312,36 +286,36 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
                 if block_top == 0 && block.x >= gate.x && block.x <= gate.x + gate.width - 1 {
                     return Some(Direction::Up);
                 }
-            },
+            }
             // 下方门
             (y, 0, _, w) if w > 0 => {
                 if block_bottom >= y && block.x >= gate.x && block.x <= gate.x + gate.width - 1 {
                     return Some(Direction::Down);
                 }
-            },
+            }
             // 左方门
             (_, h, 0, 0) if h > 0 => {
                 if block_left == 0 && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
                     return Some(Direction::Left);
                 }
-            },
+            }
             // 右方门
             (_, h, x, 0) if h > 0 => {
                 if block_right >= x && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
                     return Some(Direction::Right);
                 }
-            },
+            }
             _ => continue,
         }
     }
-    
+
     None
 }
 
 /// 辅助函数：从块列表中移除指定块，并更新剩余块的 group 链接（删除已退出块的 id）
 pub fn remove_block_and_update_links(blocks: &[Block], id: u8) -> Vec<Block> {
     let mut new_blocks = Vec::new();
-    
+
     for block in blocks {
         if block.id != id {
             // 保留非目标块，但需要更新其链接
@@ -353,10 +327,9 @@ pub fn remove_block_and_update_links(blocks: &[Block], id: u8) -> Vec<Block> {
             new_blocks.push(new_block);
         }
     }
-    
+
     new_blocks
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -366,4 +339,3 @@ mod tests {
         // let result = ColorblkData::new();
     }
 }
-

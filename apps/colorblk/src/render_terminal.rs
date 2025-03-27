@@ -61,7 +61,8 @@ impl ColorblkRender {
         t.add_sprite(tsback, "back");
 
         // 为每个格子创建精灵（这里使用足够大的数量以支持各种棋盘大小）
-        for i in 0..64 { // 最大支持8x8的棋盘
+        for i in 0..64 {
+            // 最大支持8x8的棋盘
             t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
                 &format!("cc{}", i),
@@ -127,12 +128,15 @@ impl ColorblkRender {
             for x in 0..d.stage.board_width {
                 let sx = (x + 1) * 10;
                 let sy = (y + 1) * 5;
-                let l = self.panel.get_sprite(&format!("cc{}", y * d.stage.board_width + x));
+                let l = self
+                    .panel
+                    .get_sprite(&format!("cc{}", y * d.stage.board_width + x));
                 let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
                 l.content.resize(area);
                 l.content.reset();
                 l.set_pos(sx as u16, sy as u16);
-                l.content.set_style(l.content.area, Style::default().fg(COLORS[7]));
+                l.content
+                    .set_style(l.content.area, Style::default().fg(COLORS[7]));
                 l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
             }
         }
@@ -209,7 +213,7 @@ impl ColorblkRender {
         {
             let back = self.panel.get_sprite("back");
             back.content.reset();
-            
+
             // 清空所有格子
             for i in 0..d.stage.board_width * d.stage.board_height {
                 let l = self.panel.get_sprite(&format!("cc{}", i));
@@ -283,7 +287,8 @@ impl Render for ColorblkRender {
     type Model = ColorblkModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(COLORBLKW, COLORBLKH, 1.0, 1.0, "colorblk".to_string());
+        ctx.adapter
+            .init(COLORBLKW, COLORBLKH, 1.0, 1.0, "colorblk".to_string());
         self.panel.init(ctx);
         // let l = self.panel.get_sprite("back");
         // asset2sprite!(l, ctx, &format!("back.txt"));

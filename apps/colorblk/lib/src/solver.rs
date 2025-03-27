@@ -1,8 +1,8 @@
 use crate::shape::SHAPE_IDX;
 use crate::*;
-use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::IndexedParallelIterator;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -13,7 +13,7 @@ use std::time::Instant;
 struct State {
     blocks: Vec<Block>,
     // 每一步记录 (block id, move, steps)，Some(direction) 表示移动或退出，steps 表示连续移动步数
-    history: Vec<(u8, Option<Direction>, u8)>, 
+    history: Vec<(u8, Option<Direction>, u8)>,
 }
 
 // 仅比较 blocks 字段
@@ -93,8 +93,12 @@ fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
                         let mut sim_board = layout_to_board(&temp_state.blocks, stage);
 
                         // 尝试将块移动一步
-                        if move_entire_block(&mut sim_board, &mut temp_state.blocks[temp_idx], dir, stage)
-                        {
+                        if move_entire_block(
+                            &mut sim_board,
+                            &mut temp_state.blocks[temp_idx],
+                            dir,
+                            stage,
+                        ) {
                             moves_count += 1;
 
                             // 添加这个移动步骤到历史记录
@@ -268,11 +272,13 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
 
         // 并行处理状态
         let next_states = if use_parallel {
-            states_to_process.par_iter()
+            states_to_process
+                .par_iter()
                 .flat_map(|state| expand(state, stage))
                 .collect::<Vec<_>>()
         } else {
-            states_to_process.iter()
+            states_to_process
+                .iter()
                 .flat_map(|state| expand(state, stage))
                 .collect()
         };
@@ -441,16 +447,20 @@ fn create_default_blocks() -> Vec<Block> {
     ]
 }
 
-pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>, u8)>>) {
+pub fn solve_main() -> (
+    Vec<Block>,
+    Vec<Gate>,
+    Option<Vec<(u8, Option<Direction>, u8)>>,
+) {
     // 创建一个新的关卡
     let mut stage = ColorBlkStage::new(5, 6);
-    
+
     // 添加默认方块和门
     stage.blocks = create_default_blocks();
     stage.gates = create_default_gates(&stage);
 
     match solve(stage.blocks.clone(), &stage, true) {
-    // match solve(stage.blocks.clone(), &stage, false) {
+        // match solve(stage.blocks.clone(), &stage, false) {
         Some(solution) => {
             println!("solve ok!!!");
             (stage.blocks, stage.gates, Some(solution.history))
