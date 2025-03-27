@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use crate::model::{ColorblkModel, CELLH, CELLW, COLORBLKH, COLORBLKW};
-use colorblk_lib::{Block, Direction, Gate, BOARD_HEIGHT, BOARD_WIDTH, SHAPE, SHAPE_IDX};
+use colorblk_lib::{Block, Direction, Gate, SHAPE, SHAPE_IDX};
 use log::info;
 use rust_pixel::{
     asset::AssetType,
@@ -60,8 +60,8 @@ impl ColorblkRender {
         let tsback = Sprite::new(0, 0, COLORBLKW, COLORBLKH);
         t.add_sprite(tsback, "back");
 
-        // 为每个格子创建精灵
-        for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
+        // 为每个格子创建精灵（这里使用足够大的数量以支持各种棋盘大小）
+        for i in 0..64 { // 最大支持8x8的棋盘
             t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
                 &format!("cc{}", i),
@@ -122,21 +122,20 @@ impl ColorblkRender {
         );
     }
 
-    pub fn draw_grid(&mut self, ctx: &mut Context) {
-        // for y in 0..BOARD_HEIGHT {
-        //     for x in 0..BOARD_WIDTH {
-        //         let sx = x * 8;
-        //         let sy = y * 4;
-        //         let l = self.panel.get_sprite(&format!("cc{}", y * 8 + x));
-        //         let area = Rect::new(0, 0, 8, 4);
-        //         l.content.resize(area);
-        //         l.content.reset();
-        //         l.set_pos(sx as u16, sy as u16);
-        //         l.content
-        //             .set_style(l.content.area, Style::default().fg(COLORS[7]));
-        //         l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
-        //     }
-        // }
+    pub fn draw_grid(&mut self, ctx: &mut Context, d: &mut ColorblkModel) {
+        for y in 0..d.stage.board_height {
+            for x in 0..d.stage.board_width {
+                let sx = (x + 1) * 10;
+                let sy = (y + 1) * 5;
+                let l = self.panel.get_sprite(&format!("cc{}", y * d.stage.board_width + x));
+                let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
+                l.content.resize(area);
+                l.content.reset();
+                l.set_pos(sx as u16, sy as u16);
+                l.content.set_style(l.content.area, Style::default().fg(COLORS[7]));
+                l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
+            }
+        }
     }
 
     pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
@@ -212,19 +211,19 @@ impl ColorblkRender {
             back.content.reset();
             
             // 清空所有格子
-            for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
+            for i in 0..d.stage.board_width * d.stage.board_height {
                 let l = self.panel.get_sprite(&format!("cc{}", i));
                 l.content.reset();
             }
         }
 
         // 绘制网格
-        self.draw_grid(ctx);
+        self.draw_grid(ctx, d);
 
         // 绘制门
         {
             let back = self.panel.get_sprite("back");
-            for gate in &d.gates {
+            for gate in &d.stage.gates {
                 if gate.height == 0 {
                     // 上下门：绘制一行彩色字符
                     for x in gate.x..gate.x + gate.width {
@@ -232,7 +231,7 @@ impl ColorblkRender {
                         let screen_y = if gate.y == 0 {
                             0
                         } else {
-                            (BOARD_HEIGHT * 6) as u16
+                            (d.stage.board_height * 6) as u16
                         }; // 每个单元格高度为5
                         back.set_color_str(
                             screen_x as u16, // 居中显示
@@ -248,7 +247,7 @@ impl ColorblkRender {
                         let screen_x = if gate.x == 0 {
                             0
                         } else {
-                            (BOARD_WIDTH * 13) as u16
+                            (d.stage.board_width * 13) as u16
                         }; // 每个单元格宽度为10
                         let screen_y = ((y as usize + 1) * 5) as u16; // 每个单元格高度为5
 
@@ -267,11 +266,11 @@ impl ColorblkRender {
         }
 
         // 使用model中的render_state绘制方块
-        for i in 0..BOARD_WIDTH * BOARD_HEIGHT {
+        for i in 0..d.stage.board_width * d.stage.board_height {
             let (border_type, color, symbol) = d.render_state[i as usize];
             if color >= 0 {
-                let x = i % BOARD_WIDTH;
-                let y = i / BOARD_WIDTH;
+                let x = i % d.stage.board_width;
+                let y = i / d.stage.board_width;
                 let sx = ((x + 1) * 10) as u16;
                 let sy = ((y + 1) * 5) as u16;
                 self.draw_cell(ctx, i as i16, sx, sy, border_type, color, symbol, 0);

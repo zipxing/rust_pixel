@@ -1,5 +1,5 @@
 use colorblk_lib::solver::solve_main;
-use colorblk_lib::{Block, ColorblkData, Direction, Gate, BOARD_HEIGHT, BOARD_WIDTH, SHAPE};
+use colorblk_lib::{Block, ColorBlkStage, ColorblkData, Direction, Gate, SHAPE};
 use log::info;
 use rust_pixel::{
     context::Context,
@@ -7,11 +7,6 @@ use rust_pixel::{
     game::Model,
 };
 
-// pub const CARDW: usize = 7;
-// #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
-// pub const CARDH: usize = 7;
-// #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
-// pub const CARDH: usize = 5;
 pub const COLORBLKW: u16 = 70;
 pub const COLORBLKH: u16 = 40;
 pub const CELLW: usize = 10;
@@ -53,9 +48,9 @@ pub struct ColorblkModel {
     pub data: ColorblkData,
     pub count: i16,
     pub card: i16,
+    // 存储初始关卡状态
+    pub stage: ColorBlkStage,
     // 存储计算结果的字段
-    pub initial_blocks: Vec<Block>,
-    pub gates: Vec<Gate>,
     pub solution: Option<Vec<(u8, Option<Direction>, u8)>>, // 存储移动步骤
     pub current_step: usize,                                // 当前执行到哪一步
     pub is_paused: bool,
@@ -66,17 +61,17 @@ pub struct ColorblkModel {
 
 impl ColorblkModel {
     pub fn new() -> Self {
+        let stage = ColorBlkStage::new(5, 6); // 默认使用5x6的棋盘
         Self {
             data: ColorblkData::new(),
             count: 0,
             card: 0,
-            initial_blocks: Vec::new(),
-            gates: Vec::new(),
+            stage,
             solution: None,
             current_step: 0,
             is_paused: false,
             animation_speed: 1.0,
-            render_state: vec![(0, -1, ""); (BOARD_WIDTH * BOARD_HEIGHT) as usize],
+            render_state: vec![(0, -1, ""); (5 * 6)], // 默认大小
         }
     }
 
@@ -84,13 +79,12 @@ impl ColorblkModel {
         self.data = ColorblkData::new();
         self.count = 0;
         self.card = 0;
-        self.initial_blocks.clear();
-        self.gates.clear();
+        self.stage = ColorBlkStage::new(5, 6); // 重置为默认大小
         self.solution = None;
         self.current_step = 0;
         self.is_paused = false;
         self.animation_speed = 1.0;
-        self.render_state = vec![(0, -1, ""); (BOARD_WIDTH * BOARD_HEIGHT) as usize];
+        self.render_state = vec![(0, -1, ""); (5 * 6)];
     }
 
     pub fn init(&mut self, data: ColorblkData) {
@@ -98,13 +92,12 @@ impl ColorblkModel {
         // 从data中获取初始状态
         self.count = 0;
         self.card = 0;
-        self.initial_blocks = Vec::new();
-        self.gates = Vec::new();
+        self.stage = ColorBlkStage::new(5, 6); // 使用默认大小
         self.solution = None;
         self.current_step = 0;
         self.is_paused = false;
         self.animation_speed = 1.0;
-        self.render_state = vec![(0, -1, ""); (BOARD_WIDTH * BOARD_HEIGHT) as usize];
+        self.render_state = vec![(0, -1, ""); (5 * 6)];
         self.update_render_state();
     }
 
@@ -146,11 +139,11 @@ impl ColorblkModel {
     // 更新渲染状态
     fn update_render_state(&mut self) {
         // 重置渲染状态
-        self.render_state = vec![(0, -1, ""); (BOARD_WIDTH * BOARD_HEIGHT) as usize];
+        self.render_state = vec![(0, -1, ""); (self.stage.board_width * self.stage.board_height)];
 
         // 创建一个数组来跟踪每个方块的当前位置和是否被移除
         let mut current_positions: Vec<(i16, i16, bool)> = self
-            .initial_blocks
+            .stage.blocks
             .iter()
             .map(|block| (block.x as i16, block.y as i16, true))
             .collect();
@@ -184,7 +177,7 @@ impl ColorblkModel {
 
         // 更新渲染状态
         for (block, &(current_x, current_y, is_active)) in
-            self.initial_blocks.iter().zip(current_positions.iter())
+            self.stage.blocks.iter().zip(current_positions.iter())
         {
             if !is_active {
                 continue;
@@ -200,8 +193,8 @@ impl ColorblkModel {
                         let board_x = current_x as usize + (grid_x - shape_data.rect.x);
                         let board_y = current_y as usize + (grid_y - shape_data.rect.y);
 
-                        if board_x < BOARD_WIDTH as usize && board_y < BOARD_HEIGHT as usize {
-                            let idx = board_y * BOARD_WIDTH as usize + board_x;
+                        if board_x < self.stage.board_width && board_y < self.stage.board_height {
+                            let idx = board_y * self.stage.board_width + board_x;
                             // 计算边框类型
                             let border_type =
                                 calculate_border_type(&shape_data.grid, grid_x, grid_y);
@@ -226,11 +219,16 @@ impl Model for ColorblkModel {
         // 保存初始布局和门
         context.state = ColorblkState::Normal as u8;
         let (blocks, gates, solution) = solve_main();
-        self.initial_blocks = blocks;
-        self.gates = gates;
+        
+        // 设置关卡数据
+        self.stage = ColorBlkStage::new(5, 6); // 默认大小
+        self.stage.blocks = blocks;
+        self.stage.gates = gates;
         self.solution = solution;
+        
         info!("solution....{:?}", self.solution);
         self.current_step = 0;
+        self.update_render_state();
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {

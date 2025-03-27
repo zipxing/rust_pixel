@@ -35,7 +35,7 @@ fn is_goal(state: &State) -> bool {
 }
 
 /// 扩展当前状态，尝试所有可能的移动和退出操作（并行版）
-fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
+fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
     let mut next_states = Vec::new();
 
     // 1. 退出操作：对每个块判断是否能退出
@@ -49,7 +49,7 @@ fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
                 return None;
             }
 
-            if let Some(_dir) = can_exit(block, gates) {
+            if let Some(_dir) = can_exit(block, &stage.gates) {
                 let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
                 let mut new_history = state.history.clone();
                 new_history.push((block.id, None, 0)); // None 表示退出
@@ -90,10 +90,10 @@ fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
 
                     // 循环尝试移动，直到无法继续移动
                     loop {
-                        let mut sim_board = layout_to_board(&temp_state.blocks);
+                        let mut sim_board = layout_to_board(&temp_state.blocks, stage);
 
                         // 尝试将块移动一步
-                        if move_entire_block(&mut sim_board, &mut temp_state.blocks[temp_idx], dir)
+                        if move_entire_block(&mut sim_board, &mut temp_state.blocks[temp_idx], dir, stage)
                         {
                             moves_count += 1;
 
@@ -149,10 +149,10 @@ fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
 
                 // 循环尝试移动，直到无法继续移动
                 loop {
-                    let mut sim_board = layout_to_board(&temp_state.blocks);
+                    let mut sim_board = layout_to_board(&temp_state.blocks, stage);
 
                     // 尝试移动整个组
-                    if move_group(&mut sim_board, &mut temp_state.blocks, group, dir) {
+                    if move_group(&mut sim_board, &mut temp_state.blocks, group, dir, stage) {
                         moves_count += 1;
 
                         // 添加这个移动步骤到历史记录
@@ -185,8 +185,7 @@ fn expand(state: &State, gates: &[Gate]) -> Vec<State> {
 
 #[derive(Clone)]
 struct SharedData {
-    gates: Vec<Gate>,
-    blocks: Vec<Block>,
+    stage: ColorBlkStage,
     visited: Arc<Mutex<HashSet<State>>>,
     solution: Arc<Mutex<Option<Vec<Direction>>>>,
     max_depth: Arc<Mutex<usize>>,
@@ -198,7 +197,7 @@ struct SharedData {
 }
 
 /// 广度优先搜索求解（支持并行和串行）
-fn solve(initial_blocks: Vec<Block>, gates: &[Gate], use_parallel: bool) -> Option<State> {
+fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) -> Option<State> {
     let initial_state = State {
         blocks: initial_blocks,
         history: Vec::new(),
@@ -270,11 +269,11 @@ fn solve(initial_blocks: Vec<Block>, gates: &[Gate], use_parallel: bool) -> Opti
         // 并行处理状态
         let next_states = if use_parallel {
             states_to_process.par_iter()
-                .flat_map(|state| expand(state, gates))
+                .flat_map(|state| expand(state, stage))
                 .collect::<Vec<_>>()
         } else {
             states_to_process.iter()
-                .flat_map(|state| expand(state, gates))
+                .flat_map(|state| expand(state, stage))
                 .collect()
         };
 
@@ -327,7 +326,7 @@ fn get_color_code(color: u8) -> &'static str {
 }
 
 /// 创建默认的门
-fn create_default_gates() -> Vec<Gate> {
+fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
     vec![
         // 上方门(红色)
         Gate {
@@ -350,7 +349,7 @@ fn create_default_gates() -> Vec<Gate> {
         // 下方门(蓝色)
         Gate {
             x: 1,
-            y: (BOARD_HEIGHT - 1) as u8,
+            y: (stage.board_height - 1) as u8,
             color: 3,
             width: 3,
             height: 0,
@@ -358,7 +357,7 @@ fn create_default_gates() -> Vec<Gate> {
         },
         // 右方门(绿色)
         Gate {
-            x: (BOARD_WIDTH - 1) as u8,
+            x: (stage.board_width - 1) as u8,
             y: 4,
             color: 4,
             width: 0,
@@ -443,18 +442,22 @@ fn create_default_blocks() -> Vec<Block> {
 }
 
 pub fn solve_main() -> (Vec<Block>, Vec<Gate>, Option<Vec<(u8, Option<Direction>, u8)>>) {
-    let blocks = create_default_blocks();
-    let gates = create_default_gates();
+    // 创建一个新的关卡
+    let mut stage = ColorBlkStage::new(5, 6);
+    
+    // 添加默认方块和门
+    stage.blocks = create_default_blocks();
+    stage.gates = create_default_gates(&stage);
 
-    match solve(blocks.clone(), &gates, true) {
-    // match solve(blocks.clone(), &gates, false) {
+    match solve(stage.blocks.clone(), &stage, true) {
+    // match solve(stage.blocks.clone(), &stage, false) {
         Some(solution) => {
             println!("solve ok!!!");
-            (blocks, gates, Some(solution.history))
+            (stage.blocks, stage.gates, Some(solution.history))
         }
         None => {
             println!("no solution found");
-            (blocks, gates, None)
+            (stage.blocks, stage.gates, None)
         }
     }
 }
