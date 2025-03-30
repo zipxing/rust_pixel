@@ -202,10 +202,47 @@ struct SharedData {
 
 /// 广度优先搜索求解（支持并行和串行）
 fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) -> Option<State> {
-    let initial_state = State {
+    // 首先检查初始状态是否可以移除任何方块，如果可以，则以移除后的状态为起点
+    let mut initial_state = State {
         blocks: initial_blocks,
         history: Vec::new(),
     };
+
+    // 尝试移除初始状态中可以移除的方块
+    let mut has_removable_blocks = true;
+    while has_removable_blocks {
+        has_removable_blocks = false;
+        
+        // 检查是否有方块可以移除
+        let mut block_to_remove = None;
+        for block in &initial_state.blocks {
+            // 如果块被锁定且没有钥匙，则不能退出
+            if block.lock == 1 && block.key == 0 {
+                continue;
+            }
+
+            if let Some(_dir) = can_exit(block, &stage.gates) {
+                block_to_remove = Some(block.id);
+                break;  // 一次只移除一个方块，然后重新检查
+            }
+        }
+        
+        // 如果找到了可以移除的方块，则移除它
+        if let Some(block_id) = block_to_remove {
+            // 在移除前获取方块颜色
+            let block_color = initial_state.blocks.iter()
+                .find(|b| b.id == block_id)
+                .map(|b| b.color)
+                .unwrap_or(0);
+                
+            let new_blocks = remove_block_and_update_links(&initial_state.blocks, block_id);
+            initial_state.history.push((block_id, None, 0)); // None 表示退出
+            initial_state.blocks = new_blocks;
+            has_removable_blocks = true;
+            
+            println!("预处理：移除方块 {}({})", block_id, get_color_name(block_color));
+        }
+    }
 
     let visited = Arc::new(Mutex::new(HashSet::new()));
     let queue = Arc::new(Mutex::new(VecDeque::new()));
@@ -239,7 +276,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
 
     loop {
         // 从队列中获取一批状态进行处理
-        let states_to_process = {
+        let mut states_to_process = {
             let mut q = queue.lock().unwrap();
             let mut batch = Vec::new();
 
@@ -269,6 +306,55 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
                 println!("搜索中... 已探索 {} 个状态，队列中 {} 个状态", *s, q.len());
             }
         }
+
+        // 优先处理能够移除方块的状态
+        // 对于每个状态，检查是否可以移除方块
+        for state_idx in 0..states_to_process.len() {
+            let state = &mut states_to_process[state_idx];
+            let mut has_removable_block = false;
+            
+            for (i, block) in state.blocks.iter().enumerate() {
+                // 如果块被锁定且没有钥匙，则不能退出
+                if block.lock == 1 && block.key == 0 {
+                    continue;
+                }
+
+                if let Some(_dir) = can_exit(block, &stage.gates) {
+                    let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
+                    let mut new_history = state.history.clone();
+                    new_history.push((block.id, None, 0)); // None 表示退出
+                    
+                    *state = State {
+                        blocks: new_blocks,
+                        history: new_history,
+                    };
+                    
+                    has_removable_block = true;
+                    break;  // 一次只移除一个方块，然后处理下一个状态
+                }
+            }
+            
+            // 如果有方块被移除，检查该状态是否已访问过
+            if has_removable_block {
+                let mut v = visited.lock().unwrap();
+                if v.contains(state) {
+                    // 如果已访问过，标记为需要移除
+                    state.blocks.clear(); // 清空表示需要移除
+                } else {
+                    v.insert(state.clone());
+                    
+                    // 检查是否达到目标
+                    if is_goal(state) {
+                        let mut s = solution.lock().unwrap();
+                        *s = Some(state.clone());
+                        return Some(state.clone());
+                    }
+                }
+            }
+        }
+        
+        // 移除已经处理过的状态
+        states_to_process.retain(|state| !state.blocks.is_empty());
 
         // 并行处理状态
         let next_states = if use_parallel {
@@ -305,7 +391,9 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
         }
     }
 
-    None
+    // 返回最终解
+    let s = solution.lock().unwrap();
+    s.clone()
 }
 
 /// 获取颜色名称
@@ -550,56 +638,56 @@ fn create_default_blocks() -> Vec<Block> {
             y: 2,
             link: Vec::new(),
         },
-        // Block {
-        //     id: 5,
-        //     shape: SHAPE_IDX[2] as u8, 
-        //     color: 3,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 5,
-        //     y: 2,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 6,
-        //     shape: SHAPE_IDX[3] as u8, 
-        //     color: 5,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 1,
-        //     y: 3,
-        //     // link: vec![6, 8],
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 7,
-        //     shape: SHAPE_IDX[5] as u8, 
-        //     color: 3,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 1,
-        //     y: 4,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 8,
-        //     shape: SHAPE_IDX[7] as u8, 
-        //     color: 4,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 3,
-        //     y: 4,
-        //     link: Vec::new(),
-        //     // link: vec![6, 8],
-        // },
+        Block {
+            id: 5,
+            shape: SHAPE_IDX[2] as u8, 
+            color: 3,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 5,
+            y: 2,
+            link: Vec::new(),
+        },
+        Block {
+            id: 6,
+            shape: SHAPE_IDX[3] as u8, 
+            color: 5,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 1,
+            y: 3,
+            // link: vec![6, 8],
+            link: Vec::new(),
+        },
+        Block {
+            id: 7,
+            shape: SHAPE_IDX[5] as u8, 
+            color: 3,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 1,
+            y: 4,
+            link: Vec::new(),
+        },
+        Block {
+            id: 8,
+            shape: SHAPE_IDX[7] as u8, 
+            color: 4,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 3,
+            y: 4,
+            link: Vec::new(),
+            // link: vec![6, 8],
+        },
     ]
 }
 
