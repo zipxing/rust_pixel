@@ -58,7 +58,8 @@ pub struct ColorblkModel {
 
 impl ColorblkModel {
     pub fn new() -> Self {
-        let stage = ColorBlkStage::new(5, 6); // 默认使用5x6的棋盘
+        // let stage = ColorBlkStage::new(5, 6); // 默认使用5x6的棋盘
+        let stage = ColorBlkStage::new(6, 6); // 默认使用5x6的棋盘
         Self {
             count: 0,
             stage,
@@ -66,29 +67,30 @@ impl ColorblkModel {
             current_step: 0,
             is_paused: false,
             animation_speed: 1.0,
-            render_state: vec![(0, -1, ""); (5 * 6)], // 默认大小
+            // render_state: vec![(0, -1, ""); (5 * 6)], // 默认大小
+            render_state: vec![(0, -1, ""); (6 * 6)], // 默认大小
         }
     }
 
     pub fn reset(&mut self) {
         self.count = 0;
-        self.stage = ColorBlkStage::new(5, 6); // 重置为默认大小
+        self.stage = ColorBlkStage::new(6, 6); // 重置为默认大小
         self.solution = None;
         self.current_step = 0;
         self.is_paused = false;
         self.animation_speed = 1.0;
-        self.render_state = vec![(0, -1, ""); (5 * 6)];
+        self.render_state = vec![(0, -1, ""); (6 * 6)];
     }
 
     pub fn init(&mut self) {
         // 从data中获取初始状态
         self.count = 0;
-        self.stage = ColorBlkStage::new(5, 6); // 使用默认大小
+        self.stage = ColorBlkStage::new(6, 6); // 使用默认大小
         self.solution = None;
         self.current_step = 0;
         self.is_paused = false;
         self.animation_speed = 1.0;
-        self.render_state = vec![(0, -1, ""); (5 * 6)];
+        self.render_state = vec![(0, -1, ""); (6 * 6)];
         self.update_render_state();
     }
 
@@ -206,11 +208,11 @@ impl Model for ColorblkModel {
         event_emit("Colorblk.RedrawTile");
 
         // 保存初始布局和门
+        self.stage = ColorBlkStage::new(6, 6); // 默认大小
         context.state = ColorblkState::Normal as u8;
         let (blocks, gates, solution) = solve_main();
 
         // 设置关卡数据
-        self.stage = ColorBlkStage::new(5, 6); // 默认大小
         self.stage.blocks = blocks;
         self.stage.gates = gates;
         self.solution = solution;

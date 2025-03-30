@@ -10,6 +10,7 @@ pub const OBSTACLE: u32 = 100_000_000;
 pub struct Obstacle {
     pub x: u8,
     pub y: u8,
+    // pub allow_color: Option<u8>,
 }
 
 /// 表示一个关卡的初始状态
@@ -264,9 +265,9 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
 
     // 计算方块的边界
     let block_left = block.x;
-    let block_right = block.x + (shape_data.rect.width - shape_data.rect.x) as u8;
+    let block_right = block.x + shape_data.rect.width as u8 - 1;
     let block_top = block.y;
-    let block_bottom = block.y + (shape_data.rect.height - shape_data.rect.y) as u8;
+    let block_bottom = block.y + shape_data.rect.height as u8 - 1;
 
     // 检查每个门
     for gate in gates {
@@ -289,8 +290,17 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
             }
             // 下方门
             (y, 0, _, w) if w > 0 => {
-                if block_bottom >= y && block.x >= gate.x && block.x <= gate.x + gate.width - 1 {
+                if block_bottom == y && block.x >= gate.x && block.x <= gate.x + gate.width - 1 {
+                    // println!(
+                    //     "!!!!!!!!!!!!!!!!!!!{:?} -- {:?}$$$$${:?} {:?} {:?} {:?}",
+                    //     block, gate, block_left, block_right, block_top, block_bottom
+                    // );
                     return Some(Direction::Down);
+                } else {
+                    // println!(
+                    //     "@@@@@@@@@@@@@@@@@@@{:?} -- {:?}$$$$${:?} {:?} {:?} {:?}",
+                    //     block, gate, block_left, block_right, block_top, block_bottom
+                    // );
                 }
             }
             // 左方门
@@ -301,7 +311,7 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
             }
             // 右方门
             (_, h, x, 0) if h > 0 => {
-                if block_right >= x && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
+                if block_right == x && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
                     return Some(Direction::Right);
                 }
             }
