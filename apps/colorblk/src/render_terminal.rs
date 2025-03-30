@@ -35,18 +35,6 @@ const GRID_SYMS: &str = "·";
 
 const RESET: &str = "\x1b[0m";
 
-// 获取颜色ANSI代码的辅助函数
-fn get_color_code(color: u8) -> &'static str {
-    match color {
-        1 => "\x1b[31m", // 红色
-        2 => "\x1b[34m", // 蓝色
-        3 => "\x1b[32m", // 绿色
-        4 => "\x1b[33m", // 黄色
-        5 => "\x1b[33m", // 为颜色5使用黄色
-        _ => "\x1b[0m",  // 默认
-    }
-}
-
 pub struct ColorblkRender {
     pub panel: Panel,
 }
