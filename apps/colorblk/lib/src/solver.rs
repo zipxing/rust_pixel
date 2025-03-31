@@ -161,7 +161,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
                 // 尝试移动整个组
                 if move_group(&mut sim_board, &mut temp_state.blocks, group, dir, stage) {
-                    println!("move group......");
+                    println!("move group......{:?}", group);
                     moves_count += 1;
 
                     // 添加这个移动步骤到历史记录

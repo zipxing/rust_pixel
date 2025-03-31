@@ -343,68 +343,68 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
 
 fn create_default_blocks() -> Vec<Block> {
     vec![
+        // Block {
+        //     id: 1,
+        //     shape: SHAPE_IDX[0] as u8, // 单个方块
+        //     color: 2,                  // 红色，对应上方门
+        //     color2: 0,
+        //     ice: 0,
+        //     key: 0,
+        //     lock: 0,
+        //     x: 1,
+        //     y: 0,
+        //     link: Vec::new(),
+        // },
+        // Block {
+        //     id: 2,
+        //     shape: SHAPE_IDX[9] as u8, // 横向两个方块
+        //     color: 4,                  // 蓝色，对应下方门
+        //     color2: 0,
+        //     ice: 0,
+        //     key: 0,
+        //     lock: 0,
+        //     x: 2,
+        //     y: 0,
+        //     link: Vec::new(),
+        // },
+        // Block {
+        //     id: 3,
+        //     shape: SHAPE_IDX[2] as u8, // 纵向两个方块
+        //     color: 3,                  // 绿色，对应右方门
+        //     color2: 0,
+        //     ice: 0,
+        //     key: 0,
+        //     lock: 0,
+        //     x: 0,
+        //     y: 1,
+        //     link: Vec::new(),
+        // },
+        // Block {
+        //     id: 4,
+        //     shape: SHAPE_IDX[0] as u8, // 纵向两个方块
+        //     color: 2,                  // 绿色，对应右方门
+        //     color2: 0,
+        //     ice: 0,
+        //     key: 0,
+        //     lock: 0,
+        //     x: 3,
+        //     y: 2,
+        //     link: Vec::new(),
+        // },
+        // Block {
+        //     id: 5,
+        //     shape: SHAPE_IDX[0] as u8,
+        //     color: 3,
+        //     color2: 0,
+        //     ice: 0,
+        //     key: 0,
+        //     lock: 0,
+        //     x: 0,
+        //     y: 3,
+        //     link: Vec::new(),
+        // },
         Block {
             id: 1,
-            shape: SHAPE_IDX[0] as u8, // 单个方块
-            color: 2,                  // 红色，对应上方门
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 1,
-            y: 0,
-            link: Vec::new(),
-        },
-        Block {
-            id: 2,
-            shape: SHAPE_IDX[9] as u8, // 横向两个方块
-            color: 4,                  // 蓝色，对应下方门
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 2,
-            y: 0,
-            link: Vec::new(),
-        },
-        Block {
-            id: 3,
-            shape: SHAPE_IDX[2] as u8, // 纵向两个方块
-            color: 3,                  // 绿色，对应右方门
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 0,
-            y: 1,
-            link: Vec::new(),
-        },
-        Block {
-            id: 4,
-            shape: SHAPE_IDX[0] as u8, // 纵向两个方块
-            color: 2,                  // 绿色，对应右方门
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 3,
-            y: 2,
-            link: Vec::new(),
-        },
-        Block {
-            id: 5,
-            shape: SHAPE_IDX[0] as u8,
-            color: 3,
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 0,
-            y: 3,
-            link: Vec::new(),
-        },
-        Block {
-            id: 6,
             shape: SHAPE_IDX[1] as u8,
             color: 5,
             color2: 0,
@@ -413,11 +413,12 @@ fn create_default_blocks() -> Vec<Block> {
             lock: 0,
             x: 1,
             y: 3,
-            link: vec![6, 8],
+            link: vec![1, 2],
+            // link: vec![6, 8],
             // link: Vec::new(),
         },
         Block {
-            id: 7,
+            id: 3,
             shape: SHAPE_IDX[2] as u8,
             color: 4,
             color2: 0,
@@ -426,10 +427,10 @@ fn create_default_blocks() -> Vec<Block> {
             lock: 0,
             x: 3,
             y: 3,
-            link: Vec::new(),
+            link: vec![3],
         },
         Block {
-            id: 8,
+            id: 2,
             shape: SHAPE_IDX[0] as u8,
             color: 1,
             color2: 0,
@@ -439,7 +440,7 @@ fn create_default_blocks() -> Vec<Block> {
             x: 2,
             y: 4,
             // link: Vec::new(),
-            link: vec![6, 8],
+            link: vec![1, 2],
         },
     ]
     // vec![
