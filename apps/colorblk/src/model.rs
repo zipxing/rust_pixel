@@ -64,7 +64,7 @@ impl ColorblkModel {
             solution: None,
             current_step: 0,
             // render_state: vec![(0, -1, ""); (5 * 6)], // 默认大小
-            render_state: vec![(0, -1, ""); (6 * 6)], // 默认大小
+            render_state: vec![(0, -1, ""); 6 * 6], // 默认大小
         }
     }
 
@@ -106,7 +106,7 @@ impl ColorblkModel {
     // 更新渲染状态
     fn update_render_state(&mut self) {
         // 重置渲染状态
-        self.render_state = vec![(0, -1, ""); (self.stage.board_width * self.stage.board_height)];
+        self.render_state = vec![(0, -1, ""); self.stage.board_width * self.stage.board_height];
 
         // 创建一个数组来跟踪每个方块的当前位置和是否被移除
         let mut current_positions: Vec<(i16, i16, bool)> = self
@@ -465,44 +465,44 @@ fn create_default_blocks() -> Vec<Block> {
             y: 2,
             link: Vec::new(),
         },
-        // Block {
-        //     id: 6,
-        //     shape: SHAPE_IDX[3] as u8, 
-        //     color: 5,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 1,
-        //     y: 3,
-        //     // link: vec![6, 8],
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 7,
-        //     shape: SHAPE_IDX[5] as u8, 
-        //     color: 3,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 1,
-        //     y: 4,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 8,
-        //     shape: SHAPE_IDX[7] as u8, 
-        //     color: 4,                  
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 3,
-        //     y: 4,
-        //     link: Vec::new(),
-        //     // link: vec![6, 8],
-        // },
+        Block {
+            id: 6,
+            shape: SHAPE_IDX[3] as u8, 
+            color: 5,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 1,
+            y: 3,
+            // link: vec![6, 8],
+            link: Vec::new(),
+        },
+        Block {
+            id: 7,
+            shape: SHAPE_IDX[5] as u8, 
+            color: 3,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 1,
+            y: 4,
+            link: Vec::new(),
+        },
+        Block {
+            id: 8,
+            shape: SHAPE_IDX[7] as u8, 
+            color: 4,                  
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 3,
+            y: 4,
+            link: Vec::new(),
+            // link: vec![6, 8],
+        },
     ]
 }
 

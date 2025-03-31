@@ -1,18 +1,17 @@
-use crate::shape::SHAPE_IDX;
 use crate::*;
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 
 /// 状态只包含 blocks，用于状态去重；history 用于记录路径，但不参与状态比较
 #[derive(Clone, Debug)]
 struct State {
     blocks: Vec<Block>,
-    // 每一步记录 (block id, move, steps)，Some(direction) 表示移动或退出，steps 表示连续移动步数
+    // 每一步记录 (block id, move, steps)
+    // Some(direction) 表示移动或退出，
+    // steps 表示连续移动步数
     history: Vec<(u8, Option<Direction>, u8)>,
 }
 
@@ -34,8 +33,8 @@ fn is_goal(state: &State) -> bool {
     state.blocks.is_empty()
 }
 
-/// 扩展当前状态，尝试所有可能的移动和退出操作（并行版）
-fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
+/// 扩展当前状态，尝试所有可能的移动和退出操作
+fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
     let mut next_states = Vec::new();
 
     // 1. 退出操作：对每个块判断是否能退出
@@ -51,123 +50,55 @@ fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
             new_history.push((block.id, None, 0)); // None 表示退出
 
             // 发现可以移除的方块，直接返回这个状态
-            return vec![State {
-                blocks: new_blocks,
-                history: new_history,
-            }];
+            return (
+                true,
+                vec![State {
+                    blocks: new_blocks,
+                    history: new_history,
+                }],
+            );
         }
     }
-
-    // 没有找到可以退出的方块，继续处理移动操作
 
     // 2. 移动操作：分为单个块移动和组合块移动
     // 2.1 先处理单个块移动
-    let single_block_move_states: Vec<State> = state
+    let mut single_block_move_states = Vec::new();
+
+    // 替换 flat_map 为普通循环
+    for (_, block) in state
         .blocks
-        .par_iter()
+        .iter()
         .enumerate()
-        .filter(|(_, block)| block.link.is_empty()) // 只处理非组块
-        .flat_map(|(_, block)| {
-            let mut block_states = Vec::new();
-
-            for &dir in &[
-                Direction::Up,
-                Direction::Down,
-                Direction::Left,
-                Direction::Right,
-            ] {
-                // 从当前状态克隆一个临时状态进行连续移动
-                let mut temp_state = state.clone();
-                // 获取当前块在临时状态中的索引
-                if let Some(temp_idx) = temp_state.blocks.iter().position(|b| b.id == block.id) {
-                    let mut moves_count = 0;
-
-                    // 循环尝试移动，直到无法继续移动
-                    loop {
-                        let mut sim_board = layout_to_board(&temp_state.blocks, stage);
-
-                        // 尝试将块移动一步
-                        if move_entire_block(
-                            &mut sim_board,
-                            &mut temp_state.blocks[temp_idx],
-                            dir,
-                            stage,
-                        ) {
-                            moves_count += 1;
-
-                            // 添加这个移动步骤到历史记录
-                            let mut new_history = temp_state.history.clone();
-                            new_history.push((block.id, Some(dir), moves_count));
-
-                            // 创建移动后的新状态
-                            let new_state = State {
-                                blocks: temp_state.blocks.clone(),
-                                history: new_history,
-                            };
-
-                            // 移动后检查是否有方块可以退出
-                            for moved_block in &new_state.blocks {
-                                if moved_block.lock == 1 && moved_block.key == 0 {
-                                    continue;
-                                }
-
-                                if let Some(_) = can_exit(moved_block, &stage.gates) {
-                                    // 如果移动后有方块可以退出，直接返回这个状态
-                                    return vec![new_state];
-                                }
-                            }
-
-                            // 将新状态添加到扩展列表
-                            block_states.push(new_state);
-                        } else {
-                            // 无法再移动，退出循环
-                            break;
-                        }
-                    }
-                }
-            }
-
-            block_states
-        })
-        .collect();
-
-    next_states.extend(single_block_move_states);
-
-    // 2.2 处理组合块移动
-    // 找出所有的组
-    let mut groups = HashSet::new();
-    for block in &state.blocks {
-        if !block.link.is_empty() {
-            groups.insert(block.link.clone());
-        }
-    }
-
-    let group_move_states: Vec<State> = groups
-        .par_iter()
-        .flat_map(|group| {
-            let mut group_states = Vec::new();
-
-            for &dir in &[
-                Direction::Up,
-                Direction::Down,
-                Direction::Left,
-                Direction::Right,
-            ] {
-                // 从当前状态克隆一个临时状态进行连续移动
-                let mut temp_state = state.clone();
+        .filter(|(_, block)| block.link.is_empty())
+    {
+        for &dir in &[
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            // 从当前状态克隆一个临时状态进行连续移动
+            let mut temp_state = state.clone();
+            // 获取当前块在临时状态中的索引
+            if let Some(temp_idx) = temp_state.blocks.iter().position(|b| b.id == block.id) {
                 let mut moves_count = 0;
 
                 // 循环尝试移动，直到无法继续移动
                 loop {
                     let mut sim_board = layout_to_board(&temp_state.blocks, stage);
 
-                    // 尝试移动整个组
-                    if move_group(&mut sim_board, &mut temp_state.blocks, group, dir, stage) {
+                    // 尝试将块移动一步
+                    if move_entire_block(
+                        &mut sim_board,
+                        &mut temp_state.blocks[temp_idx],
+                        dir,
+                        stage,
+                    ) {
                         moves_count += 1;
 
                         // 添加这个移动步骤到历史记录
                         let mut new_history = temp_state.history.clone();
-                        new_history.push((group[0], Some(dir), moves_count));
+                        new_history.push((block.id, Some(dir), moves_count));
 
                         // 创建移动后的新状态
                         let new_state = State {
@@ -183,32 +114,95 @@ fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
 
                             if let Some(_) = can_exit(moved_block, &stage.gates) {
                                 // 如果移动后有方块可以退出，直接返回这个状态
-                                return vec![new_state];
+                                return (true, vec![new_state]);
                             }
                         }
 
                         // 将新状态添加到扩展列表
-                        group_states.push(new_state);
+                        single_block_move_states.push(new_state);
                     } else {
                         // 无法再移动，退出循环
                         break;
                     }
                 }
             }
+        }
+    }
 
-            group_states
-        })
-        .collect();
+    next_states.extend(single_block_move_states);
+
+    // 2.2 处理组合块移动
+    // 找出所有的组
+    let mut groups = HashSet::new();
+    for block in &state.blocks {
+        if !block.link.is_empty() {
+            groups.insert(block.link.clone());
+        }
+    }
+
+    let mut group_move_states = Vec::new();
+
+    // 替换 flat_map 为普通循环
+    for group in &groups {
+        for &dir in &[
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            // 从当前状态克隆一个临时状态进行连续移动
+            let mut temp_state = state.clone();
+            let mut moves_count = 0;
+
+            // 循环尝试移动，直到无法继续移动
+            loop {
+                let mut sim_board = layout_to_board(&temp_state.blocks, stage);
+
+                // 尝试移动整个组
+                if move_group(&mut sim_board, &mut temp_state.blocks, group, dir, stage) {
+                    moves_count += 1;
+
+                    // 添加这个移动步骤到历史记录
+                    let mut new_history = temp_state.history.clone();
+                    new_history.push((group[0], Some(dir), moves_count));
+
+                    // 创建移动后的新状态
+                    let new_state = State {
+                        blocks: temp_state.blocks.clone(),
+                        history: new_history,
+                    };
+
+                    // 移动后检查是否有方块可以退出
+                    for moved_block in &new_state.blocks {
+                        if moved_block.lock == 1 && moved_block.key == 0 {
+                            continue;
+                        }
+
+                        if let Some(_) = can_exit(moved_block, &stage.gates) {
+                            // 如果移动后有方块可以退出，直接返回这个状态
+                            return (true, vec![new_state]);
+                        }
+                    }
+
+                    // 将新状态添加到扩展列表
+                    group_move_states.push(new_state);
+                } else {
+                    // 无法再移动，退出循环
+                    break;
+                }
+            }
+        }
+    }
 
     next_states.extend(group_move_states);
 
-    next_states
+    (false, next_states)
 }
 
 /// 广度优先搜索求解（支持并行和串行）
 fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) -> Option<State> {
     // 首先检查初始状态是否可以移除任何方块，如果可以，则以移除后的状态为起点
-    let mut initial_state = State {
+    let initial_state = State {
         blocks: initial_blocks,
         history: Vec::new(),
     };
@@ -216,7 +210,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
     let visited = Arc::new(Mutex::new(HashSet::new()));
     let queue = Arc::new(Mutex::new(VecDeque::new()));
     let solution: Arc<Mutex<Option<State>>> = Arc::new(Mutex::new(None));
-    let steps = Arc::new(Mutex::new(0));
+    // let steps = Arc::new(Mutex::new(0));
 
     // 标志是否需要重新开始搜索
     let restart_search = Arc::new(Mutex::new(false));
@@ -255,7 +249,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
             if *restart {
                 // 重置重启标志
                 *restart = false;
-                
+
                 // 获取新的起点
                 let mut new_start = next_start_state.lock().unwrap();
                 if let Some(state) = new_start.take() {
@@ -265,8 +259,8 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
                         q.clear();
                         q.push_back(state);
                     }
-                    
-                    println!("重新开始搜索，从新的起点状态出发");
+
+                    // println!("重新开始搜索，从新的起点状态出发");
                     continue;
                 }
             }
@@ -294,57 +288,54 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
         }
 
         // 更新处理的步数
-        {
-            let mut s = steps.lock().unwrap();
-            *s += states_to_process.len();
+        // {
+        //     let mut s = steps.lock().unwrap();
+        //     *s += states_to_process.len();
 
-            if *s % 11 == 0 {
-                let q = queue.lock().unwrap();
-                println!("搜索中... 已探索 {} 个状态，队列中 {} 个状态", *s, q.len());
-            }
-        }
+        //     if *s % 11 == 0 {
+        //         let q = queue.lock().unwrap();
+        //         // println!("搜索中... 已探索 {} 个状态，队列中 {} 个状态", *s, q.len());
+        //     }
+        // }
 
         // 并行处理状态
         let next_states = if use_parallel {
             states_to_process
                 .par_iter()
                 .flat_map(|state| {
-                    let expanded = expand(state, stage);
-                    
-                    // 检查是否有状态包含可移除的方块
-                    for expanded_state in &expanded {
-                        for block in &expanded_state.blocks {
-                            if block.lock == 1 && block.key == 0 {
-                                continue;
-                            }
+                    let (hasrm, expanded) = expand(state, stage);
 
-                            if let Some(_) = can_exit(block, &stage.gates) {
-                                // 找到可移除方块的状态，设置为新起点
-                                {
-                                    let mut restart = restart_search.lock().unwrap();
-                                    *restart = true;
-                                    
-                                    let mut new_start = next_start_state.lock().unwrap();
-                                    *new_start = Some(expanded_state.clone());
-                                    
-                                    println!("找到可移除方块的状态，将作为新起点");
-                                }
-                                
-                                // 只返回这个状态，放弃其他状态
-                                return vec![expanded_state.clone()];
-                            }
+                    // 检查是否有状态包含可移除的方块
+                    if hasrm {
+                        // 检查是否达到目标
+                        if is_goal(&expanded[0]) {
+                            return expanded;
+                        }
+                        // 找到可移除方块的状态，设置为新起点
+                        {
+                            let mut restart = restart_search.lock().unwrap();
+                            *restart = true;
+
+                            let mut new_start = next_start_state.lock().unwrap();
+                            *new_start = Some(expanded[0].clone());
+
+                            // println!(
+                            //     "找到可移除方块的状态，将作为新起点{} {:?}",
+                            //     hasrm,
+                            //     expanded.len(),
+                            // );
                         }
                     }
-                    
+
                     expanded
                 })
                 .collect::<Vec<_>>()
         } else {
             let mut all_next_states = Vec::new();
-            
+
             for state in &states_to_process {
-                let expanded = expand(state, stage);
-                
+                let (_hasrm, expanded) = expand(state, stage);
+
                 // 检查是否有状态包含可移除的方块
                 let mut found_removable = false;
                 for expanded_state in &expanded {
@@ -358,30 +349,33 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
                             {
                                 let mut restart = restart_search.lock().unwrap();
                                 *restart = true;
-                                
+
                                 let mut new_start = next_start_state.lock().unwrap();
                                 *new_start = Some(expanded_state.clone());
-                                
-                                println!("找到可移除方块的状态，将作为新起点");
+
+                                // println!(
+                                //     "找到可移除方块的状态，将作为新起点{} {:?}",
+                                //     hasrm, expanded
+                                // );
                             }
-                            
+
                             // 只添加这个状态，放弃其他状态
                             all_next_states.push(expanded_state.clone());
                             found_removable = true;
                             break;
                         }
                     }
-                    
+
                     if found_removable {
                         break;
                     }
                 }
-                
+
                 if !found_removable {
                     all_next_states.extend(expanded);
                 }
             }
-            
+
             all_next_states
         };
 
@@ -436,7 +430,7 @@ pub fn solve_main(stage: &ColorBlkStage) -> Option<Vec<(u8, Option<Direction>, u
     match solve(stage.blocks.clone(), &stage, true) {
         Some(solution) => {
             println!("solve ok!!!{:?}", solution);
-                Some(solution.history)
+            Some(solution.history)
         }
         None => {
             println!("no solution found");

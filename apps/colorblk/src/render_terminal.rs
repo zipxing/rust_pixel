@@ -29,11 +29,7 @@ const COLORS: [Color; 8] = [
 ];
 
 // 方块符号
-const BLOCK_SYMS: [&str; 6] = ["█", "█", "█", "█", "█", "█"];
-const GATE_SYMS: &str = "═";
 const GRID_SYMS: &str = "·";
-
-const RESET: &str = "\x1b[0m";
 
 pub struct ColorblkRender {
     pub panel: Panel,
@@ -130,16 +126,16 @@ impl ColorblkRender {
         }
     }
 
-    pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
-        let msg = if let Some(solution) = &data.solution {
-            format!("Step: {}/{}", data.current_step, solution.len())
-        } else {
-            "No solution found".to_string()
-        };
+    // pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
+    //     let msg = if let Some(solution) = &data.solution {
+    //         format!("Step: {}/{}", data.current_step, solution.len())
+    //     } else {
+    //         "No solution found".to_string()
+    //     };
 
-        let l = self.panel.get_sprite("msg");
-        l.set_color_str(0, 0, &msg, Color::White, Color::Reset);
-    }
+    //     let l = self.panel.get_sprite("msg");
+    //     l.set_color_str(0, 0, &msg, Color::White, Color::Reset);
+    // }
 
     // pub fn draw_moving(&mut self, ctx: &mut Context, d: &mut ColorblkModel, per: f32) {
     //     // 绘制网格
