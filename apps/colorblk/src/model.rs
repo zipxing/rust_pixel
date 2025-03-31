@@ -57,14 +57,14 @@ pub struct ColorblkModel {
 impl ColorblkModel {
     pub fn new() -> Self {
         // let stage = ColorBlkStage::new(5, 6); // 默认使用5x6的棋盘
-        let stage = ColorBlkStage::new(6, 6); // 默认使用5x6的棋盘
+        let stage = ColorBlkStage::new(4, 7); // 默认使用5x6的棋盘
         Self {
             count: 0,
             stage,
             solution: None,
             current_step: 0,
             // render_state: vec![(0, -1, ""); (5 * 6)], // 默认大小
-            render_state: vec![(0, -1, ""); 6 * 6], // 默认大小
+            render_state: vec![(0, -1, ""); 4 * 7], // 默认大小
         }
     }
 
@@ -236,274 +236,310 @@ impl Model for ColorblkModel {
 
 /// 创建默认的门
 fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
-    // vec![
-    //     // 上方门(红色)
-    //     Gate {
-    //         x: 0,
-    //         y: 0,
-    //         color: 1,
-    //         width: 2,
-    //         height: 0,
-    //         switch: true, // 默认开启状态
-    //     },
-    //     // 上方门(红色)
-    //     Gate {
-    //         x: 3,
-    //         y: 0,
-    //         color: 2,
-    //         width: 2,
-    //         height: 0,
-    //         switch: true, // 默认开启状态
-    //     },
-    //     // 下方门(蓝色)
-    //     Gate {
-    //         x: 1,
-    //         y: (stage.board_height - 1) as u8,
-    //         color: 3,
-    //         width: 3,
-    //         height: 0,
-    //         switch: true, // 默认开启状态
-    //     },
-    //     // 右方门(绿色)
-    //     Gate {
-    //         x: (stage.board_width - 1) as u8,
-    //         y: 4,
-    //         color: 4,
-    //         width: 0,
-    //         height: 2,
-    //         switch: true, // 默认开启状态
-    //     },
-    //     // 左方门(黄色)
-    //     Gate {
-    //         x: 0,
-    //         y: 4,
-    //         color: 5,
-    //         width: 0,
-    //         height: 2,
-    //         switch: true, // 默认开启状态
-    //     },
-    // ]
     vec![
         // 上方门(1色)
         Gate {
-            x: 0,
+            x: 2,
             y: 0,
             color: 1,
-            width: 3,
+            width: 1,
             height: 0,
             switch: true, // 默认开启状态
         },
-        // 上方门(2色)
+        // 下方门(2色)
         Gate {
-            x: 3,
-            y: 0,
+            x: 2,
+            y: (stage.board_height - 1) as u8,
             color: 2,
-            width: 3,
+            width: 1,
             height: 0,
             switch: true, // 默认开启状态
         },
-        // 下方门(3色)
+        // 左方门(3色)
         Gate {
             x: 0,
-            y: (stage.board_height - 1) as u8,
+            y: 0,
             color: 3,
-            width: 2,
-            height: 0,
+            width: 0,
+            height: 1,
             switch: true, // 默认开启状态
         },
-        // 下方门(4色)
+        // 左方门(4色)
         Gate {
-            x: 4,
-            y: (stage.board_height - 1) as u8,
+            x: 0,
+            y: 3,
             color: 4,
-            width: 2,
-            height: 0,
+            width: 0,
+            height: 2,
             switch: true, // 默认开启状态
         },
-        // 左方门(5色)
+        // 右方门(5色)
         Gate {
-            x: 0, 
-            y: 2,
+            x: (stage.board_width - 1) as u8,
+            y: 3,
             color: 5,
             width: 0,
             height: 2,
             switch: true, // 默认开启状态
         },
-        // 右方门(6色)
-        Gate {
-            x: (stage.board_width - 1) as u8,
-            y: 2,
-            color: 6,
-            width: 0,
-            height: 2,
-            switch: true, // 默认开启状态
-        },
-     ]
+    ]
+    // vec![
+    //     // 上方门(1色)
+    //     Gate {
+    //         x: 0,
+    //         y: 0,
+    //         color: 1,
+    //         width: 3,
+    //         height: 0,
+    //         switch: true, // 默认开启状态
+    //     },
+    //     // 上方门(2色)
+    //     Gate {
+    //         x: 3,
+    //         y: 0,
+    //         color: 2,
+    //         width: 3,
+    //         height: 0,
+    //         switch: true, // 默认开启状态
+    //     },
+    //     // 下方门(3色)
+    //     Gate {
+    //         x: 0,
+    //         y: (stage.board_height - 1) as u8,
+    //         color: 3,
+    //         width: 2,
+    //         height: 0,
+    //         switch: true, // 默认开启状态
+    //     },
+    //     // 下方门(4色)
+    //     Gate {
+    //         x: 4,
+    //         y: (stage.board_height - 1) as u8,
+    //         color: 4,
+    //         width: 2,
+    //         height: 0,
+    //         switch: true, // 默认开启状态
+    //     },
+    //     // 左方门(5色)
+    //     Gate {
+    //         x: 0,
+    //         y: 2,
+    //         color: 5,
+    //         width: 0,
+    //         height: 2,
+    //         switch: true, // 默认开启状态
+    //     },
+    //     // 右方门(6色)
+    //     Gate {
+    //         x: (stage.board_width - 1) as u8,
+    //         y: 2,
+    //         color: 6,
+    //         width: 0,
+    //         height: 2,
+    //         switch: true, // 默认开启状态
+    //     },
+    //  ]
 }
 
 fn create_default_blocks() -> Vec<Block> {
-    // vec![
-    //     Block {
-    //         id: 1,
-    //         shape: SHAPE_IDX[9] as u8, // 单个方块
-    //         color: 1,                  // 红色，对应上方门
-    //         color2: 0,
-    //         ice: 0,
-    //         key: 0,
-    //         lock: 0,
-    //         x: 3,
-    //         y: 2,
-    //         link: Vec::new(),
-    //     },
-    //     Block {
-    //         id: 2,
-    //         shape: SHAPE_IDX[9] as u8, // 横向两个方块
-    //         color: 2,                  // 蓝色，对应下方门
-    //         color2: 0,
-    //         ice: 0,
-    //         key: 0,
-    //         lock: 0,
-    //         x: 0,
-    //         y: 2,
-    //         link: Vec::new(),
-    //     },
-    //     Block {
-    //         id: 3,
-    //         shape: SHAPE_IDX[4] as u8, // 纵向两个方块
-    //         color: 3,                  // 绿色，对应右方门
-    //         color2: 0,
-    //         ice: 0,
-    //         key: 0,
-    //         lock: 0,
-    //         x: 2,
-    //         y: 0,
-    //         link: Vec::new(),
-    //     },
-    //     Block {
-    //         id: 4,
-    //         shape: SHAPE_IDX[3] as u8, // 纵向两个方块
-    //         color: 4,                  // 绿色，对应右方门
-    //         color2: 0,
-    //         ice: 0,
-    //         key: 0,
-    //         lock: 0,
-    //         x: 1,
-    //         y: 5,
-    //         link: Vec::new(),
-    //     },
-    //     Block {
-    //         id: 5,
-    //         shape: SHAPE_IDX[3] as u8, // 纵向两个方块
-    //         color: 5,                  // 绿色，对应右方门
-    //         color2: 0,
-    //         ice: 0,
-    //         key: 0,
-    //         lock: 0,
-    //         x: 1,
-    //         y: 4,
-    //         link: Vec::new(),
-    //     },
-    // ]
     vec![
         Block {
             id: 1,
-            shape: SHAPE_IDX[3] as u8, // 单个方块
+            shape: SHAPE_IDX[0] as u8, // 单个方块
             color: 2,                  // 红色，对应上方门
             color2: 0,
             ice: 0,
             key: 0,
             lock: 0,
-            x: 0,
-            y: 1,
+            x: 1,
+            y: 0,
             link: Vec::new(),
         },
         Block {
             id: 2,
-            shape: SHAPE_IDX[3] as u8, // 横向两个方块
-            color: 1,                  // 蓝色，对应下方门
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 3,
-            y: 1,
-            link: Vec::new(),
-        },
-        Block {
-            id: 3,
-            shape: SHAPE_IDX[2] as u8, // 纵向两个方块
-            color: 4,                  // 绿色，对应右方门
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 0,
-            y: 2,
-            link: Vec::new(),
-        },
-        Block {
-            id: 4,
-            shape: SHAPE_IDX[3] as u8, // 纵向两个方块
-            color: 6,                  // 绿色，对应右方门
+            shape: SHAPE_IDX[9] as u8, // 横向两个方块
+            color: 4,                  // 蓝色，对应下方门
             color2: 0,
             ice: 0,
             key: 0,
             lock: 0,
             x: 2,
+            y: 0,
+            link: Vec::new(),
+        },
+        Block {
+            id: 3,
+            shape: SHAPE_IDX[2] as u8, // 纵向两个方块
+            color: 3,                  // 绿色，对应右方门
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 0,
+            y: 1,
+            link: Vec::new(),
+        },
+        Block {
+            id: 4,
+            shape: SHAPE_IDX[0] as u8, // 纵向两个方块
+            color: 2,                  // 绿色，对应右方门
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 3,
             y: 2,
             link: Vec::new(),
         },
         Block {
             id: 5,
-            shape: SHAPE_IDX[2] as u8, 
-            color: 3,                  
+            shape: SHAPE_IDX[0] as u8,
+            color: 3,
             color2: 0,
             ice: 0,
             key: 0,
             lock: 0,
-            x: 5,
-            y: 2,
+            x: 0,
+            y: 3,
             link: Vec::new(),
         },
         Block {
             id: 6,
-            shape: SHAPE_IDX[3] as u8, 
-            color: 5,                  
+            shape: SHAPE_IDX[1] as u8,
+            color: 5,
             color2: 0,
             ice: 0,
             key: 0,
             lock: 0,
             x: 1,
             y: 3,
-            // link: vec![6, 8],
-            link: Vec::new(),
+            link: vec![6, 8],
+            // link: Vec::new(),
         },
         Block {
             id: 7,
-            shape: SHAPE_IDX[5] as u8, 
-            color: 3,                  
-            color2: 0,
-            ice: 0,
-            key: 0,
-            lock: 0,
-            x: 1,
-            y: 4,
-            link: Vec::new(),
-        },
-        Block {
-            id: 8,
-            shape: SHAPE_IDX[7] as u8, 
-            color: 4,                  
+            shape: SHAPE_IDX[2] as u8,
+            color: 4,
             color2: 0,
             ice: 0,
             key: 0,
             lock: 0,
             x: 3,
-            y: 4,
+            y: 3,
             link: Vec::new(),
-            // link: vec![6, 8],
+        },
+        Block {
+            id: 8,
+            shape: SHAPE_IDX[0] as u8,
+            color: 1,
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 2,
+            y: 4,
+            // link: Vec::new(),
+            link: vec![6, 8],
         },
     ]
+    // vec![
+    //     Block {
+    //         id: 1,
+    //         shape: SHAPE_IDX[3] as u8, // 单个方块
+    //         color: 2,                  // 红色，对应上方门
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 0,
+    //         y: 1,
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 2,
+    //         shape: SHAPE_IDX[3] as u8, // 横向两个方块
+    //         color: 1,                  // 蓝色，对应下方门
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 3,
+    //         y: 1,
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 3,
+    //         shape: SHAPE_IDX[2] as u8, // 纵向两个方块
+    //         color: 4,                  // 绿色，对应右方门
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 0,
+    //         y: 2,
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 4,
+    //         shape: SHAPE_IDX[3] as u8, // 纵向两个方块
+    //         color: 6,                  // 绿色，对应右方门
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 2,
+    //         y: 2,
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 5,
+    //         shape: SHAPE_IDX[2] as u8,
+    //         color: 3,
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 5,
+    //         y: 2,
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 6,
+    //         shape: SHAPE_IDX[3] as u8,
+    //         color: 5,
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 1,
+    //         y: 3,
+    //         // link: vec![6, 8],
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 7,
+    //         shape: SHAPE_IDX[5] as u8,
+    //         color: 3,
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 1,
+    //         y: 4,
+    //         link: Vec::new(),
+    //     },
+    //     Block {
+    //         id: 8,
+    //         shape: SHAPE_IDX[7] as u8,
+    //         color: 4,
+    //         color2: 0,
+    //         ice: 0,
+    //         key: 0,
+    //         lock: 0,
+    //         x: 3,
+    //         y: 4,
+    //         link: Vec::new(),
+    //         // link: vec![6, 8],
+    //     },
+    // ]
 }
-
-
