@@ -216,20 +216,12 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
 
         // 如果找到了可以移除的方块，则移除它
         if let Some(block_id) = block_to_remove {
-            // 在移除前获取方块颜色
-            let block_color = initial_state
-                .blocks
-                .iter()
-                .find(|b| b.id == block_id)
-                .map(|b| b.color)
-                .unwrap_or(0);
-
             let new_blocks = remove_block_and_update_links(&initial_state.blocks, block_id);
             initial_state.history.push((block_id, None, 0)); // None 表示退出
             initial_state.blocks = new_blocks;
             has_removable_blocks = true;
 
-            println!("预处理：移除方块 {}({})", block_id, block_color);
+            println!("预处理：移除方块 {}", block_id);
         }
     }
 
