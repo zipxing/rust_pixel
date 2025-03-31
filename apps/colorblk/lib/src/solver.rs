@@ -39,32 +39,26 @@ fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
     let mut next_states = Vec::new();
 
     // 1. 退出操作：对每个块判断是否能退出
-    let exit_states: Vec<State> = state
-        .blocks
-        .par_iter()
-        .enumerate()
-        .filter_map(|(_, block)| {
-            // 如果块被锁定且没有钥匙，则不能退出
-            if block.lock == 1 && block.key == 0 {
-                return None;
-            }
+    for block in &state.blocks {
+        // 如果块被锁定且没有钥匙，则不能退出
+        if block.lock == 1 && block.key == 0 {
+            continue;
+        }
 
-            if let Some(_dir) = can_exit(block, &stage.gates) {
-                let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
-                let mut new_history = state.history.clone();
-                new_history.push((block.id, None, 0)); // None 表示退出
+        if let Some(_dir) = can_exit(block, &stage.gates) {
+            let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
+            let mut new_history = state.history.clone();
+            new_history.push((block.id, None, 0)); // None 表示退出
 
-                Some(State {
-                    blocks: new_blocks,
-                    history: new_history,
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
+            // 发现可以移除的方块，直接返回这个状态
+            return vec![State {
+                blocks: new_blocks,
+                history: new_history,
+            }];
+        }
+    }
 
-    next_states.extend(exit_states);
+    // 没有找到可以退出的方块，继续处理移动操作
 
     // 2. 移动操作：分为单个块移动和组合块移动
     // 2.1 先处理单个块移动
@@ -110,6 +104,18 @@ fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
                                 blocks: temp_state.blocks.clone(),
                                 history: new_history,
                             };
+
+                            // 移动后检查是否有方块可以退出
+                            for moved_block in &new_state.blocks {
+                                if moved_block.lock == 1 && moved_block.key == 0 {
+                                    continue;
+                                }
+
+                                if let Some(_) = can_exit(moved_block, &stage.gates) {
+                                    // 如果移动后有方块可以退出，直接返回这个状态
+                                    return vec![new_state];
+                                }
+                            }
 
                             // 将新状态添加到扩展列表
                             block_states.push(new_state);
@@ -169,6 +175,18 @@ fn expand(state: &State, stage: &ColorBlkStage) -> Vec<State> {
                             history: new_history,
                         };
 
+                        // 移动后检查是否有方块可以退出
+                        for moved_block in &new_state.blocks {
+                            if moved_block.lock == 1 && moved_block.key == 0 {
+                                continue;
+                            }
+
+                            if let Some(_) = can_exit(moved_block, &stage.gates) {
+                                // 如果移动后有方块可以退出，直接返回这个状态
+                                return vec![new_state];
+                            }
+                        }
+
                         // 将新状态添加到扩展列表
                         group_states.push(new_state);
                     } else {
@@ -195,40 +213,15 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
         history: Vec::new(),
     };
 
-    // 尝试移除初始状态中可以移除的方块
-    let mut has_removable_blocks = true;
-    while has_removable_blocks {
-        has_removable_blocks = false;
-
-        // 检查是否有方块可以移除
-        let mut block_to_remove = None;
-        for block in &initial_state.blocks {
-            // 如果块被锁定且没有钥匙，则不能退出
-            if block.lock == 1 && block.key == 0 {
-                continue;
-            }
-
-            if let Some(_dir) = can_exit(block, &stage.gates) {
-                block_to_remove = Some(block.id);
-                break; // 一次只移除一个方块，然后重新检查
-            }
-        }
-
-        // 如果找到了可以移除的方块，则移除它
-        if let Some(block_id) = block_to_remove {
-            let new_blocks = remove_block_and_update_links(&initial_state.blocks, block_id);
-            initial_state.history.push((block_id, None, 0)); // None 表示退出
-            initial_state.blocks = new_blocks;
-            has_removable_blocks = true;
-
-            println!("预处理：移除方块 {}", block_id);
-        }
-    }
-
     let visited = Arc::new(Mutex::new(HashSet::new()));
     let queue = Arc::new(Mutex::new(VecDeque::new()));
     let solution: Arc<Mutex<Option<State>>> = Arc::new(Mutex::new(None));
     let steps = Arc::new(Mutex::new(0));
+
+    // 标志是否需要重新开始搜索
+    let restart_search = Arc::new(Mutex::new(false));
+    // 保存需要作为起点的状态
+    let next_start_state = Arc::new(Mutex::new(None::<State>));
 
     // 添加初始状态
     {
@@ -256,8 +249,31 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
     }
 
     loop {
+        // 检查是否需要重新开始搜索
+        {
+            let mut restart = restart_search.lock().unwrap();
+            if *restart {
+                // 重置重启标志
+                *restart = false;
+                
+                // 获取新的起点
+                let mut new_start = next_start_state.lock().unwrap();
+                if let Some(state) = new_start.take() {
+                    // 清空队列
+                    {
+                        let mut q = queue.lock().unwrap();
+                        q.clear();
+                        q.push_back(state);
+                    }
+                    
+                    println!("重新开始搜索，从新的起点状态出发");
+                    continue;
+                }
+            }
+        }
+
         // 从队列中获取一批状态进行处理
-        let mut states_to_process = {
+        let states_to_process = {
             let mut q = queue.lock().unwrap();
             let mut batch = Vec::new();
 
@@ -288,67 +304,95 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
             }
         }
 
-        // 优先处理能够移除方块的状态
-        // 对于每个状态，检查是否可以移除方块
-        for state_idx in 0..states_to_process.len() {
-            let state = &mut states_to_process[state_idx];
-            let mut has_removable_block = false;
-
-            for (i, block) in state.blocks.iter().enumerate() {
-                // 如果块被锁定且没有钥匙，则不能退出
-                if block.lock == 1 && block.key == 0 {
-                    continue;
-                }
-
-                if let Some(_dir) = can_exit(block, &stage.gates) {
-                    let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
-                    let mut new_history = state.history.clone();
-                    new_history.push((block.id, None, 0)); // None 表示退出
-
-                    *state = State {
-                        blocks: new_blocks,
-                        history: new_history,
-                    };
-
-                    has_removable_block = true;
-                    break; // 一次只移除一个方块，然后处理下一个状态
-                }
-            }
-
-            // 如果有方块被移除，检查该状态是否已访问过
-            if has_removable_block {
-                let mut v = visited.lock().unwrap();
-                if v.contains(state) {
-                    // 如果已访问过，标记为需要移除
-                    state.blocks.clear(); // 清空表示需要移除
-                } else {
-                    v.insert(state.clone());
-
-                    // 检查是否达到目标
-                    if is_goal(state) {
-                        let mut s = solution.lock().unwrap();
-                        *s = Some(state.clone());
-                        return Some(state.clone());
-                    }
-                }
-            }
-        }
-
-        // 移除已经处理过的状态
-        states_to_process.retain(|state| !state.blocks.is_empty());
-
         // 并行处理状态
         let next_states = if use_parallel {
             states_to_process
                 .par_iter()
-                .flat_map(|state| expand(state, stage))
+                .flat_map(|state| {
+                    let expanded = expand(state, stage);
+                    
+                    // 检查是否有状态包含可移除的方块
+                    for expanded_state in &expanded {
+                        for block in &expanded_state.blocks {
+                            if block.lock == 1 && block.key == 0 {
+                                continue;
+                            }
+
+                            if let Some(_) = can_exit(block, &stage.gates) {
+                                // 找到可移除方块的状态，设置为新起点
+                                {
+                                    let mut restart = restart_search.lock().unwrap();
+                                    *restart = true;
+                                    
+                                    let mut new_start = next_start_state.lock().unwrap();
+                                    *new_start = Some(expanded_state.clone());
+                                    
+                                    println!("找到可移除方块的状态，将作为新起点");
+                                }
+                                
+                                // 只返回这个状态，放弃其他状态
+                                return vec![expanded_state.clone()];
+                            }
+                        }
+                    }
+                    
+                    expanded
+                })
                 .collect::<Vec<_>>()
         } else {
-            states_to_process
-                .iter()
-                .flat_map(|state| expand(state, stage))
-                .collect()
+            let mut all_next_states = Vec::new();
+            
+            for state in &states_to_process {
+                let expanded = expand(state, stage);
+                
+                // 检查是否有状态包含可移除的方块
+                let mut found_removable = false;
+                for expanded_state in &expanded {
+                    for block in &expanded_state.blocks {
+                        if block.lock == 1 && block.key == 0 {
+                            continue;
+                        }
+
+                        if let Some(_) = can_exit(block, &stage.gates) {
+                            // 找到可移除方块的状态，设置为新起点
+                            {
+                                let mut restart = restart_search.lock().unwrap();
+                                *restart = true;
+                                
+                                let mut new_start = next_start_state.lock().unwrap();
+                                *new_start = Some(expanded_state.clone());
+                                
+                                println!("找到可移除方块的状态，将作为新起点");
+                            }
+                            
+                            // 只添加这个状态，放弃其他状态
+                            all_next_states.push(expanded_state.clone());
+                            found_removable = true;
+                            break;
+                        }
+                    }
+                    
+                    if found_removable {
+                        break;
+                    }
+                }
+                
+                if !found_removable {
+                    all_next_states.extend(expanded);
+                }
+            }
+            
+            all_next_states
         };
+
+        // 检查是否需要重新开始搜索
+        {
+            let restart = restart_search.lock().unwrap();
+            if *restart {
+                // 跳过处理新状态，直接进入下一轮循环
+                continue;
+            }
+        }
 
         // 处理新状态
         for state in next_states {
