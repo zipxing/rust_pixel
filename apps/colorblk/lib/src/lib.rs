@@ -62,6 +62,7 @@ pub struct Gate {
     pub x: u8, // 对于上/下门：x ∈ [0, BOARD_WIDTH - gate.width]
     pub y: u8, // 对于左/右门：y ∈ [0, BOARD_HEIGHT - gate.height]
     pub color: u8,
+    pub star: u8, // 是否star
     pub width: u8,    // 上/下门的宽度 ∈ [1,3]；左/右门的宽度应为 0
     pub height: u8,   // 左/右门的高度 ∈ [1,3]；上/下门的高度应为 0
     pub switch: bool, // 门的开关状态，默认为 true（开启状态）
@@ -83,11 +84,15 @@ pub struct Block {
     pub shape: u8,     // 块使用的形状索引（取值范围：0..SHAPE.len()-1）
     pub color: u8,     // 主颜色
     pub color2: u8,    // 边缘颜色
+    pub star: u8,    // 是否star
+    pub dir: u8,       // 0: 自由，1: 只能横向，2: 只能纵向
     pub ice: u8,       // 冰层厚度（0 表示无冰）
     pub key: u8,       // 是否有钥匙（0 或 1）
     pub lock: u8,      // 是否上锁（0 或 1）
-    pub x: u8, // 在棋盘中左上角的 x 坐标, 注意为bound_box(由BlockData.rect描述)的坐标，不是grid的坐标
-    pub y: u8, // 在棋盘中左上角的 y 坐标, 注意为bound_box(由BlockData.rect描述)的坐标，不是grid的坐标
+    pub scissor: u8,   // 0: 无剪刀，非0：剪刀颜色
+    pub ropes: Vec<u8>,// 绳索颜色列表
+    pub x: u8,         // 在棋盘中x坐标, 注意为bound_box(由BlockData.rect描述)的坐标
+    pub y: u8,         // 在棋盘中y坐标, 注意为bound_box的坐标
     pub link: Vec<u8>, // 如果属于一个组，则保存组内所有块的id
 }
 

@@ -218,6 +218,7 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
             x: 2,
             y: 0,
             color: 1,
+            star: 0,
             width: 1,
             height: 0,
             switch: true, // 默认开启状态
@@ -227,6 +228,7 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
             x: 2,
             y: (stage.board_height - 1) as u8,
             color: 2,
+            star: 0,
             width: 1,
             height: 0,
             switch: true, // 默认开启状态
@@ -236,6 +238,7 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
             x: 0,
             y: 0,
             color: 3,
+            star: 0,
             width: 0,
             height: 1,
             switch: true, // 默认开启状态
@@ -245,6 +248,7 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
             x: 0,
             y: 3,
             color: 4,
+            star: 0,
             width: 0,
             height: 2,
             switch: true, // 默认开启状态
@@ -254,6 +258,7 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
             x: (stage.board_width - 1) as u8,
             y: 3,
             color: 5,
+            star: 0,
             width: 0,
             height: 2,
             switch: true, // 默认开启状态
@@ -324,6 +329,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[0] as u8, // 单个方块
             color: 2,                  // 红色，对应上方门
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -336,6 +345,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[9] as u8, // 横向两个方块
             color: 4,                  // 蓝色，对应下方门
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -348,6 +361,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[2] as u8, // 纵向两个方块
             color: 3,                  // 绿色，对应右方门
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -360,6 +377,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[0] as u8, // 纵向两个方块
             color: 2,                  // 绿色，对应右方门
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -372,6 +393,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[0] as u8,
             color: 3,
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -384,6 +409,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[1] as u8,
             color: 5,
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -398,6 +427,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[2] as u8,
             color: 4,
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
@@ -410,6 +443,10 @@ fn create_default_blocks() -> Vec<Block> {
             shape: SHAPE_IDX[0] as u8,
             color: 1,
             color2: 0,
+            star: 0,
+            dir: 0,
+            ropes: vec![],
+            scissor: 0,
             ice: 0,
             key: 0,
             lock: 0,
