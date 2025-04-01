@@ -48,8 +48,8 @@ pub struct ColorblkModel {
     // 存储初始关卡状态
     pub stage: ColorBlkStage,
     // 存储计算结果的字段
-    pub solution: Option<Vec<(u8, Option<Direction>, u8)>>, // 存储移动步骤
-    pub current_step: usize,                                // 当前执行到哪一步
+    pub solution: Option<Vec<(Vec<u8>, Option<Direction>, u8)>>, // 存储移动步骤
+    pub current_step: usize,                                     // 当前执行到哪一步
     // 存储每个格子的渲染状态 (border_type, color, symbol)
     pub render_state: Vec<(u8, i8, &'static str)>,
 }
@@ -119,7 +119,7 @@ impl ColorblkModel {
         // 根据solution更新方块位置
         if let Some(solution) = &self.solution {
             for step in 0..self.current_step {
-                let (block_id, direction, mstep) = solution[step];
+                let (block_ids, direction, mstep) = &solution[step];
                 if let Some(dir) = direction {
                     let (dx, dy) = match dir {
                         Direction::Up => (0, -1),
@@ -127,16 +127,20 @@ impl ColorblkModel {
                         Direction::Left => (-1, 0),
                         Direction::Right => (1, 0),
                     };
-                    for _ in 0..mstep {
-                        if let Some(pos) = current_positions.get_mut(block_id as usize - 1) {
-                            pos.0 += dx;
-                            pos.1 += dy;
+                    for block_id in block_ids {
+                        for _ in 0..*mstep {
+                            if let Some(pos) = current_positions.get_mut(*block_id as usize - 1) {
+                                pos.0 += dx;
+                                pos.1 += dy;
+                            }
                         }
                     }
                 } else {
-                    // 标记方块为已移除
-                    if let Some(pos) = current_positions.get_mut(block_id as usize - 1) {
-                        pos.2 = false;
+                    for block_id in block_ids {
+                        // 标记方块为已移除
+                        if let Some(pos) = current_positions.get_mut(*block_id as usize - 1) {
+                            pos.2 = false;
+                        }
                     }
                 }
             }
@@ -182,7 +186,7 @@ impl Model for ColorblkModel {
         event_emit("Colorblk.RedrawTile");
 
         // 保存初始布局和门
-        self.stage = ColorBlkStage::new(6, 6); // 默认大小
+        self.stage = ColorBlkStage::new(4, 7); // 默认大小
         context.state = ColorblkState::Normal as u8;
 
         // 添加默认方块和门
@@ -427,7 +431,7 @@ fn create_default_blocks() -> Vec<Block> {
             lock: 0,
             x: 3,
             y: 3,
-            link: vec![3],
+            link: vec![],
         },
         Block {
             id: 2,

@@ -306,6 +306,10 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
             // 左方门
             (_, h, 0, 0) if h > 0 => {
                 if block_left == 0 && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
+                    println!(
+                        "!!!!!!!!!!!!!!!!!!!{:?} -- {:?}$$$$${:?} {:?} {:?} {:?}",
+                        block, gate, block_left, block_right, block_top, block_bottom
+                    );
                     return Some(Direction::Left);
                 }
             }

@@ -221,13 +221,13 @@ impl ColorblkRender {
                         } else {
                             (d.stage.board_height * 6) as u16
                         }; // 每个单元格高度为5
-                        back.set_color_str(
-                            screen_x as u16, // 居中显示
-                            screen_y as u16,
-                            "██████████", // 使用10个字符的宽度
-                            COLORS[gate.color as usize % COLORS.len()],
-                            Color::Reset,
-                        );
+                        // back.set_color_str(
+                        //     screen_x as u16, // 居中显示
+                        //     screen_y as u16,
+                        //     "██", // 使用10个字符的宽度
+                        //     COLORS[gate.color as usize % COLORS.len()],
+                        //     Color::Reset,
+                        // );
                     }
                 } else {
                     // 左右门：绘制一列彩色字符

@@ -12,7 +12,7 @@ struct State {
     // 每一步记录 (block id, move, steps)
     // Some(direction) 表示移动或退出，
     // steps 表示连续移动步数
-    history: Vec<(u8, Option<Direction>, u8)>,
+    history: Vec<(Vec<u8>, Option<Direction>, u8)>,
 }
 
 // 仅比较 blocks 字段
@@ -47,7 +47,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
         if let Some(_dir) = can_exit(block, &stage.gates) {
             let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
             let mut new_history = state.history.clone();
-            new_history.push((block.id, None, 0)); // None 表示退出
+            new_history.push((vec!(block.id), None, 0)); // None 表示退出
 
             // 发现可以移除的方块，直接返回这个状态
             return (
@@ -98,7 +98,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
                         // 添加这个移动步骤到历史记录
                         let mut new_history = temp_state.history.clone();
-                        new_history.push((block.id, Some(dir), moves_count));
+                        new_history.push((vec!(block.id), Some(dir), moves_count));
 
                         // 创建移动后的新状态
                         let new_state = State {
@@ -166,7 +166,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
                     // 添加这个移动步骤到历史记录
                     let mut new_history = temp_state.history.clone();
-                    new_history.push((group[0], Some(dir), moves_count));
+                    new_history.push((group.clone().into_iter().collect(), Some(dir), moves_count));
 
                     // 创建移动后的新状态
                     let new_state = State {
@@ -429,7 +429,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
 //     }
 // }
 
-pub fn solve_main(stage: &ColorBlkStage) -> Option<Vec<(u8, Option<Direction>, u8)>> {
+pub fn solve_main(stage: &ColorBlkStage) -> Option<Vec<(Vec<u8>, Option<Direction>, u8)>> {
     match solve(stage.blocks.clone(), &stage, true) {
         Some(solution) => {
             println!("solve ok!!!{:?}", solution);
