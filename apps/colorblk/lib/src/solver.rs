@@ -4,6 +4,7 @@ use rayon::iter::ParallelIterator;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
+use log::info;
 
 /// 状态只包含 blocks，用于状态去重；history 用于记录路径，但不参与状态比较
 #[derive(Clone, Debug)]
@@ -432,7 +433,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
 pub fn solve_main(stage: &ColorBlkStage) -> Option<Vec<(Vec<u8>, Option<Direction>, u8)>> {
     match solve(stage.blocks.clone(), &stage, true) {
         Some(solution) => {
-            println!("solve ok!!!{:?}", solution);
+            info!("solve ok!!!{:?}", solution);
             Some(solution.history)
         }
         None => {

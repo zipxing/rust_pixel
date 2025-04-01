@@ -7,36 +7,10 @@ use rust_pixel::{
     game::Model,
 };
 
-pub const COLORBLKW: u16 = 70;
-pub const COLORBLKH: u16 = 40;
+pub const COLORBLKW: u16 = 80;
+pub const COLORBLKH: u16 = 50;
 pub const CELLW: usize = 10;
 pub const CELLH: usize = 5;
-
-fn calculate_border_type(grid: &[[u8; 5]; 5], x: usize, y: usize) -> u8 {
-    // 检查四个方向的邻居
-    let mut border_bits = 0u8;
-
-    // 上邻居
-    if y == 0 || grid[y - 1][x] == 0 {
-        border_bits |= 0b1000;
-    }
-
-    // 下邻居
-    if y == 4 || grid[y + 1][x] == 0 {
-        border_bits |= 0b0100;
-    }
-
-    // 左邻居
-    if x == 0 || grid[y][x - 1] == 0 {
-        border_bits |= 0b0010;
-    }
-
-    // 右邻居
-    if x == 4 || grid[y][x + 1] == 0 {
-        border_bits |= 0b0001;
-    }
-    border_bits
-}
 
 #[repr(u8)]
 enum ColorblkState {
@@ -56,15 +30,13 @@ pub struct ColorblkModel {
 
 impl ColorblkModel {
     pub fn new() -> Self {
-        // let stage = ColorBlkStage::new(5, 6); // 默认使用5x6的棋盘
-        let stage = ColorBlkStage::new(4, 7); // 默认使用5x6的棋盘
+        let stage = ColorBlkStage::new(1, 1); // 默认使用5x6的棋盘
         Self {
             count: 0,
             stage,
             solution: None,
             current_step: 0,
-            // render_state: vec![(0, -1, ""); (5 * 6)], // 默认大小
-            render_state: vec![(0, -1, ""); 4 * 7], // 默认大小
+            render_state: vec![(0, -1, ""); 1 * 1], // 默认大小
         }
     }
 
@@ -342,73 +314,73 @@ fn create_default_gates(stage: &ColorBlkStage) -> Vec<Gate> {
     //         height: 2,
     //         switch: true, // 默认开启状态
     //     },
-    //  ]
+    // ]
 }
 
 fn create_default_blocks() -> Vec<Block> {
     vec![
-        // Block {
-        //     id: 1,
-        //     shape: SHAPE_IDX[0] as u8, // 单个方块
-        //     color: 2,                  // 红色，对应上方门
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 1,
-        //     y: 0,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 2,
-        //     shape: SHAPE_IDX[9] as u8, // 横向两个方块
-        //     color: 4,                  // 蓝色，对应下方门
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 2,
-        //     y: 0,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 3,
-        //     shape: SHAPE_IDX[2] as u8, // 纵向两个方块
-        //     color: 3,                  // 绿色，对应右方门
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 0,
-        //     y: 1,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 4,
-        //     shape: SHAPE_IDX[0] as u8, // 纵向两个方块
-        //     color: 2,                  // 绿色，对应右方门
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 3,
-        //     y: 2,
-        //     link: Vec::new(),
-        // },
-        // Block {
-        //     id: 5,
-        //     shape: SHAPE_IDX[0] as u8,
-        //     color: 3,
-        //     color2: 0,
-        //     ice: 0,
-        //     key: 0,
-        //     lock: 0,
-        //     x: 0,
-        //     y: 3,
-        //     link: Vec::new(),
-        // },
         Block {
             id: 1,
+            shape: SHAPE_IDX[0] as u8, // 单个方块
+            color: 2,                  // 红色，对应上方门
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 1,
+            y: 0,
+            link: Vec::new(),
+        },
+        Block {
+            id: 2,
+            shape: SHAPE_IDX[9] as u8, // 横向两个方块
+            color: 4,                  // 蓝色，对应下方门
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 2,
+            y: 0,
+            link: Vec::new(),
+        },
+        Block {
+            id: 3,
+            shape: SHAPE_IDX[2] as u8, // 纵向两个方块
+            color: 3,                  // 绿色，对应右方门
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 0,
+            y: 1,
+            link: Vec::new(),
+        },
+        Block {
+            id: 4,
+            shape: SHAPE_IDX[0] as u8, // 纵向两个方块
+            color: 2,                  // 绿色，对应右方门
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 3,
+            y: 2,
+            link: Vec::new(),
+        },
+        Block {
+            id: 5,
+            shape: SHAPE_IDX[0] as u8,
+            color: 3,
+            color2: 0,
+            ice: 0,
+            key: 0,
+            lock: 0,
+            x: 0,
+            y: 3,
+            link: Vec::new(),
+        },
+        Block {
+            id: 6,
             shape: SHAPE_IDX[1] as u8,
             color: 5,
             color2: 0,
@@ -417,12 +389,12 @@ fn create_default_blocks() -> Vec<Block> {
             lock: 0,
             x: 1,
             y: 3,
-            link: vec![1, 2],
-            // link: vec![6, 8],
+            // link: vec![1, 2],
+            link: vec![6, 8],
             // link: Vec::new(),
         },
         Block {
-            id: 3,
+            id: 7,
             shape: SHAPE_IDX[2] as u8,
             color: 4,
             color2: 0,
@@ -431,10 +403,10 @@ fn create_default_blocks() -> Vec<Block> {
             lock: 0,
             x: 3,
             y: 3,
-            link: vec![],
+            link: Vec::new(),
         },
         Block {
-            id: 2,
+            id: 8,
             shape: SHAPE_IDX[0] as u8,
             color: 1,
             color2: 0,
@@ -444,7 +416,7 @@ fn create_default_blocks() -> Vec<Block> {
             x: 2,
             y: 4,
             // link: Vec::new(),
-            link: vec![1, 2],
+            link: vec![6, 8],
         },
     ]
     // vec![
@@ -547,4 +519,30 @@ fn create_default_blocks() -> Vec<Block> {
     //         // link: vec![6, 8],
     //     },
     // ]
+}
+
+fn calculate_border_type(grid: &[[u8; 5]; 5], x: usize, y: usize) -> u8 {
+    // 检查四个方向的邻居
+    let mut border_bits = 0u8;
+
+    // 上邻居
+    if y == 0 || grid[y - 1][x] == 0 {
+        border_bits |= 0b1000;
+    }
+
+    // 下邻居
+    if y == 4 || grid[y + 1][x] == 0 {
+        border_bits |= 0b0100;
+    }
+
+    // 左邻居
+    if x == 0 || grid[y][x - 1] == 0 {
+        border_bits |= 0b0010;
+    }
+
+    // 右邻居
+    if x == 4 || grid[y][x + 1] == 0 {
+        border_bits |= 0b0001;
+    }
+    border_bits
 }

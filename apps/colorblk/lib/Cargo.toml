@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 rayon = "1.10.0"
 rand = "0.8.5"
+log = "0.4.16"
 rust_pixel = { path = "../../..", default-features = false }
 

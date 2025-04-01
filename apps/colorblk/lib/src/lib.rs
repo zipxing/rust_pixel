@@ -265,9 +265,9 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
 
     // 计算方块的边界
     let block_left = block.x;
-    let block_right = block.x + shape_data.rect.width as u8 - 1;
+    let block_right = block.x + (shape_data.rect.width as u8 - 1);
     let block_top = block.y;
-    let block_bottom = block.y + shape_data.rect.height as u8 - 1;
+    let block_bottom = block.y + (shape_data.rect.height as u8 - 1);
 
     // 检查每个门
     for gate in gates {
@@ -284,38 +284,37 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
         match (gate.y, gate.height, gate.x, gate.width) {
             // 上方门
             (0, 0, _, w) if w > 0 => {
-                if block_top == 0 && block.x >= gate.x && block.x <= gate.x + gate.width - 1 {
+                // 方块顶部在顶边界，并且方块左右边界处于门的范围内
+                if block_top == 0 && 
+                   block_left <= gate.x + gate.width - 1 && 
+                   block_right >= gate.x {
                     return Some(Direction::Up);
                 }
             }
             // 下方门
             (y, 0, _, w) if w > 0 => {
-                if block_bottom == y && block.x >= gate.x && block.x <= gate.x + gate.width - 1 {
-                    // println!(
-                    //     "!!!!!!!!!!!!!!!!!!!{:?} -- {:?}$$$$${:?} {:?} {:?} {:?}",
-                    //     block, gate, block_left, block_right, block_top, block_bottom
-                    // );
+                // 方块底部触及下边界，并且方块左右边界处于门的范围内
+                if block_bottom == y && 
+                   block_left <= gate.x + gate.width - 1 && 
+                   block_right >= gate.x {
                     return Some(Direction::Down);
-                } else {
-                    // println!(
-                    //     "@@@@@@@@@@@@@@@@@@@{:?} -- {:?}$$$$${:?} {:?} {:?} {:?}",
-                    //     block, gate, block_left, block_right, block_top, block_bottom
-                    // );
                 }
             }
             // 左方门
             (_, h, 0, 0) if h > 0 => {
-                if block_left == 0 && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
-                    println!(
-                        "!!!!!!!!!!!!!!!!!!!{:?} -- {:?}$$$$${:?} {:?} {:?} {:?}",
-                        block, gate, block_left, block_right, block_top, block_bottom
-                    );
+                // 方块左侧在左边界，并且方块上下边界处于门的范围内
+                if block_left == 0 && 
+                   block_top <= gate.y + gate.height - 1 && 
+                   block_bottom >= gate.y {
                     return Some(Direction::Left);
                 }
             }
             // 右方门
             (_, h, x, 0) if h > 0 => {
-                if block_right == x && block.y >= gate.y && block.y <= gate.y + gate.height - 1 {
+                // 方块右侧触及右边界，并且方块上下边界处于门的范围内
+                if block_right == x  && 
+                   block_top <= gate.y + gate.height - 1 && 
+                   block_bottom >= gate.y {
                     return Some(Direction::Right);
                 }
             }
