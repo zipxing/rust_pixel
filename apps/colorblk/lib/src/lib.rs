@@ -2,15 +2,20 @@ pub mod shape;
 pub use crate::shape::*;
 pub mod solver;
 
-pub type Board = Vec<Vec<u32>>;
-pub const OBSTACLE: u32 = 100_000_000;
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BoardValue {
+    pub obstacle: u8, // 255(all) or allow_color
+    pub block_id: u8,
+}
+
+pub type Board = Vec<Vec<BoardValue>>;
 
 /// 表示障碍物的结构体
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Obstacle {
     pub x: u8,
     pub y: u8,
-    // pub allow_color: Option<u8>,
+    pub allow_color: u8,
 }
 
 /// 表示一个关卡的初始状态
@@ -36,14 +41,14 @@ impl ColorBlkStage {
 
     /// 创建一个新的棋盘
     pub fn create_board(&self) -> Board {
-        let mut board = vec![vec![0; self.board_width]; self.board_height];
+        let mut board: Board = vec![vec![Default::default(); self.board_width]; self.board_height];
 
         // 放置障碍物
         for obstacle in &self.obstacles {
             if ((obstacle.x as usize) < self.board_width)
                 && ((obstacle.y as usize) < self.board_height)
             {
-                board[obstacle.y as usize][obstacle.x as usize] = OBSTACLE;
+                board[obstacle.y as usize][obstacle.x as usize].obstacle = obstacle.allow_color;
             }
         }
 
@@ -88,13 +93,11 @@ pub struct Block {
 
 /// 按编码规则将 Block 属性转换为 u32（不包含 link 部分）
 /// 用于设置Board数组
-pub fn encode_block(b: &Block) -> u32 {
-    (b.id as u32)
-        + (b.color as u32 * 100)
-        + (b.color2 as u32 * 10_000)
-        + (b.ice as u32 * 100_000)
-        + (b.key as u32 * 1_000_000)
-        + (b.lock as u32 * 10_000_000)
+pub fn encode_block(b: &Block) -> BoardValue {
+    BoardValue {
+        obstacle: 0,
+        block_id: b.id,
+    }
 }
 
 /// layout_to_board 函数，注意正确理解 BlockData 结构
@@ -117,7 +120,6 @@ pub fn layout_to_board(blocks: &[Block], stage: &ColorBlkStage) -> Board {
 
                     // 确保坐标在棋盘范围内
                     if board_x < stage.board_width && board_y < stage.board_height {
-                        // 设置格子的值：高8位是颜色，低8位是方块ID
                         board[board_y][board_x] = encode;
                     }
                 }
@@ -155,7 +157,12 @@ fn move_block_to(
                 // 检查新位置是否被其他方块占据
                 let cell = board[board_y][board_x];
                 // println!("MBT:({}, {}) cell = {} code = {}", board_x, board_y, cell, code);
-                if cell != 0 && cell != code {
+
+                // 无法移动
+                if !((cell == code) // 等于本体可以移动
+                    || (cell.obstacle == 0 && cell.block_id == 0) // 空白处可以移动
+                    || (cell.obstacle != 0 && cell.obstacle == block.color)) // 半透明障碍且颜色一致可以移动
+                {
                     return false;
                 }
             }
@@ -171,7 +178,7 @@ fn move_block_to(
                 let old_y = block.y as usize + (grid_y - shape_data.rect.y);
 
                 if old_x < stage.board_width && old_y < stage.board_height {
-                    board[old_y][old_x] = 0;
+                    board[old_y][old_x].block_id = 0;
                 }
             }
         }
@@ -285,36 +292,38 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
             // 上方门
             (0, 0, _, w) if w > 0 => {
                 // 方块顶部在顶边界，并且方块左右边界处于门的范围内
-                if block_top == 0 && 
-                   block_left <= gate.x + gate.width - 1 && 
-                   block_right >= gate.x {
+                if block_top == 0 && block_left <= gate.x + gate.width - 1 && block_right >= gate.x
+                {
                     return Some(Direction::Up);
                 }
             }
             // 下方门
             (y, 0, _, w) if w > 0 => {
                 // 方块底部触及下边界，并且方块左右边界处于门的范围内
-                if block_bottom == y && 
-                   block_left <= gate.x + gate.width - 1 && 
-                   block_right >= gate.x {
+                if block_bottom == y
+                    && block_left <= gate.x + gate.width - 1
+                    && block_right >= gate.x
+                {
                     return Some(Direction::Down);
                 }
             }
             // 左方门
             (_, h, 0, 0) if h > 0 => {
                 // 方块左侧在左边界，并且方块上下边界处于门的范围内
-                if block_left == 0 && 
-                   block_top <= gate.y + gate.height - 1 && 
-                   block_bottom >= gate.y {
+                if block_left == 0
+                    && block_top <= gate.y + gate.height - 1
+                    && block_bottom >= gate.y
+                {
                     return Some(Direction::Left);
                 }
             }
             // 右方门
             (_, h, x, 0) if h > 0 => {
                 // 方块右侧触及右边界，并且方块上下边界处于门的范围内
-                if block_right == x  && 
-                   block_top <= gate.y + gate.height - 1 && 
-                   block_bottom >= gate.y {
+                if block_right == x
+                    && block_top <= gate.y + gate.height - 1
+                    && block_bottom >= gate.y
+                {
                     return Some(Direction::Right);
                 }
             }

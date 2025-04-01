@@ -114,7 +114,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                             }
 
                             if let Some(_) = can_exit(moved_block, &stage.gates) {
-                                println!("single exit....");
+                                // println!("single exit....");
                                 // 如果移动后有方块可以退出，直接返回这个状态
                                 return (true, vec![new_state]);
                             }
@@ -162,7 +162,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
                 // 尝试移动整个组
                 if move_group(&mut sim_board, &mut temp_state.blocks, group, dir, stage) {
-                    println!("move group......{:?}", group);
+                    // println!("move group......{:?}", group);
                     moves_count += 1;
 
                     // 添加这个移动步骤到历史记录
@@ -182,7 +182,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                         }
 
                         if let Some(_) = can_exit(moved_block, &stage.gates) {
-                            println!("move group and can_exit");
+                            // println!("move group and can_exit");
                             // 如果移动后有方块可以退出，直接返回这个状态
                             return (true, vec![new_state]);
                         }

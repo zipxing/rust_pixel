@@ -224,7 +224,7 @@ impl ColorblkRender {
                         back.set_color_str(
                             screen_x as u16, // 居中显示
                             screen_y as u16,
-                            "██", // 使用10个字符的宽度
+                            "██████████", // 使用10个字符的宽度
                             COLORS[gate.color as usize % COLORS.len()],
                             Color::Reset,
                         );
