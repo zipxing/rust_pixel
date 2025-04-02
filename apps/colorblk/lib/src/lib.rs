@@ -385,16 +385,35 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
 /// 辅助函数：从块列表中移除指定块，并更新剩余块的 group 链接（删除已退出块的 id）
 pub fn remove_block_and_update_links(blocks: &[Block], id: u8) -> Vec<Block> {
     let mut new_blocks = Vec::new();
+    
+    // 首先检查要移除的方块是否有color2属性
+    let target_block = blocks.iter().find(|b| b.id == id);
+    let should_remove = match target_block {
+        Some(block) => block.color2 == 0, // 只有当color2为0时才真正移除
+        None => false,
+    };
 
     for block in blocks {
         if block.id != id {
-            // 保留非目标块，但需要更新其链接
+            // 处理非目标方块
             let mut new_block = block.clone();
-            if !new_block.link.is_empty() {
+            
+            // 只有在真正需要移除目标方块时，才更新链接
+            if should_remove && !new_block.link.is_empty() {
                 // 从链接中移除目标块ID
                 new_block.link.retain(|&linked_id| linked_id != id);
             }
             new_blocks.push(new_block);
+        } else {
+            // 处理目标方块
+            if !should_remove {
+                // 如果color2不为0，则只更新颜色而不移除方块
+                let mut updated_block = block.clone();
+                updated_block.color = block.color2;
+                updated_block.color2 = 0;
+                new_blocks.push(updated_block);
+            }
+            // 如果should_remove为true，则不添加该方块，相当于移除它
         }
     }
 
