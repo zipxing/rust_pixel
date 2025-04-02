@@ -205,6 +205,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
 /// 广度优先搜索求解（支持并行和串行）
 fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) -> Option<State> {
+    // println!("---{:?}", stage);
     // 首先检查初始状态是否可以移除任何方块，如果可以，则以移除后的状态为起点
     let initial_state = State {
         blocks: initial_blocks,

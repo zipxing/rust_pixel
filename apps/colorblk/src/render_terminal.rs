@@ -45,7 +45,7 @@ impl ColorblkRender {
         t.add_sprite(tsback, "back");
 
         // 为每个格子创建精灵（这里使用足够大的数量以支持各种棋盘大小）
-        for i in 0..64 {
+        for i in 0..120 {
             // 最大支持8x8的棋盘
             t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
@@ -54,7 +54,7 @@ impl ColorblkRender {
         }
 
         // 创建消息精灵
-        t.add_sprite(Sprite::new(0, 35, 70, 1), "msg");
+        // t.add_sprite(Sprite::new(0, 35, 70, 1), "msg");
 
         // 注册重绘网格事件
         event_register("redraw_grid", "draw_grid");
@@ -82,7 +82,7 @@ impl ColorblkRender {
         msg: &str,
         msg_color: i8,
     ) {
-        if id >= 30 {
+        if id >= 60 {
             return;
         }
         let l = self.panel.get_sprite(&format!("cc{}", id));
@@ -255,13 +255,13 @@ impl ColorblkRender {
 
         // 使用model中的render_state绘制方块
         for i in 0..d.stage.board_width * d.stage.board_height {
-            let (border_type, color, symbol) = d.render_state[i as usize];
+            let (border_type, color) = d.render_state[i as usize];
             if color >= 0 {
                 let x = i % d.stage.board_width;
                 let y = i / d.stage.board_width;
                 let sx = ((x + 1) * 10) as u16;
                 let sy = ((y + 1) * 5) as u16;
-                self.draw_cell(ctx, i as i16, sx, sy, border_type, color, symbol, 0);
+                self.draw_cell(ctx, i as i16, sx, sy, border_type, color, "", 0);
             }
         }
     }

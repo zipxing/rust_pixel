@@ -4,7 +4,7 @@ pub mod solver;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BoardValue {
-    pub obstacle: u8, // 255(all) or allow_color
+    pub obstacle: u8, // 0: no obstacle, 255: block all, other: allow_color
     pub block_id: u8,
 }
 
@@ -62,6 +62,8 @@ pub struct Gate {
     pub x: u8, // 对于上/下门：x ∈ [0, BOARD_WIDTH - gate.width]
     pub y: u8, // 对于左/右门：y ∈ [0, BOARD_HEIGHT - gate.height]
     pub color: u8,
+    pub ice: u8,
+    pub lock: u8,
     pub star: u8, // 是否star
     pub width: u8,    // 上/下门的宽度 ∈ [1,3]；左/右门的宽度应为 0
     pub height: u8,   // 左/右门的高度 ∈ [1,3]；上/下门的高度应为 0
@@ -108,6 +110,7 @@ pub fn encode_block(b: &Block) -> BoardValue {
 /// layout_to_board 函数，注意正确理解 BlockData 结构
 pub fn layout_to_board(blocks: &[Block], stage: &ColorBlkStage) -> Board {
     let mut board = stage.create_board();
+    // println!("board....{:?}", board);
 
     for block in blocks {
         let shape_data = &SHAPE[block.shape as usize];
@@ -168,6 +171,9 @@ fn move_block_to(
                     || (cell.obstacle == 0 && cell.block_id == 0) // 空白处可以移动
                     || (cell.obstacle != 0 && cell.obstacle == block.color)) // 半透明障碍且颜色一致可以移动
                 {
+                    // if cell.obstacle != 0 {
+                    //     println!("@@@ob...{:?} block..{:?}", cell.obstacle, block.color);
+                    // }
                     return false;
                 }
             }
@@ -287,8 +293,12 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<Direction> {
             continue; // 如果门关闭，跳过
         }
 
-        // 检查方块颜色与门颜色是否匹配
-        if block.color != gate.color {
+        // 检查方块颜色与门颜色是否匹配,考虑星门
+        if !(
+            (block.star == 0 && gate.star == 0 && block.color == gate.color) ||
+            (block.star == 0 && gate.star != 0 && block.color == gate.color) ||
+            (block.star !=0 && gate.star != 0 && block.color == gate.color)
+        ) {
             continue;
         }
 
