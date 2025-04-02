@@ -224,6 +224,21 @@ pub fn move_entire_block(
     direction: Direction,
     stage: &ColorBlkStage,
 ) -> bool {
+    // 检查方向限制
+    match block.dir {
+        1 => { // 只能横向移动
+            if direction == Direction::Up || direction == Direction::Down {
+                return false;
+            }
+        },
+        2 => { // 只能纵向移动
+            if direction == Direction::Left || direction == Direction::Right {
+                return false;
+            }
+        },
+        _ => {}, // 自由移动，无限制
+    }
+
     if direction == Direction::Up && block.y == 0 {
         return false;
     }
@@ -261,6 +276,24 @@ pub fn move_group(
         .filter(|(_, b)| group_ids.contains(&b.id))
         .map(|(idx, _)| idx)
         .collect();
+
+    // 先检查组中所有方块的方向限制
+    for &idx in &group_blocks {
+        let block = &blocks[idx];
+        match block.dir {
+            1 => { // 只能横向移动
+                if direction == Direction::Up || direction == Direction::Down {
+                    return false;
+                }
+            },
+            2 => { // 只能纵向移动
+                if direction == Direction::Left || direction == Direction::Right {
+                    return false;
+                }
+            },
+            _ => {}, // 自由移动，无限制
+        }
+    }
 
     // 尝试逐个移动组中的方块
     for &idx in &group_blocks {

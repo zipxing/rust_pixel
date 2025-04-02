@@ -72,12 +72,14 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
         .enumerate()
         .filter(|(_, block)| block.link.is_empty())
     {
-        for &dir in &[
-            Direction::Up,
-            Direction::Down,
-            Direction::Left,
-            Direction::Right,
-        ] {
+        // 获取可用的移动方向，根据块的方向限制过滤
+        let allowed_directions = match block.dir {
+            1 => vec![Direction::Left, Direction::Right], // 只能横向移动
+            2 => vec![Direction::Up, Direction::Down],    // 只能纵向移动
+            _ => vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right], // 自由移动
+        };
+
+        for &dir in &allowed_directions {
             // 从当前状态克隆一个临时状态进行连续移动
             let mut temp_state = state.clone();
             // 获取当前块在临时状态中的索引
@@ -146,12 +148,34 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
     // 替换 flat_map 为普通循环
     for group in &groups {
-        for &dir in &[
-            Direction::Up,
-            Direction::Down,
-            Direction::Left,
-            Direction::Right,
-        ] {
+        // 获取组中所有方块
+        let group_blocks: Vec<&Block> = state
+            .blocks
+            .iter()
+            .filter(|b| group.contains(&b.id))
+            .collect();
+            
+        // 判断组内方块的移动方向限制
+        // 只有当所有方块都允许特定方向移动时，才允许整个组朝该方向移动
+        // 横向限制方块只能横向移动，纵向限制方块只能纵向移动
+        let horizontal_only = group_blocks.iter().any(|b| b.dir == 1);
+        let vertical_only = group_blocks.iter().any(|b| b.dir == 2);
+        
+        // 如果组内既有只能横向移动的方块，又有只能纵向移动的方块，则该组不能移动
+        if horizontal_only && vertical_only {
+            continue;
+        }
+        
+        // 根据组内方块的限制确定可用方向
+        let allowed_directions = if horizontal_only {
+            vec![Direction::Left, Direction::Right]
+        } else if vertical_only {
+            vec![Direction::Up, Direction::Down]
+        } else {
+            vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right]
+        };
+
+        for &dir in &allowed_directions {
             // 从当前状态克隆一个临时状态进行连续移动
             let mut temp_state = state.clone();
             let mut moves_count = 0;
@@ -215,7 +239,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
     let visited = Arc::new(Mutex::new(HashSet::new()));
     let queue = Arc::new(Mutex::new(VecDeque::new()));
     let solution: Arc<Mutex<Option<State>>> = Arc::new(Mutex::new(None));
-    // let steps = Arc::new(Mutex::new(0));
+    let steps = Arc::new(Mutex::new(0));
 
     // 标志是否需要重新开始搜索
     let restart_search = Arc::new(Mutex::new(false));
@@ -293,15 +317,15 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
         }
 
         // 更新处理的步数
-        // {
-        //     let mut s = steps.lock().unwrap();
-        //     *s += states_to_process.len();
+        {
+            let mut s = steps.lock().unwrap();
+            *s += states_to_process.len();
 
-        //     if *s % 11 == 0 {
-        //         let q = queue.lock().unwrap();
-        //         // println!("搜索中... 已探索 {} 个状态，队列中 {} 个状态", *s, q.len());
-        //     }
-        // }
+            if *s % 10 == 0 {
+                let q = queue.lock().unwrap();
+                println!("搜索中... 已探索 {} 个状态，队列中 {} 个状态", *s, q.len());
+            }
+        }
 
         // 并行处理状态
         let next_states = if use_parallel {
