@@ -10,9 +10,7 @@ use log::info;
 #[derive(Clone, Debug)]
 struct State {
     blocks: Vec<Block>,
-    // 每一步记录 (block id, move, steps)
-    // Some(direction) 表示移动或退出，
-    // steps 表示连续移动步数
+    // 每一步记录 (block id, move_dir(None表示退出), steps), steps 表示连续移动步数
     history: Vec<(Vec<u8>, Option<Direction>, u8)>,
 }
 
