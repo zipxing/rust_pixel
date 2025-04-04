@@ -404,12 +404,15 @@ pub fn remove_block_and_update_links(
         Some(block) => block.color2 == 0, // 只有当color2为0时才真正移除
         None => false,
     };
+    
+    // 检查退出的方块是否带钥匙
+    let has_key = target_block.map(|b| b.key > 0).unwrap_or(false);
 
     // 处理门的变化
-    if let (Some(block), idx) = (target_block, gate_id) {
+    if let Some(block) = target_block {
         // 直接通过索引获取对应的门
-        if idx < gates.len() {
-            let gate = &mut gates[idx];
+        if gate_id < gates.len() {
+            let gate = &mut gates[gate_id];
 
             // 如果方块颜色与门颜色相匹配，则修改门的状态
             if gate.color == block.color {
@@ -433,12 +436,16 @@ pub fn remove_block_and_update_links(
         if block.id != id {
             // 处理非目标方块
             let mut new_block = block.clone();
-
             // 只有在真正需要移除目标方块时，才更新链接
             if should_remove && !new_block.link.is_empty() {
                 // 从链接中移除目标块ID
                 new_block.link.retain(|&linked_id| linked_id != id);
             }
+            // 如果退出的方块带有钥匙，且当前方块有锁，则减少锁值
+            if has_key && new_block.lock > 0 {
+                new_block.lock -= 1;
+            }
+            
             new_blocks.push(new_block);
         } else {
             // 处理目标方块
