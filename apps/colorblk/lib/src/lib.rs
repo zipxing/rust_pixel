@@ -419,10 +419,10 @@ pub fn remove_block_and_update_links(
                 // 这里可以根据游戏规则定义门的变化逻辑
                 // 例如：关闭门，修改门的颜色等
 
-                // 示例：改变门的开关状态
+                // 改变门的开关状态
                 // gate.switch = !gate.switch;
 
-                // 示例：如果门上有锁，则解锁
+                // 如果门上有锁，则解锁
                 // if gate.lock > 0 && block.key > 0 {
                 //     gate.lock = 0;
                 // }
@@ -436,14 +436,21 @@ pub fn remove_block_and_update_links(
         if block.id != id {
             // 处理非目标方块
             let mut new_block = block.clone();
+
             // 只有在真正需要移除目标方块时，才更新链接
             if should_remove && !new_block.link.is_empty() {
                 // 从链接中移除目标块ID
                 new_block.link.retain(|&linked_id| linked_id != id);
             }
+            
             // 如果退出的方块带有钥匙，且当前方块有锁，则减少锁值
             if has_key && new_block.lock > 0 {
                 new_block.lock -= 1;
+            }
+            
+            // 当有方块退出时，减少所有方块的冰层
+            if new_block.ice > 0 {
+                new_block.ice -= 1;
             }
             
             new_blocks.push(new_block);
@@ -454,6 +461,9 @@ pub fn remove_block_and_update_links(
                 let mut updated_block = block.clone();
                 updated_block.color = block.color2;
                 updated_block.color2 = 0;
+                
+                // 退出的方块本身不会有冰层，去掉对冰层的处理
+                
                 new_blocks.push(updated_block);
             }
             // 如果should_remove为true，则不添加该方块，相当于移除它
