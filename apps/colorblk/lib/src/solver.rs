@@ -12,6 +12,7 @@ struct State {
     blocks: Vec<Block>,
     // 每一步记录 (block id, move_dir(None表示退出), steps), steps 表示连续移动步数
     history: Vec<(Vec<u8>, Option<Direction>, u8)>,
+    gates: Vec<Gate>,
 }
 
 // 仅比较 blocks 字段
@@ -43,8 +44,9 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
             continue;
         }
 
-        if let Some(_dir) = can_exit(block, &stage.gates) {
-            let new_blocks = remove_block_and_update_links(&state.blocks, block.id);
+        if let Some((_dir, gate_idx)) = can_exit(block, &state.gates) {
+            let mut exit_gates = state.gates.clone();
+            let new_blocks = remove_block_and_update_links(&state.blocks, block.id, &mut exit_gates, gate_idx);
             let mut new_history = state.history.clone();
             new_history.push((vec!(block.id), None, 0)); // None 表示退出
 
@@ -53,6 +55,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                 true,
                 vec![State {
                     blocks: new_blocks,
+                    gates: exit_gates,
                     history: new_history,
                 }],
             );
@@ -104,6 +107,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                         // 创建移动后的新状态
                         let new_state = State {
                             blocks: temp_state.blocks.clone(),
+                            gates: temp_state.gates.clone(),
                             history: new_history,
                         };
 
@@ -113,10 +117,25 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                                 continue;
                             }
 
-                            if let Some(_) = can_exit(moved_block, &stage.gates) {
-                                // println!("single exit....");
+                            if let Some((_exit_dir, gate_idx)) = can_exit(moved_block, &new_state.gates) {
+                                // 找到匹配的门的索引
+                                let mut exit_gates = new_state.gates.clone();
+                                let exit_blocks = remove_block_and_update_links(
+                                    &new_state.blocks, 
+                                    moved_block.id, 
+                                    &mut exit_gates,
+                                    gate_idx
+                                );
+                                
+                                let mut exit_history = new_state.history.clone();
+                                exit_history.push((vec!(moved_block.id), None, 0)); // None 表示退出
+                                
                                 // 如果移动后有方块可以退出，直接返回这个状态
-                                return (true, vec![new_state]);
+                                return (true, vec![State {
+                                    blocks: exit_blocks,
+                                    gates: exit_gates,
+                                    history: exit_history,
+                                }]);
                             }
                         }
 
@@ -184,7 +203,6 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
                 // 尝试移动整个组
                 if move_group(&mut sim_board, &mut temp_state.blocks, group, dir, stage) {
-                    // println!("move group......{:?}", group);
                     moves_count += 1;
 
                     // 添加这个移动步骤到历史记录
@@ -194,6 +212,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                     // 创建移动后的新状态
                     let new_state = State {
                         blocks: temp_state.blocks.clone(),
+                        gates: temp_state.gates.clone(),
                         history: new_history,
                     };
 
@@ -203,10 +222,25 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                             continue;
                         }
 
-                        if let Some(_) = can_exit(moved_block, &stage.gates) {
-                            // println!("move group and can_exit");
+                        if let Some((_exit_dir, gate_idx)) = can_exit(moved_block, &new_state.gates) {
+                            // 找到匹配的门的索引
+                            let mut exit_gates = new_state.gates.clone();
+                            let exit_blocks = remove_block_and_update_links(
+                                &new_state.blocks, 
+                                moved_block.id, 
+                                &mut exit_gates,
+                                gate_idx
+                            );
+                            
+                            let mut exit_history = new_state.history.clone();
+                            exit_history.push((vec!(moved_block.id), None, 0)); // None 表示退出
+                            
                             // 如果移动后有方块可以退出，直接返回这个状态
-                            return (true, vec![new_state]);
+                            return (true, vec![State {
+                                blocks: exit_blocks,
+                                gates: exit_gates,
+                                history: exit_history,
+                            }]);
                         }
                     }
 
@@ -227,10 +261,10 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
 /// 广度优先搜索求解（支持并行和串行）
 fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) -> Option<State> {
-    // println!("---{:?}", stage);
     // 首先检查初始状态是否可以移除任何方块，如果可以，则以移除后的状态为起点
     let initial_state = State {
         blocks: initial_blocks,
+        gates: stage.gates.clone(), // 初始化gates为stage中的gates
         history: Vec::new(),
     };
 
@@ -371,23 +405,37 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
                             continue;
                         }
 
-                        if let Some(_) = can_exit(block, &stage.gates) {
+                        if let Some((exit_dir, gate_idx)) = can_exit(block, &expanded_state.gates) {
                             // 找到可移除方块的状态，设置为新起点
                             {
                                 let mut restart = restart_search.lock().unwrap();
                                 *restart = true;
 
                                 let mut new_start = next_start_state.lock().unwrap();
-                                *new_start = Some(expanded_state.clone());
-
-                                // println!(
-                                //     "找到可移除方块的状态，将作为新起点{} {:?}",
-                                //     hasrm, expanded
-                                // );
+                                *new_start = Some(State {
+                                    blocks: expanded_state.blocks.clone(),
+                                    gates: expanded_state.gates.clone(),
+                                    history: expanded_state.history.clone(),
+                                });
                             }
-
+                            
                             // 只添加这个状态，放弃其他状态
-                            all_next_states.push(expanded_state.clone());
+                            let mut exit_gates = expanded_state.gates.clone();
+                            let exit_blocks = remove_block_and_update_links(
+                                &expanded_state.blocks, 
+                                block.id, 
+                                &mut exit_gates, 
+                                gate_idx
+                            );
+                            
+                            let mut exit_history = expanded_state.history.clone();
+                            exit_history.push((vec!(block.id), None, 0)); // None 表示退出
+                            
+                            all_next_states.push(State {
+                                blocks: exit_blocks,
+                                gates: exit_gates,
+                                history: exit_history,
+                            });
                             found_removable = true;
                             break;
                         }
@@ -460,7 +508,7 @@ pub fn solve_main(stage: &ColorBlkStage) -> Option<Vec<(Vec<u8>, Option<Directio
             Some(solution.history)
         }
         None => {
-            println!("no solution found");
+            info!("no solution found");
             None
         }
     }
