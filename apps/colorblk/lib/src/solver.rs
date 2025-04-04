@@ -405,7 +405,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
                             continue;
                         }
 
-                        if let Some((exit_dir, gate_idx)) = can_exit(block, &expanded_state.gates) {
+                        if let Some((_exit_dir, gate_idx)) = can_exit(block, &expanded_state.gates) {
                             // 找到可移除方块的状态，设置为新起点
                             {
                                 let mut restart = restart_search.lock().unwrap();

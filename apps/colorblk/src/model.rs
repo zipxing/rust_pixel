@@ -140,7 +140,7 @@ impl ColorblkModel {
                             // 处理方块状态
                             if block.color2 != 0 {
                                 // 双色方块：改变颜色而不是移除
-                                if let Some(pos) = current_positions.get_mut(block_idx) {
+                                if let Some(_pos) = current_positions.get_mut(block_idx) {
                                     // 不需要标记为移除，只需保持位置不变
                                 }
                             } else {
