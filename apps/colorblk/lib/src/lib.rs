@@ -346,7 +346,7 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
             // 上方门
             (0, 0, _, w) if w > 0 => {
                 // 方块顶部在顶边界，并且方块左右边界处于门的范围内
-                if block_top == 0 && block_left <= gate.x + gate.width - 1 && block_right >= gate.x
+                if block_top == 0 && block_right <= gate.x + gate.width - 1 && block_left >= gate.x
                 {
                     return Some((Direction::Up, idx));
                 }
@@ -355,8 +355,8 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
             (y, 0, _, w) if w > 0 => {
                 // 方块底部触及下边界，并且方块左右边界处于门的范围内
                 if block_bottom == y
-                    && block_left <= gate.x + gate.width - 1
-                    && block_right >= gate.x
+                    && block_right <= gate.x + gate.width - 1
+                    && block_left >= gate.x
                 {
                     return Some((Direction::Down, idx));
                 }
@@ -365,8 +365,8 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
             (_, h, 0, 0) if h > 0 => {
                 // 方块左侧在左边界，并且方块上下边界处于门的范围内
                 if block_left == 0
-                    && block_top <= gate.y + gate.height - 1
-                    && block_bottom >= gate.y
+                    && block_bottom <= gate.y + gate.height - 1
+                    && block_top >= gate.y
                 {
                     return Some((Direction::Left, idx));
                 }
@@ -375,8 +375,8 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
             (_, h, x, 0) if h > 0 => {
                 // 方块右侧触及右边界，并且方块上下边界处于门的范围内
                 if block_right == x
-                    && block_top <= gate.y + gate.height - 1
-                    && block_bottom >= gate.y
+                    && block_bottom <= gate.y + gate.height - 1
+                    && block_top >= gate.y
                 {
                     return Some((Direction::Right, idx));
                 }
