@@ -2,7 +2,9 @@ pub mod shape;
 pub use crate::shape::*;
 pub mod solver;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BoardValue {
     pub obstacle: u8, // 0: no obstacle, 255: block all, other: allow_color
     pub block_id: u8,
@@ -11,7 +13,7 @@ pub struct BoardValue {
 pub type Board = Vec<Vec<BoardValue>>;
 
 /// 表示障碍物的结构体
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Obstacle {
     pub x: u8,
     pub y: u8,
@@ -19,7 +21,7 @@ pub struct Obstacle {
 }
 
 /// 表示一个关卡的初始状态
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColorBlkStage {
     pub board_width: usize,
     pub board_height: usize,
@@ -57,7 +59,7 @@ impl ColorBlkStage {
 }
 
 /// 描述门（Gate）的结构体
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Gate {
     pub x: u8, // 对于上/下门：x ∈ [0, BOARD_WIDTH - gate.width]
     pub y: u8, // 对于左/右门：y ∈ [0, BOARD_HEIGHT - gate.height]
@@ -71,7 +73,7 @@ pub struct Gate {
 }
 
 /// 定义方向枚举
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Direction {
     Up,
     Down,
@@ -80,7 +82,7 @@ pub enum Direction {
 }
 
 /// 表示一个块的数据结构
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Block {
     pub id: u8,         // 块的唯一自增编号，从1开始
     pub shape: u8,      // 块使用的形状索引（取值范围：0..SHAPE.len()-1）

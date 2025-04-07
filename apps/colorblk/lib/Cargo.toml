@@ -9,5 +9,6 @@ edition = "2021"
 rayon = "1.10.0"
 rand = "0.8.5"
 log = "0.4.16"
+serde = { version = "1.0.136", features = ["derive"] }
 rust_pixel = { path = "../../..", default-features = false }
 
