@@ -1,15 +1,15 @@
 use colorblk_lib::solver::solve_main;
-use colorblk_lib::{Obstacle, Block, ColorBlkStage, Direction, Gate, SHAPE, SHAPE_IDX};
+use colorblk_lib::{Block, ColorBlkStage, Direction, Gate, Obstacle, SHAPE, SHAPE_IDX};
 use log::info;
 use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
     game::Model,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::{from_str, Value};
 use std::fs::File;
 use std::io::Read;
-use serde_json::{Value, from_str};
-use serde::{Serialize, Deserialize};
 use std::path::Path;
 
 pub const COLORBLKW: u16 = 90;
@@ -27,10 +27,10 @@ pub struct ColorblkModel {
     // 存储初始关卡状态
     pub stage: ColorBlkStage,
     // 存储计算结果的字段
-    pub solution: Option<Vec<(Vec<u8>, Option<Direction>, u8)>>, 
+    pub solution: Option<Vec<(Vec<u8>, Option<Direction>, u8)>>,
     pub current_step: usize,
     // 存储门状态（从stage初始化，在处理solution时更新）
-    pub gates_state: Vec<Gate>,                        
+    pub gates_state: Vec<Gate>,
     // 存储每个格子的渲染状态 (border_type, color, symbol)
     pub render_state: Vec<(u8, i8)>,
 }
@@ -87,7 +87,7 @@ impl ColorblkModel {
     fn update_render_state(&mut self) {
         // 重置渲染状态
         self.render_state = vec![(0, -1); self.stage.board_width * self.stage.board_height];
-        
+
         // 复位gates_state为初始状态，然后根据历史步骤更新
         self.gates_state = self.stage.gates.clone();
 
@@ -123,25 +123,25 @@ impl ColorblkModel {
                     for block_id in block_ids {
                         // 获取方块索引
                         let block_idx = *block_id as usize - 1;
-                        
+
                         if block_idx < self.stage.blocks.len() {
                             let block = &self.stage.blocks[block_idx];
-                            
+
                             // 找到方块通过的门并更新门状态
                             for gate in &mut self.gates_state {
                                 if gate.color == block.color && gate.switch {
                                     // 执行门状态变化逻辑
                                     gate.switch = !gate.switch;
-                                    
+
                                     // 如果门有锁且方块有钥匙，则解锁
                                     if gate.lock > 0 && block.key > 0 {
                                         gate.lock = 0;
                                     }
-                                    
+
                                     break;
                                 }
                             }
-                            
+
                             // 处理方块状态
                             if block.color2 != 0 {
                                 // 双色方块：改变颜色而不是移除
@@ -191,9 +191,9 @@ impl ColorblkModel {
                 }
             }
         }
-        
+
         // 这里可以添加代码来根据self.gates_state渲染门的状态
-        
+
         info!("render_state....{:?}", self.render_state);
     }
 }
@@ -205,7 +205,7 @@ impl Model for ColorblkModel {
 
         // 加载关卡数据
         let level = load_level_from_json("test.json");
-        
+
         // 保存初始布局和门
         self.stage = ColorBlkStage::new(level.width, level.height);
         context.state = ColorblkState::Normal as u8;
@@ -278,19 +278,25 @@ fn load_level_from_json(filename: &str) -> LevelData {
     // 尝试打开文件
     let file_path = Path::new(filename);
     info!("尝试加载关卡文件: {}", file_path.display());
-    
+
     let mut file = match File::open(file_path) {
         Ok(file) => file,
         Err(e) => {
             // 尝试从根目录加载
             let root_path = Path::new("/Users/xinzhou/rust_pixel_work").join(filename);
             info!("尝试从根目录加载关卡文件: {}", root_path.display());
-            
+
             match File::open(&root_path) {
                 Ok(file) => file,
                 Err(e2) => {
                     // 文件加载失败时使用默认值
-                    info!("无法打开关卡文件 {} 或 {}: {}, {}", file_path.display(), root_path.display(), e, e2);
+                    info!(
+                        "无法打开关卡文件 {} 或 {}: {}, {}",
+                        file_path.display(),
+                        root_path.display(),
+                        e,
+                        e2
+                    );
                     return LevelData {
                         width: 5,
                         height: 9,
@@ -334,27 +340,27 @@ fn load_level_from_json(filename: &str) -> LevelData {
     // 从JSON中获取宽度和高度
     let width = json_value["wh"].as_u64().unwrap_or(5) as usize;
     let height = json_value["ht"].as_u64().unwrap_or(9) as usize;
-    
+
     info!("成功加载关卡，大小: {}x{}", width, height);
 
     // 创建一个新关卡
     let mut blocks = Vec::new();
     let mut gates = Vec::new();
     let mut obstacles = Vec::new();
-    
+
     // 用于ID自增
     let mut next_id: u8 = 1;
 
     // 解析所有槽位
     if let Some(slots) = json_value["ss"].as_array() {
         info!("发现 {} 个槽位", slots.len());
-        
+
         for (slot_index, slot) in slots.iter().enumerate() {
             // 获取基本属性
-            let x = slot["x"].as_u64().unwrap_or(0) as u8;
+            let mut x = slot["x"].as_u64().unwrap_or(0) as u8;
             let y = slot["y"].as_u64().unwrap_or(0) as u8;
             let block_type = slot["bp"].as_u64().unwrap_or(0) as u8;
-            
+
             // 从bd中解析id
             let raw_id = slot["bd"].as_u64().unwrap_or(0) as u32;
             let block_id = if raw_id > 0 {
@@ -364,11 +370,13 @@ fn load_level_from_json(filename: &str) -> LevelData {
                 next_id += 1;
                 id
             };
-            
+
             let block_shape_id = slot["bi"].as_u64().unwrap_or(0) as u8;
-            
-            info!("处理槽位 #{}: 位置({},{}), 类型={}, ID={}", 
-                   slot_index, x, y, block_type, block_id);
+
+            info!(
+                "处理槽位 #{}: 位置({},{}), 类型={}, ID={}",
+                slot_index, x, y, block_type, block_id
+            );
 
             // 根据方块类型处理不同的对象
             match block_type {
@@ -380,7 +388,16 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     //     SHAPE_IDX[0] as u8 // 默认使用第一个形状
                     // };
                     let shape_idx = block_shape_id;
-                    
+
+                    match shape_idx {
+                        12 | 17 | 22 | 25 | 26 | 34 => {
+                            x -= 1;
+                        }
+                        16 => x -= 2,
+                        33 => x -= 3,
+                        _ => {}
+                    }
+
                     // 获取颜色
                     let color = if let Some(layers) = slot["l"].as_array() {
                         if !layers.is_empty() {
@@ -399,7 +416,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     } else {
                         0
                     };
-                    
+
                     // 获取其他属性
                     let block_limit_dir = slot["br"].as_u64().unwrap_or(0) as u8;
                     let ice_count = slot["i"].as_u64().unwrap_or(0) as u8;
@@ -407,7 +424,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     let lock = slot["lt"].as_u64().unwrap_or(0) as u8;
                     let star = slot["s"].as_u64().unwrap_or(0) as u8;
                     let scissor = slot["h"].as_u64().unwrap_or(0) as u8;
-                    
+
                     // 处理链接
                     let mut link = Vec::new();
                     if let Some(link_value) = &slot.get("l") {
@@ -421,7 +438,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
                             }
                         }
                     }
-                    
+
                     // 处理绳索
                     let mut ropes = Vec::new();
                     if let Some(rope_info) = slot["r"].as_array() {
@@ -431,7 +448,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
                             }
                         }
                     }
-                    
+
                     let block = Block {
                         id: block_id,
                         shape: shape_idx,
@@ -448,14 +465,17 @@ fn load_level_from_json(filename: &str) -> LevelData {
                         y: y,
                         link: link,
                     };
-                    
-                    info!("添加移动方块: ID={}, 颜色={}, 形状={}", block_id, color, block_shape_id);
+
+                    info!(
+                        "添加移动方块: ID={}, 颜色={}, 形状={}",
+                        block_id, color, block_shape_id
+                    );
                     blocks.push(block);
-                },
+                }
                 2 => {
                     // 墙壁或障碍物
                     info!("跳过墙壁障碍物: ({},{})", x, y);
-                },
+                }
                 3 => {
                     // 门
                     let color = if let Some(layers) = slot["l"].as_array() {
@@ -475,19 +495,19 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     } else {
                         0
                     };
-                    
+
                     let door_dir = slot["dr"].as_u64().unwrap_or(0) as u8;
                     let star = slot["s"].as_u64().unwrap_or(0) as u8;
                     let ice = slot["i"].as_u64().unwrap_or(0) as u8;
                     let lock = slot["m"].as_u64().unwrap_or(0) as u8;
-                    
+
                     // 根据门的方向创建不同的门
                     let (width, height) = match door_dir {
                         1 => (block_shape_id + 1, 0), // 上/下门
                         2 => (0, block_shape_id + 1), // 左/右门
                         _ => (1, 0),                  // 默认为上/下门
                     };
-                    
+
                     let gate = Gate {
                         x: x,
                         y: y,
@@ -499,10 +519,13 @@ fn load_level_from_json(filename: &str) -> LevelData {
                         height: height,
                         switch: true, // 默认开启状态
                     };
-                    
-                    info!("添加门: 位置({},{}), 颜色={}, 方向={}", x, y, color, door_dir);
+
+                    info!(
+                        "添加门: 位置({},{}), 颜色={}, 方向={}",
+                        x, y, color, door_dir
+                    );
                     gates.push(gate);
-                },
+                }
                 4 => {
                     // 普通障碍物
                     let allow_color = if let Some(layers) = slot["l"].as_array() {
@@ -522,16 +545,16 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     } else {
                         0
                     };
-                    
+
                     let obstacle = Obstacle {
                         x: x,
                         y: y,
                         allow_color: allow_color,
                     };
-                    
+
                     info!("添加障碍物: 位置({},{}), 允许颜色={}", x, y, allow_color);
                     obstacles.push(obstacle);
-                },
+                }
                 _ => {
                     info!("跳过未知类型 {} 位置({},{})", block_type, x, y);
                 }
@@ -541,24 +564,42 @@ fn load_level_from_json(filename: &str) -> LevelData {
 
     // 在返回LevelData前打印解析出的数据
     info!("\n========== 解析结果 ==========");
-    info!("总计解析: {} 个方块, {} 个门, {} 个障碍物", blocks.len(), gates.len(), obstacles.len());
-    
+    info!(
+        "总计解析: {} 个方块, {} 个门, {} 个障碍物",
+        blocks.len(),
+        gates.len(),
+        obstacles.len()
+    );
+
     info!("\n---------- 方块 ----------");
     for (i, block) in blocks.iter().enumerate() {
         info!("方块 #{}: ID={}, 位置=({},{}), 形状={}, 颜色={}, 冰层={}, 钥匙={}, 锁={}, 星标={}, 链接={:?}",
             i, block.id, block.x, block.y, block.shape, block.color, block.ice, block.key, block.lock, block.star, block.link);
     }
-    
+
     info!("\n---------- 门 ----------");
     for (i, gate) in gates.iter().enumerate() {
-        info!("门 #{}: 位置=({},{}), 颜色={}, 宽度={}, 高度={}, 冰层={}, 锁={}, 星标={}, 开关={}",
-            i, gate.x, gate.y, gate.color, gate.width, gate.height, gate.ice, gate.lock, gate.star, gate.switch);
+        info!(
+            "门 #{}: 位置=({},{}), 颜色={}, 宽度={}, 高度={}, 冰层={}, 锁={}, 星标={}, 开关={}",
+            i,
+            gate.x,
+            gate.y,
+            gate.color,
+            gate.width,
+            gate.height,
+            gate.ice,
+            gate.lock,
+            gate.star,
+            gate.switch
+        );
     }
-    
+
     info!("\n---------- 障碍物 ----------");
     for (i, obstacle) in obstacles.iter().enumerate() {
-        info!("障碍物 #{}: 位置=({},{}), 允许颜色={}",
-            i, obstacle.x, obstacle.y, obstacle.allow_color);
+        info!(
+            "障碍物 #{}: 位置=({},{}), 允许颜色={}",
+            i, obstacle.x, obstacle.y, obstacle.allow_color
+        );
     }
     info!("============================\n");
 
@@ -877,8 +918,8 @@ fn create_default_blocks() -> Vec<Block> {
     // vec![
     //     Block {
     //         id: 1,
-    //         shape: SHAPE_IDX[0] as u8, 
-    //         color: 1,                  
+    //         shape: SHAPE_IDX[0] as u8,
+    //         color: 1,
     //         color2: 2,
     //         star: 0,
     //         dir: 0,
@@ -896,8 +937,8 @@ fn create_default_blocks() -> Vec<Block> {
     vec![
         Block {
             id: 1,
-            shape: SHAPE_IDX[1] as u8, 
-            color: 4,                  
+            shape: SHAPE_IDX[1] as u8,
+            color: 4,
             color2: 0,
             star: 0,
             dir: 0,
@@ -912,8 +953,8 @@ fn create_default_blocks() -> Vec<Block> {
         },
         Block {
             id: 2,
-            shape: SHAPE_IDX[4] as u8, 
-            color: 8,                  
+            shape: SHAPE_IDX[4] as u8,
+            color: 8,
             color2: 0,
             star: 0,
             dir: 0,
@@ -928,8 +969,8 @@ fn create_default_blocks() -> Vec<Block> {
         },
         Block {
             id: 3,
-            shape: SHAPE_IDX[1] as u8, 
-            color: 7,                  
+            shape: SHAPE_IDX[1] as u8,
+            color: 7,
             color2: 0,
             star: 0,
             dir: 0,
@@ -1070,7 +1111,6 @@ fn create_default_blocks() -> Vec<Block> {
             y: 5,
             link: Vec::new(),
         },
-
         Block {
             id: 12,
             shape: SHAPE_IDX[2] as u8,
@@ -1087,7 +1127,6 @@ fn create_default_blocks() -> Vec<Block> {
             y: 5,
             link: Vec::new(),
         },
-
         Block {
             id: 13,
             shape: SHAPE_IDX[2] as u8,
@@ -1104,7 +1143,6 @@ fn create_default_blocks() -> Vec<Block> {
             y: 5,
             link: Vec::new(),
         },
-
         Block {
             id: 14,
             shape: SHAPE_IDX[9] as u8,
@@ -1121,7 +1159,6 @@ fn create_default_blocks() -> Vec<Block> {
             y: 7,
             link: Vec::new(),
         },
-
         Block {
             id: 15,
             shape: SHAPE_IDX[4] as u8,
