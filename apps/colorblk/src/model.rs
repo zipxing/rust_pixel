@@ -1,19 +1,20 @@
 use colorblk_lib::solver::solve_main;
-use colorblk_lib::{Block, ColorBlkStage, Direction, Gate, Obstacle, SHAPE, SHAPE_IDX};
+use colorblk_lib::{
+    Block, ColorBlkStage, Direction, Gate, Obstacle, SHAPE, SHAPE_IDX, SHAPE_IDX_COCOS,
+};
 use log::info;
 use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode},
     game::Model,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::{from_str, Value};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-pub const COLORBLKW: u16 = 90;
-pub const COLORBLKH: u16 = 57;
+pub const COLORBLKW: u16 = 100;
+pub const COLORBLKH: u16 = 58;
 pub const CELLW: usize = 10;
 pub const CELLH: usize = 5;
 
@@ -265,7 +266,7 @@ impl Model for ColorblkModel {
 }
 
 /// 从JSON文件加载关卡数据
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 struct LevelData {
     width: usize,
     height: usize,
@@ -381,13 +382,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
             // 根据方块类型处理不同的对象
             match block_type {
                 1 => {
-                    // 可移动方块
-                    // let shape_idx = if block_shape_id < SHAPE_IDX.len() as u8 {
-                    //     SHAPE_IDX[block_shape_id as usize] as u8
-                    // } else {
-                    //     SHAPE_IDX[0] as u8 // 默认使用第一个形状
-                    // };
-                    let shape_idx = block_shape_id;
+                    let mut shape_idx = block_shape_id;
 
                     match shape_idx {
                         12 | 17 | 22 | 25 | 26 | 34 => {
@@ -397,6 +392,8 @@ fn load_level_from_json(filename: &str) -> LevelData {
                         33 => x -= 3,
                         _ => {}
                     }
+
+                    shape_idx = SHAPE_IDX_COCOS[block_shape_id as usize] as u8;
 
                     // 获取颜色
                     let color = if let Some(layers) = slot["l"].as_array() {
@@ -422,7 +419,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     let ice_count = slot["i"].as_u64().unwrap_or(0) as u8;
                     let key = slot["k"].as_u64().unwrap_or(0) as u8;
                     let lock = slot["lt"].as_u64().unwrap_or(0) as u8;
-                    let star = slot["s"].as_u64().unwrap_or(0) as u8;
+                    let star = slot["de"].as_u64().unwrap_or(0) as u8;
                     let scissor = slot["h"].as_u64().unwrap_or(0) as u8;
 
                     // 处理链接
@@ -461,9 +458,10 @@ fn load_level_from_json(filename: &str) -> LevelData {
                         lock: lock,
                         scissor: scissor,
                         ropes: ropes,
-                        x: x,
-                        y: y,
-                        link: link,
+                        x: x - 1,
+                        y: y - 1,
+                        // link: link,
+                        link: vec![],
                     };
 
                     info!(
@@ -497,20 +495,33 @@ fn load_level_from_json(filename: &str) -> LevelData {
                     };
 
                     let door_dir = slot["dr"].as_u64().unwrap_or(0) as u8;
-                    let star = slot["s"].as_u64().unwrap_or(0) as u8;
+                    let star = slot["de"].as_u64().unwrap_or(0) as u8;
                     let ice = slot["i"].as_u64().unwrap_or(0) as u8;
                     let lock = slot["m"].as_u64().unwrap_or(0) as u8;
+                    let door_shape_id = slot["bi"].as_u64().unwrap_or(0) as u8;
 
                     // 根据门的方向创建不同的门
                     let (width, height) = match door_dir {
-                        1 => (block_shape_id + 1, 0), // 上/下门
-                        2 => (0, block_shape_id + 1), // 左/右门
-                        _ => (1, 0),                  // 默认为上/下门
+                        // 左右门
+                        0 | 1 => match door_shape_id {
+                            0 => (0, 1),
+                            1 => (0, 2),
+                            3 => (0, 3),
+                            _ => (0, 1),
+                        },
+                        // 上下门
+                        2 | 3 => match door_shape_id {
+                            0 => (1, 0),
+                            2 => (2, 0),
+                            4 => (3, 0),
+                            _ => (1, 0),
+                        },
+                        _ => (1, 0), // 默认为上/下门
                     };
 
                     let gate = Gate {
-                        x: x,
-                        y: y,
+                        x: if x == 0 { 0 } else { x - 1 },
+                        y: if y == 0 { 0 } else { y - 1 },
                         color: color,
                         ice: ice,
                         lock: lock,
@@ -572,7 +583,8 @@ fn load_level_from_json(filename: &str) -> LevelData {
     );
 
     info!("\n---------- 方块 ----------");
-    for (i, block) in blocks.iter().enumerate() {
+    for (i, block) in blocks.iter_mut().enumerate() {
+        block.id = (i + 1) as u8;
         info!("方块 #{}: ID={}, 位置=({},{}), 形状={}, 颜色={}, 冰层={}, 钥匙={}, 锁={}, 星标={}, 链接={:?}",
             i, block.id, block.x, block.y, block.shape, block.color, block.ice, block.key, block.lock, block.star, block.link);
     }
