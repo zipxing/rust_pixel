@@ -28,9 +28,6 @@ const COLORS: [Color; 8] = [
     Color::Indexed(202), // 边框颜色
 ];
 
-// 方块符号
-const GRID_SYMS: &str = "·";
-
 pub struct ColorblkRender {
     pub panel: Panel,
 }
@@ -61,15 +58,6 @@ impl ColorblkRender {
 
         Self { panel: t }
     }
-
-    // pub fn draw_solution(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
-    //     if data.solution.is_some() {
-    //         self.draw_moving(ctx, data, timer_percent("solution"));
-    //     } else {
-    //         self.draw_ready(ctx, data);
-    //     }
-    //     self.draw_status(ctx, data);
-    // }
 
     pub fn draw_cell(
         &mut self,
@@ -126,72 +114,6 @@ impl ColorblkRender {
         // }
     }
 
-    // pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
-    //     let msg = if let Some(solution) = &data.solution {
-    //         format!("Step: {}/{}", data.current_step, solution.len())
-    //     } else {
-    //         "No solution found".to_string()
-    //     };
-
-    //     let l = self.panel.get_sprite("msg");
-    //     l.set_color_str(0, 0, &msg, Color::White, Color::Reset);
-    // }
-
-    // pub fn draw_moving(&mut self, ctx: &mut Context, d: &mut ColorblkModel, per: f32) {
-    //     // 绘制网格
-    //     self.draw_grid(ctx);
-
-    //     // // 绘制门
-    //     // for gate in &d.gates {
-    //     //     let sx = gate.x * 8;
-    //     //     let sy = gate.y * 4;
-    //     //     self.draw_cell(
-    //     //         ctx,
-    //     //         (gate.y * 8 + gate.x) as i16,
-    //     //         sx as u16,
-    //     //         sy as u16,
-    //     //         0,
-    //     //         gate.color as i8,
-    //     //         "",
-    //     //         0,
-    //     //         true,
-    //     //     );
-    //     // }
-
-    //     // 绘制移动中的方块
-    //     if let Some(solution) = &d.solution {
-    //         if d.current_step < solution.len() {
-    //             let (block_id, direction, steps) = solution[d.current_step];
-    //             if let Some(block) = d.initial_blocks.iter().find(|b| b.id == block_id) {
-    //                 if let Some(dir) = direction {
-    //                     // 计算移动后的位置
-    //                     let (dx, dy) = match dir {
-    //                         Direction::Up => (0, -1),
-    //                         Direction::Down => (0, 1),
-    //                         Direction::Left => (-1, 0),
-    //                         Direction::Right => (1, 0),
-    //                     };
-    //                     let new_x = block.x as i16 + dx;
-    //                     let new_y = block.y as i16 + dy;
-
-    //                     let sx = new_x * 8;
-    //                     let sy = new_y * 4;
-    //                     self.draw_cell(
-    //                         ctx,
-    //                         (new_y * 8 + new_x) as i16,
-    //                         sx as u16,
-    //                         sy as u16,
-    //                         0,
-    //                         block.color as i8,
-    //                         BLOCK_SYMS[block.color as usize % BLOCK_SYMS.len()],
-    //                         0,
-    //                     );
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
     pub fn draw_ready(&mut self, ctx: &mut Context, d: &mut ColorblkModel) {
         // 清空所有内容
         {
@@ -215,11 +137,11 @@ impl ColorblkRender {
                 if gate.height == 0 {
                     // 上下门：绘制一行彩色字符
                     for x in gate.x..gate.x + gate.width {
-                        let screen_x = ((x as usize + 1) * 10) as u16; // 每个单元格宽度为10
+                        let screen_x = (x as usize * 10) as u16 + 1; // 每个单元格宽度为10
                         let screen_y = if gate.y == 0 {
                             0
                         } else {
-                            (d.stage.board_height * 5) as u16
+                            (d.stage.board_height * 5) as u16 + 1
                         }; // 每个单元格高度为5
                         back.set_color_str(
                             screen_x as u16, // 居中显示
@@ -235,9 +157,9 @@ impl ColorblkRender {
                         let screen_x = if gate.x == 0 {
                             0
                         } else {
-                            (d.stage.board_width * 12) as u16
+                            (d.stage.board_width * 10) as u16 + 1
                         }; // 每个单元格宽度为10
-                        let screen_y = ((y as usize + 1) * 5) as u16; // 每个单元格高度为5
+                        let screen_y = (y as usize  * 5) as u16 + 1; // 每个单元格高度为5
 
                         for r in 0..5 {
                             back.set_color_str(
@@ -259,8 +181,8 @@ impl ColorblkRender {
             if color >= 0 {
                 let x = i % d.stage.board_width;
                 let y = i / d.stage.board_width;
-                let sx = ((x + 1) * 10) as u16;
-                let sy = ((y + 1) * 5) as u16;
+                let sx = (x * 10) as u16 + 1;
+                let sy = (y * 5) as u16 + 1;
                 self.draw_cell(ctx, i as i16, sx, sy, border_type, color, "", 0);
             }
         }

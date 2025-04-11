@@ -14,8 +14,8 @@ use std::io::Read;
 use std::path::Path;
 use std::collections::{HashMap, HashSet};
 
-pub const COLORBLKW: u16 = 148;
-pub const COLORBLKH: u16 = 78;
+pub const COLORBLKW: u16 = 100;
+pub const COLORBLKH: u16 = 61;
 pub const CELLW: usize = 10;
 pub const CELLH: usize = 5;
 
@@ -340,8 +340,8 @@ fn load_level_from_json(filename: &str) -> LevelData {
     };
 
     // 从JSON中获取宽度和高度
-    let width = json_value["wh"].as_u64().unwrap_or(5) as usize;
-    let height = json_value["ht"].as_u64().unwrap_or(9) as usize;
+    let width = json_value["wh"].as_u64().unwrap_or(5) as usize - 2;
+    let height = json_value["ht"].as_u64().unwrap_or(9) as usize - 2;
 
     info!("成功加载关卡，大小: {}x{}", width, height);
 
@@ -381,7 +381,7 @@ fn load_level_from_json(filename: &str) -> LevelData {
         }
         
         // 第二轮：创建方块并处理链接
-        for (slot_index, slot) in slots.iter().enumerate() {
+        for (_slot_index, slot) in slots.iter().enumerate() {
             // 获取基本属性
             let mut x = slot["x"].as_u64().unwrap_or(0) as u8;
             let y = slot["y"].as_u64().unwrap_or(0) as u8;
@@ -549,8 +549,8 @@ fn load_level_from_json(filename: &str) -> LevelData {
                         },
                         _ => (1, 0), // 默认为上/下门
                     };
-                    
-                    let gate = Gate {
+
+                    let mut gate = Gate {
                         x: if x == 0 { 0 } else { x - 1 },
                         y: if y == 0 { 0 } else { y - 1 },
                         color,
@@ -561,8 +561,14 @@ fn load_level_from_json(filename: &str) -> LevelData {
                         height,
                         switch: true, // 默认开启状态
                     };
+
+                    match door_dir {
+                        0 => gate.x -= 1,
+                        2 => gate.y -= 1,
+                        _ => {}
+                    }
                     
-                    // info!("添加门: 位置({},{}), 颜色={}, 方向={}", x, y, color, door_dir);
+                    info!("添加门: 位置({},{}), 颜色={}, 方向={}", x, y, color, door_dir);
                     gates.push(gate);
                 },
                 4 => {
