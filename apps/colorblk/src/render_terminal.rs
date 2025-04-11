@@ -45,7 +45,7 @@ impl ColorblkRender {
         t.add_sprite(tsback, "back");
 
         // 为每个格子创建精灵（这里使用足够大的数量以支持各种棋盘大小）
-        for i in 0..120 {
+        for i in 0..300 {
             // 最大支持8x8的棋盘
             t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
@@ -82,9 +82,9 @@ impl ColorblkRender {
         msg: &str,
         msg_color: i8,
     ) {
-        if id >= 60 {
-            return;
-        }
+        // if id >= 60 {
+        //     return;
+        // }
         let l = self.panel.get_sprite(&format!("cc{}", id));
         let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
         l.content.resize(area);
@@ -108,22 +108,22 @@ impl ColorblkRender {
     }
 
     pub fn draw_grid(&mut self, ctx: &mut Context, d: &mut ColorblkModel) {
-        for y in 0..d.stage.board_height {
-            for x in 0..d.stage.board_width {
-                let sx = (x + 1) * 10;
-                let sy = (y + 1) * 5;
-                let l = self
-                    .panel
-                    .get_sprite(&format!("cc{}", y * d.stage.board_width + x));
-                let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
-                l.content.resize(area);
-                l.content.reset();
-                l.set_pos(sx as u16, sy as u16);
-                l.content
-                    .set_style(l.content.area, Style::default().fg(COLORS[7]));
-                l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
-            }
-        }
+        // for y in 0..d.stage.board_height {
+        //     for x in 0..d.stage.board_width {
+        //         let sx = (x + 1) * 10;
+        //         let sy = (y + 1) * 5;
+        //         let l = self
+        //             .panel
+        //             .get_sprite(&format!("cc{}", y * d.stage.board_width + x));
+        //         let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
+        //         l.content.resize(area);
+        //         l.content.reset();
+        //         l.set_pos(sx as u16, sy as u16);
+        //         l.content
+        //             .set_style(l.content.area, Style::default().fg(COLORS[7]));
+        //         l.set_color_str(3, 2, GRID_SYMS, COLORS[7], Color::Reset);
+        //     }
+        // }
     }
 
     // pub fn draw_status(&mut self, ctx: &mut Context, data: &mut ColorblkModel) {
@@ -219,7 +219,7 @@ impl ColorblkRender {
                         let screen_y = if gate.y == 0 {
                             0
                         } else {
-                            (d.stage.board_height * 6) as u16
+                            (d.stage.board_height * 5) as u16
                         }; // 每个单元格高度为5
                         back.set_color_str(
                             screen_x as u16, // 居中显示
@@ -235,7 +235,7 @@ impl ColorblkRender {
                         let screen_x = if gate.x == 0 {
                             0
                         } else {
-                            (d.stage.board_width * 13) as u16
+                            (d.stage.board_width * 10) as u16
                         }; // 每个单元格宽度为10
                         let screen_y = ((y as usize + 1) * 5) as u16; // 每个单元格高度为5
 

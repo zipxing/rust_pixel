@@ -1,15 +1,20 @@
 pub mod shape;
 pub use crate::shape::*;
 pub mod solver;
+use log::info;
 
 use serde::{Serialize, Deserialize};
 
+/// 棋盘网格格子中的数值，障碍及方块
+/// 对于半透明颜色障碍，可能并存
+/// 都为0表示空白
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BoardValue {
     pub obstacle: u8, // 0: no obstacle, 255: block all, other: allow_color
     pub block_id: u8,
 }
 
+/// 棋盘网格二维数组
 pub type Board = Vec<Vec<BoardValue>>;
 
 /// 表示障碍物的结构体
@@ -392,7 +397,7 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
 
 /// 辅助函数：从块列表中移除指定块，并更新剩余块的 group 链接（删除已退出块的 id）
 /// 如果门需要变化，则同时更新门的状态
-pub fn remove_block_and_update_links(
+pub fn remove_block_and_update(
     blocks: &[Block],
     id: u8,
     gates: &mut Vec<Gate>,
@@ -453,6 +458,7 @@ pub fn remove_block_and_update_links(
             // 当有方块退出时，减少所有方块的冰层
             if new_block.ice > 0 {
                 new_block.ice -= 1;
+                info!("ICE--");
             }
             
             new_blocks.push(new_block);
@@ -481,5 +487,4 @@ mod tests {
     #[test]
     fn it_works() {
         // let result = ColorblkData::new();
-    }
-}
+    } }

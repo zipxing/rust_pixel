@@ -46,7 +46,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
 
         if let Some((_dir, gate_idx)) = can_exit(block, &state.gates) {
             let mut exit_gates = state.gates.clone();
-            let new_blocks = remove_block_and_update_links(&state.blocks, block.id, &mut exit_gates, gate_idx);
+            let new_blocks = remove_block_and_update(&state.blocks, block.id, &mut exit_gates, gate_idx);
             let mut new_history = state.history.clone();
             new_history.push((vec!(block.id), None, 0)); // None 表示退出
 
@@ -120,7 +120,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                             if let Some((_exit_dir, gate_idx)) = can_exit(moved_block, &new_state.gates) {
                                 // 找到匹配的门的索引
                                 let mut exit_gates = new_state.gates.clone();
-                                let exit_blocks = remove_block_and_update_links(
+                                let exit_blocks = remove_block_and_update(
                                     &new_state.blocks, 
                                     moved_block.id, 
                                     &mut exit_gates,
@@ -225,7 +225,7 @@ fn expand(state: &State, stage: &ColorBlkStage) -> (bool, Vec<State>) {
                         if let Some((_exit_dir, gate_idx)) = can_exit(moved_block, &new_state.gates) {
                             // 找到匹配的门的索引
                             let mut exit_gates = new_state.gates.clone();
-                            let exit_blocks = remove_block_and_update_links(
+                            let exit_blocks = remove_block_and_update(
                                 &new_state.blocks, 
                                 moved_block.id, 
                                 &mut exit_gates,
@@ -421,7 +421,7 @@ fn solve(initial_blocks: Vec<Block>, stage: &ColorBlkStage, use_parallel: bool) 
                             
                             // 只添加这个状态，放弃其他状态
                             let mut exit_gates = expanded_state.gates.clone();
-                            let exit_blocks = remove_block_and_update_links(
+                            let exit_blocks = remove_block_and_update(
                                 &expanded_state.blocks, 
                                 block.id, 
                                 &mut exit_gates, 
