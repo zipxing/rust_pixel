@@ -235,7 +235,7 @@ impl ColorblkRender {
                         let screen_x = if gate.x == 0 {
                             0
                         } else {
-                            (d.stage.board_width * 10) as u16
+                            (d.stage.board_width * 12) as u16
                         }; // 每个单元格宽度为10
                         let screen_y = ((y as usize + 1) * 5) as u16; // 每个单元格高度为5
 
