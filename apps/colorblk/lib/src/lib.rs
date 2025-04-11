@@ -325,7 +325,8 @@ pub fn move_group(
 }
 
 /// 重构后的 can_exit 函数：合并四个方位门的处理逻辑，同时返回方向和门的索引
-pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
+/// 增加检查：尝试向门的方向移动一步，如果能够移动，才认为可以退出
+pub fn can_exit(block: &Block, gates: &[Gate], blocks: &[Block]) -> Option<(Direction, usize)> {
     let shape_data = &SHAPE[block.shape as usize];
 
     // 计算方块的边界
@@ -348,14 +349,15 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
             continue;
         }
 
-        // 根据门的类型（由width和height确定）确定方向和检查位置
+        // 检查位置与门匹配
+        let mut exit_direction = None;
+        
         match (gate.y, gate.height, gate.x, gate.width) {
             // 上方门
             (0, 0, _, w) if w > 0 => {
                 // 方块顶部在顶边界，并且方块左右边界处于门的范围内
-                if block_top == 0 && block_right <= gate.x + gate.width - 1 && block_left >= gate.x
-                {
-                    return Some((Direction::Up, idx));
+                if block_top == 0 && block_right <= gate.x + gate.width - 1 && block_left >= gate.x {
+                    exit_direction = Some(Direction::Up);
                 }
             }
             // 下方门
@@ -365,7 +367,7 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
                     && block_right <= gate.x + gate.width - 1
                     && block_left >= gate.x
                 {
-                    return Some((Direction::Down, idx));
+                    exit_direction = Some(Direction::Down);
                 }
             }
             // 左方门
@@ -375,7 +377,7 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
                     && block_bottom <= gate.y + gate.height - 1
                     && block_top >= gate.y
                 {
-                    return Some((Direction::Left, idx));
+                    exit_direction = Some(Direction::Left);
                 }
             }
             // 右方门
@@ -385,10 +387,81 @@ pub fn can_exit(block: &Block, gates: &[Gate]) -> Option<(Direction, usize)> {
                     && block_bottom <= gate.y + gate.height - 1
                     && block_top >= gate.y
                 {
-                    return Some((Direction::Right, idx));
+                    exit_direction = Some(Direction::Right);
                 }
             }
             _ => continue,
+        }
+        
+        // 如果位置匹配，检查是否能向门方向移动（允许部分超出棋盘）
+        if let Some(direction) = exit_direction {
+            // 确定原始棋盘的宽度和高度（通过查找最大的block坐标）
+            let mut original_width = 0;
+            let mut original_height = 0;
+            
+            for b in blocks {
+                let b_shape = &SHAPE[b.shape as usize];
+                let b_right = b.x as usize + b_shape.rect.width;
+                let b_bottom = b.y as usize + b_shape.rect.height;
+                
+                if b_right > original_width {
+                    original_width = b_right;
+                }
+                if b_bottom > original_height {
+                    original_height = b_bottom;
+                }
+            }
+            
+            // 确保棋盘至少比最大坐标大1，然后在周围加上1圈
+            original_width = original_width.max(10) + 2;
+            original_height = original_height.max(10) + 2;
+            
+            // 创建扩展棋盘，比原始棋盘周围多一圈空白
+            let stage = ColorBlkStage {
+                board_width: original_width,
+                board_height: original_height,
+                gates: gates.to_vec(),
+                blocks: Vec::new(),
+                obstacles: Vec::new(),
+            };
+            
+            // 创建扩展棋盘，保持偏移为1
+            let mut sim_board = vec![vec![BoardValue::default(); stage.board_width]; stage.board_height];
+            
+            // 放置其他方块（除了当前检查的方块）到棋盘上，坐标+1
+            for other_block in blocks {
+                if other_block.id == block.id {
+                    continue; // 跳过当前方块
+                }
+                
+                let other_shape = &SHAPE[other_block.shape as usize];
+                for grid_y in 0..5 {
+                    for grid_x in 0..5 {
+                        if other_shape.grid[grid_y][grid_x] == 1 {
+                            // 计算在扩展棋盘上的坐标（+1偏移）
+                            let board_x = other_block.x as usize + (grid_x - other_shape.rect.x) + 1;
+                            let board_y = other_block.y as usize + (grid_y - other_shape.rect.y) + 1;
+                            
+                            if board_x < stage.board_width && board_y < stage.board_height {
+                                sim_board[board_y][board_x] = BoardValue {
+                                    obstacle: 0,
+                                    block_id: other_block.id,
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 创建当前方块的偏移副本（坐标+1）
+            let mut test_block = block.clone();
+            test_block.x += 1;
+            test_block.y += 1;
+            
+            // 使用move_entire_block检查是否可以移动
+            if move_entire_block(&mut sim_board, &mut test_block, direction, &stage) {
+                return Some((direction, idx));
+            }
         }
     }
 
