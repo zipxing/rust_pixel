@@ -12,16 +12,7 @@ pub const CELLW: usize = 10;
 pub const CELLH: usize = 5;
 
 /// 从JSON文件加载关卡数据
-#[derive(Debug, Clone)]
-pub struct LevelData {
-    pub width: usize,
-    pub height: usize,
-    pub blocks: Vec<Block>,
-    pub gates: Vec<Gate>,
-    pub obstacles: Vec<Obstacle>,
-}
-
-pub fn load_level_from_json(filename: &str) -> LevelData {
+pub fn load_level_from_json(filename: &str) -> ColorBlkStage {
     // 尝试打开文件
     let file_path = Path::new(filename);
     info!("尝试加载关卡文件: {}", file_path.display());
@@ -44,13 +35,11 @@ pub fn load_level_from_json(filename: &str) -> LevelData {
                         e,
                         e2
                     );
-                    return LevelData {
-                        width: 5,
-                        height: 9,
-                        blocks: create_default_blocks(),
-                        gates: create_default_gates(&ColorBlkStage::new(5, 9)),
-                        obstacles: create_default_obstacles(),
-                    };
+                    let mut stage = ColorBlkStage::new(5, 9);
+                    stage.blocks = create_default_blocks();
+                    stage.gates = create_default_gates(&stage);
+                    stage.obstacles = create_default_obstacles();
+                    return stage;
                 }
             }
         }
@@ -60,13 +49,11 @@ pub fn load_level_from_json(filename: &str) -> LevelData {
     let mut json_data = String::new();
     if let Err(e) = file.read_to_string(&mut json_data) {
         info!("无法读取关卡文件内容: {}", e);
-        return LevelData {
-            width: 5,
-            height: 9,
-            blocks: create_default_blocks(),
-            gates: create_default_gates(&ColorBlkStage::new(5, 9)),
-            obstacles: create_default_obstacles(),
-        };
+        let mut stage = ColorBlkStage::new(5, 9);
+        stage.blocks = create_default_blocks();
+        stage.gates = create_default_gates(&stage);
+        stage.obstacles = create_default_obstacles();
+        return stage;
     }
 
     // 解析JSON
@@ -74,13 +61,11 @@ pub fn load_level_from_json(filename: &str) -> LevelData {
         Ok(value) => value,
         Err(e) => {
             info!("无法解析JSON: {}", e);
-            return LevelData {
-                width: 5,
-                height: 9,
-                blocks: create_default_blocks(),
-                gates: create_default_gates(&ColorBlkStage::new(5, 9)),
-                obstacles: create_default_obstacles(),
-            };
+            let mut stage = ColorBlkStage::new(5, 9);
+            stage.blocks = create_default_blocks();
+            stage.gates = create_default_gates(&stage);
+            stage.obstacles = create_default_obstacles();
+            return stage;
         }
     };
 
@@ -468,13 +453,11 @@ pub fn load_level_from_json(filename: &str) -> LevelData {
     }
     info!("============================\n");
 
-    LevelData {
-        width,
-        height,
-        blocks,
-        gates,
-        obstacles,
-    }
+    let mut stage = ColorBlkStage::new(width, height);
+    stage.blocks = blocks;
+    stage.gates = gates;
+    stage.obstacles = obstacles;
+    stage
 }
 
 /// 创建默认障碍

@@ -200,16 +200,8 @@ impl Model for ColorblkModel {
         event_emit("Colorblk.RedrawTile");
 
         // 加载关卡数据
-        let level = load_level_from_json("test.json");
-
-        // 保存初始布局和门
-        self.stage = ColorBlkStage::new(level.width, level.height);
+        self.stage = load_level_from_json("test.json");
         context.state = ColorblkState::Normal as u8;
-
-        // 使用从JSON加载的数据
-        self.stage.blocks = level.blocks;
-        self.stage.gates = level.gates;
-        self.stage.obstacles = level.obstacles;
 
         // 初始化gates_state
         self.gates_state = self.stage.gates.clone();
