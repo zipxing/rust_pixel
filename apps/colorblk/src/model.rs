@@ -7,8 +7,8 @@ use rust_pixel::{
     game::Model,
 };
 
-pub const COLORBLKW: u16 = 100;
-pub const COLORBLKH: u16 = 61;
+pub const COLORBLKW: u16 = 120;
+pub const COLORBLKH: u16 = 60;
 pub const CELLW: usize = 10;
 pub const CELLH: usize = 5;
 use crate::level::load_level_from_json;
