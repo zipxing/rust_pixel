@@ -3,7 +3,7 @@ pub use crate::shape::*;
 pub mod solver;
 use log::info;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// 棋盘网格格子中的数值，障碍及方块
 /// 对于半透明颜色障碍，可能并存
@@ -172,15 +172,14 @@ fn move_block_to(
                 // println!("MBT:({}, {}) cell = {} code = {}", board_x, board_y, cell, code);
 
                 // 只有三种情况可以移动:
-                //   等于本体可以移动 
-                //   空白处可以移动 
+                //   等于本体可以移动
+                //   空白处可以移动
                 //   半透明障碍且颜色一致可以移动
                 // 否则不能移动返回false
-                if !(
-                    (cell == code)
-                        || (cell.obstacle == 0 && cell.block_id == 0)
-                        || (cell.obstacle != 0 && cell.obstacle == block.color)
-                ) {
+                if !((cell == code)
+                    || (cell.obstacle == 0 && cell.block_id == 0)
+                    || (cell.obstacle != 0 && cell.obstacle == block.color))
+                {
                     // if cell.obstacle != 0 {
                     //     println!("@@@ob...{:?} block..{:?}", cell.obstacle, block.color);
                     // }
@@ -351,12 +350,13 @@ pub fn can_exit(block: &Block, gates: &[Gate], blocks: &[Block]) -> Option<(Dire
 
         // 检查位置与门匹配
         let mut exit_direction = None;
-        
+
         match (gate.y, gate.height, gate.x, gate.width) {
             // 上方门
             (0, 0, _, w) if w > 0 => {
                 // 方块顶部在顶边界，并且方块左右边界处于门的范围内
-                if block_top == 0 && block_right <= gate.x + gate.width - 1 && block_left >= gate.x {
+                if block_top == 0 && block_right <= gate.x + gate.width - 1 && block_left >= gate.x
+                {
                     exit_direction = Some(Direction::Up);
                 }
             }
@@ -392,18 +392,18 @@ pub fn can_exit(block: &Block, gates: &[Gate], blocks: &[Block]) -> Option<(Dire
             }
             _ => continue,
         }
-        
+
         // 如果位置匹配，检查是否能向门方向移动（允许部分超出棋盘）
         if let Some(direction) = exit_direction {
             // 确定原始棋盘的宽度和高度（通过查找最大的block坐标）
             let mut original_width = 0;
             let mut original_height = 0;
-            
+
             for b in blocks {
                 let b_shape = &SHAPE[b.shape as usize];
                 let b_right = b.x as usize + b_shape.rect.width;
                 let b_bottom = b.y as usize + b_shape.rect.height;
-                
+
                 if b_right > original_width {
                     original_width = b_right;
                 }
@@ -411,11 +411,11 @@ pub fn can_exit(block: &Block, gates: &[Gate], blocks: &[Block]) -> Option<(Dire
                     original_height = b_bottom;
                 }
             }
-            
+
             // 确保棋盘至少比最大坐标大1，然后在周围加上1圈
             original_width = original_width.max(10) + 2;
             original_height = original_height.max(10) + 2;
-            
+
             // 创建扩展棋盘，比原始棋盘周围多一圈空白
             let stage = ColorBlkStage {
                 board_width: original_width,
@@ -424,24 +424,27 @@ pub fn can_exit(block: &Block, gates: &[Gate], blocks: &[Block]) -> Option<(Dire
                 blocks: Vec::new(),
                 obstacles: Vec::new(),
             };
-            
+
             // 创建扩展棋盘，保持偏移为1
-            let mut sim_board = vec![vec![BoardValue::default(); stage.board_width]; stage.board_height];
-            
+            let mut sim_board =
+                vec![vec![BoardValue::default(); stage.board_width]; stage.board_height];
+
             // 放置其他方块（除了当前检查的方块）到棋盘上，坐标+1
             for other_block in blocks {
                 if other_block.id == block.id {
                     continue; // 跳过当前方块
                 }
-                
+
                 let other_shape = &SHAPE[other_block.shape as usize];
                 for grid_y in 0..5 {
                     for grid_x in 0..5 {
                         if other_shape.grid[grid_y][grid_x] == 1 {
                             // 计算在扩展棋盘上的坐标（+1偏移）
-                            let board_x = other_block.x as usize + (grid_x - other_shape.rect.x) + 1;
-                            let board_y = other_block.y as usize + (grid_y - other_shape.rect.y) + 1;
-                            
+                            let board_x =
+                                other_block.x as usize + (grid_x - other_shape.rect.x) + 1;
+                            let board_y =
+                                other_block.y as usize + (grid_y - other_shape.rect.y) + 1;
+
                             if board_x < stage.board_width && board_y < stage.board_height {
                                 sim_board[board_y][board_x] = BoardValue {
                                     obstacle: 0,
@@ -452,12 +455,12 @@ pub fn can_exit(block: &Block, gates: &[Gate], blocks: &[Block]) -> Option<(Dire
                     }
                 }
             }
-            
+
             // 创建当前方块的偏移副本（坐标+1）
             let mut test_block = block.clone();
             test_block.x += 1;
             test_block.y += 1;
-            
+
             // 使用move_entire_block检查是否可以移动
             if move_entire_block(&mut sim_board, &mut test_block, direction, &stage) {
                 return Some((direction, idx));
@@ -484,7 +487,7 @@ pub fn remove_block_and_update(
         Some(block) => block.color2 == 0, // 只有当color2为0时才真正移除
         None => false,
     };
-    
+
     // 检查退出的方块是否带钥匙
     let has_key = target_block.map(|b| b.key > 0).unwrap_or(false);
 
@@ -522,18 +525,18 @@ pub fn remove_block_and_update(
                 // 从链接中移除目标块ID
                 new_block.link.retain(|&linked_id| linked_id != id);
             }
-            
+
             // 如果退出的方块带有钥匙，且当前方块有锁，则减少锁值
             if has_key && new_block.lock > 0 {
                 new_block.lock -= 1;
             }
-            
+
             // 当有方块退出时，减少所有方块的冰层
             if new_block.ice > 0 {
                 new_block.ice -= 1;
                 info!("ICE--");
             }
-            
+
             new_blocks.push(new_block);
         } else {
             // 处理目标方块
@@ -542,9 +545,9 @@ pub fn remove_block_and_update(
                 let mut updated_block = block.clone();
                 updated_block.color = block.color2;
                 updated_block.color2 = 0;
-                
+
                 // 退出的方块本身不会有冰层，去掉对冰层的处理
-                
+
                 new_blocks.push(updated_block);
             }
             // 如果should_remove为true，则不添加该方块，相当于移除它
@@ -560,4 +563,5 @@ mod tests {
     #[test]
     fn it_works() {
         // let result = ColorblkData::new();
-    } }
+    }
+}

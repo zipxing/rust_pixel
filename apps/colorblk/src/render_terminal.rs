@@ -159,7 +159,7 @@ impl ColorblkRender {
                         } else {
                             (d.stage.board_width * 10) as u16 + 1
                         }; // 每个单元格宽度为10
-                        let screen_y = (y as usize  * 5) as u16 + 1; // 每个单元格高度为5
+                        let screen_y = (y as usize * 5) as u16 + 1; // 每个单元格高度为5
 
                         for r in 0..5 {
                             back.set_color_str(
