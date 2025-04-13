@@ -7,7 +7,7 @@ use rust_pixel::{
     game::Model,
 };
 
-pub const COLORBLKW: u16 = 120;
+pub const COLORBLKW: u16 = 100;
 pub const COLORBLKH: u16 = 60;
 pub const CELLW: usize = 10;
 pub const CELLH: usize = 5;
@@ -185,6 +185,18 @@ impl ColorblkModel {
                         }
                     }
                 }
+            }
+        }
+
+        // 渲染障碍物
+        for obstacle in &self.stage.obstacles {
+            let x = obstacle.x as usize;
+            let y = obstacle.y as usize;
+            
+            if x < self.stage.board_width && y < self.stage.board_height {
+                let idx = y * self.stage.board_width + x;
+                // 使用类型15表示障碍物，颜色设置为0
+                self.render_state[idx] = (15, 14);
             }
         }
 

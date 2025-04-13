@@ -17,15 +17,22 @@ use rust_pixel::{
 };
 
 // 颜色定义
-const COLORS: [Color; 8] = [
-    Color::LightRed,     // 红色方块
-    Color::LightBlue,    // 蓝色方块
-    Color::LightGreen,   // 绿色方块
-    Color::LightYellow,  // 黄色方块
-    Color::LightMagenta, // 紫色方块
-    Color::LightCyan,    // 青色方块
-    Color::Indexed(38),  // 门颜色
-    Color::Indexed(202), // 边框颜色
+const COLORS: [Color; 15] = [
+    Color::Rgba(0xe9, 0x05, 0x05, 0xff), // Red
+    Color::Rgba(0x19, 0xce, 0x27, 0xff), // Green
+    Color::Rgba(0x10, 0x73, 0xdd, 0xff), // Blue
+    Color::Rgba(0xff, 0xd3, 0x22, 0xff), // Yellow
+    Color::Rgba(0xb3, 0x52, 0xff, 0xff), // Purple
+    Color::Rgba(0xfc, 0x86, 0x2a, 0xff), // Orange
+    Color::Rgba(0xe5, 0x5a, 0xf1, 0xff), // LightPurple
+    Color::Rgba(0x97, 0x51, 0x3b, 0xff), // Brown
+    Color::Rgba(0xf0, 0xf0, 0xf0, 0xff), // Gray
+    Color::Rgba(0x33, 0x33, 0x33, 0xff), // Black
+    Color::Rgba(0x21, 0x79, 0x37, 0xff), // DarkGreen
+    Color::Rgba(0x73, 0xfb, 0xfd, 0xff), // LightBlue
+    Color::Rgba(0xff, 0xff, 0xff, 0xff), // White
+    Color::Rgba(0x28, 0xc8, 0xff, 0xff), // Skyblue
+    Color::Rgba(0x66, 0x66, 0x66, 0xff), // DarkBlack
 ];
 
 pub struct ColorblkRender {
@@ -129,10 +136,43 @@ impl ColorblkRender {
 
         // 绘制网格
         self.draw_grid(ctx, d);
+        let wallcolor = 8;
 
         // 绘制门
         {
             let back = self.panel.get_sprite("back");
+            for i in 0..d.stage.board_width * 10 + 2 {
+                back.set_color_str(
+                    i as u16, // 居中显示
+                    0u16,
+                    "░", // 使用10个字符的宽度
+                    COLORS[wallcolor],
+                    Color::Reset,
+                );
+                back.set_color_str(
+                    i as u16, // 居中显示
+                    d.stage.board_height as u16 * 5 + 1,
+                    "░", // 使用10个字符的宽度
+                    COLORS[wallcolor],
+                    Color::Reset,
+                );
+            }
+            for i in 0..d.stage.board_height * 5 + 2 {
+                back.set_color_str(
+                    0u16, 
+                    i as u16, // 居中显示
+                    "░", // 使用10个字符的宽度
+                    COLORS[wallcolor],
+                    Color::Reset,
+                );
+                back.set_color_str(
+                    d.stage.board_width as u16 * 10 + 1,
+                    i as u16, // 居中显示
+                    "░", // 使用10个字符的宽度
+                    COLORS[wallcolor],
+                    Color::Reset,
+                );
+            }
             for gate in &d.stage.gates {
                 if gate.height == 0 {
                     // 上下门：绘制一行彩色字符

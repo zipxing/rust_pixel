@@ -1,4 +1,4 @@
-use colorblk_lib::{Block, ColorBlkStage, Gate, Obstacle, SHAPE_IDX, SHAPE_IDX_COCOS};
+use colorblk_lib::{Block, ColorBlkStage, Gate, Obstacle, SHAPE_IDX, SHAPE_IDX_COCOS, SHAPE};
 use log::info;
 use serde_json::{from_str, Value};
 use std::collections::{HashMap, HashSet};
@@ -226,8 +226,61 @@ pub fn load_level_from_json(filename: &str) -> ColorBlkStage {
                     blocks.push(block);
                 }
                 2 => {
+                    // 过滤掉墙
+                    if x == 0 || y == 0 || x == width as u8 + 1 || y == height as u8 + 1 {
+                        continue;
+                    }
                     // 墙壁或障碍物
                     // info!("跳过墙壁障碍物: ({},{})", x, y);
+                    let mut shape_idx = block_shape_id;
+                    
+                    // 适配js定义中锚点差异，与方块处理类似
+                    match shape_idx {
+                        12 | 17 | 22 | 25 | 26 | 34 => {
+                            x -= 1;
+                        }
+                        16 => x -= 2,
+                        33 => x -= 3,
+                        _ => {}
+                    }
+                    
+                    // 获取实际形状
+                    if shape_idx < SHAPE_IDX_COCOS.len() as u8 {
+                        shape_idx = SHAPE_IDX_COCOS[block_shape_id as usize] as u8;
+                        
+                        // 获取障碍物颜色（允许通过的颜色）
+                        let mut allow_color = 255;
+                        if let Some(layers) = slot["l"].as_array() {
+                            if !layers.is_empty() {
+                                if let Some(first_layer) = layers.first() {
+                                    if first_layer.is_object() && first_layer["b"].is_u64() {
+                                        allow_color = first_layer["b"].as_u64().unwrap_or(0) as u8;
+                                    }
+                                }
+                            }
+                        };
+                        
+                        // 根据形状创建多个障碍物
+                        let shape_data = &SHAPE[shape_idx as usize];
+                        for grid_y in 0..5 {
+                            for grid_x in 0..5 {
+                                if shape_data.grid[grid_y][grid_x] == 1 {
+                                    // 计算棋盘上的实际坐标
+                                    let board_x = (x - 1) as usize + (grid_x - shape_data.rect.x);
+                                    let board_y = (y - 1) as usize + (grid_y - shape_data.rect.y);
+                                    
+                                    obstacles.push(Obstacle {
+                                        x: board_x as u8,
+                                        y: board_y as u8,
+                                        allow_color,
+                                    });
+                                }
+                            }
+                        }
+                        
+                        info!("添加障碍物: 位置({},{}), 允许颜色={}, 形状ID={}", 
+                             x - 1, y - 1, allow_color, shape_idx);
+                    }
                 }
                 3 => {
                     // 门
