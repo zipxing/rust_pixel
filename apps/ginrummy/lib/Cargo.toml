@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-itertools = "0.10.3"
+itertools = "0.10.5"
 rust_pixel = { path = "../../..", default-features = false }
 poker_lib = { path = "../../poker/lib" }
 
