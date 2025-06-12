@@ -41,6 +41,9 @@ pub mod asset;
 /// processing input events, timer and other custom events
 pub mod event;
 
+/// comparison module for event system benchmarking
+pub mod event_mutex;
+
 /// common tools and data structures:
 /// object pool, RNG, matrix, circle, dots
 pub mod util;

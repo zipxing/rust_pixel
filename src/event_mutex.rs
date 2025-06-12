@@ -1,126 +1,96 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-
-//! this event module provides a global event centre and a global timer centre.
-//! For comparison testing: thread_local! + Rc<RefCell<T>> vs Mutex + lazy_static
-//!
-//! one event in this class namely Event, describing I/Os from keyboard and mouse
-//! Input events triggered by renders such as web, sdl or cross are converted here to
-//! unified Event
-
+//! Mutex + lazy_static implementation for comparison
+//! This is the original implementation using Mutex
 
 use crate::GAME_FRAME;
+use lazy_static::lazy_static;
 use serde::Serialize;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::Mutex};
 
-// Version 1: thread_local! + Rc<RefCell<T>>
-thread_local! {
-    static GAME_TIMER: Rc<RefCell<Timers>> = Rc::new(RefCell::new(Timers::new()));
-    static EVENT_CENTER: Rc<RefCell<HashMap<String, HashMap<String, bool>>>> = 
-        Rc::new(RefCell::new(HashMap::new()));
+// Version 2: Mutex + lazy_static (original)
+lazy_static! {
+    pub static ref GAME_TIMER_MUTEX: Mutex<Timers> = Mutex::new(Timers::new());
+    pub static ref EVENT_CENTER_MUTEX: Mutex<HashMap<String, HashMap<String, bool>>> =
+        Mutex::new(HashMap::new());
 }
 
 /// A global HashMap is used to save callbacks of events
 pub fn event_register(event: &str, func: &str) {
-    EVENT_CENTER.with(|ec| {
-        let mut ec_ref = ec.borrow_mut();
-        match ec_ref.get_mut(event) {
-            Some(ht) => {
-                ht.insert(func.to_string(), false);
-            }
-            None => {
-                let mut h: HashMap<String, bool> = HashMap::new();
-                h.insert(func.to_string(), false);
-                ec_ref.insert(event.to_string(), h);
-            }
+    let mut ec = EVENT_CENTER_MUTEX.lock().unwrap();
+    match ec.get_mut(event) {
+        Some(ht) => {
+            ht.insert(func.to_string(), false);
         }
-    });
+        None => {
+            let mut h: HashMap<String, bool> = HashMap::new();
+            h.insert(func.to_string(), false);
+            ec.insert(event.to_string(), h);
+        }
+    }
 }
 
 pub fn event_check(event: &str, func: &str) -> bool {
-    EVENT_CENTER.with(|ec| {
-        let mut ec_ref = ec.borrow_mut();
-        if let Some(ht) = ec_ref.get_mut(event) { 
-            if let Some(flag) = ht.get_mut(func) {
-                if *flag {
-                    *flag = false;
-                    return true;
-                }
-            } 
-        }
-        false
-    })
+    let mut ec = EVENT_CENTER_MUTEX.lock().unwrap();
+    if let Some(ht) = ec.get_mut(event) { 
+        if let Some(flag) = ht.get_mut(func) {
+            if *flag {
+                *flag = false;
+                return true;
+            }
+        } 
+    }
+    false
 }
 
 pub fn event_emit(event: &str) {
-    EVENT_CENTER.with(|ec| {
-        let mut ec_ref = ec.borrow_mut();
-        if let Some(ht) = ec_ref.get_mut(event) {
-            for value in ht.values_mut() {
-                if !(*value) {
-                    *value = true;
-                }
+    if let Some(ht) = EVENT_CENTER_MUTEX.lock().unwrap().get_mut(event) {
+        for value in ht.values_mut() {
+            if !(*value) {
+                *value = true;
             }
         }
-    });
+    }
 }
 
 pub fn timer_register(name: &str, time: f32, func: &str) {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().register(name, time, func);
-    });
+    GAME_TIMER_MUTEX.lock().unwrap().register(name, time, func);
 }
 
 pub fn timer_set_time(name: &str, time: f32) {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().set_time(name, time);
-    });
+    GAME_TIMER_MUTEX.lock().unwrap().set_time(name, time);
 }
 
 pub fn timer_stage(name: &str) -> u32 {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().stage(name)
-    })
+    GAME_TIMER_MUTEX.lock().unwrap().stage(name)
 }
 
 pub fn timer_rstage(name: &str) -> u32 {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().rstage(name)
-    })
+    GAME_TIMER_MUTEX.lock().unwrap().rstage(name)
 }
 
 pub fn timer_percent(name: &str) -> f32 {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().percent(name)
-    })
+    GAME_TIMER_MUTEX.lock().unwrap().percent(name)
 }
 
 pub fn timer_exdata(name: &str) -> Option<Vec<u8>> {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().exdata(name)
-    })
+    GAME_TIMER_MUTEX.lock().unwrap().exdata(name)
 }
 
 pub fn timer_fire<T>(name: &str, value: T)
 where
     T: Serialize,
 {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().fire(name, value);
-    });
+    GAME_TIMER_MUTEX.lock().unwrap().fire(name, value);
 }
 
 pub fn timer_cancel(name: &str, nall: bool) {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().cancel(name, nall);
-    });
+    GAME_TIMER_MUTEX.lock().unwrap().cancel(name, nall);
 }
 
 pub fn timer_update() {
-    GAME_TIMER.with(|gt| {
-        gt.borrow_mut().update();
-    });
+    GAME_TIMER_MUTEX.lock().unwrap().update()
 }
 
 pub struct Timer {
@@ -190,8 +160,6 @@ impl Timers {
     pub fn set_time(&mut self, name: &str, time: f32) {
         if let Some(timer) = self.timers.get_mut(name) {
             timer.count = (time * GAME_FRAME as f32) as u32;
-            //may cause count equals 0 and therefore can not be triggered if time is too small
-            //to prevent this, reset the count to 1
             if timer.count == 0 {
                 timer.count += 1;
             }
@@ -240,60 +208,57 @@ impl Timers {
     }
 }
 
-mod input;
-pub use input::*;
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Instant;
 
     #[test]
-    fn test_thread_local_implementation() {
+    fn test_mutex_implementation() {
         // 测试事件注册和触发
-        event_register("test_event_tl", "test_callback");
+        event_register("test_event_mutex", "test_callback");
         
         // 测试事件检查（初始应该为false）
-        assert!(!event_check("test_event_tl", "test_callback"));
+        assert!(!event_check("test_event_mutex", "test_callback"));
         
         // 触发事件
-        event_emit("test_event_tl");
+        event_emit("test_event_mutex");
         
         // 现在应该为true
-        assert!(event_check("test_event_tl", "test_callback"));
+        assert!(event_check("test_event_mutex", "test_callback"));
         
         // 再次检查应该为false（因为已经被消费）
-        assert!(!event_check("test_event_tl", "test_callback"));
+        assert!(!event_check("test_event_mutex", "test_callback"));
     }
     
     #[test]
-    fn test_timer_implementation() {
+    fn test_timer_mutex_implementation() {
         // 测试计时器注册
-        timer_register("test_timer_tl", 1.0, "timer_callback");
+        timer_register("test_timer_mutex", 1.0, "timer_callback");
         
         // 测试初始状态
-        assert_eq!(timer_stage("test_timer_tl"), 0);
-        assert_eq!(timer_rstage("test_timer_tl"), 60); // 1.0 * GAME_FRAME
-        assert_eq!(timer_percent("test_timer_tl"), 0.0);
+        assert_eq!(timer_stage("test_timer_mutex"), 0);
+        assert_eq!(timer_rstage("test_timer_mutex"), 60); // 1.0 * GAME_FRAME
+        assert_eq!(timer_percent("test_timer_mutex"), 0.0);
         
         // 测试设置时间
-        timer_set_time("test_timer_tl", 2.0);
-        assert_eq!(timer_rstage("test_timer_tl"), 120); // 2.0 * GAME_FRAME
+        timer_set_time("test_timer_mutex", 2.0);
+        assert_eq!(timer_rstage("test_timer_mutex"), 120); // 2.0 * GAME_FRAME
         
         // 测试数据存储
-        timer_fire("test_timer_tl", "test_data");
-        let exdata = timer_exdata("test_timer_tl");
+        timer_fire("test_timer_mutex", "test_data");
+        let exdata = timer_exdata("test_timer_mutex");
         assert!(exdata.is_some());
     }
     
     #[test]
-    fn benchmark_thread_local_performance() {
+    fn benchmark_mutex_performance() {
         let iterations = 10000;
         
         // 事件操作基准测试
         let start = Instant::now();
         for i in 0..iterations {
-            let event_name = format!("bench_event_{}", i % 10);
+            let event_name = format!("bench_event_mutex_{}", i % 10);
             let callback_name = format!("bench_callback_{}", i % 10);
             
             event_register(&event_name, &callback_name);
@@ -305,7 +270,7 @@ mod tests {
         // 计时器操作基准测试
         let start = Instant::now();
         for i in 0..iterations {
-            let timer_name = format!("bench_timer_{}", i % 10);
+            let timer_name = format!("bench_timer_mutex_{}", i % 10);
             let callback_name = format!("bench_callback_{}", i % 10);
             
             timer_register(&timer_name, 0.1, &callback_name);
@@ -314,10 +279,10 @@ mod tests {
         }
         let timer_time = start.elapsed();
         
-        println!("Thread-local版本:");
+        println!("Mutex版本:");
         println!("  事件操作 {} 次耗时: {:?}", iterations, event_time);
         println!("  计时器操作 {} 次耗时: {:?}", iterations, timer_time);
         println!("  平均每次事件操作: {:?}", event_time / iterations);
         println!("  平均每次计时器操作: {:?}", timer_time / iterations);
     }
-}
+} 
