@@ -39,6 +39,10 @@ pub mod web;
 )))]
 pub mod cross;
 
+/// wgpu adapter
+#[cfg(feature = "wgpu")]
+pub mod wgpu;
+
 /// symbols texture contains 8x8 blocks
 /// each block contain 16x16 symbols
 /// total 128 * 128 symbols
