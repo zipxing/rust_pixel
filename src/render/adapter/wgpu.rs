@@ -267,6 +267,7 @@ impl Adapter for WgpuAdapter {
             .to_rgba8();
         let texwidth = teximg.width();
         let texheight = teximg.height();
+        let texdata = teximg.as_raw();
         
         PIXEL_SYM_WIDTH
             .set(init_sym_width(texwidth))
@@ -299,6 +300,9 @@ impl Adapter for WgpuAdapter {
                 self.base.pixel_w,
                 self.base.pixel_h,
             );
+            
+            // Store texture data for later use when WGPU context is ready
+            self.base.texture_data = Some((texwidth, texheight, texdata.clone()));
         }
 
         info!("WgpuAdapter init completed");

@@ -92,7 +92,7 @@ default = ["log4rs", "crossterm", "rodio", "image"]
 web = ["image"]
 term = ["log4rs", "crossterm", "rodio", "image"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
-wgpu = ["log4rs", "dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "image"]
+wgpu = ["log4rs", "rodio", "dep:winit", "dep:wgpu", "dep:pollster", "dep:bytemuck", "image"]
 base = ["log4rs"]
 
 [profile.release]
