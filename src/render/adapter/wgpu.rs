@@ -101,7 +101,7 @@ impl WgpuAdapter {
     }
 
     #[cfg(feature = "wgpu")]
-    async fn init_wgpu_context(&mut self, window: Arc<Window>) -> Result<(), String> {
+    pub async fn init_wgpu_context(&mut self, window: Arc<Window>) -> Result<(), String> {
         // Create wgpu instance
         let instance = Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -173,7 +173,7 @@ impl WgpuAdapter {
     }
 
     #[cfg(feature = "wgpu")]
-    fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
+    pub fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::CloseRequested => {
                 self.should_exit = true;
@@ -254,12 +254,12 @@ impl WgpuAdapter {
 
 impl Adapter for WgpuAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
-        // Load texture file (use c64.png for testing)
+        // Load texture file (use symbols.png for testing)
         let texture_path = format!(
             "{}{}{}",
             self.base.project_path,
             std::path::MAIN_SEPARATOR,
-            "assets/pix/c64.png"
+            "assets/pix/symbols.png"
         );
         let teximg = image::open(&texture_path)
             .map_err(|e| e.to_string())
@@ -269,12 +269,9 @@ impl Adapter for WgpuAdapter {
         let texheight = teximg.height();
         let texdata = teximg.as_raw();
         
-        PIXEL_SYM_WIDTH
-            .set(init_sym_width(texwidth))
-            .expect("lazylock init");
-        PIXEL_SYM_HEIGHT
-            .set(init_sym_height(texheight))
-            .expect("lazylock init");
+        // Set LazyLock values, ignore if already set
+        let _ = PIXEL_SYM_WIDTH.set(init_sym_width(texwidth));
+        let _ = PIXEL_SYM_HEIGHT.set(init_sym_height(texheight));
             
         info!("wgpu_pixel load texture...{}", texture_path);
         info!(
@@ -433,7 +430,7 @@ pub struct WgpuApp {
 
 #[cfg(feature = "wgpu")]
 impl WgpuApp {
-    pub fn new(mut adapter: WgpuAdapter) -> Self {
+    pub fn new(adapter: WgpuAdapter) -> Self {
         Self {
             adapter: Some(adapter),
         }

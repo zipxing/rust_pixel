@@ -26,7 +26,11 @@ rust_pixel = { path = "../..", default-features = false }
 tower_lib = { path = "./lib" }
 # pixel_macro = { path = "../../pixel_macro" }
 
+# WGPU dependencies (optional)
+winit = { version = "0.30", optional = true }
+pollster = { version = "0.4", optional = true }
+
 [features]
 sdl = ["rust_pixel/sdl"]
-wgpu = ["rust_pixel/wgpu"]
+wgpu = ["rust_pixel/wgpu", "dep:winit", "dep:pollster"]
 term = ["rust_pixel/term"]
