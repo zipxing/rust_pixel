@@ -26,3 +26,4 @@ tetris_lib = { path = "./lib" }
 [features]
 sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
+wgpu = ["rust_pixel/wgpu"]

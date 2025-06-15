@@ -28,8 +28,224 @@ pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
 #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
 
-/// proc macro for pixel_game!
-pub use pixel_macro;
+/// Re-export paste for use in macros
+#[cfg(not(feature = "base"))]
+pub use paste;
+
+/// pixel_game macro for creating game applications
+#[cfg(not(feature = "base"))]
+#[macro_export]
+macro_rules! pixel_game {
+    ($name:ident) => {
+        pixel_game!($name, "");
+    };
+    ($name:ident, $path:expr) => {
+        mod model;
+        #[cfg(not(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32")))]
+        mod render_terminal;
+        #[cfg(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32"))]
+        mod render_graphics;
+
+        #[cfg(not(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32")))]
+        use crate::{model::*, render_terminal::*};
+        #[cfg(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32"))]
+        use crate::{model::*, render_graphics::*};
+        use rust_pixel::game::Game;
+        use rust_pixel::util::get_project_path;
+
+        #[cfg(target_arch = "wasm32")]
+        use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter};
+        use wasm_bindgen::prelude::*;
+        #[cfg(target_arch = "wasm32")]
+        use wasm_bindgen_futures::js_sys;
+        #[cfg(target_arch = "wasm32")]
+        use log::info;
+
+        rust_pixel::paste::paste! {
+            #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+            pub struct [<$name Game>] {
+                g: Game<[<$name Model>], [<$name Render>]>,
+            }
+
+            pub fn init_game() -> [<$name Game>] {
+                let m = [<$name Model>]::new();
+                let r = [<$name Render>]::new();
+                let pp = if $path.is_empty() {
+                    get_project_path()
+                } else {
+                    format!("{}/{}", get_project_path(), $path)
+                };
+                println!("asset path : {:?}", pp);
+                let mut g = Game::new(m, r, stringify!([<$name:lower>]), &pp);
+                g.init();
+                [<$name Game>] { g }
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+            impl [<$name Game>] {
+                pub fn new() -> Self {
+                    init_game()
+                }
+
+                pub fn tick(&mut self, dt: f32) {
+                    self.g.on_tick(dt);
+                }
+
+                pub fn key_event(&mut self, t: u8, e: web_sys::Event) {
+                    let abase = &self
+                        .g
+                        .context
+                        .adapter
+                        .as_any()
+                        .downcast_ref::<WebAdapter>()
+                        .unwrap()
+                        .base;
+                    if let Some(pe) = input_events_from_web(t, e, abase.pixel_h, abase.ratio_x, abase.ratio_y) {
+                        self.g.context.input_events.push(pe);
+                    }
+                }
+
+                pub fn upload_imgdata(&mut self, w: i32, h: i32, d: &js_sys::Uint8ClampedArray) {
+                    let length = d.length() as usize;
+                    let mut pixels = vec![0u8; length];
+                    d.copy_to(&mut pixels);
+                    info!("RUST...pixels.len={}", pixels.len());
+
+                    let wa = &mut self
+                        .g
+                        .context
+                        .adapter
+                        .as_any()
+                        .downcast_mut::<WebAdapter>()
+                        .unwrap();
+
+                    wa.init_glpix(w, h, &pixels);
+                }
+
+                pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
+                    self.g.context.asset_manager.set_data(url, data);
+                }
+
+                pub fn get_ratiox(&mut self) -> f32 {
+                    self.g.context.adapter.get_base().ratio_x
+                }
+
+                pub fn get_ratioy(&mut self) -> f32 {
+                    self.g.context.adapter.get_base().ratio_y
+                }
+            }
+
+            pub fn run() {
+                let mut g = init_game().g;
+                
+                #[cfg(feature = "wgpu")]
+                {
+                    run_wgpu_game(g);
+                }
+                
+                #[cfg(not(feature = "wgpu"))]
+                {
+                    g.run().unwrap();
+                    g.render.panel.reset(&mut g.context);
+                }
+            }
+            
+            #[cfg(feature = "wgpu")]
+            fn run_wgpu_game<M: rust_pixel::game::Model, R: rust_pixel::game::Render<Model = M>>(mut game: rust_pixel::game::Game<M, R>) {
+                use rust_pixel::render::adapter::wgpu::WgpuAdapter;
+                use winit::event_loop::{EventLoop, ControlFlow};
+                use winit::application::ApplicationHandler;
+                use winit::event::{Event as WinitEvent, WindowEvent};
+                use winit::window::{Window, WindowId};
+                use std::sync::Arc;
+                use std::time::{Duration, Instant};
+                
+                game.init();
+                
+                let event_loop = EventLoop::new().unwrap();
+                event_loop.set_control_flow(ControlFlow::Poll);
+                
+                struct GameApp<M: rust_pixel::game::Model, R: rust_pixel::game::Render<Model = M>> {
+                    game: Option<rust_pixel::game::Game<M, R>>,
+                    window: Option<Arc<Window>>,
+                    last_tick: Instant,
+                    tick_rate: Duration,
+                }
+                
+                impl<M: rust_pixel::game::Model, R: rust_pixel::game::Render<Model = M>> ApplicationHandler for GameApp<M, R> {
+                    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+                        if self.window.is_none() {
+                            if let Some(game) = &mut self.game {
+                                let adapter = game.context.adapter.as_any().downcast_mut::<WgpuAdapter>().unwrap();
+                                
+                                let window_attributes = Window::default_attributes()
+                                    .with_title(&adapter.base.title)
+                                    .with_inner_size(adapter.size)
+                                    .with_decorations(false);
+
+                                match event_loop.create_window(window_attributes) {
+                                    Ok(window) => {
+                                        let window = Arc::new(window);
+                                        
+                                        let window_clone = window.clone();
+                                        let init_result = pollster::block_on(async {
+                                            adapter.init_wgpu_context(window_clone).await
+                                        });
+                                        
+                                        if let Err(e) = init_result {
+                                            log::error!("Failed to initialize WGPU: {}", e);
+                                            event_loop.exit();
+                                        } else {
+                                            self.window = Some(window);
+                                            log::info!("WGPU game window created successfully");
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to create window: {}", e);
+                                        event_loop.exit();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    fn window_event(
+                        &mut self,
+                        event_loop: &winit::event_loop::ActiveEventLoop,
+                        window_id: WindowId,
+                        event: WindowEvent,
+                    ) {
+                        if let Some(game) = &mut self.game {
+                            let adapter = game.context.adapter.as_any().downcast_mut::<WgpuAdapter>().unwrap();
+                            if adapter.handle_window_event(&event) {
+                                event_loop.exit();
+                            }
+                            
+                            let et = self.last_tick.elapsed();
+                            if et >= self.tick_rate {
+                                let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1_000_000_000.0;
+                                game.on_tick(dt);
+                                self.last_tick = Instant::now();
+                            }
+                        }
+                    }
+                }
+                
+                let mut app = GameApp {
+                    game: Some(game),
+                    window: None,
+                    last_tick: Instant::now(),
+                    tick_rate: Duration::from_nanos(1_000_000_000 / rust_pixel::GAME_FRAME as u64),
+                };
+                
+                if let Err(e) = event_loop.run_app(&mut app) {
+                    log::error!("Event loop error: {}", e);
+                }
+            }
+        }
+    };
+}
 
 /// disjoint-set data structure, astar
 pub mod algorithm;

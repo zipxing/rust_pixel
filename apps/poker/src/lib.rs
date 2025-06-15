@@ -1,2 +1,2 @@
-use rust_pixel::pixel_macro::pixel_game;
+use rust_pixel::pixel_game;
 pixel_game!(Poker);
