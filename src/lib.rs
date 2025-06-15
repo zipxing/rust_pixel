@@ -141,106 +141,15 @@ macro_rules! pixel_game {
                 
                 #[cfg(feature = "wgpu")]
                 {
-                    run_wgpu_game(g);
+                    if let Err(e) = rust_pixel::render::adapter::wgpu::WgpuAdapter::run_with_game(g) {
+                        log::error!("WGPU game error: {}", e);
+                    }
                 }
                 
                 #[cfg(not(feature = "wgpu"))]
                 {
                     g.run().unwrap();
                     g.render.panel.reset(&mut g.context);
-                }
-            }
-            
-            #[cfg(feature = "wgpu")]
-            fn run_wgpu_game<M: rust_pixel::game::Model, R: rust_pixel::game::Render<Model = M>>(mut game: rust_pixel::game::Game<M, R>) {
-                use rust_pixel::render::adapter::wgpu::WgpuAdapter;
-                use winit::event_loop::{EventLoop, ControlFlow};
-                use winit::application::ApplicationHandler;
-                use winit::event::{Event as WinitEvent, WindowEvent};
-                use winit::window::{Window, WindowId};
-                use std::sync::Arc;
-                use std::time::{Duration, Instant};
-                
-                game.init();
-                
-                let event_loop = EventLoop::new().unwrap();
-                event_loop.set_control_flow(ControlFlow::Poll);
-                
-                struct GameApp<M: rust_pixel::game::Model, R: rust_pixel::game::Render<Model = M>> {
-                    game: Option<rust_pixel::game::Game<M, R>>,
-                    window: Option<Arc<Window>>,
-                    last_tick: Instant,
-                    tick_rate: Duration,
-                }
-                
-                impl<M: rust_pixel::game::Model, R: rust_pixel::game::Render<Model = M>> ApplicationHandler for GameApp<M, R> {
-                    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-                        if self.window.is_none() {
-                            if let Some(game) = &mut self.game {
-                                let adapter = game.context.adapter.as_any().downcast_mut::<WgpuAdapter>().unwrap();
-                                
-                                let window_attributes = Window::default_attributes()
-                                    .with_title(&adapter.base.title)
-                                    .with_inner_size(adapter.size)
-                                    .with_decorations(false);
-
-                                match event_loop.create_window(window_attributes) {
-                                    Ok(window) => {
-                                        let window = Arc::new(window);
-                                        
-                                        let window_clone = window.clone();
-                                        let init_result = pollster::block_on(async {
-                                            adapter.init_wgpu_context(window_clone).await
-                                        });
-                                        
-                                        if let Err(e) = init_result {
-                                            log::error!("Failed to initialize WGPU: {}", e);
-                                            event_loop.exit();
-                                        } else {
-                                            self.window = Some(window);
-                                            log::info!("WGPU game window created successfully");
-                                        }
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to create window: {}", e);
-                                        event_loop.exit();
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    fn window_event(
-                        &mut self,
-                        event_loop: &winit::event_loop::ActiveEventLoop,
-                        window_id: WindowId,
-                        event: WindowEvent,
-                    ) {
-                        if let Some(game) = &mut self.game {
-                            let adapter = game.context.adapter.as_any().downcast_mut::<WgpuAdapter>().unwrap();
-                            if adapter.handle_window_event(&event) {
-                                event_loop.exit();
-                            }
-                            
-                            let et = self.last_tick.elapsed();
-                            if et >= self.tick_rate {
-                                let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1_000_000_000.0;
-                                game.on_tick(dt);
-                                self.last_tick = Instant::now();
-                            }
-                        }
-                    }
-                }
-                
-                let mut app = GameApp {
-                    game: Some(game),
-                    window: None,
-                    last_tick: Instant::now(),
-                    tick_rate: Duration::from_nanos(1_000_000_000 / rust_pixel::GAME_FRAME as u64),
-                };
-                
-                if let Err(e) = event_loop.run_app(&mut app) {
-                    log::error!("Event loop error: {}", e);
                 }
             }
         }
