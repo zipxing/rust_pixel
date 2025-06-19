@@ -70,11 +70,6 @@ macro_rules! pixel_game {
             pub fn init_game() -> [<$name Game>] {
                 let m = [<$name Model>]::new();
                 let r = [<$name Render>]::new();
-                // let pp = if $path.is_empty() {
-                //     get_project_path()
-                // } else {
-                //     format!("{}/{}", get_project_path(), $path)
-                // };
                 let pp = get_project_path();
                 println!("asset path : {:?}", pp);
                 let mut g = Game::new(m, r, stringify!([<$name:lower>]), &pp);
