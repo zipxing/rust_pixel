@@ -106,20 +106,8 @@ fn replace_in_files(
                 {
                     let content = fs::read(&path).unwrap();
                     let mut content_str = String::from_utf8_lossy(&content).to_string();
-                    if !is_standalone {
-                        if dirname == "games" {
-                        } else {
-                            content_str = content_str.replace(
-                                "pixel_game!(Template)",
-                                &format!("pixel_game!(Template, \"{}\")", dirname),
-                            );
-                        }
-                    } else {
+                    if is_standalone {
                         content_str = content_str.replace("$RUST_PIXEL_ROOT", rust_pixel_path);
-                        content_str = content_str.replace(
-                            "pixel_game!(Template)",
-                            &format!("pixel_game!(Template, \"app\", \".\")"),
-                        );
                     }
                     content_str = content_str.replace("Template", capname);
                     content_str = content_str.replace("TEMPLATE", upname);
