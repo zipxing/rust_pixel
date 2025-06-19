@@ -37,9 +37,6 @@ pub use paste;
 #[macro_export]
 macro_rules! pixel_game {
     ($name:ident) => {
-        pixel_game!($name, "");
-    };
-    ($name:ident, $path:expr) => {
         mod model;
         #[cfg(not(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32")))]
         mod render_terminal;
