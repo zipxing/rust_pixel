@@ -38,14 +38,14 @@ pub use paste;
 macro_rules! pixel_game {
     ($name:ident) => {
         mod model;
-        #[cfg(not(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         mod render_terminal;
-        #[cfg(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         mod render_graphics;
 
-        #[cfg(not(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
         use crate::{model::*, render_terminal::*};
-        #[cfg(any(feature = "sdl", feature = "wgpu", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
         use crate::{model::*, render_graphics::*};
         use rust_pixel::game::Game;
         use rust_pixel::util::get_project_path;
@@ -132,18 +132,8 @@ macro_rules! pixel_game {
             pub fn run() {
                 let mut g = init_game().g;
                 
-                #[cfg(feature = "wgpu")]
-                {
-                    if let Err(e) = rust_pixel::render::adapter::wgpu::WgpuAdapter::run_with_game(g) {
-                        log::error!("WGPU game error: {}", e);
-                    }
-                }
-                
-                #[cfg(not(feature = "wgpu"))]
-                {
-                    g.run().unwrap();
-                    g.render.panel.reset(&mut g.context);
-                }
+                g.run().unwrap();
+                g.render.panel.reset(&mut g.context);
             }
         }
     };

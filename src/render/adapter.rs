@@ -33,16 +33,11 @@ pub mod web;
 /// crossterm adapter
 #[cfg(not(any(
     feature = "sdl",
-    feature = "wgpu",
     target_os = "android",
     target_os = "ios",
     target_arch = "wasm32"
 )))]
 pub mod cross;
-
-/// wgpu adapter
-#[cfg(feature = "wgpu")]
-pub mod wgpu;
 
 /// symbols texture contains 8x8 blocks
 /// each block contain 16x16 symbols
@@ -142,8 +137,6 @@ pub struct AdapterBase {
     pub gl: Option<glow::Context>,
     #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
     pub gl_pixel: Option<GlPixel>,
-    #[cfg(feature = "wgpu")]
-    pub texture_data: Option<(u32, u32, Vec<u8>)>,
 }
 
 impl AdapterBase {
@@ -167,8 +160,6 @@ impl AdapterBase {
             gl: None,
             #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
             gl_pixel: None,
-            #[cfg(feature = "wgpu")]
-            texture_data: None,
         }
     }
 }
