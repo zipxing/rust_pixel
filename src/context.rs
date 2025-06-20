@@ -18,7 +18,7 @@ use crate::render::adapter::cross::CrosstermAdapter;
 use crate::render::adapter::sdl::SdlAdapter;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "winit"))]
-use crate::render::adapter::winit_adapter::WinitAdapter;
+use crate::render::adapter::winit::WinitAdapter;
 
 #[cfg(target_arch = "wasm32")]
 use crate::render::adapter::web::WebAdapter;

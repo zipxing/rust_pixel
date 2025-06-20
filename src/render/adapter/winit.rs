@@ -4,9 +4,7 @@
 //! Implements an Adapter trait using winit for window management and glow for OpenGL rendering.
 //! This replaces the SDL2 implementation while maintaining the same functionality.
 
-use crate::event::{
-    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
-};
+use crate::event::Event;
 use crate::render::{
     adapter::{
         gl::pixel::GlPixel, init_sym_height, init_sym_width, Adapter, AdapterBase,
@@ -18,14 +16,14 @@ use crate::render::{
 use log::info;
 use std::any::Any;
 use std::time::Duration;
-use winit::{
+pub use winit::{
+    dpi::LogicalSize,
+    event::{Event as WinitEvent, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::Window,
     application::ApplicationHandler,
-    dpi::{LogicalSize, PhysicalPosition},
-    event::{ElementState, Event as WinitEvent, KeyEvent as WinitKeyEvent, MouseButton as WinitMouseButton, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    keyboard::{KeyCode as WinitKeyCode, PhysicalKey},
-    window::{Window, WindowId},
 };
+use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
 use glutin::{
     config::ConfigTemplateBuilder,
     context::{ContextApi, ContextAttributesBuilder, Version},
@@ -33,135 +31,87 @@ use glutin::{
     prelude::*,
     surface::{Surface, SurfaceAttributesBuilder, WindowSurface},
 };
-use glutin_winit::{DisplayBuilder, GlWindow};
-use raw_window_handle::HasRawWindowHandle;
-
-// data for drag window...
-#[derive(Default)]
-struct Drag {
-    need: bool,
-    dragging: bool,
-    mouse_x: f64,
-    mouse_y: f64,
-    dx: f64,
-    dy: f64,
-}
+use glutin_winit::DisplayBuilder;
+use raw_window_handle::HasWindowHandle;
 
 pub struct WinitAdapter {
     pub base: AdapterBase,
     
     // winit objects
-    pub event_loop: Option<EventLoop<()>>,
     pub window: Option<Window>,
+    pub event_loop: Option<EventLoop<()>>,
     
     // glutin objects for OpenGL context
     pub gl_display: Option<glutin::display::Display>,
     pub gl_context: Option<glutin::context::PossiblyCurrentContext>,
     pub gl_surface: Option<Surface<WindowSurface>>,
     
-    // events storage
-    pub pending_events: Vec<Event>,
     pub should_exit: bool,
     
-    // data for dragging the window
-    drag: Drag,
+    // Event handling - for pump events mode
+    pub app_handler: Option<WinitAppHandler>,
 }
 
-pub enum WinitBorderArea {
-    NOPE,
-    CLOSE,
-    TOPBAR,
-    OTHER,
+// ApplicationHandler for winit pump events
+pub struct WinitAppHandler {
+    pub pending_events: Vec<Event>,
+    pub cursor_position: (f64, f64),
+    pub ratio_x: f32,
+    pub ratio_y: f32,
+    pub should_exit: bool,
+}
+
+impl ApplicationHandler for WinitAppHandler {
+    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        // Window should already be created
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                self.should_exit = true;
+                event_loop.exit();
+            }
+            _ => {
+                // Convert winit event to RustPixel event
+                let winit_event = WinitEvent::WindowEvent {
+                    window_id: _window_id,
+                    event,
+                };
+                if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                    self.pending_events.push(pixel_event);
+                }
+            }
+        }
+    }
 }
 
 impl WinitAdapter {
     pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(gn, project_path),
-            event_loop: None,
             window: None,
+            event_loop: None,
             gl_display: None,
             gl_context: None,
             gl_surface: None,
-            pending_events: Vec::new(),
             should_exit: false,
-            drag: Default::default(),
+            app_handler: None,
         }
     }
 
-    fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
-        let w = self.cell_width();
-        let h = self.cell_height();
-        let sw = self.base.cell_w + 2;
-        if y >= 0.0 && y < h as f64 {
-            if x >= 0.0 && x <= ((sw - 1) as f32 * w) as f64 {
-                return WinitBorderArea::TOPBAR;
-            }
-            if x > ((sw - 1) as f32 * w) as f64 && x <= (sw as f32 * w) as f64 {
-                return WinitBorderArea::CLOSE;
-            }
-        } else if x > w as f64 && x <= ((sw - 1) as f32 * w) as f64 {
-            return WinitBorderArea::NOPE;
-        }
-        WinitBorderArea::OTHER
-    }
 
-    fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::CloseRequested => return true,
-            WindowEvent::MouseInput { state: ElementState::Pressed, button: WinitMouseButton::Left, .. } => {
-                if let Some(window) = &self.window {
-                    if let Ok(cursor_pos) = window.cursor_position() {
-                        let bs = self.in_border(cursor_pos.x, cursor_pos.y);
-                        match bs {
-                            WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
-                                // start dragging when mouse left click
-                                self.drag.dragging = true;
-                                self.drag.mouse_x = cursor_pos.x;
-                                self.drag.mouse_y = cursor_pos.y;
-                            }
-                            WinitBorderArea::CLOSE => {
-                                return true;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            WindowEvent::MouseInput { state: ElementState::Released, button: WinitMouseButton::Left, .. } => {
-                // stop dragging when mouse left button is released
-                self.drag.dragging = false;
-            }
-            WindowEvent::CursorMoved { position, .. } if self.drag.dragging => {
-                self.drag.need = true;
-                // dragging window when mouse left button is held and moving
-                self.drag.dx = position.x - self.drag.mouse_x;
-                self.drag.dy = position.y - self.drag.mouse_y;
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn move_window(&mut self) {
-        // dragging window, set the correct position of a window
-        if self.drag.need {
-            if let Some(window) = &self.window {
-                if let Ok(current_pos) = window.outer_position() {
-                    let new_pos = PhysicalPosition::new(
-                        current_pos.x + self.drag.dx as i32,
-                        current_pos.y + self.drag.dy as i32,
-                    );
-                    let _ = window.set_outer_position(new_pos);
-                }
-            }
-            self.drag.need = false;
-        }
-    }
 }
 
 impl Adapter for WinitAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
+        info!("Initializing Winit adapter...");
+        
         // load texture file...
         let texture_path = format!(
             "{}{}{}",
@@ -209,11 +159,11 @@ impl Adapter for WinitAdapter {
 
         let display_builder = DisplayBuilder::new()
             .with_window_attributes(
-                winit::window::WindowAttributes::default()
+                Some(winit::window::WindowAttributes::default()
                     .with_title(&self.base.title)
                     .with_inner_size(window_size)
-                    .with_decorations(false) // borderless like SDL version
-                    .with_resizable(false)
+                    // .with_decorations(false) // borderless like SDL version
+                    .with_resizable(false))
             );
 
         let (window, gl_config) = display_builder
@@ -236,16 +186,16 @@ impl Adapter for WinitAdapter {
         let window = window.unwrap();
         
         let gl_display = gl_config.display();
-        let raw_window_handle = window.raw_window_handle();
+        let raw_window_handle = window.window_handle().unwrap().as_raw();
         
         let context_attributes = ContextAttributesBuilder::new()
             .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
             .build(Some(raw_window_handle));
 
-        let mut not_current_gl_context = Some(
-            unsafe { gl_display.create_context(&gl_config, &context_attributes) }
-                .expect("failed to create context"),
-        );
+        let not_current_gl_context = unsafe { 
+            gl_display.create_context(&gl_config, &context_attributes)
+                .expect("failed to create context")
+        };
 
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
@@ -253,12 +203,12 @@ impl Adapter for WinitAdapter {
             std::num::NonZeroU32::new(self.base.pixel_h).unwrap(),
         );
 
-        let surface = unsafe { gl_config.display().create_window_surface(&gl_config, &attrs) }
-            .expect("failed to create surface");
+        let surface = unsafe { 
+            gl_config.display().create_window_surface(&gl_config, &attrs)
+                .expect("failed to create surface")
+        };
 
         let gl_context = not_current_gl_context
-            .take()
-            .unwrap()
             .make_current(&surface)
             .expect("failed to make context current");
 
@@ -278,7 +228,6 @@ impl Adapter for WinitAdapter {
         self.gl_display = Some(gl_display);
         self.gl_context = Some(gl_context);
         self.gl_surface = Some(surface);
-        self.event_loop = Some(event_loop);
 
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
@@ -290,7 +239,19 @@ impl Adapter for WinitAdapter {
             &teximg,
         ));
 
-        info!("Window & gl init ok...");
+        // Initialize app handler for pump events
+        self.app_handler = Some(WinitAppHandler {
+            pending_events: Vec::new(),
+            cursor_position: (0.0, 0.0),
+            ratio_x: self.base.ratio_x,
+            ratio_y: self.base.ratio_y,
+            should_exit: false,
+        });
+        
+        // Store event loop for later use
+        self.event_loop = Some(event_loop);
+
+        info!("Winit window & OpenGL context initialized successfully");
     }
 
     fn get_base(&mut self) -> &mut AdapterBase {
@@ -308,18 +269,26 @@ impl Adapter for WinitAdapter {
     }
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
-        // This is a simplified polling implementation
-        // In a real winit application, you'd typically use the event loop differently
-        // For now, we'll return the pending events and check for exit condition
-        es.extend(self.pending_events.drain(..));
-        
-        if self.should_exit {
-            return true;
+        if let (Some(event_loop), Some(app_handler)) = (self.event_loop.as_mut(), self.app_handler.as_mut()) {
+            // Use pump_app_events for non-blocking event polling
+            let pump_timeout = Some(timeout);
+            let status = event_loop.pump_app_events(pump_timeout, app_handler);
+            
+            // Collect events from app handler
+            es.extend(app_handler.pending_events.drain(..));
+            
+            // Check if we should exit
+            if app_handler.should_exit {
+                return true;
+            }
+            
+            // Check pump status
+            if let PumpStatus::Exit(_) = status {
+                return true;
+            }
         }
         
-        // Sleep for the timeout duration
-        std::thread::sleep(timeout);
-        false
+        self.should_exit
     }
 
     fn draw_all_to_screen(
@@ -329,15 +298,20 @@ impl Adapter for WinitAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // process window dragging move...
-        self.move_window();
-
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
 
         // swap buffers for display
         if let Some(surface) = &self.gl_surface {
-            surface.swap_buffers(&self.gl_context.as_ref().unwrap()).unwrap();
+            if let Some(context) = &self.gl_context {
+                surface.swap_buffers(context).unwrap();
+            }
         }
+        
+        // Request redraw
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+        
         Ok(())
     }
 
@@ -369,102 +343,109 @@ impl Adapter for WinitAdapter {
 }
 
 /// Convert winit input events to RustPixel event, for the sake of unified event processing
-pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32) -> Option<Event> {
+pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32, cursor_pos: &mut (f64, f64)) -> Option<Event> {
+    use crate::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*};
+    
     let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
     let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
     
     match event {
-        WinitEvent::WindowEvent { event: WindowEvent::KeyboardInput { event: key_event, .. }, .. } => {
-            if key_event.state == ElementState::Pressed {
-                if let PhysicalKey::Code(keycode) = key_event.physical_key {
-                    let kc = match keycode {
-                        WinitKeyCode::Space => ' ',
-                        WinitKeyCode::KeyA => 'a',
-                        WinitKeyCode::KeyB => 'b',
-                        WinitKeyCode::KeyC => 'c',
-                        WinitKeyCode::KeyD => 'd',
-                        WinitKeyCode::KeyE => 'e',
-                        WinitKeyCode::KeyF => 'f',
-                        WinitKeyCode::KeyG => 'g',
-                        WinitKeyCode::KeyH => 'h',
-                        WinitKeyCode::KeyI => 'i',
-                        WinitKeyCode::KeyJ => 'j',
-                        WinitKeyCode::KeyK => 'k',
-                        WinitKeyCode::KeyL => 'l',
-                        WinitKeyCode::KeyM => 'm',
-                        WinitKeyCode::KeyN => 'n',
-                        WinitKeyCode::KeyO => 'o',
-                        WinitKeyCode::KeyP => 'p',
-                        WinitKeyCode::KeyQ => 'q',
-                        WinitKeyCode::KeyR => 'r',
-                        WinitKeyCode::KeyS => 's',
-                        WinitKeyCode::KeyT => 't',
-                        WinitKeyCode::KeyU => 'u',
-                        WinitKeyCode::KeyV => 'v',
-                        WinitKeyCode::KeyW => 'w',
-                        WinitKeyCode::KeyX => 'x',
-                        WinitKeyCode::KeyY => 'y',
-                        WinitKeyCode::KeyZ => 'z',
-                        _ => return None,
+        WinitEvent::WindowEvent { event: window_event, .. } => {
+            match window_event {
+                WindowEvent::KeyboardInput { event: key_event, .. } => {
+                    if key_event.state == winit::event::ElementState::Pressed {
+                        if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
+                            let kc = match keycode {
+                                winit::keyboard::KeyCode::Space => ' ',
+                                winit::keyboard::KeyCode::KeyA => 'a',
+                                winit::keyboard::KeyCode::KeyB => 'b',
+                                winit::keyboard::KeyCode::KeyC => 'c',
+                                winit::keyboard::KeyCode::KeyD => 'd',
+                                winit::keyboard::KeyCode::KeyE => 'e',
+                                winit::keyboard::KeyCode::KeyF => 'f',
+                                winit::keyboard::KeyCode::KeyG => 'g',
+                                winit::keyboard::KeyCode::KeyH => 'h',
+                                winit::keyboard::KeyCode::KeyI => 'i',
+                                winit::keyboard::KeyCode::KeyJ => 'j',
+                                winit::keyboard::KeyCode::KeyK => 'k',
+                                winit::keyboard::KeyCode::KeyL => 'l',
+                                winit::keyboard::KeyCode::KeyM => 'm',
+                                winit::keyboard::KeyCode::KeyN => 'n',
+                                winit::keyboard::KeyCode::KeyO => 'o',
+                                winit::keyboard::KeyCode::KeyP => 'p',
+                                winit::keyboard::KeyCode::KeyQ => 'q',
+                                winit::keyboard::KeyCode::KeyR => 'r',
+                                winit::keyboard::KeyCode::KeyS => 's',
+                                winit::keyboard::KeyCode::KeyT => 't',
+                                winit::keyboard::KeyCode::KeyU => 'u',
+                                winit::keyboard::KeyCode::KeyV => 'v',
+                                winit::keyboard::KeyCode::KeyW => 'w',
+                                winit::keyboard::KeyCode::KeyX => 'x',
+                                winit::keyboard::KeyCode::KeyY => 'y',
+                                winit::keyboard::KeyCode::KeyZ => 'z',
+                                winit::keyboard::KeyCode::ArrowUp => return Some(Event::Key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))),
+                                winit::keyboard::KeyCode::ArrowDown => return Some(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))),
+                                winit::keyboard::KeyCode::ArrowLeft => return Some(Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))),
+                                winit::keyboard::KeyCode::ArrowRight => return Some(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))),
+                                _ => return None,
+                            };
+                            let cte = KeyEvent::new(KeyCode::Char(kc), KeyModifiers::NONE);
+                            return Some(Event::Key(cte));
+                        }
+                    }
+                }
+                WindowEvent::MouseInput { state, button, .. } => {
+                    let mouse_event = match (state, button) {
+                        (winit::event::ElementState::Pressed, winit::event::MouseButton::Left) => {
+                            Some(MouseEvent {
+                                kind: Down(Left),
+                                column: (cursor_pos.0 / (sym_width / adjx) as f64) as u16,
+                                row: (cursor_pos.1 / (sym_height / adjy) as f64) as u16,
+                                modifiers: KeyModifiers::NONE,
+                            })
+                        }
+                        (winit::event::ElementState::Released, winit::event::MouseButton::Left) => {
+                            Some(MouseEvent {
+                                kind: Up(Left),
+                                column: (cursor_pos.0 / (sym_width / adjx) as f64) as u16,
+                                row: (cursor_pos.1 / (sym_height / adjy) as f64) as u16,
+                                modifiers: KeyModifiers::NONE,
+                            })
+                        }
+                        _ => None,
                     };
-                    let cte = KeyEvent::new(KeyCode::Char(kc), KeyModifiers::NONE);
-                    return Some(Event::Key(cte));
+                    
+                    if let Some(mut mc) = mouse_event {
+                        if mc.column >= 1 {
+                            mc.column -= 1;
+                        }
+                        if mc.row >= 1 {
+                            mc.row -= 1;
+                        }
+                        return Some(Event::Mouse(mc));
+                    }
                 }
-            }
-        }
-        WinitEvent::WindowEvent { event: WindowEvent::MouseInput { state, button, .. }, .. } => {
-            // We need cursor position for mouse events, but winit doesn't provide it in MouseInput
-            // This is a limitation of the current implementation
-            let (x, y) = (0, 0); // Placeholder - in real implementation, we'd track cursor position
-            
-            let mouse_event = match (state, button) {
-                (ElementState::Pressed, WinitMouseButton::Left) => {
-                    Some(MouseEvent {
-                        kind: Down(Left),
-                        column: x,
-                        row: y,
+                WindowEvent::CursorMoved { position, .. } => {
+                    // Update cursor position
+                    cursor_pos.0 = position.x;
+                    cursor_pos.1 = position.y;
+                    
+                    let mut mc = MouseEvent {
+                        kind: Moved,
+                        column: (position.x / (sym_width / adjx) as f64) as u16,
+                        row: (position.y / (sym_height / adjy) as f64) as u16,
                         modifiers: KeyModifiers::NONE,
-                    })
+                    };
+                    if mc.column >= 1 {
+                        mc.column -= 1;
+                    }
+                    if mc.row >= 1 {
+                        mc.row -= 1;
+                    }
+                    return Some(Event::Mouse(mc));
                 }
-                (ElementState::Released, WinitMouseButton::Left) => {
-                    Some(MouseEvent {
-                        kind: Up(Left),
-                        column: x,
-                        row: y,
-                        modifiers: KeyModifiers::NONE,
-                    })
-                }
-                _ => None,
-            };
-            
-            if let Some(mut mc) = mouse_event {
-                mc.column = (mc.column as f32 / (sym_width / adjx)) as u16;
-                mc.row = (mc.row as f32 / (sym_height / adjy)) as u16;
-                if mc.column >= 1 {
-                    mc.column -= 1;
-                }
-                if mc.row >= 1 {
-                    mc.row -= 1;
-                }
-                return Some(Event::Mouse(mc));
+                _ => {}
             }
-        }
-        WinitEvent::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } => {
-            let mut mc = MouseEvent {
-                kind: Moved,
-                column: position.x as u16,
-                row: position.y as u16,
-                modifiers: KeyModifiers::NONE,
-            };
-            mc.column = (mc.column as f32 / (sym_width / adjx)) as u16;
-            mc.row = (mc.row as f32 / (sym_height / adjy)) as u16;
-            if mc.column >= 1 {
-                mc.column -= 1;
-            }
-            if mc.row >= 1 {
-                mc.row -= 1;
-            }
-            return Some(Event::Mouse(mc));
         }
         _ => {}
     }

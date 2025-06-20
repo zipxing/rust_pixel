@@ -32,7 +32,7 @@ pub mod web;
 
 /// winit adapter  
 #[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
-pub mod winit_adapter;
+pub mod winit;
 
 /// crossterm adapter
 #[cfg(not(any(
