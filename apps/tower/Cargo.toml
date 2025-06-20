@@ -28,5 +28,5 @@ tower_lib = { path = "./lib" }
 
 [features]
 sdl = ["rust_pixel/sdl"]
-# wgpu feature removed
+winit = ["rust_pixel/winit"]
 term = ["rust_pixel/term"]

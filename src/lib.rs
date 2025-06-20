@@ -38,14 +38,14 @@ pub use paste;
 macro_rules! pixel_game {
     ($name:ident) => {
         mod model;
-        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", feature = "winit", target_arch = "wasm32")))]
         mod render_terminal;
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         mod render_graphics;
 
-        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", feature = "winit", target_arch = "wasm32")))]
         use crate::{model::*, render_terminal::*};
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         use crate::{model::*, render_graphics::*};
         use rust_pixel::game::Game;
         use rust_pixel::util::get_project_path;
@@ -132,8 +132,79 @@ macro_rules! pixel_game {
             pub fn run() {
                 let mut g = init_game().g;
                 
-                g.run().unwrap();
-                g.render.panel.reset(&mut g.context);
+                #[cfg(feature = "winit")]
+                {
+                    use rust_pixel::render::adapter::winit_adapter::WinitAdapter;
+                    use std::time::{Duration, Instant};
+                    
+                    // For winit, we need to handle the event loop differently
+                    if let Some(winit_adapter) = g.context.adapter.as_any().downcast_mut::<WinitAdapter>() {
+                        if let Some(event_loop) = winit_adapter.event_loop.take() {
+                            let mut last_tick = Instant::now();
+                            let tick_rate = Duration::from_nanos(1_000_000_000 / rust_pixel::GAME_FRAME as u64);
+                            
+                            #[allow(deprecated)]
+                            event_loop.run(move |event, window_target| {
+                                #[cfg(feature = "winit")]
+                                {
+                                    use rust_pixel::render::adapter::winit_adapter::{WinitEvent, WindowEvent, ControlFlow, input_events_from_winit};
+                                    
+                                    window_target.set_control_flow(ControlFlow::Poll);
+                                    
+                                    // Process input events
+                                    if let Some(winit_adapter) = g.context.adapter.as_any().downcast_mut::<WinitAdapter>() {
+                                        if let Some(pixel_event) = input_events_from_winit(&event, winit_adapter.base.ratio_x, winit_adapter.base.ratio_y, &mut winit_adapter.cursor_position) {
+                                            winit_adapter.pending_events.push(pixel_event);
+                                        }
+                                    }
+                                    
+                                    match event {
+                                        WinitEvent::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                                            g.render.panel.reset(&mut g.context);
+                                            window_target.exit();
+                                        }
+                                        WinitEvent::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+                                            // Handle game tick
+                                            let et = last_tick.elapsed();
+                                            if et >= tick_rate {
+                                                let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1_000_000_000.0;
+                                                
+                                                // Poll events from adapter before processing the game tick
+                                                let timeout = std::time::Duration::from_nanos(100);
+                                                g.context.adapter.poll_event(timeout, &mut g.context.input_events);
+                                                
+                                                g.on_tick(dt);
+                                                last_tick = Instant::now();
+                                            }
+                                            
+                                            // Request next frame
+                                            if let Some(winit_adapter) = g.context.adapter.as_any().downcast_mut::<WinitAdapter>() {
+                                                if let Some(window) = &winit_adapter.window {
+                                                    window.request_redraw();
+                                                }
+                                            }
+                                        }
+                                        WinitEvent::AboutToWait => {
+                                            // Trigger redraw
+                                            if let Some(winit_adapter) = g.context.adapter.as_any().downcast_mut::<WinitAdapter>() {
+                                                if let Some(window) = &winit_adapter.window {
+                                                    window.request_redraw();
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }).unwrap();
+                        }
+                    }
+                }
+                
+                #[cfg(not(feature = "winit"))]
+                {
+                    g.run().unwrap();
+                    g.render.panel.reset(&mut g.context);
+                }
             }
         }
     };

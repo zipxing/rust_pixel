@@ -25,5 +25,6 @@ tetris_lib = { path = "./lib" }
 
 [features]
 sdl = ["rust_pixel/sdl"]
+winit = ["rust_pixel/winit"]
 term = ["rust_pixel/term"]
 # wgpu feature removed

@@ -7,7 +7,7 @@ use crate::{
     render::{buffer::Buffer, sprite::Sprites},
     util::{Rand, Rect},
 };
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 use crate::{
     render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
     render::style::Color,
@@ -30,9 +30,14 @@ pub mod sdl;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
+/// winit adapter  
+#[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
+pub mod winit_adapter;
+
 /// crossterm adapter
 #[cfg(not(any(
     feature = "sdl",
+    feature = "winit",
     target_os = "android",
     target_os = "ios",
     target_arch = "wasm32"
@@ -42,7 +47,7 @@ pub mod cross;
 /// symbols texture contains 8x8 blocks
 /// each block contain 16x16 symbols
 /// total 128 * 128 symbols
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
 /// symbol size is calculated based on the size of the texture
@@ -129,13 +134,13 @@ pub struct AdapterBase {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub rd: Rand,
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub rflag: bool,
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub rbuf: Vec<RenderCell>,
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub gl: Option<glow::Context>,
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub gl_pixel: Option<GlPixel>,
 }
 
@@ -152,13 +157,13 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             rflag: true,
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             rbuf: vec![],
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl: None,
-            #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl_pixel: None,
         }
     }
@@ -239,8 +244,8 @@ pub trait Adapter {
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
-    // sdl & web main render pass...
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    // sdl & winit & web main render pass...
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_all_graph(
         &mut self,
         current_buffer: &Buffer,
@@ -272,12 +277,12 @@ pub trait Adapter {
         }
     }
 
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn only_render_buffer(&mut self) {
         self.get_base().rflag = false;
     }
 
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_render_textures_to_screen(&mut self) {
         let bs = self.get_base();
 
@@ -314,7 +319,7 @@ pub trait Adapter {
     }
 
     // draw buffer to render texture...
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         let rbuf = self.buffer_to_render_buffer(buf);
         // For debug...
@@ -323,7 +328,7 @@ pub trait Adapter {
     }
 
     // draw render buffer to render texture...
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
         let bs = self.get_base();
         let rx = bs.ratio_x;
@@ -342,7 +347,7 @@ pub trait Adapter {
     }
 
     // buffer to render buffer...
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
         let rx = self.get_base().ratio_x;
@@ -362,7 +367,7 @@ pub trait Adapter {
     }
 
     // draw main buffer & pixel sprites to render buffer...
-    #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_all_to_render_buffer(
         &mut self,
         cb: &Buffer,
@@ -434,7 +439,7 @@ pub trait Adapter {
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
     fc: &(u8, u8, u8, u8),
@@ -489,7 +494,7 @@ fn push_render_buffer(
     rbuf.push(wc);
 }
 
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 fn render_helper(
     cell_w: u16,
     r: PointF32,
@@ -538,7 +543,7 @@ fn render_helper(
     )
 }
 
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
     // rgba, back rgba, back rect, sym rect, dst rect, tex, sym, angle, center point
@@ -598,7 +603,7 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border: bool, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
@@ -624,7 +629,7 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub fn render_border<F>(cell_w: u16, cell_h: u16, rx: f32, ry: f32, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
@@ -663,7 +668,7 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub fn render_logo<F>(srx: f32, sry: f32, spw: u32, sph: u32, rd: &mut Rand, stage: u32, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
