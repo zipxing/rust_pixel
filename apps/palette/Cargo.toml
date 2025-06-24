@@ -25,4 +25,5 @@ rust_pixel = { path = "../..", default-features = false }
 
 [features]
 sdl = ["rust_pixel/sdl"]
+winit = ["rust_pixel/winit"]
 term = ["rust_pixel/term"]

@@ -13,7 +13,7 @@ use crate::{
     util::Rand,
     LOGO_FRAME,
 };
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit")))]
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -32,14 +32,14 @@ use std::io::{self, Write};
 use std::time::Duration;
 // use log::info;
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit")))]
 pub struct CrosstermAdapter {
     pub writer: Box<dyn Write>,
     pub base: AdapterBase,
     pub rd: Rand,
 }
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit")))]
 impl CrosstermAdapter {
     pub fn new(gn: &str, project_path: &str) -> Self {
         let stdout = io::stdout();
@@ -51,7 +51,7 @@ impl CrosstermAdapter {
     }
 }
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit")))]
 impl Adapter for CrosstermAdapter {
     fn init(&mut self, w: u16, h: u16, _rx: f32, _ry: f32, _s: String) {
         self.set_size(w, h);
@@ -207,7 +207,7 @@ impl Adapter for CrosstermAdapter {
 
 /// Convert crossterm I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit")))]
 pub fn input_events_from_cross(e: &CEvent) -> Option<Event> {
     let mut mcte: Option<MouseEvent> = None;
     match e {

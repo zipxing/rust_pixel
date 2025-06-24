@@ -30,4 +30,5 @@ texas_lib = { path = "./texas" }
 web = ["rust_pixel/web"]
 sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
+winit = ["rust_pixel/winit"]
 

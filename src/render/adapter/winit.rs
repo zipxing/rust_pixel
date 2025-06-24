@@ -153,9 +153,7 @@ impl Adapter for WinitAdapter {
         // Create window with OpenGL context
         let window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
         
-        let template = ConfigTemplateBuilder::new()
-            .with_alpha_size(8)
-            .with_transparency(false);
+        let template = ConfigTemplateBuilder::new();
 
         let display_builder = DisplayBuilder::new()
             .with_window_attributes(
@@ -170,10 +168,7 @@ impl Adapter for WinitAdapter {
             .build(&event_loop, template, |configs| {
                 configs
                     .reduce(|accum, config| {
-                        let transparency_check = config.supports_transparency().unwrap_or(false)
-                            & !accum.supports_transparency().unwrap_or(false);
-
-                        if transparency_check || config.num_samples() > accum.num_samples() {
+                        if config.num_samples() > accum.num_samples() {
                             config
                         } else {
                             accum
