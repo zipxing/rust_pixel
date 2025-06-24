@@ -20,7 +20,7 @@ pub use winit::{
     dpi::LogicalSize,
     event::{Event as WinitEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window,
+    window::{Window, CustomCursor, Cursor},
     application::ApplicationHandler,
 };
 use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
@@ -50,6 +50,9 @@ pub struct WinitAdapter {
     
     // Event handling - for pump events mode
     pub app_handler: Option<WinitAppHandler>,
+    
+    // custom cursor
+    pub custom_cursor: Option<CustomCursor>,
 }
 
 // ApplicationHandler for winit pump events
@@ -102,6 +105,40 @@ impl WinitAdapter {
             gl_surface: None,
             should_exit: false,
             app_handler: None,
+            custom_cursor: None,
+        }
+    }
+    
+    fn set_mouse_cursor(&mut self) {
+        // Load custom cursor image  
+        let cursor_path = format!(
+            "{}{}{}",
+            self.base.project_path,
+            std::path::MAIN_SEPARATOR,
+            "assets/pix/cursor.png"
+        );
+        
+        if let Ok(cursor_img) = image::open(&cursor_path) {
+            let cursor_rgba = cursor_img.to_rgba8();
+            let (width, height) = cursor_rgba.dimensions();
+            let cursor_data = cursor_rgba.into_raw();
+            
+            // Create CustomCursor source from image data
+            if let Ok(cursor_source) = CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0) {
+                // Need to create the actual cursor from the source using event_loop
+                if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
+                    let custom_cursor = event_loop.create_custom_cursor(cursor_source);
+                    self.custom_cursor = Some(custom_cursor.clone());
+                    window.set_cursor(custom_cursor);
+                    // Ensure cursor is visible after setting custom cursor
+                    window.set_cursor_visible(true);
+                }
+            }
+        } else {
+            // If custom cursor fails to load, ensure standard cursor is visible
+            if let Some(window) = &self.window {
+                window.set_cursor_visible(true);
+            }
         }
     }
 
@@ -246,6 +283,12 @@ impl Adapter for WinitAdapter {
         // Store event loop for later use
         self.event_loop = Some(event_loop);
 
+        // Set custom mouse cursor (similar to SDL version)
+        self.set_mouse_cursor();
+        
+        // Ensure cursor is visible (similar to SDL version)
+        self.show_cursor().unwrap();
+
         info!("Winit window & OpenGL context initialized successfully");
     }
 
@@ -311,9 +354,8 @@ impl Adapter for WinitAdapter {
     }
 
     fn hide_cursor(&mut self) -> Result<(), String> {
-        if let Some(window) = &self.window {
-            window.set_cursor_visible(false);
-        }
+        // For GUI applications, we don't want to hide the mouse cursor
+        // This is similar to SDL behavior - let the mouse cursor remain visible
         Ok(())
     }
 
