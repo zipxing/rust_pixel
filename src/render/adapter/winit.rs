@@ -104,6 +104,27 @@ impl ApplicationHandler for WinitAppHandler {
                 self.should_exit = true;
                 event_loop.exit();
             }
+            WindowEvent::KeyboardInput { event: key_event, .. } => {
+                // Handle Q key for exit (similar to SDL version)
+                if key_event.state == winit::event::ElementState::Pressed {
+                    if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
+                        if keycode == winit::keyboard::KeyCode::KeyQ {
+                            self.should_exit = true;
+                            event_loop.exit();
+                            return;
+                        }
+                    }
+                }
+                
+                // Convert keyboard event to pixel event
+                let winit_event = WinitEvent::WindowEvent {
+                    window_id: _window_id,
+                    event: WindowEvent::KeyboardInput { device_id: winit::event::DeviceId::dummy(), event: key_event, is_synthetic: false, },
+                };
+                if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                    self.pending_events.push(pixel_event);
+                }
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_position = (position.x, position.y);
                 
