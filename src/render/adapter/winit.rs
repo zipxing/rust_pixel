@@ -34,6 +34,24 @@ use glutin::{
 use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasWindowHandle;
 
+// Window dragging support structures (similar to SDL)
+#[derive(Default)]
+struct Drag {
+    need: bool,
+    draging: bool,
+    mouse_x: f64,
+    mouse_y: f64,
+    dx: f64,
+    dy: f64,
+}
+
+pub enum WinitBorderArea {
+    NOPE,
+    CLOSE,
+    TOPBAR,
+    OTHER,
+}
+
 pub struct WinitAdapter {
     pub base: AdapterBase,
     
@@ -53,6 +71,9 @@ pub struct WinitAdapter {
     
     // custom cursor
     pub custom_cursor: Option<CustomCursor>,
+    
+    // data for dragging the window
+    drag: Drag,
 }
 
 // ApplicationHandler for winit pump events
@@ -62,6 +83,9 @@ pub struct WinitAppHandler {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub should_exit: bool,
+    
+    // Reference to adapter for drag handling
+    pub adapter_ref: *mut WinitAdapter,
 }
 
 impl ApplicationHandler for WinitAppHandler {
@@ -80,8 +104,96 @@ impl ApplicationHandler for WinitAppHandler {
                 self.should_exit = true;
                 event_loop.exit();
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor_position = (position.x, position.y);
+                
+                // Handle window dragging
+                unsafe {
+                    let adapter = &mut *self.adapter_ref;
+                    if adapter.drag.draging {
+                        adapter.drag.need = true;
+                        adapter.drag.dx = position.x - adapter.drag.mouse_x;
+                        adapter.drag.dy = position.y - adapter.drag.mouse_y;
+                    }
+                }
+                
+                // Convert to pixel event only if not dragging
+                let winit_event = WinitEvent::WindowEvent {
+                    window_id: _window_id,
+                    event: WindowEvent::CursorMoved { device_id: winit::event::DeviceId::dummy(), position, },
+                };
+                
+                unsafe {
+                    let adapter = &*self.adapter_ref;
+                    if !adapter.drag.draging {
+                        if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                            self.pending_events.push(pixel_event);
+                        }
+                    }
+                }
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                match (state, button) {
+                    (winit::event::ElementState::Pressed, winit::event::MouseButton::Left) => {
+                        unsafe {
+                            let adapter = &mut *self.adapter_ref;
+                            let bs = adapter.in_border(self.cursor_position.0, self.cursor_position.1);
+                            match bs {
+                                WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
+                                    // start dragging when mouse left click on border
+                                    adapter.drag.draging = true;
+                                    adapter.drag.mouse_x = self.cursor_position.0;
+                                    adapter.drag.mouse_y = self.cursor_position.1;
+                                }
+                                WinitBorderArea::CLOSE => {
+                                    self.should_exit = true;
+                                    event_loop.exit();
+                                }
+                                _ => {
+                                    // Not dragging, pass event to game
+                                    let winit_event = WinitEvent::WindowEvent {
+                                        window_id: _window_id,
+                                        event: WindowEvent::MouseInput { device_id: winit::event::DeviceId::dummy(), state, button, },
+                                    };
+                                    if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                                        self.pending_events.push(pixel_event);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    (winit::event::ElementState::Released, winit::event::MouseButton::Left) => {
+                        unsafe {
+                            let adapter = &mut *self.adapter_ref;
+                            let was_dragging = adapter.drag.draging;
+                            adapter.drag.draging = false;
+                            
+                            // Only pass mouse release to game if we weren't dragging
+                            if !was_dragging {
+                                let winit_event = WinitEvent::WindowEvent {
+                                    window_id: _window_id,
+                                    event: WindowEvent::MouseInput { device_id: winit::event::DeviceId::dummy(), state, button, },
+                                };
+                                if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                                    self.pending_events.push(pixel_event);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // Convert other mouse inputs
+                        let winit_event = WinitEvent::WindowEvent {
+                            window_id: _window_id,
+                            event: WindowEvent::MouseInput { device_id: winit::event::DeviceId::dummy(), state, button, },
+                        };
+                        if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                            self.pending_events.push(pixel_event);
+                        }
+                    }
+                }
+            }
             _ => {
-                // Convert winit event to RustPixel event
+                // Convert other winit events to RustPixel events
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event,
@@ -106,6 +218,7 @@ impl WinitAdapter {
             should_exit: false,
             app_handler: None,
             custom_cursor: None,
+            drag: Default::default(),
         }
     }
     
@@ -141,6 +254,25 @@ impl WinitAdapter {
             }
         }
     }
+    
+    fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
+        let w = self.cell_width();
+        let h = self.cell_height();
+        let sw = self.base.cell_w + 2;
+        if y >= 0.0 && y < h as f64 {
+            if x >= 0.0 && x <= ((sw - 1) as f32 * w) as f64 {
+                return WinitBorderArea::TOPBAR;
+            }
+            if x > ((sw - 1) as f32 * w) as f64 && x <= (sw as f32 * w) as f64 {
+                return WinitBorderArea::CLOSE;
+            }
+        } else if x > w as f64 && x <= ((sw - 1) as f32 * w) as f64 {
+            return WinitBorderArea::NOPE;
+        }
+        WinitBorderArea::OTHER
+    }
+
+
 
 
 }
@@ -197,7 +329,7 @@ impl Adapter for WinitAdapter {
                 Some(winit::window::WindowAttributes::default()
                     .with_title(&self.base.title)
                     .with_inner_size(window_size)
-                    // .with_decorations(false) // borderless like SDL version
+                    .with_decorations(false) // borderless like SDL version
                     .with_resizable(false))
             );
 
@@ -278,6 +410,7 @@ impl Adapter for WinitAdapter {
             ratio_x: self.base.ratio_x,
             ratio_y: self.base.ratio_y,
             should_exit: false,
+            adapter_ref: self as *mut WinitAdapter,
         });
         
         // Store event loop for later use
@@ -312,8 +445,13 @@ impl Adapter for WinitAdapter {
             let pump_timeout = Some(timeout);
             let status = event_loop.pump_app_events(pump_timeout, app_handler);
             
-            // Collect events from app handler
-            es.extend(app_handler.pending_events.drain(..));
+            // Collect events from app handler, but filter out dragging events
+            for event in app_handler.pending_events.drain(..) {
+                // Don't pass mouse events to the game when dragging window
+                if !self.drag.draging {
+                    es.push(event);
+                }
+            }
             
             // Check if we should exit
             if app_handler.should_exit {
@@ -336,6 +474,9 @@ impl Adapter for WinitAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
+        // process window dragging move...
+        winit_move_win(&mut self.drag.need, self.window.as_ref(), self.drag.dx, self.drag.dy);
+
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
 
         // swap buffers for display
@@ -487,4 +628,18 @@ pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32, cur
         _ => {}
     }
     None
+}
+
+pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy: f64) {
+    // dragging window, set the correct position of a window
+    if *drag_need {
+        if let Some(win) = window {
+            if let Ok(pos) = win.outer_position() {
+                let new_x = pos.x + dx as i32;
+                let new_y = pos.y + dy as i32;
+                let _ = win.set_outer_position(winit::dpi::PhysicalPosition::new(new_x, new_y));
+            }
+        }
+        *drag_need = false;
+    }
 } 

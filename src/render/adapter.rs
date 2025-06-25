@@ -409,8 +409,8 @@ pub trait Adapter {
             push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
 
-        // render windows border, only at sdl mode
-        #[cfg(feature = "sdl")]
+        // render windows border, for sdl and winit mode
+        #[cfg(any(feature = "sdl", feature = "winit"))]
         render_border(cw, ch, rx, ry, &mut rfunc);
 
         // render main buffer...
