@@ -13,6 +13,7 @@ use crate::render::{
     buffer::Buffer,
     sprite::Sprites,
 };
+use glow::HasContext;
 use log::info;
 use std::any::Any;
 use std::time::Duration;
@@ -370,6 +371,11 @@ impl Adapter for WinitAdapter {
 
         let window = window.unwrap();
         
+        // Get actual framebuffer size for Retina displays
+        let physical_size = window.inner_size();
+        info!("Window physical size: {}x{}", physical_size.width, physical_size.height);
+        info!("Window logical size: {}x{}", self.base.pixel_w, self.base.pixel_h);
+        
         let gl_display = gl_config.display();
         let raw_window_handle = window.window_handle().unwrap().as_raw();
         
@@ -382,10 +388,11 @@ impl Adapter for WinitAdapter {
                 .expect("failed to create context")
         };
 
+        // Use physical size for surface to match actual framebuffer
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
-            std::num::NonZeroU32::new(self.base.pixel_w).unwrap(),
-            std::num::NonZeroU32::new(self.base.pixel_h).unwrap(),
+            std::num::NonZeroU32::new(physical_size.width).unwrap(),
+            std::num::NonZeroU32::new(physical_size.height).unwrap(),
         );
 
         let surface = unsafe { 
@@ -414,22 +421,40 @@ impl Adapter for WinitAdapter {
         self.gl_context = Some(gl_context);
         self.gl_surface = Some(surface);
 
+        // For Retina displays, use physical size for GlPixel to match actual framebuffer
+        let physical_size = self.window.as_ref().unwrap().inner_size();
+        info!("Physical size: {}x{}, Logical size: {}x{}", 
+              physical_size.width, physical_size.height,
+              self.base.pixel_w, self.base.pixel_h);
+        
+        // Create GlPixel with physical dimensions to match the actual framebuffer
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
             "#version 330 core",
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
+            physical_size.width as i32,  // Use physical size to match framebuffer
+            physical_size.height as i32,  // Use physical size to match framebuffer
             texwidth as i32,
             texheight as i32,
             &teximg,
         ));
 
-        // Initialize app handler for pump events
+        // Calculate scale factor and adjust ratio for Retina displays  
+        let scale_factor = self.window.as_ref().unwrap().scale_factor();
+        let physical_ratio_x = self.base.ratio_x / scale_factor as f32;  // Inverse scale to compensate
+        let physical_ratio_y = self.base.ratio_y / scale_factor as f32;  // Inverse scale to compensate
+        
+        info!("Scale factor: {}, Original ratio: {}x{}, Physical ratio: {}x{}", 
+              scale_factor, self.base.ratio_x, self.base.ratio_y, physical_ratio_x, physical_ratio_y);
+              
+        // Update base ratio for correct rendering
+        self.base.ratio_x = physical_ratio_x;
+        self.base.ratio_y = physical_ratio_y;
+        
         self.app_handler = Some(WinitAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
-            ratio_x: self.base.ratio_x,
-            ratio_y: self.base.ratio_y,
+            ratio_x: physical_ratio_x,  
+            ratio_y: physical_ratio_y,
             should_exit: false,
             adapter_ref: self as *mut WinitAdapter,
         });
