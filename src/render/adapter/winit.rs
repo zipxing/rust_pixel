@@ -138,7 +138,16 @@ impl ApplicationHandler for WinitAppHandler {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.cursor_position = (position.x, position.y);
+                // Convert physical coordinates to logical coordinates for Retina displays
+                unsafe {
+                    let adapter = &*self.adapter_ref;
+                    if let Some(window) = &adapter.window {
+                        let scale_factor = window.scale_factor();
+                        self.cursor_position = (position.x / scale_factor, position.y / scale_factor);
+                    } else {
+                        self.cursor_position = (position.x, position.y);
+                    }
+                }
 
                 // Handle window dragging
                 unsafe {
@@ -151,11 +160,16 @@ impl ApplicationHandler for WinitAppHandler {
                 }
 
                 // Convert to pixel event only if not dragging
+                // Use logical position for consistent coordinate system
+                let logical_position = winit::dpi::PhysicalPosition::new(
+                    self.cursor_position.0,
+                    self.cursor_position.1,
+                );
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event: WindowEvent::CursorMoved {
                         device_id: winit::event::DeviceId::dummy(),
-                        position,
+                        position: logical_position,
                     },
                 };
 
@@ -417,19 +431,23 @@ impl Adapter for WinitAdapter {
             .unwrap();
         let temp_window = temp_window.unwrap();
 
-        // Get scale factor and calculate proper window size
+                // Get scale factor and calculate proper window size to match SDL behavior
         let scale_factor = temp_window.scale_factor();
-        let adjusted_logical_w = (self.base.pixel_w as f64 / scale_factor) as u32;
-        let adjusted_logical_h = (self.base.pixel_h as f64 / scale_factor) as u32;
+        
+        // For consistency with SDL: on Retina displays, we want the window to be 2x larger
+        // So logical size = original size (not divided by scale factor)
+        let adjusted_logical_w = self.base.pixel_w;
+        let adjusted_logical_h = self.base.pixel_h;
         let window_size = LogicalSize::new(adjusted_logical_w, adjusted_logical_h);
-
+        
         info!(
-            "Scale factor: {}, Adjusted window logical size: {}x{}",
+            "Scale factor: {}, Window logical size: {}x{} (same as SDL)",
             scale_factor, adjusted_logical_w, adjusted_logical_h
         );
         info!(
-            "Expected physical size: {}x{}",
-            self.base.pixel_w, self.base.pixel_h
+            "Expected physical size: {}x{} (2x render size on Retina)",
+            (adjusted_logical_w as f64 * scale_factor) as u32, 
+            (adjusted_logical_h as f64 * scale_factor) as u32
         );
 
         let template = ConfigTemplateBuilder::new();
@@ -458,14 +476,14 @@ impl Adapter for WinitAdapter {
 
         let window = window.unwrap();
 
-        // Verify that the physical size matches our expectations
+        // Get actual physical size - should be 2x render size on Retina
         let physical_size = window.inner_size();
         info!(
-            "Actual window physical size: {}x{}",
+            "Actual window physical size: {}x{} (2x on Retina)",
             physical_size.width, physical_size.height
         );
         info!(
-            "Expected render size: {}x{}",
+            "Render area size: {}x{}",
             self.base.pixel_w, self.base.pixel_h
         );
 
@@ -482,11 +500,11 @@ impl Adapter for WinitAdapter {
                 .expect("failed to create context")
         };
 
-        // Use our expected render size for surface (should match physical size now)
+        // Use physical size for surface to match actual framebuffer (2x on Retina)
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
-            std::num::NonZeroU32::new(self.base.pixel_w).unwrap(),
-            std::num::NonZeroU32::new(self.base.pixel_h).unwrap(),
+            std::num::NonZeroU32::new(physical_size.width).unwrap(),
+            std::num::NonZeroU32::new(physical_size.height).unwrap(),
         );
 
         let surface = unsafe {
@@ -517,29 +535,30 @@ impl Adapter for WinitAdapter {
         self.gl_context = Some(gl_context);
         self.gl_surface = Some(surface);
 
-        // Now window physical size should match our render size perfectly
-        // Create GlPixel with our standard render dimensions
+        // Create GlPixel with logical dimensions for consistent coordinate system
+        // The framebuffer is still high-res (physical size), but GlPixel will handle scaling
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
             "#version 330 core",
-            self.base.pixel_w as i32, // Standard render width
-            self.base.pixel_h as i32, // Standard render height
+            self.base.pixel_w as i32,    // Use logical size for coordinate system
+            self.base.pixel_h as i32,    // Use logical size for coordinate system  
             texwidth as i32,
             texheight as i32,
             &teximg,
         ));
 
-        // No need to adjust ratio - window is sized to match our render area exactly
+        // Ratio remains the same, but OpenGL will render at higher resolution on Retina
         info!(
-            "Using standard ratio: {}x{} (consistent with SDL)",
-            self.base.ratio_x, self.base.ratio_y
+            "Using standard ratio: {}x{}, OpenGL framebuffer: {}x{} (2x on Retina)",
+            self.base.ratio_x, self.base.ratio_y,
+            physical_size.width, physical_size.height
         );
 
         self.app_handler = Some(WinitAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
-            ratio_x: self.base.ratio_x, // Standard ratio - window sized to match perfectly
-            ratio_y: self.base.ratio_y, // Standard ratio - window sized to match perfectly
+            ratio_x: self.base.ratio_x, // Standard ratio - OpenGL handles scaling automatically
+            ratio_y: self.base.ratio_y, // Standard ratio - OpenGL handles scaling automatically
             should_exit: false,
             adapter_ref: self as *mut WinitAdapter,
         });
@@ -655,6 +674,63 @@ impl Adapter for WinitAdapter {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+    
+    // Override draw_render_textures_to_screen to handle Retina scaling
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]  
+    fn draw_render_textures_to_screen(&mut self) {
+        use crate::render::adapter::gl::color::GlColor;
+        use crate::render::adapter::gl::transform::GlTransform;
+        use glow::HasContext;
+        
+        // Get window physical size first to avoid borrowing conflicts
+        let physical_size = if let Some(window) = &self.window {
+            Some(window.inner_size())
+        } else {
+            None
+        };
+        
+        let bs = self.get_base();
+
+        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            // First bind screen with GlPixel's logical viewport
+            pix.bind_screen(gl);
+            
+            // Then manually set the correct viewport for Retina displays
+            if let Some(physical_size) = physical_size {
+                unsafe {
+                    gl.viewport(0, 0, physical_size.width as i32, physical_size.height as i32);
+                }
+            }
+            
+            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+
+            // draw render_texture 2 ( main buffer )
+            if !pix.get_render_texture_hidden(2) {
+                let t = GlTransform::new();
+                pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+            }
+
+            // draw render_texture 3 ( gl transition )
+            if !pix.get_render_texture_hidden(3) {
+                let pcw = pix.canvas_width as f32;
+                let pch = pix.canvas_height as f32;
+                let rx = bs.ratio_x;
+                let ry = bs.ratio_y;
+                let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = 25.0 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+
+                let mut t2 = GlTransform::new();
+                t2.scale(pw / pcw, ph / pch);
+                pix.draw_general2d(
+                    gl,
+                    3,
+                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
+                    &t2,
+                    &c,
+                );
+            }
+        }
     }
 }
 
