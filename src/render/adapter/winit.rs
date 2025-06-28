@@ -13,18 +13,7 @@ use crate::render::{
     buffer::Buffer,
     sprite::Sprites,
 };
-use glow::HasContext;
-use log::info;
-use std::any::Any;
-use std::time::Duration;
-pub use winit::{
-    dpi::LogicalSize,
-    event::{Event as WinitEvent, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, CustomCursor, Cursor},
-    application::ApplicationHandler,
-};
-use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
+
 use glutin::{
     config::ConfigTemplateBuilder,
     context::{ContextApi, ContextAttributesBuilder, Version},
@@ -33,7 +22,18 @@ use glutin::{
     surface::{Surface, SurfaceAttributesBuilder, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+use log::info;
 use raw_window_handle::HasWindowHandle;
+use std::any::Any;
+use std::time::Duration;
+use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
+pub use winit::{
+    application::ApplicationHandler,
+    dpi::LogicalSize,
+    event::{Event as WinitEvent, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::{Cursor, CustomCursor, Window},
+};
 
 // Window dragging support structures (similar to SDL)
 #[derive(Default)]
@@ -55,24 +55,24 @@ pub enum WinitBorderArea {
 
 pub struct WinitAdapter {
     pub base: AdapterBase,
-    
+
     // winit objects
     pub window: Option<Window>,
     pub event_loop: Option<EventLoop<()>>,
-    
+
     // glutin objects for OpenGL context
     pub gl_display: Option<glutin::display::Display>,
     pub gl_context: Option<glutin::context::PossiblyCurrentContext>,
     pub gl_surface: Option<Surface<WindowSurface>>,
-    
+
     pub should_exit: bool,
-    
+
     // Event handling - for pump events mode
     pub app_handler: Option<WinitAppHandler>,
-    
+
     // custom cursor
     pub custom_cursor: Option<CustomCursor>,
-    
+
     // data for dragging the window
     drag: Drag,
 }
@@ -84,7 +84,7 @@ pub struct WinitAppHandler {
     pub ratio_x: f32,
     pub ratio_y: f32,
     pub should_exit: bool,
-    
+
     // Reference to adapter for drag handling
     pub adapter_ref: *mut WinitAdapter,
 }
@@ -105,7 +105,9 @@ impl ApplicationHandler for WinitAppHandler {
                 self.should_exit = true;
                 event_loop.exit();
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 // Handle Q key for exit (similar to SDL version)
                 if key_event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
@@ -116,19 +118,28 @@ impl ApplicationHandler for WinitAppHandler {
                         }
                     }
                 }
-                
+
                 // Convert keyboard event to pixel event
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
-                    event: WindowEvent::KeyboardInput { device_id: winit::event::DeviceId::dummy(), event: key_event, is_synthetic: false, },
+                    event: WindowEvent::KeyboardInput {
+                        device_id: winit::event::DeviceId::dummy(),
+                        event: key_event,
+                        is_synthetic: false,
+                    },
                 };
-                if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                if let Some(pixel_event) = input_events_from_winit(
+                    &winit_event,
+                    self.ratio_x,
+                    self.ratio_y,
+                    &mut self.cursor_position,
+                ) {
                     self.pending_events.push(pixel_event);
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_position = (position.x, position.y);
-                
+
                 // Handle window dragging
                 unsafe {
                     let adapter = &mut *self.adapter_ref;
@@ -138,17 +149,25 @@ impl ApplicationHandler for WinitAppHandler {
                         adapter.drag.dy = position.y - adapter.drag.mouse_y;
                     }
                 }
-                
+
                 // Convert to pixel event only if not dragging
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
-                    event: WindowEvent::CursorMoved { device_id: winit::event::DeviceId::dummy(), position, },
+                    event: WindowEvent::CursorMoved {
+                        device_id: winit::event::DeviceId::dummy(),
+                        position,
+                    },
                 };
-                
+
                 unsafe {
                     let adapter = &*self.adapter_ref;
                     if !adapter.drag.draging {
-                        if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                        if let Some(pixel_event) = input_events_from_winit(
+                            &winit_event,
+                            self.ratio_x,
+                            self.ratio_y,
+                            &mut self.cursor_position,
+                        ) {
                             self.pending_events.push(pixel_event);
                         }
                     }
@@ -159,7 +178,8 @@ impl ApplicationHandler for WinitAppHandler {
                     (winit::event::ElementState::Pressed, winit::event::MouseButton::Left) => {
                         unsafe {
                             let adapter = &mut *self.adapter_ref;
-                            let bs = adapter.in_border(self.cursor_position.0, self.cursor_position.1);
+                            let bs =
+                                adapter.in_border(self.cursor_position.0, self.cursor_position.1);
                             match bs {
                                 WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
                                     // start dragging when mouse left click on border
@@ -175,9 +195,18 @@ impl ApplicationHandler for WinitAppHandler {
                                     // Not dragging, pass event to game
                                     let winit_event = WinitEvent::WindowEvent {
                                         window_id: _window_id,
-                                        event: WindowEvent::MouseInput { device_id: winit::event::DeviceId::dummy(), state, button, },
+                                        event: WindowEvent::MouseInput {
+                                            device_id: winit::event::DeviceId::dummy(),
+                                            state,
+                                            button,
+                                        },
                                     };
-                                    if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                                    if let Some(pixel_event) = input_events_from_winit(
+                                        &winit_event,
+                                        self.ratio_x,
+                                        self.ratio_y,
+                                        &mut self.cursor_position,
+                                    ) {
                                         self.pending_events.push(pixel_event);
                                     }
                                 }
@@ -189,14 +218,23 @@ impl ApplicationHandler for WinitAppHandler {
                             let adapter = &mut *self.adapter_ref;
                             let was_dragging = adapter.drag.draging;
                             adapter.drag.draging = false;
-                            
+
                             // Only pass mouse release to game if we weren't dragging
                             if !was_dragging {
                                 let winit_event = WinitEvent::WindowEvent {
                                     window_id: _window_id,
-                                    event: WindowEvent::MouseInput { device_id: winit::event::DeviceId::dummy(), state, button, },
+                                    event: WindowEvent::MouseInput {
+                                        device_id: winit::event::DeviceId::dummy(),
+                                        state,
+                                        button,
+                                    },
                                 };
-                                if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                                if let Some(pixel_event) = input_events_from_winit(
+                                    &winit_event,
+                                    self.ratio_x,
+                                    self.ratio_y,
+                                    &mut self.cursor_position,
+                                ) {
                                     self.pending_events.push(pixel_event);
                                 }
                             }
@@ -206,9 +244,18 @@ impl ApplicationHandler for WinitAppHandler {
                         // Convert other mouse inputs
                         let winit_event = WinitEvent::WindowEvent {
                             window_id: _window_id,
-                            event: WindowEvent::MouseInput { device_id: winit::event::DeviceId::dummy(), state, button, },
+                            event: WindowEvent::MouseInput {
+                                device_id: winit::event::DeviceId::dummy(),
+                                state,
+                                button,
+                            },
                         };
-                        if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                        if let Some(pixel_event) = input_events_from_winit(
+                            &winit_event,
+                            self.ratio_x,
+                            self.ratio_y,
+                            &mut self.cursor_position,
+                        ) {
                             self.pending_events.push(pixel_event);
                         }
                     }
@@ -220,7 +267,12 @@ impl ApplicationHandler for WinitAppHandler {
                     window_id: _window_id,
                     event,
                 };
-                if let Some(pixel_event) = input_events_from_winit(&winit_event, self.ratio_x, self.ratio_y, &mut self.cursor_position) {
+                if let Some(pixel_event) = input_events_from_winit(
+                    &winit_event,
+                    self.ratio_x,
+                    self.ratio_y,
+                    &mut self.cursor_position,
+                ) {
                     self.pending_events.push(pixel_event);
                 }
             }
@@ -243,23 +295,25 @@ impl WinitAdapter {
             drag: Default::default(),
         }
     }
-    
+
     fn set_mouse_cursor(&mut self) {
-        // Load custom cursor image  
+        // Load custom cursor image
         let cursor_path = format!(
             "{}{}{}",
             self.base.project_path,
             std::path::MAIN_SEPARATOR,
             "assets/pix/cursor.png"
         );
-        
+
         if let Ok(cursor_img) = image::open(&cursor_path) {
             let cursor_rgba = cursor_img.to_rgba8();
             let (width, height) = cursor_rgba.dimensions();
             let cursor_data = cursor_rgba.into_raw();
-            
+
             // Create CustomCursor source from image data
-            if let Ok(cursor_source) = CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0) {
+            if let Ok(cursor_source) =
+                CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0)
+            {
                 // Need to create the actual cursor from the source using event_loop
                 if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
                     let custom_cursor = event_loop.create_custom_cursor(cursor_source);
@@ -276,7 +330,7 @@ impl WinitAdapter {
             }
         }
     }
-    
+
     fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
         let w = self.cell_width();
         let h = self.cell_height();
@@ -293,16 +347,12 @@ impl WinitAdapter {
         }
         WinitBorderArea::OTHER
     }
-
-
-
-
 }
 
 impl Adapter for WinitAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing Winit adapter...");
-        
+
         // load texture file...
         let texture_path = format!(
             "{}{}{}",
@@ -333,6 +383,7 @@ impl Adapter for WinitAdapter {
             .set_ratioy(ry)
             .set_pixel_size()
             .set_title(title);
+
         info!(
             "pixel_w={} pixel_h={}",
             self.base.pixel_w, self.base.pixel_h
@@ -340,20 +391,56 @@ impl Adapter for WinitAdapter {
 
         // Create event loop
         let event_loop = EventLoop::new().unwrap();
-        
-        // Create window with OpenGL context
-        let window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
-        
+
+        // For Retina displays, we need to adjust window logical size so its physical size matches our render area
+        // First create a temporary window to get the scale factor
+        let temp_window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
+        let temp_display_builder = DisplayBuilder::new().with_window_attributes(Some(
+            winit::window::WindowAttributes::default()
+                .with_title(&self.base.title)
+                .with_inner_size(temp_window_size)
+                .with_decorations(false)
+                .with_resizable(false),
+        ));
+        let (temp_window, temp_gl_config) = temp_display_builder
+            .build(&event_loop, ConfigTemplateBuilder::new(), |configs| {
+                configs
+                    .reduce(|accum, config| {
+                        if config.num_samples() > accum.num_samples() {
+                            config
+                        } else {
+                            accum
+                        }
+                    })
+                    .unwrap()
+            })
+            .unwrap();
+        let temp_window = temp_window.unwrap();
+
+        // Get scale factor and calculate proper window size
+        let scale_factor = temp_window.scale_factor();
+        let adjusted_logical_w = (self.base.pixel_w as f64 / scale_factor) as u32;
+        let adjusted_logical_h = (self.base.pixel_h as f64 / scale_factor) as u32;
+        let window_size = LogicalSize::new(adjusted_logical_w, adjusted_logical_h);
+
+        info!(
+            "Scale factor: {}, Adjusted window logical size: {}x{}",
+            scale_factor, adjusted_logical_w, adjusted_logical_h
+        );
+        info!(
+            "Expected physical size: {}x{}",
+            self.base.pixel_w, self.base.pixel_h
+        );
+
         let template = ConfigTemplateBuilder::new();
 
-        let display_builder = DisplayBuilder::new()
-            .with_window_attributes(
-                Some(winit::window::WindowAttributes::default()
-                    .with_title(&self.base.title)
-                    .with_inner_size(window_size)
-                    .with_decorations(false) // borderless like SDL version
-                    .with_resizable(false))
-            );
+        let display_builder = DisplayBuilder::new().with_window_attributes(Some(
+            winit::window::WindowAttributes::default()
+                .with_title(&self.base.title)
+                .with_inner_size(window_size)
+                .with_decorations(false) // borderless like SDL version
+                .with_resizable(false),
+        ));
 
         let (window, gl_config) = display_builder
             .build(&event_loop, template, |configs| {
@@ -370,33 +457,42 @@ impl Adapter for WinitAdapter {
             .unwrap();
 
         let window = window.unwrap();
-        
-        // Get actual framebuffer size for Retina displays
+
+        // Verify that the physical size matches our expectations
         let physical_size = window.inner_size();
-        info!("Window physical size: {}x{}", physical_size.width, physical_size.height);
-        info!("Window logical size: {}x{}", self.base.pixel_w, self.base.pixel_h);
-        
+        info!(
+            "Actual window physical size: {}x{}",
+            physical_size.width, physical_size.height
+        );
+        info!(
+            "Expected render size: {}x{}",
+            self.base.pixel_w, self.base.pixel_h
+        );
+
         let gl_display = gl_config.display();
         let raw_window_handle = window.window_handle().unwrap().as_raw();
-        
+
         let context_attributes = ContextAttributesBuilder::new()
             .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
             .build(Some(raw_window_handle));
 
-        let not_current_gl_context = unsafe { 
-            gl_display.create_context(&gl_config, &context_attributes)
+        let not_current_gl_context = unsafe {
+            gl_display
+                .create_context(&gl_config, &context_attributes)
                 .expect("failed to create context")
         };
 
-        // Use physical size for surface to match actual framebuffer
+        // Use our expected render size for surface (should match physical size now)
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
-            std::num::NonZeroU32::new(physical_size.width).unwrap(),
-            std::num::NonZeroU32::new(physical_size.height).unwrap(),
+            std::num::NonZeroU32::new(self.base.pixel_w).unwrap(),
+            std::num::NonZeroU32::new(self.base.pixel_h).unwrap(),
         );
 
-        let surface = unsafe { 
-            gl_config.display().create_window_surface(&gl_config, &attrs)
+        let surface = unsafe {
+            gl_config
+                .display()
+                .create_window_surface(&gl_config, &attrs)
                 .expect("failed to create surface")
         };
 
@@ -421,50 +517,39 @@ impl Adapter for WinitAdapter {
         self.gl_context = Some(gl_context);
         self.gl_surface = Some(surface);
 
-        // For Retina displays, use physical size for GlPixel to match actual framebuffer
-        let physical_size = self.window.as_ref().unwrap().inner_size();
-        info!("Physical size: {}x{}, Logical size: {}x{}", 
-              physical_size.width, physical_size.height,
-              self.base.pixel_w, self.base.pixel_h);
-        
-        // Create GlPixel with physical dimensions to match the actual framebuffer
+        // Now window physical size should match our render size perfectly
+        // Create GlPixel with our standard render dimensions
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
             "#version 330 core",
-            physical_size.width as i32,  // Use physical size to match framebuffer
-            physical_size.height as i32,  // Use physical size to match framebuffer
+            self.base.pixel_w as i32, // Standard render width
+            self.base.pixel_h as i32, // Standard render height
             texwidth as i32,
             texheight as i32,
             &teximg,
         ));
 
-        // Calculate scale factor and adjust ratio for Retina displays  
-        let scale_factor = self.window.as_ref().unwrap().scale_factor();
-        let physical_ratio_x = self.base.ratio_x / scale_factor as f32;  // Inverse scale to compensate
-        let physical_ratio_y = self.base.ratio_y / scale_factor as f32;  // Inverse scale to compensate
-        
-        info!("Scale factor: {}, Original ratio: {}x{}, Physical ratio: {}x{}", 
-              scale_factor, self.base.ratio_x, self.base.ratio_y, physical_ratio_x, physical_ratio_y);
-              
-        // Update base ratio for correct rendering
-        self.base.ratio_x = physical_ratio_x;
-        self.base.ratio_y = physical_ratio_y;
-        
+        // No need to adjust ratio - window is sized to match our render area exactly
+        info!(
+            "Using standard ratio: {}x{} (consistent with SDL)",
+            self.base.ratio_x, self.base.ratio_y
+        );
+
         self.app_handler = Some(WinitAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
-            ratio_x: physical_ratio_x,  
-            ratio_y: physical_ratio_y,
+            ratio_x: self.base.ratio_x, // Standard ratio - window sized to match perfectly
+            ratio_y: self.base.ratio_y, // Standard ratio - window sized to match perfectly
             should_exit: false,
             adapter_ref: self as *mut WinitAdapter,
         });
-        
+
         // Store event loop for later use
         self.event_loop = Some(event_loop);
 
         // Set custom mouse cursor (similar to SDL version)
         self.set_mouse_cursor();
-        
+
         // Ensure cursor is visible (similar to SDL version)
         self.show_cursor().unwrap();
 
@@ -486,11 +571,13 @@ impl Adapter for WinitAdapter {
     }
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
-        if let (Some(event_loop), Some(app_handler)) = (self.event_loop.as_mut(), self.app_handler.as_mut()) {
+        if let (Some(event_loop), Some(app_handler)) =
+            (self.event_loop.as_mut(), self.app_handler.as_mut())
+        {
             // Use pump_app_events for non-blocking event polling
             let pump_timeout = Some(timeout);
             let status = event_loop.pump_app_events(pump_timeout, app_handler);
-            
+
             // Collect events from app handler, but filter out dragging events
             for event in app_handler.pending_events.drain(..) {
                 // Don't pass mouse events to the game when dragging window
@@ -498,18 +585,18 @@ impl Adapter for WinitAdapter {
                     es.push(event);
                 }
             }
-            
+
             // Check if we should exit
             if app_handler.should_exit {
                 return true;
             }
-            
+
             // Check pump status
             if let PumpStatus::Exit(_) = status {
                 return true;
             }
         }
-        
+
         self.should_exit
     }
 
@@ -521,7 +608,12 @@ impl Adapter for WinitAdapter {
         stage: u32,
     ) -> Result<(), String> {
         // process window dragging move...
-        winit_move_win(&mut self.drag.need, self.window.as_ref(), self.drag.dx, self.drag.dy);
+        winit_move_win(
+            &mut self.drag.need,
+            self.window.as_ref(),
+            self.drag.dx,
+            self.drag.dy,
+        );
 
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
 
@@ -531,12 +623,12 @@ impl Adapter for WinitAdapter {
                 surface.swap_buffers(context).unwrap();
             }
         }
-        
+
         // Request redraw
         if let Some(window) = &self.window {
             window.request_redraw();
         }
-        
+
         Ok(())
     }
 
@@ -567,18 +659,31 @@ impl Adapter for WinitAdapter {
 }
 
 /// Convert winit input events to RustPixel event, for the sake of unified event processing
-pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32, cursor_pos: &mut (f64, f64)) -> Option<Event> {
-    use crate::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*};
-    
+pub fn input_events_from_winit(
+    event: &WinitEvent<()>,
+    adjx: f32,
+    adjy: f32,
+    cursor_pos: &mut (f64, f64),
+) -> Option<Event> {
+    use crate::event::{
+        Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
+    };
+
     let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
     let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-    
+
     match event {
-        WinitEvent::WindowEvent { event: window_event, .. } => {
+        WinitEvent::WindowEvent {
+            event: window_event,
+            ..
+        } => {
             match window_event {
-                WindowEvent::KeyboardInput { event: key_event, .. } => {
+                WindowEvent::KeyboardInput {
+                    event: key_event, ..
+                } => {
                     if key_event.state == winit::event::ElementState::Pressed {
-                        if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
+                        if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key
+                        {
                             let kc = match keycode {
                                 winit::keyboard::KeyCode::Space => ' ',
                                 winit::keyboard::KeyCode::KeyA => 'a',
@@ -607,10 +712,30 @@ pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32, cur
                                 winit::keyboard::KeyCode::KeyX => 'x',
                                 winit::keyboard::KeyCode::KeyY => 'y',
                                 winit::keyboard::KeyCode::KeyZ => 'z',
-                                winit::keyboard::KeyCode::ArrowUp => return Some(Event::Key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))),
-                                winit::keyboard::KeyCode::ArrowDown => return Some(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))),
-                                winit::keyboard::KeyCode::ArrowLeft => return Some(Event::Key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))),
-                                winit::keyboard::KeyCode::ArrowRight => return Some(Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))),
+                                winit::keyboard::KeyCode::ArrowUp => {
+                                    return Some(Event::Key(KeyEvent::new(
+                                        KeyCode::Up,
+                                        KeyModifiers::NONE,
+                                    )))
+                                }
+                                winit::keyboard::KeyCode::ArrowDown => {
+                                    return Some(Event::Key(KeyEvent::new(
+                                        KeyCode::Down,
+                                        KeyModifiers::NONE,
+                                    )))
+                                }
+                                winit::keyboard::KeyCode::ArrowLeft => {
+                                    return Some(Event::Key(KeyEvent::new(
+                                        KeyCode::Left,
+                                        KeyModifiers::NONE,
+                                    )))
+                                }
+                                winit::keyboard::KeyCode::ArrowRight => {
+                                    return Some(Event::Key(KeyEvent::new(
+                                        KeyCode::Right,
+                                        KeyModifiers::NONE,
+                                    )))
+                                }
                                 _ => return None,
                             };
                             let cte = KeyEvent::new(KeyCode::Char(kc), KeyModifiers::NONE);
@@ -638,7 +763,7 @@ pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32, cur
                         }
                         _ => None,
                     };
-                    
+
                     if let Some(mut mc) = mouse_event {
                         if mc.column >= 1 {
                             mc.column -= 1;
@@ -653,7 +778,7 @@ pub fn input_events_from_winit(event: &WinitEvent<()>, adjx: f32, adjy: f32, cur
                     // Update cursor position
                     cursor_pos.0 = position.x;
                     cursor_pos.1 = position.y;
-                    
+
                     let mut mc = MouseEvent {
                         kind: Moved,
                         column: (position.x / (sym_width / adjx) as f64) as u16,
@@ -688,4 +813,4 @@ pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy
         }
         *drag_need = false;
     }
-} 
+}
