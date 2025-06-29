@@ -143,7 +143,8 @@ impl ApplicationHandler for WinitAppHandler {
                     let adapter = &*self.adapter_ref;
                     if let Some(window) = &adapter.window {
                         let scale_factor = window.scale_factor();
-                        self.cursor_position = (position.x / scale_factor, position.y / scale_factor);
+                        self.cursor_position =
+                            (position.x / scale_factor, position.y / scale_factor);
                     } else {
                         self.cursor_position = (position.x, position.y);
                     }
@@ -431,22 +432,22 @@ impl Adapter for WinitAdapter {
             .unwrap();
         let temp_window = temp_window.unwrap();
 
-                // Get scale factor and calculate proper window size to match SDL behavior
+        // Get scale factor and calculate proper window size to match SDL behavior
         let scale_factor = temp_window.scale_factor();
-        
+
         // For consistency with SDL: on Retina displays, we want the window to be 2x larger
         // So logical size = original size (not divided by scale factor)
         let adjusted_logical_w = self.base.pixel_w;
         let adjusted_logical_h = self.base.pixel_h;
         let window_size = LogicalSize::new(adjusted_logical_w, adjusted_logical_h);
-        
+
         info!(
             "Scale factor: {}, Window logical size: {}x{} (same as SDL)",
             scale_factor, adjusted_logical_w, adjusted_logical_h
         );
         info!(
             "Expected physical size: {}x{} (2x render size on Retina)",
-            (adjusted_logical_w as f64 * scale_factor) as u32, 
+            (adjusted_logical_w as f64 * scale_factor) as u32,
             (adjusted_logical_h as f64 * scale_factor) as u32
         );
 
@@ -540,8 +541,8 @@ impl Adapter for WinitAdapter {
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
             "#version 330 core",
-            self.base.pixel_w as i32,    // Use logical size for coordinate system
-            self.base.pixel_h as i32,    // Use logical size for coordinate system  
+            self.base.pixel_w as i32, // Use logical size for coordinate system
+            self.base.pixel_h as i32, // Use logical size for coordinate system
             texwidth as i32,
             texheight as i32,
             &teximg,
@@ -550,8 +551,7 @@ impl Adapter for WinitAdapter {
         // Ratio remains the same, but OpenGL will render at higher resolution on Retina
         info!(
             "Using standard ratio: {}x{}, OpenGL framebuffer: {}x{} (2x on Retina)",
-            self.base.ratio_x, self.base.ratio_y,
-            physical_size.width, physical_size.height
+            self.base.ratio_x, self.base.ratio_y, physical_size.width, physical_size.height
         );
 
         self.app_handler = Some(WinitAppHandler {
@@ -675,34 +675,39 @@ impl Adapter for WinitAdapter {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
-    
+
     // Override draw_render_textures_to_screen to handle Retina scaling
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]  
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_render_textures_to_screen(&mut self) {
         use crate::render::adapter::gl::color::GlColor;
         use crate::render::adapter::gl::transform::GlTransform;
         use glow::HasContext;
-        
+
         // Get window physical size first to avoid borrowing conflicts
         let physical_size = if let Some(window) = &self.window {
             Some(window.inner_size())
         } else {
             None
         };
-        
+
         let bs = self.get_base();
 
         if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
             // First bind screen with GlPixel's logical viewport
             pix.bind_screen(gl);
-            
+
             // Then manually set the correct viewport for Retina displays
             if let Some(physical_size) = physical_size {
                 unsafe {
-                    gl.viewport(0, 0, physical_size.width as i32, physical_size.height as i32);
+                    gl.viewport(
+                        0,
+                        0,
+                        physical_size.width as i32,
+                        physical_size.height as i32,
+                    );
                 }
             }
-            
+
             let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
 
             // draw render_texture 2 ( main buffer )
