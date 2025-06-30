@@ -1,8 +1,35 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Implements an Adapter trait using winit for window management and glow for OpenGL rendering.
-//! This replaces the SDL2 implementation while maintaining the same functionality.
+//! # Winit适配器实现
+//! 
+//! 基于winit + glutin + glow技术栈的跨平台渲染适配器。
+//! 
+//! ## 技术栈
+//! - **winit**: 跨平台窗口管理和事件处理
+//! - **glutin**: OpenGL上下文管理
+//! - **glow**: 现代OpenGL绑定
+//! 
+//! ## 功能特性
+//! - 跨平台窗口管理（Windows、macOS、Linux）
+//! - 高DPI/Retina显示支持
+//! - 自定义鼠标光标
+//! - 窗口拖拽功能
+//! - 键盘和鼠标事件处理
+//! - OpenGL硬件加速渲染
+//! 
+//! ## 架构设计
+//! 
+//! ```text
+//! ┌─────────────────────────────────────────────┐
+//! │             WinitAdapter                    │
+//! ├─────────────────────────────────────────────┤
+//! │  Window Management  │  OpenGL Context      │
+//! │  - winit::Window    │  - glutin::Context   │
+//! │  - Event handling   │  - glutin::Surface   │
+//! │  - Cursor support   │  - glow::Context     │
+//! └─────────────────────────────────────────────┘
+//! ```
 
 use crate::event::Event;
 use crate::render::{
@@ -35,65 +62,111 @@ pub use winit::{
     window::{Cursor, CustomCursor, Window},
 };
 
-// Window dragging support structures (similar to SDL)
+/// 窗口拖拽状态管理
+/// 
+/// 记录窗口拖拽的相关状态，支持通过鼠标拖拽移动窗口位置。
+/// 类似于SDL版本的实现，提供相同的用户体验。
 #[derive(Default)]
 struct Drag {
+    /// 是否需要执行拖拽操作
     need: bool,
+    /// 是否正在拖拽中
     draging: bool,
+    /// 拖拽起始鼠标X坐标
     mouse_x: f64,
+    /// 拖拽起始鼠标Y坐标
     mouse_y: f64,
+    /// X轴拖拽偏移量
     dx: f64,
+    /// Y轴拖拽偏移量
     dy: f64,
 }
 
+/// 边框区域枚举
+/// 
+/// 定义鼠标点击区域的类型，用于确定是否应该触发拖拽操作。
 pub enum WinitBorderArea {
+    /// 无效区域
     NOPE,
+    /// 关闭按钮区域
     CLOSE,
+    /// 顶部标题栏区域（可拖拽）
     TOPBAR,
+    /// 其他边框区域（可拖拽）
     OTHER,
 }
 
+/// Winit适配器主结构
+/// 
+/// 封装了winit窗口管理和OpenGL渲染的所有组件。
+/// 实现了与SDL适配器相同的接口，可以无缝替换。
 pub struct WinitAdapter {
+    /// 基础适配器数据
     pub base: AdapterBase,
 
-    // winit objects
+    // Winit相关对象
+    /// 窗口实例
     pub window: Option<Window>,
+    /// 事件循环
     pub event_loop: Option<EventLoop<()>>,
 
-    // glutin objects for OpenGL context
+    // Glutin OpenGL相关对象
+    /// OpenGL显示上下文
     pub gl_display: Option<glutin::display::Display>,
+    /// OpenGL渲染上下文
     pub gl_context: Option<glutin::context::PossiblyCurrentContext>,
+    /// OpenGL渲染表面
     pub gl_surface: Option<Surface<WindowSurface>>,
 
+    /// 是否应该退出程序
     pub should_exit: bool,
 
-    // Event handling - for pump events mode
+    /// 事件处理器（用于pump events模式）
     pub app_handler: Option<WinitAppHandler>,
 
-    // custom cursor
+    /// 自定义鼠标光标
     pub custom_cursor: Option<CustomCursor>,
 
-    // data for dragging the window
+    /// 窗口拖拽数据
     drag: Drag,
 }
 
-// ApplicationHandler for winit pump events
+/// Winit应用程序事件处理器
+/// 
+/// 实现winit的ApplicationHandler trait，处理窗口事件和用户输入。
+/// 使用不安全指针引用适配器实例以支持拖拽功能。
 pub struct WinitAppHandler {
+    /// 待处理的像素事件队列
     pub pending_events: Vec<Event>,
+    /// 当前鼠标位置
     pub cursor_position: (f64, f64),
+    /// X轴比例调整系数
     pub ratio_x: f32,
+    /// Y轴比例调整系数
     pub ratio_y: f32,
+    /// 是否应该退出
     pub should_exit: bool,
 
-    // Reference to adapter for drag handling
+    /// 适配器引用（用于拖拽处理）
+    /// 
+    /// 注意：这里使用原始指针是为了避免借用检查器的限制，
+    /// 在事件处理期间需要修改适配器状态。使用时必须确保安全性。
     pub adapter_ref: *mut WinitAdapter,
 }
 
 impl ApplicationHandler for WinitAppHandler {
+    /// 应用程序恢复时的回调
     fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        // Window should already be created
+        // 窗口应该已经创建完成，无需额外操作
     }
 
+    /// 处理窗口事件
+    /// 
+    /// 这是事件处理的核心方法，处理所有的窗口事件包括：
+    /// - 窗口关闭请求
+    /// - 键盘输入（支持Q键退出）
+    /// - 鼠标移动和点击
+    /// - 窗口拖拽逻辑
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -108,7 +181,7 @@ impl ApplicationHandler for WinitAppHandler {
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
-                // Handle Q key for exit (similar to SDL version)
+                // 处理Q键退出（与SDL版本保持一致）
                 if key_event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
                         if keycode == winit::keyboard::KeyCode::KeyQ {
@@ -119,7 +192,7 @@ impl ApplicationHandler for WinitAppHandler {
                     }
                 }
 
-                // Convert keyboard event to pixel event
+                // 将键盘事件转换为像素事件
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event: WindowEvent::KeyboardInput {
@@ -138,7 +211,7 @@ impl ApplicationHandler for WinitAppHandler {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // Convert physical coordinates to logical coordinates for Retina displays
+                // 为Retina显示器转换物理坐标到逻辑坐标
                 unsafe {
                     let adapter = &*self.adapter_ref;
                     if let Some(window) = &adapter.window {
@@ -150,7 +223,7 @@ impl ApplicationHandler for WinitAppHandler {
                     }
                 }
 
-                // Handle window dragging
+                // 处理窗口拖拽
                 unsafe {
                     let adapter = &mut *self.adapter_ref;
                     if adapter.drag.draging {
@@ -160,8 +233,8 @@ impl ApplicationHandler for WinitAppHandler {
                     }
                 }
 
-                // Convert to pixel event only if not dragging
-                // Use logical position for consistent coordinate system
+                // 只有在非拖拽状态时才转换为像素事件
+                // 使用逻辑位置确保坐标系统一致
                 let logical_position = winit::dpi::PhysicalPosition::new(
                     self.cursor_position.0,
                     self.cursor_position.1,
@@ -197,17 +270,18 @@ impl ApplicationHandler for WinitAppHandler {
                                 adapter.in_border(self.cursor_position.0, self.cursor_position.1);
                             match bs {
                                 WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
-                                    // start dragging when mouse left click on border
+                                    // 在边框区域按下左键时开始拖拽
                                     adapter.drag.draging = true;
                                     adapter.drag.mouse_x = self.cursor_position.0;
                                     adapter.drag.mouse_y = self.cursor_position.1;
                                 }
                                 WinitBorderArea::CLOSE => {
+                                    // 点击关闭按钮区域时退出程序
                                     self.should_exit = true;
                                     event_loop.exit();
                                 }
                                 _ => {
-                                    // Not dragging, pass event to game
+                                    // 非拖拽区域，将事件传递给游戏逻辑
                                     let winit_event = WinitEvent::WindowEvent {
                                         window_id: _window_id,
                                         event: WindowEvent::MouseInput {
@@ -234,7 +308,7 @@ impl ApplicationHandler for WinitAppHandler {
                             let was_dragging = adapter.drag.draging;
                             adapter.drag.draging = false;
 
-                            // Only pass mouse release to game if we weren't dragging
+                            // 只有在非拖拽状态时才将鼠标释放事件传递给游戏
                             if !was_dragging {
                                 let winit_event = WinitEvent::WindowEvent {
                                     window_id: _window_id,
@@ -256,7 +330,7 @@ impl ApplicationHandler for WinitAppHandler {
                         }
                     }
                     _ => {
-                        // Convert other mouse inputs
+                        // 转换其他鼠标输入事件
                         let winit_event = WinitEvent::WindowEvent {
                             window_id: _window_id,
                             event: WindowEvent::MouseInput {
@@ -277,7 +351,7 @@ impl ApplicationHandler for WinitAppHandler {
                 }
             }
             _ => {
-                // Convert other winit events to RustPixel events
+                // 将其他winit事件转换为RustPixel事件
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event,
@@ -296,6 +370,15 @@ impl ApplicationHandler for WinitAppHandler {
 }
 
 impl WinitAdapter {
+    /// 创建新的Winit适配器实例
+    /// 
+    /// # 参数
+    /// - `gn`: 游戏名称
+    /// - `project_path`: 项目路径（用于资源加载）
+    /// 
+    /// # 返回值
+    /// 返回初始化的WinitAdapter实例，所有OpenGL相关组件都为None，
+    /// 需要在调用init()方法后才能正常使用。
     pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(gn, project_path),
@@ -311,8 +394,17 @@ impl WinitAdapter {
         }
     }
 
+    /// 设置自定义鼠标光标
+    /// 
+    /// 加载并设置自定义的鼠标光标图像。光标图像从assets/pix/cursor.png加载，
+    /// 如果加载失败则使用系统默认光标。
+    /// 
+    /// # 实现细节
+    /// - 支持PNG格式的光标图像
+    /// - 自动转换为RGBA8格式
+    /// - 热点位置设置为(0, 0)
     fn set_mouse_cursor(&mut self) {
-        // Load custom cursor image
+        // 构建光标图像文件路径
         let cursor_path = format!(
             "{}{}{}",
             self.base.project_path,
@@ -346,6 +438,16 @@ impl WinitAdapter {
         }
     }
 
+    /// 检查鼠标位置是否在边框区域
+    /// 
+    /// 用于确定鼠标点击位置的区域类型，决定是否触发拖拽操作。
+    /// 
+    /// # 参数
+    /// - `x`: 鼠标X坐标
+    /// - `y`: 鼠标Y坐标
+    /// 
+    /// # 返回值
+    /// 返回对应的边框区域类型
     fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
         let w = self.cell_width();
         let h = self.cell_height();
@@ -365,6 +467,25 @@ impl WinitAdapter {
 }
 
 impl Adapter for WinitAdapter {
+    /// 初始化Winit适配器
+    /// 
+    /// 这是适配器的主要初始化方法，负责创建窗口、设置OpenGL上下文、
+    /// 加载资源等所有必要的初始化工作。
+    /// 
+    /// # 参数
+    /// - `w`: 逻辑宽度（字符数）
+    /// - `h`: 逻辑高度（字符数）
+    /// - `rx`: X轴缩放比例
+    /// - `ry`: Y轴缩放比例
+    /// - `title`: 窗口标题
+    /// 
+    /// # 初始化流程
+    /// 1. 创建事件循环和窗口
+    /// 2. 设置OpenGL上下文和表面
+    /// 3. 初始化OpenGL渲染器
+    /// 4. 加载纹理资源
+    /// 5. 设置自定义光标
+    /// 6. 配置事件处理器
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing Winit adapter...");
 
@@ -589,6 +710,22 @@ impl Adapter for WinitAdapter {
         PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
     }
 
+    /// 轮询事件
+    /// 
+    /// 处理窗口事件并将其转换为RustPixel事件。使用pump_events模式
+    /// 避免阻塞主线程，确保渲染性能。
+    /// 
+    /// # 参数
+    /// - `timeout`: 事件轮询超时时间（未使用）
+    /// - `es`: 输出事件向量
+    /// 
+    /// # 返回值
+    /// 如果应该退出程序则返回true
+    /// 
+    /// # 特殊处理
+    /// - 窗口拖拽：检测并执行窗口移动
+    /// - Q键退出：与SDL版本保持一致
+    /// - Retina显示：正确处理高DPI坐标转换
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
         if let (Some(event_loop), Some(app_handler)) =
             (self.event_loop.as_mut(), self.app_handler.as_mut())
@@ -619,6 +756,22 @@ impl Adapter for WinitAdapter {
         self.should_exit
     }
 
+    /// 渲染一帧到屏幕
+    /// 
+    /// 使用OpenGL将游戏内容渲染到屏幕上。支持Retina显示器的高分辨率渲染，
+    /// 并正确处理viewport设置以避免显示错误。
+    /// 
+    /// # 参数
+    /// - `current_buffer`: 当前帧缓冲区
+    /// - `previous_buffer`: 前一帧缓冲区
+    /// - `pixel_sprites`: 像素精灵列表
+    /// - `stage`: 渲染阶段
+    /// 
+    /// # Retina显示支持
+    /// 在Retina显示器上，物理分辨率是逻辑分辨率的2倍。本方法：
+    /// 1. 使用物理分辨率创建framebuffer
+    /// 2. 在draw_render_textures_to_screen中设置正确的viewport
+    /// 3. 确保渲染质量和窗口大小的一致性
     fn draw_all_to_screen(
         &mut self,
         current_buffer: &Buffer,
@@ -651,12 +804,22 @@ impl Adapter for WinitAdapter {
         Ok(())
     }
 
+    /// 隐藏光标
+    /// 
+    /// 在图形应用程序中，我们不希望隐藏鼠标光标。
+    /// 这与SDL版本的行为相似 - 让鼠标光标保持可见。
+    /// 
+    /// # 设计考虑
+    /// 保持与SDL适配器的一致性，实际上不执行隐藏操作。
     fn hide_cursor(&mut self) -> Result<(), String> {
-        // For GUI applications, we don't want to hide the mouse cursor
-        // This is similar to SDL behavior - let the mouse cursor remain visible
+        // 对于GUI应用程序，我们不希望隐藏鼠标光标
+        // 这与SDL行为相似 - 让鼠标光标保持可见
         Ok(())
     }
 
+    /// 显示光标
+    /// 
+    /// 确保鼠标光标可见。如果窗口存在，则显式设置光标可见性。
     fn show_cursor(&mut self) -> Result<(), String> {
         if let Some(window) = &self.window {
             window.set_cursor_visible(true);
@@ -664,10 +827,16 @@ impl Adapter for WinitAdapter {
         Ok(())
     }
 
+    /// 设置光标位置
+    /// 
+    /// 在Winit中，光标位置通常由系统管理，此方法为兼容性而保留。
     fn set_cursor(&mut self, _x: u16, _y: u16) -> Result<(), String> {
         Ok(())
     }
 
+    /// 获取光标位置
+    /// 
+    /// 返回当前光标位置。在Winit实现中，返回固定值以保持接口兼容性。
     fn get_cursor(&mut self) -> Result<(u16, u16), String> {
         Ok((0, 0))
     }
@@ -676,7 +845,22 @@ impl Adapter for WinitAdapter {
         self
     }
 
-    // Override draw_render_textures_to_screen to handle Retina scaling
+    /// 重写渲染纹理到屏幕的方法以处理Retina缩放
+    /// 
+    /// 这是专门为Winit适配器优化的渲染方法，解决了在Retina显示器上
+    /// 的viewport设置问题。
+    /// 
+    /// # Retina显示问题
+    /// 在Retina显示器上：
+    /// - 逻辑分辨率与物理分辨率不同（通常是2倍关系）
+    /// - GlPixel使用逻辑尺寸设置viewport
+    /// - 但framebuffer实际是物理尺寸
+    /// - 导致显示区域只占屏幕的1/4
+    /// 
+    /// # 解决方案
+    /// 1. 让GlPixel先绑定屏幕framebuffer
+    /// 2. 手动重设viewport为物理尺寸
+    /// 3. 确保渲染覆盖整个屏幕
     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     fn draw_render_textures_to_screen(&mut self) {
         use crate::render::adapter::gl::color::GlColor;
@@ -739,7 +923,24 @@ impl Adapter for WinitAdapter {
     }
 }
 
-/// Convert winit input events to RustPixel event, for the sake of unified event processing
+/// 将Winit输入事件转换为RustPixel事件
+/// 
+/// 为了统一事件处理，将winit的事件系统转换为RustPixel的事件格式。
+/// 这样可以确保游戏逻辑与具体的窗口库解耦。
+/// 
+/// # 参数
+/// - `event`: Winit原始事件
+/// - `adjx`: X轴坐标调整系数
+/// - `adjy`: Y轴坐标调整系数  
+/// - `cursor_pos`: 当前鼠标位置（可变引用）
+/// 
+/// # 支持的事件类型
+/// - 键盘输入：字母键、方向键
+/// - 鼠标输入：左键按下/释放
+/// - 鼠标移动：更新光标位置
+/// 
+/// # 返回值
+/// 如果事件可以转换则返回Some(Event)，否则返回None
 pub fn input_events_from_winit(
     event: &WinitEvent<()>,
     adjx: f32,
@@ -882,6 +1083,22 @@ pub fn input_events_from_winit(
     None
 }
 
+/// 移动Winit窗口位置
+/// 
+/// 根据拖拽偏移量移动窗口到新位置。这个函数实现了与SDL版本相同的
+/// 窗口拖拽功能。
+/// 
+/// # 参数
+/// - `drag_need`: 是否需要拖拽的标志（会被重置为false）
+/// - `window`: 窗口实例的可选引用
+/// - `dx`: X轴拖拽偏移量
+/// - `dy`: Y轴拖拽偏移量
+/// 
+/// # 实现细节
+/// - 获取当前窗口位置
+/// - 计算新位置（当前位置 + 偏移量）
+/// - 调用set_outer_position移动窗口
+/// - 重置拖拽标志
 pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy: f64) {
     // dragging window, set the correct position of a window
     if *drag_need {
