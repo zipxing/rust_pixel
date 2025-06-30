@@ -19,7 +19,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 // use log::info;
 
-/// opengl codes for sdl & web mode
+/// opengl codes for winit & sdl & web mode
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub mod gl;
 
 /// sdl adapter
@@ -61,8 +62,11 @@ pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
 /// logo data
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub const PIXEL_LOGO_WIDTH: usize = 27;
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
     32, 15, 1, 32, 202, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 239, 1, 32, 15, 1, 100, 239, 1, 32,
     239, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0,
