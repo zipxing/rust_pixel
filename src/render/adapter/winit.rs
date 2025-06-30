@@ -693,6 +693,33 @@ impl Adapter for WinitAdapter {
         // Ensure cursor is visible (similar to SDL version)
         self.show_cursor().unwrap();
 
+        // Perform initial clear to prevent white flash on window creation
+        // This is important for winit mode because the window is immediately visible
+        // after creation, unlike SDL mode
+        if let (Some(gl), Some(gl_pixel)) = (&self.base.gl, &mut self.base.gl_pixel) {
+            use glow::HasContext;
+            
+            unsafe {
+                // Bind the screen framebuffer
+                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+                
+                // Get actual window physical size for viewport
+                if let Some(window) = &self.window {
+                    let physical_size = window.inner_size();
+                    gl.viewport(0, 0, physical_size.width as i32, physical_size.height as i32);
+                }
+                
+                // Set black clear color and clear the screen
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+            
+            // Swap buffers to display the cleared screen immediately
+            if let (Some(surface), Some(context)) = (&self.gl_surface, &self.gl_context) {
+                surface.swap_buffers(context).unwrap();
+            }
+        }
+
         info!("Winit window & OpenGL context initialized successfully");
     }
 
