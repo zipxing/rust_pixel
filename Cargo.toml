@@ -46,6 +46,10 @@ glutin-winit = { version = "0.5", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
 image = { version = "0.24.9", optional = true }
 glow = { version = "0.14.2" }
+# wgpu dependencies for modern GPU rendering
+wgpu = { version = "0.20", optional = true }
+bytemuck = { version = "1.16", features = ["derive"], optional = true }
+pollster = { version = "0.3", optional = true }
 unicode-segmentation = "1.12"
 unicode-width = "0.1"
 clap = { version = "3.2", features = ["derive"] }
@@ -97,7 +101,7 @@ web = ["image"]
 term = ["log4rs", "crossterm", "rodio", "image"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
 winit = ["log4rs", "rodio", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
-# wgpu feature removed
+wgpu = ["log4rs", "rodio", "dep:wgpu", "dep:bytemuck", "dep:pollster", "image"]
 base = ["log4rs"]
 
 [profile.release]

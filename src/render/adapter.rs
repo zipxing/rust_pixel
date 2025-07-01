@@ -157,6 +157,10 @@ use std::time::Duration;
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub mod gl;
 
+/// WGPU rendering subsystem - modern GPU API for cross-platform rendering
+#[cfg(feature = "wgpu")]
+pub mod wgpu;
+
 /// SDL adapter module - Desktop rendering backend based on SDL2
 #[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
 pub mod sdl;
