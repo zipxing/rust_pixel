@@ -141,13 +141,15 @@ use crate::{
     render::{buffer::Buffer, sprite::Sprites},
     util::{Rand, Rect},
 };
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 use crate::{
-    render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform},
     render::style::Color,
     util::{ARect, PointF32, PointI32, PointU16},
     LOGO_FRAME,
 };
+
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+use crate::render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform};
 use std::any::Any;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -1146,6 +1148,7 @@ fn render_helper(
 /// - `rx`: Horizontal scaling ratio for display compensation
 /// - `ry`: Vertical scaling ratio for display compensation  
 /// - `f`: Callback function to process each sprite pixel
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
     // Callback signature: (fg_color, bg_color, bg_rect, sym_rect, dst_rect, tex_idx, sym_idx, angle, center_point)
@@ -1205,7 +1208,7 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 /// Main buffer rendering with character-to-pixel conversion
 /// 
 /// This function processes the main game buffer containing character data and
@@ -1280,7 +1283,7 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 /// Window border rendering for windowed display modes
 /// 
 /// This function renders decorative borders around the game area for SDL and Winit
@@ -1354,7 +1357,7 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 /// RustPixel Logo animation rendering with dynamic effects
 /// 
 /// This function renders the animated RustPixel logo during the startup sequence.

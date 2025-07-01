@@ -57,6 +57,10 @@ use glutin::{
 #[cfg(not(feature = "wgpu"))]
 use glutin_winit::DisplayBuilder;
 
+// Import HasWindowHandle trait for window_handle() method
+#[cfg(not(feature = "wgpu"))]
+use winit::raw_window_handle::HasWindowHandle;
+
 // WGPU backend imports - only when wgpu is enabled
 #[cfg(feature = "wgpu")]
 use crate::render::adapter::wgpu::{WgpuRender, pixel::WgpuPixelRender};

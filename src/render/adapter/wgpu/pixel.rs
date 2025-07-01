@@ -363,14 +363,7 @@ impl WgpuPixelRender {
         const PIXELS_PER_SYMBOL: f32 = 8.0; // Each symbol is 8x8 pixels
         const TEXTURE_SIZE: f32 = 1024.0; // Total texture size in pixels
         
-        // Debug output for canvas dimensions (only first time)
-        static mut FIRST_DEBUG: bool = true;
-        unsafe {
-            if FIRST_DEBUG {
-                println!("WGPU Debug: Canvas dimensions {}x{}", self.base.canvas_width, self.base.canvas_height);
-                FIRST_DEBUG = false;
-            }
-        }
+
         
         // Convert render cells to vertices
         for render_cell in render_cells {
@@ -379,10 +372,73 @@ impl WgpuPixelRender {
             let window_width = self.base.canvas_width as f32;
             let window_height = self.base.canvas_height as f32;
             
-            let left_ndc = (render_cell.x / window_width) * 2.0 - 1.0;
-            let right_ndc = ((render_cell.x + render_cell.w as f32) / window_width) * 2.0 - 1.0;
-            let top_ndc = 1.0 - (render_cell.y / window_height) * 2.0;
-            let bottom_ndc = 1.0 - ((render_cell.y + render_cell.h as f32) / window_height) * 2.0;
+            // Calculate base quad corners in screen coordinates
+            let left = render_cell.x;
+            let right = render_cell.x + render_cell.w as f32;
+            let top = render_cell.y;
+            let bottom = render_cell.y + render_cell.h as f32;
+            
+            // Apply rotation if angle is not zero
+            // Follow the same transformation sequence as OpenGL mode:
+            // 1. translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT)
+            // 2. rotate(r.angle)
+            // 3. translate(-r.cx + PIXEL_SYM_WIDTH/ratio_x, -r.cy + PIXEL_SYM_HEIGHT/ratio_y)
+            let (left_ndc, right_ndc, top_ndc, bottom_ndc) = if render_cell.angle != 0.0 {
+                let cx = render_cell.cx;
+                let cy = render_cell.cy;
+                let pixel_sym_width = *crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init");
+                let pixel_sym_height = *crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+                
+                // Calculate scaling ratios (approximation based on canvas dimensions)
+                let ratio_x = self.base.canvas_width as f32 / window_width;
+                let ratio_y = self.base.canvas_height as f32 / window_height;
+                
+                // Step 1: First translation - move to rotation center
+                let tx1 = render_cell.x + cx - pixel_sym_width;
+                let ty1 = render_cell.y + cy - pixel_sym_height;
+                
+                // Step 2: Apply rotation around origin
+                let cos_a = render_cell.angle.cos();
+                let sin_a = render_cell.angle.sin();
+                
+                // Transform each corner of the quad
+                let corners = [
+                    (left, bottom),   // bottom-left
+                    (right, bottom),  // bottom-right
+                    (right, top),     // top-right
+                    (left, top),      // top-left
+                ];
+                
+                let rotated_corners: Vec<(f32, f32)> = corners.iter().map(|(x, y)| {
+                    // Apply first translation
+                    let x1 = x - tx1;
+                    let y1 = y - ty1;
+                    // Apply rotation
+                    let x2 = x1 * cos_a - y1 * sin_a;
+                    let y2 = x1 * sin_a + y1 * cos_a;
+                    // Apply second translation
+                    let tx2 = -cx + pixel_sym_width / ratio_x;
+                    let ty2 = -cy + pixel_sym_height / ratio_y;
+                    (x2 + tx1 + tx2, y2 + ty1 + ty2)
+                }).collect();
+                
+                // Convert to NDC
+                let ndc_corners: Vec<(f32, f32)> = rotated_corners.iter().map(|(x, y)| {
+                    let x_ndc = (x / window_width) * 2.0 - 1.0;
+                    let y_ndc = 1.0 - (y / window_height) * 2.0;
+                    (x_ndc, y_ndc)
+                }).collect();
+                
+                (ndc_corners[0], ndc_corners[1], ndc_corners[2], ndc_corners[3])
+            } else {
+                // No rotation - simple conversion to NDC
+                let left_ndc = (left / window_width) * 2.0 - 1.0;
+                let right_ndc = (right / window_width) * 2.0 - 1.0;
+                let top_ndc = 1.0 - (top / window_height) * 2.0;
+                let bottom_ndc = 1.0 - (bottom / window_height) * 2.0;
+                
+                ((left_ndc, bottom_ndc), (right_ndc, bottom_ndc), (right_ndc, top_ndc), (left_ndc, top_ndc))
+            };
             
             // Use foreground color from render cell
             let color = [render_cell.fcolor.0, render_cell.fcolor.1, render_cell.fcolor.2, render_cell.fcolor.3];
@@ -406,35 +462,37 @@ impl WgpuPixelRender {
             // Debug output removed for performance
             
             // Create quad vertices (using triangle list, so need 6 vertices per quad)
+            // Use the calculated (potentially rotated) corner positions
+            // Corners are: [bottom-left, bottom-right, top-right, top-left]
             vertices.push(WgpuVertex {
-                position: [left_ndc, bottom_ndc],
+                position: [left_ndc.0, left_ndc.1],  // bottom-left
                 tex_coords: [tex_left, tex_bottom],
                 color,
             });
             vertices.push(WgpuVertex {
-                position: [right_ndc, bottom_ndc],
+                position: [right_ndc.0, right_ndc.1],  // bottom-right
                 tex_coords: [tex_right, tex_bottom],
                 color,
             });
             vertices.push(WgpuVertex {
-                position: [right_ndc, top_ndc],
+                position: [top_ndc.0, top_ndc.1],  // top-right
                 tex_coords: [tex_right, tex_top],
                 color,
             });
             
             // Second triangle
             vertices.push(WgpuVertex {
-                position: [left_ndc, bottom_ndc],
+                position: [left_ndc.0, left_ndc.1],  // bottom-left
                 tex_coords: [tex_left, tex_bottom],
                 color,
             });
             vertices.push(WgpuVertex {
-                position: [right_ndc, top_ndc],
+                position: [top_ndc.0, top_ndc.1],  // top-right
                 tex_coords: [tex_right, tex_top],
                 color,
             });
             vertices.push(WgpuVertex {
-                position: [left_ndc, top_ndc],
+                position: [bottom_ndc.0, bottom_ndc.1],  // top-left
                 tex_coords: [tex_left, tex_top],
                 color,
             });
