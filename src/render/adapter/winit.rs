@@ -860,8 +860,19 @@ impl WinitAdapter {
             wgpu_surface_config.format, // Use actual surface format
         );
         
-        // 初始化渲染器
-        wgpu_pixel_renderer.init(&wgpu_device);
+        // 加载纹理
+        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue) {
+            panic!("Failed to load symbol texture: {}", e);
+        }
+        
+        // 创建shader和渲染管线
+        wgpu_pixel_renderer.create_shader(&wgpu_device);
+        
+        // 创建buffers
+        wgpu_pixel_renderer.create_buffer(&wgpu_device);
+        
+        // 创建bind group
+        wgpu_pixel_renderer.create_bind_group(&wgpu_device);
 
         // 5. 存储所有 WGPU 对象
         self.event_loop = Some(event_loop);
@@ -1035,7 +1046,8 @@ impl WinitAdapter {
             self.drag.dy,
         );
 
-        // 2. 使用原始buffer（暂时），关键是让游戏逻辑先运行
+        // 2. 使用与OpenGL版本相同的渲染管线：先处理游戏数据生成RenderCell
+        let render_cells = self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
         
         // 3. 执行 WGPU 渲染流程
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
@@ -1044,8 +1056,8 @@ impl WinitAdapter {
             &self.wgpu_surface,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 准备绘制数据（传入原始buffer）
-            pixel_renderer.prepare_draw_with_buffer(device, queue, current_buffer);
+            // 准备绘制数据（使用处理过的RenderCell数据）
+            pixel_renderer.prepare_draw_with_render_cells(device, queue, &render_cells);
             
             // 获取当前表面纹理
             let output = surface
