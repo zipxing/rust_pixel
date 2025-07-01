@@ -101,7 +101,7 @@ web = ["image"]
 term = ["log4rs", "crossterm", "rodio", "image"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
 winit = ["log4rs", "rodio", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
-wgpu = ["log4rs", "rodio", "dep:wgpu", "dep:bytemuck", "dep:pollster", "image"]
+wgpu = ["log4rs", "rodio", "dep:wgpu", "dep:bytemuck", "dep:pollster", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
 base = ["log4rs"]
 
 [profile.release]

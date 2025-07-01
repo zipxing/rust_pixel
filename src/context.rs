@@ -11,13 +11,13 @@
 
 use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::Rand};
 
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl"), not(feature = "winit")))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl"), not(feature = "winit"), not(feature = "wgpu")))]
 use crate::render::adapter::cross::CrosstermAdapter;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
 use crate::render::adapter::sdl::SdlAdapter;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "winit"))]
+#[cfg(all(not(target_arch = "wasm32"), any(feature = "winit", feature = "wgpu")))]
 use crate::render::adapter::winit::WinitAdapter;
 
 #[cfg(target_arch = "wasm32")]
@@ -48,9 +48,9 @@ impl Context {
             adapter: Box::new(WebAdapter::new(name, project_path)),
             #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
             adapter: Box::new(SdlAdapter::new(name, project_path)),
-            #[cfg(all(not(target_arch = "wasm32"), feature = "winit"))]
+            #[cfg(all(not(target_arch = "wasm32"), any(feature = "winit", feature = "wgpu")))]
             adapter: Box::new(WinitAdapter::new(name, project_path)),
-            #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl"), not(feature = "winit")))]
+            #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl"), not(feature = "winit"), not(feature = "wgpu")))]
             adapter: Box::new(CrosstermAdapter::new(name, project_path)),
         }
     }

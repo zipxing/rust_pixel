@@ -169,14 +169,15 @@ pub mod sdl;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
-/// Winit adapter module - Cross-platform window management with OpenGL
-#[cfg(all(feature = "winit", not(target_arch = "wasm32")))]
+/// Winit adapter module - Cross-platform window management with OpenGL/WGPU
+#[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
 pub mod winit;
 
 /// Crossterm adapter module - Terminal-based text mode rendering
 #[cfg(not(any(
     feature = "sdl",
     feature = "winit",
+    feature = "wgpu",
     target_os = "android",
     target_os = "ios",
     target_arch = "wasm32"
@@ -206,7 +207,7 @@ pub mod cross;
 /// │  └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘         │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
 /// Calculate symbol width based on texture dimensions

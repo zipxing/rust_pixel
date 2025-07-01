@@ -63,6 +63,7 @@ use crate::render::adapter::wgpu::{WgpuRender, pixel::WgpuPixelRender};
 use log::info;
 use raw_window_handle::HasWindowHandle;
 use std::any::Any;
+use std::sync::Arc;
 use std::time::Duration;
 use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
 pub use winit::{
@@ -118,7 +119,7 @@ pub struct WinitAdapter {
 
     // Winit相关对象
     /// 窗口实例
-    pub window: Option<Window>,
+    pub window: Option<Arc<Window>>,
     /// 事件循环
     pub event_loop: Option<EventLoop<()>>,
 
@@ -616,7 +617,7 @@ impl WinitAdapter {
 
         // Store the OpenGL context and objects
         self.base.gl = Some(gl);
-        self.window = Some(window);
+        self.window = Some(Arc::new(window));
         self.gl_display = Some(gl_display);
         self.gl_context = Some(gl_context);
         self.gl_surface = Some(surface);
@@ -758,13 +759,15 @@ impl WinitAdapter {
         // 计算窗口大小（处理 Retina 显示器）
         let window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
         
-        let window = winit::window::WindowBuilder::new()
+        let window_attributes = winit::window::Window::default_attributes()
             .with_title(&self.base.title)
             .with_inner_size(window_size)
             .with_decorations(false) // 无边框，与 SDL 版本一致
-            .with_resizable(false)
-            .build(&event_loop)
-            .expect("Failed to create window");
+            .with_resizable(false);
+            
+        let window = Arc::new(event_loop
+            .create_window(window_attributes)
+            .expect("Failed to create window"));
 
         // 获取实际物理尺寸
         let physical_size = window.inner_size();
@@ -780,10 +783,15 @@ impl WinitAdapter {
             ..Default::default()
         });
 
-        // 创建窗口表面
-        let wgpu_surface = wgpu_instance
-            .create_surface(&window)
-            .expect("Failed to create surface");
+        // 先存储窗口，稍后创建surface
+        self.window = Some(window.clone());
+
+        // 创建窗口表面（使用 unsafe 方式避免生命周期问题）
+        let wgpu_surface = unsafe {
+            wgpu_instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::from_window(&**self.window.as_ref().unwrap()).unwrap())
+                .expect("Failed to create surface")
+        };
 
         // 异步获取适配器和设备（使用 pollster 简化）
         let (wgpu_device, wgpu_queue, wgpu_surface_config) = pollster::block_on(async {
@@ -852,7 +860,6 @@ impl WinitAdapter {
         wgpu_pixel_renderer.init(&wgpu_device);
 
         // 5. 存储所有 WGPU 对象
-        self.window = Some(window);
         self.event_loop = Some(event_loop);
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_device = Some(wgpu_device);
@@ -909,15 +916,15 @@ impl WinitAdapter {
                 if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
                     let custom_cursor = event_loop.create_custom_cursor(cursor_source);
                     self.custom_cursor = Some(custom_cursor.clone());
-                    window.set_cursor(custom_cursor);
+                    window.as_ref().set_cursor(custom_cursor);
                     // Ensure cursor is visible after setting custom cursor
-                    window.set_cursor_visible(true);
+                    window.as_ref().set_cursor_visible(true);
                 }
             }
         } else {
             // If custom cursor fails to load, ensure standard cursor is visible
             if let Some(window) = &self.window {
-                window.set_cursor_visible(true);
+                window.as_ref().set_cursor_visible(true);
             }
         }
     }
@@ -970,7 +977,7 @@ impl WinitAdapter {
         // process window dragging move...
         winit_move_win(
             &mut self.drag.need,
-            self.window.as_ref(),
+            self.window.as_ref().map(|v| &**v),
             self.drag.dx,
             self.drag.dy,
         );
@@ -986,7 +993,7 @@ impl WinitAdapter {
 
         // Request redraw
         if let Some(window) = &self.window {
-            window.request_redraw();
+            window.as_ref().request_redraw();
         }
 
         Ok(())
@@ -1019,7 +1026,7 @@ impl WinitAdapter {
         // 1. 处理窗口拖拽移动（与 OpenGL 版本相同）
         winit_move_win(
             &mut self.drag.need,
-            self.window.as_ref(),
+            self.window.as_ref().map(|v| &**v),
             self.drag.dx,
             self.drag.dy,
         );
@@ -1045,31 +1052,8 @@ impl WinitAdapter {
                 label: Some("RustPixel Render Encoder"),
             });
 
-            // 执行渲染通道
-            {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("RustPixel Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 0.0,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-
-                // 使用像素渲染器执行渲染
-                pixel_renderer.draw(&mut render_pass, current_buffer);
-            }
+            // 使用像素渲染器执行渲染
+            pixel_renderer.draw(&mut encoder, &view);
 
             // 提交命令
             queue.submit(std::iter::once(encoder.finish()));
@@ -1082,7 +1066,7 @@ impl WinitAdapter {
 
         // 3. 请求重绘（与 OpenGL 版本相同）
         if let Some(window) = &self.window {
-            window.request_redraw();
+            window.as_ref().request_redraw();
         }
 
         Ok(())
