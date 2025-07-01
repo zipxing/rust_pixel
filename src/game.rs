@@ -116,6 +116,7 @@ where
             }
 
             let et = last_tick.elapsed();
+            
             if et >= tick_rate {
                 let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1_000_000_000.0;
                 self.on_tick(dt);

@@ -211,6 +211,7 @@ impl ApplicationHandler for WinitAppHandler {
     ) {
         match event {
             WindowEvent::CloseRequested => {
+                println!("WGPU Debug: WindowEvent::CloseRequested - setting should_exit=true");
                 self.should_exit = true;
                 event_loop.exit();
             }
@@ -221,6 +222,7 @@ impl ApplicationHandler for WinitAppHandler {
                 if key_event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
                         if keycode == winit::keyboard::KeyCode::KeyQ {
+                            println!("WGPU Debug: Q key pressed - setting should_exit=true");
                             self.should_exit = true;
                             event_loop.exit();
                             return;
@@ -313,6 +315,7 @@ impl ApplicationHandler for WinitAppHandler {
                                 }
                                 WinitBorderArea::CLOSE => {
                                     // 点击关闭按钮区域时退出程序
+                                    println!("WGPU Debug: Close button clicked - setting should_exit=true");
                                     self.should_exit = true;
                                     event_loop.exit();
                                 }
@@ -851,9 +854,10 @@ impl WinitAdapter {
         });
 
         // 4. 创建并初始化 WGPU 像素渲染器
-        let mut wgpu_pixel_renderer = WgpuPixelRender::new(
+        let mut wgpu_pixel_renderer = WgpuPixelRender::new_with_format(
             self.base.pixel_w,
             self.base.pixel_h,
+            wgpu_surface_config.format, // Use actual surface format
         );
         
         // 初始化渲染器
@@ -1031,13 +1035,18 @@ impl WinitAdapter {
             self.drag.dy,
         );
 
-        // 2. 执行 WGPU 渲染流程
+        // 2. 使用原始buffer（暂时），关键是让游戏逻辑先运行
+        
+        // 3. 执行 WGPU 渲染流程
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
             &self.wgpu_device,
             &self.wgpu_queue,
             &self.wgpu_surface,
             &mut self.wgpu_pixel_renderer,
         ) {
+            // 准备绘制数据（传入原始buffer）
+            pixel_renderer.prepare_draw_with_buffer(device, queue, current_buffer);
+            
             // 获取当前表面纹理
             let output = surface
                 .get_current_texture()
@@ -1064,7 +1073,7 @@ impl WinitAdapter {
             return Err("WGPU components not initialized".to_string());
         }
 
-        // 3. 请求重绘（与 OpenGL 版本相同）
+        // 4. 请求重绘（与 OpenGL 版本相同）
         if let Some(window) = &self.window {
             window.as_ref().request_redraw();
         }
@@ -1131,6 +1140,15 @@ impl Adapter for WinitAdapter {
     /// - Q键退出：与SDL版本保持一致
     /// - Retina显示：正确处理高DPI坐标转换
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
+        // 添加调试输出，偶尔输出一次以避免过多日志
+        static mut POLL_COUNT: u32 = 0;
+        unsafe {
+            POLL_COUNT += 1;
+            if POLL_COUNT % 60 == 0 {
+                println!("=== poll_event called {} times ===", POLL_COUNT);
+            }
+        }
+        
         if let (Some(event_loop), Some(app_handler)) =
             (self.event_loop.as_mut(), self.app_handler.as_mut())
         {
@@ -1148,15 +1166,20 @@ impl Adapter for WinitAdapter {
 
             // Check if we should exit
             if app_handler.should_exit {
+                println!("WGPU Debug: poll_event returning true - app_handler.should_exit=true");
                 return true;
             }
 
             // Check pump status
             if let PumpStatus::Exit(_) = status {
+                println!("WGPU Debug: poll_event returning true - PumpStatus::Exit");
                 return true;
             }
         }
 
+        if self.should_exit {
+            println!("WGPU Debug: poll_event returning true - self.should_exit=true");
+        }
         self.should_exit
     }
 
