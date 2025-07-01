@@ -372,36 +372,28 @@ impl WgpuPixelRender {
             let window_width = self.base.canvas_width as f32;
             let window_height = self.base.canvas_height as f32;
             
-            // Calculate base quad corners in screen coordinates
             let left = render_cell.x;
             let right = render_cell.x + render_cell.w as f32;
             let top = render_cell.y;
             let bottom = render_cell.y + render_cell.h as f32;
             
+
+            
             // Apply rotation if angle is not zero
-            // Follow the same transformation sequence as OpenGL mode:
-            // 1. translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT)
-            // 2. rotate(r.angle)
-            // 3. translate(-r.cx + PIXEL_SYM_WIDTH/ratio_x, -r.cy + PIXEL_SYM_HEIGHT/ratio_y)
+            // Simplified approach: rotate the quad corners directly around the rotation center
             let (left_ndc, right_ndc, top_ndc, bottom_ndc) = if render_cell.angle != 0.0 {
-                let cx = render_cell.cx;
-                let cy = render_cell.cy;
-                let pixel_sym_width = *crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init");
-                let pixel_sym_height = *crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+                let cx = render_cell.cx as f32;
+                let cy = render_cell.cy as f32;
                 
-                // Calculate scaling ratios (approximation based on canvas dimensions)
-                let ratio_x = self.base.canvas_width as f32 / window_width;
-                let ratio_y = self.base.canvas_height as f32 / window_height;
+                // Calculate the actual rotation center in screen coordinates
+                // The rotation center is relative to the render_cell position
+                let center_x = render_cell.x + cx;
+                let center_y = render_cell.y + cy;
                 
-                // Step 1: First translation - move to rotation center
-                let tx1 = render_cell.x + cx - pixel_sym_width;
-                let ty1 = render_cell.y + cy - pixel_sym_height;
-                
-                // Step 2: Apply rotation around origin
+                // Apply rotation to each corner around the center
                 let cos_a = render_cell.angle.cos();
                 let sin_a = render_cell.angle.sin();
                 
-                // Transform each corner of the quad
                 let corners = [
                     (left, bottom),   // bottom-left
                     (right, bottom),  // bottom-right
@@ -410,16 +402,16 @@ impl WgpuPixelRender {
                 ];
                 
                 let rotated_corners: Vec<(f32, f32)> = corners.iter().map(|(x, y)| {
-                    // Apply first translation
-                    let x1 = x - tx1;
-                    let y1 = y - ty1;
+                    // Translate to origin (relative to rotation center)
+                    let dx = x - center_x;
+                    let dy = y - center_y;
+                    
                     // Apply rotation
-                    let x2 = x1 * cos_a - y1 * sin_a;
-                    let y2 = x1 * sin_a + y1 * cos_a;
-                    // Apply second translation
-                    let tx2 = -cx + pixel_sym_width / ratio_x;
-                    let ty2 = -cy + pixel_sym_height / ratio_y;
-                    (x2 + tx1 + tx2, y2 + ty1 + ty2)
+                    let rotated_x = dx * cos_a - dy * sin_a;
+                    let rotated_y = dx * sin_a + dy * cos_a;
+                    
+                    // Translate back
+                    (rotated_x + center_x, rotated_y + center_y)
                 }).collect();
                 
                 // Convert to NDC
