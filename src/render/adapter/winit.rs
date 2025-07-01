@@ -61,7 +61,7 @@ use glutin_winit::DisplayBuilder;
 #[cfg(feature = "wgpu")]
 use crate::render::adapter::wgpu::{WgpuRender, pixel::WgpuPixelRender};
 use log::info;
-use raw_window_handle::HasWindowHandle;
+// Removed unused import
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
@@ -211,7 +211,6 @@ impl ApplicationHandler for WinitAppHandler {
     ) {
         match event {
             WindowEvent::CloseRequested => {
-                println!("WGPU Debug: WindowEvent::CloseRequested - setting should_exit=true");
                 self.should_exit = true;
                 event_loop.exit();
             }
@@ -222,7 +221,6 @@ impl ApplicationHandler for WinitAppHandler {
                 if key_event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
                         if keycode == winit::keyboard::KeyCode::KeyQ {
-                            println!("WGPU Debug: Q key pressed - setting should_exit=true");
                             self.should_exit = true;
                             event_loop.exit();
                             return;
@@ -315,7 +313,6 @@ impl ApplicationHandler for WinitAppHandler {
                                 }
                                 WinitBorderArea::CLOSE => {
                                     // 点击关闭按钮区域时退出程序
-                                    println!("WGPU Debug: Close button clicked - setting should_exit=true");
                                     self.should_exit = true;
                                     event_loop.exit();
                                 }
@@ -854,14 +851,15 @@ impl WinitAdapter {
         });
 
         // 4. 创建并初始化 WGPU 像素渲染器
+        // 使用逻辑尺寸创建渲染器以避免缓冲区过大，坐标转换在着色器中处理
         let mut wgpu_pixel_renderer = WgpuPixelRender::new_with_format(
-            self.base.pixel_w,
-            self.base.pixel_h,
+            self.base.pixel_w,    // 使用逻辑尺寸避免缓冲区过大
+            self.base.pixel_h,    // 使用逻辑尺寸避免缓冲区过大
             wgpu_surface_config.format, // Use actual surface format
         );
         
         // 加载纹理
-        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue) {
+        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &texture_path) {
             panic!("Failed to load symbol texture: {}", e);
         }
         
@@ -1152,14 +1150,7 @@ impl Adapter for WinitAdapter {
     /// - Q键退出：与SDL版本保持一致
     /// - Retina显示：正确处理高DPI坐标转换
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
-        // 添加调试输出，偶尔输出一次以避免过多日志
-        static mut POLL_COUNT: u32 = 0;
-        unsafe {
-            POLL_COUNT += 1;
-            if POLL_COUNT % 60 == 0 {
-                println!("=== poll_event called {} times ===", POLL_COUNT);
-            }
-        }
+        // Poll event logic - debug output removed
         
         if let (Some(event_loop), Some(app_handler)) =
             (self.event_loop.as_mut(), self.app_handler.as_mut())
@@ -1178,20 +1169,16 @@ impl Adapter for WinitAdapter {
 
             // Check if we should exit
             if app_handler.should_exit {
-                println!("WGPU Debug: poll_event returning true - app_handler.should_exit=true");
                 return true;
             }
 
             // Check pump status
             if let PumpStatus::Exit(_) = status {
-                println!("WGPU Debug: poll_event returning true - PumpStatus::Exit");
                 return true;
             }
         }
 
-        if self.should_exit {
-            println!("WGPU Debug: poll_event returning true - self.should_exit=true");
-        }
+        // Return exit status
         self.should_exit
     }
 

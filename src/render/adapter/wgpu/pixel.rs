@@ -125,10 +125,9 @@ impl WgpuPixelRender {
         }
     }
     
-    /// Load the symbol texture from assets/pix/symbols.png
-    pub fn load_symbol_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> Result<(), String> {
+    /// Load the symbol texture from the specified path
+    pub fn load_symbol_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, texture_path: &str) -> Result<(), String> {
         // Load the texture file
-        let texture_path = "assets/pix/symbols.png";
         let texture_bytes = std::fs::read(texture_path)
             .map_err(|e| format!("Failed to read texture file {}: {}", texture_path, e))?;
         
@@ -364,12 +363,21 @@ impl WgpuPixelRender {
         const PIXELS_PER_SYMBOL: f32 = 8.0; // Each symbol is 8x8 pixels
         const TEXTURE_SIZE: f32 = 1024.0; // Total texture size in pixels
         
+        // Debug output for canvas dimensions (only first time)
+        static mut FIRST_DEBUG: bool = true;
+        unsafe {
+            if FIRST_DEBUG {
+                println!("WGPU Debug: Canvas dimensions {}x{}", self.base.canvas_width, self.base.canvas_height);
+                FIRST_DEBUG = false;
+            }
+        }
+        
         // Convert render cells to vertices
         for render_cell in render_cells {
             // Convert screen coordinates to normalized device coordinates
-            // Assume window size is 800x600 for now (we should get this from context)
-            let window_width = 800.0;
-            let window_height = 600.0;
+            // Use actual canvas dimensions from base renderer
+            let window_width = self.base.canvas_width as f32;
+            let window_height = self.base.canvas_height as f32;
             
             let left_ndc = (render_cell.x / window_width) * 2.0 - 1.0;
             let right_ndc = ((render_cell.x + render_cell.w as f32) / window_width) * 2.0 - 1.0;

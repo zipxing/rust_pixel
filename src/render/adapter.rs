@@ -885,7 +885,7 @@ pub trait Adapter {
     }
 
     // draw main buffer & pixel sprites to render buffer...
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
     fn draw_all_to_render_buffer(
         &mut self,
         cb: &Buffer,
@@ -957,7 +957,7 @@ pub trait Adapter {
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 /// Convert game data to RenderCell format with texture coordinate calculation
 /// 
 /// This function converts individual game elements (characters, sprites, etc.) into
@@ -1047,7 +1047,7 @@ fn push_render_buffer(
     rbuf.push(wc);
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 fn render_helper(
     cell_w: u16,
     r: PointF32,
