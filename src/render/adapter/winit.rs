@@ -117,6 +117,17 @@ pub enum WinitBorderArea {
 /// 封装了winit窗口管理和现代渲染后端的所有组件。
 /// 支持两种渲染后端：OpenGL (glow) 和现代GPU API (wgpu)。
 /// 实现了与SDL适配器相同的接口，可以无缝替换。
+/// 窗口初始化参数
+#[derive(Debug, Clone)]
+pub struct WindowInitParams {
+    pub width: u16,
+    pub height: u16,
+    pub ratio_x: f32,
+    pub ratio_y: f32,
+    pub title: String,
+    pub texture_path: String,
+}
+
 pub struct WinitAdapter {
     /// 基础适配器数据
     pub base: AdapterBase,
@@ -126,6 +137,8 @@ pub struct WinitAdapter {
     pub window: Option<Arc<Window>>,
     /// 事件循环
     pub event_loop: Option<EventLoop<()>>,
+    /// 窗口初始化参数（用于在resumed中创建窗口）
+    pub window_init_params: Option<WindowInitParams>,
 
     // OpenGL backend objects (only when wgpu feature is disabled)
     #[cfg(not(feature = "wgpu"))]
@@ -196,8 +209,15 @@ pub struct WinitAppHandler {
 
 impl ApplicationHandler for WinitAppHandler {
     /// 应用程序恢复时的回调
-    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        // 窗口应该已经创建完成，无需额外操作
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        unsafe {
+            let adapter = &mut *self.adapter_ref;
+            // 如果是WGPU模式且窗口尚未创建，则创建窗口和资源
+            #[cfg(feature = "wgpu")]
+            if adapter.window.is_none() && adapter.window_init_params.is_some() {
+                adapter.create_wgpu_window_and_resources(event_loop);
+            }
+        }
     }
 
     /// 处理窗口事件
@@ -424,6 +444,7 @@ impl WinitAdapter {
             base: AdapterBase::new(gn, project_path),
             window: None,
             event_loop: None,
+            window_init_params: None,
             
             // OpenGL backend fields (only when wgpu is disabled)
             #[cfg(not(feature = "wgpu"))]
@@ -750,21 +771,52 @@ impl WinitAdapter {
             .set_ratiox(rx)
             .set_ratioy(ry)
             .set_pixel_size()
-            .set_title(title);
+            .set_title(title.clone());
 
         info!(
             "pixel_w={} pixel_h={}",
             self.base.pixel_w, self.base.pixel_h
         );
 
-        // 2. 创建事件循环和窗口
+        // 2. 创建事件循环，但延迟创建窗口到resumed方法中
         let event_loop = EventLoop::new().unwrap();
+        
+        // 存储窗口初始化参数，稍后在resumed中使用
+        self.window_init_params = Some(WindowInitParams {
+            width: w,
+            height: h,
+            ratio_x: rx,
+            ratio_y: ry,
+            title,
+            texture_path,
+        });
+
+        // 3. 存储事件循环，窗口将在resumed方法中创建
+        self.event_loop = Some(event_loop);
+
+        // 4. 配置事件处理器
+        self.app_handler = Some(WinitAppHandler {
+            pending_events: Vec::new(),
+            cursor_position: (0.0, 0.0),
+            ratio_x: self.base.ratio_x,
+            ratio_y: self.base.ratio_y,
+            should_exit: false,
+            adapter_ref: self as *mut WinitAdapter,
+        });
+
+        info!("WGPU adapter initialization prepared, window will be created in resumed()");
+    }
+
+    /// 在resumed方法中创建WGPU窗口和相关资源
+    #[cfg(feature = "wgpu")]
+    fn create_wgpu_window_and_resources(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let params = self.window_init_params.as_ref().unwrap().clone();
         
         // 计算窗口大小（处理 Retina 显示器）
         let window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
         
         let window_attributes = winit::window::Window::default_attributes()
-            .with_title(&self.base.title)
+            .with_title(&params.title)
             .with_inner_size(window_size)
             .with_decorations(false) // 无边框，与 SDL 版本一致
             .with_resizable(false);
@@ -781,7 +833,7 @@ impl WinitAdapter {
             physical_size.width, physical_size.height
         );
 
-        // 3. 初始化 WGPU 核心组件
+        // 初始化 WGPU 核心组件
         let wgpu_instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -854,7 +906,7 @@ impl WinitAdapter {
             (device, queue, surface_config)
         });
 
-        // 4. 创建并初始化 WGPU 像素渲染器
+        // 创建并初始化 WGPU 像素渲染器
         // 使用逻辑尺寸创建渲染器以避免缓冲区过大，坐标转换在着色器中处理
         let mut wgpu_pixel_renderer = WgpuPixelRender::new_with_format(
             self.base.pixel_w,    // 使用逻辑尺寸避免缓冲区过大
@@ -863,7 +915,7 @@ impl WinitAdapter {
         );
         
         // 加载纹理
-        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &texture_path) {
+        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path) {
             panic!("Failed to load symbol texture: {}", e);
         }
         
@@ -876,8 +928,7 @@ impl WinitAdapter {
         // 创建bind group
         wgpu_pixel_renderer.create_bind_group(&wgpu_device);
 
-        // 5. 存储所有 WGPU 对象
-        self.event_loop = Some(event_loop);
+        // 存储所有 WGPU 对象
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_device = Some(wgpu_device);
         self.wgpu_queue = Some(wgpu_queue);
@@ -885,20 +936,10 @@ impl WinitAdapter {
         self.wgpu_surface_config = Some(wgpu_surface_config);
         self.wgpu_pixel_renderer = Some(wgpu_pixel_renderer);
 
-        // 6. 设置自定义光标
+        // 设置自定义光标
         self.set_mouse_cursor();
 
-        // 7. 配置事件处理器
-        self.app_handler = Some(WinitAppHandler {
-            pending_events: Vec::new(),
-            cursor_position: (0.0, 0.0),
-            ratio_x: self.base.ratio_x,
-            ratio_y: self.base.ratio_y,
-            should_exit: false,
-            adapter_ref: self as *mut WinitAdapter,
-        });
-
-        info!("Winit window & WGPU context initialized successfully");
+        info!("WGPU window & context initialized successfully");
     }
 
 
