@@ -391,8 +391,10 @@ impl WgpuPixelRender {
                 let center_y = render_cell.y + cy;
                 
                 // Apply rotation to each corner around the center
-                let cos_a = render_cell.angle.cos();
-                let sin_a = render_cell.angle.sin();
+                // Add 90 degrees (π/2) to match OpenGL/SDL bullet direction behavior
+                let corrected_angle = render_cell.angle + std::f32::consts::PI / 2.0;
+                let cos_a = corrected_angle.cos();
+                let sin_a = corrected_angle.sin();
                 
                 let corners = [
                     (left, bottom),   // bottom-left
