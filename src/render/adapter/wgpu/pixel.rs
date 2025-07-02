@@ -372,10 +372,17 @@ impl WgpuPixelRender {
             let window_width = self.base.canvas_width as f32;
             let window_height = self.base.canvas_height as f32;
             
-            let left = render_cell.x;
-            let right = render_cell.x + render_cell.w as f32;
-            let top = render_cell.y;
-            let bottom = render_cell.y + render_cell.h as f32;
+            // Compensate for the PIXEL_SYM_WIDTH/HEIGHT offset added in push_render_buffer
+            // OpenGL version subtracts this in the transformation matrix
+            let sym_width = 8.0; // PIXEL_SYM_WIDTH for 1024x1024 texture
+            let sym_height = 8.0; // PIXEL_SYM_HEIGHT for 1024x1024 texture
+            let adjusted_x = render_cell.x - sym_width;
+            let adjusted_y = render_cell.y - sym_height;
+            
+            let left = adjusted_x;
+            let right = adjusted_x + render_cell.w as f32;
+            let top = adjusted_y;
+            let bottom = adjusted_y + render_cell.h as f32;
             
 
             
@@ -386,9 +393,9 @@ impl WgpuPixelRender {
                 let cy = render_cell.cy as f32;
                 
                 // Calculate the actual rotation center in screen coordinates
-                // The rotation center is relative to the render_cell position
-                let center_x = render_cell.x + cx;
-                let center_y = render_cell.y + cy;
+                // The rotation center is relative to the adjusted render_cell position
+                let center_x = adjusted_x + cx;
+                let center_y = adjusted_y + cy;
                 
                 // Apply rotation to each corner around the center
                 // Add 90 degrees (π/2) to match OpenGL/SDL bullet direction behavior
@@ -437,17 +444,21 @@ impl WgpuPixelRender {
             // Use foreground color from render cell
             let color = [render_cell.fcolor.0, render_cell.fcolor.1, render_cell.fcolor.2, render_cell.fcolor.3];
             
-            // Calculate texture coordinates from texsym field
-            // texsym = y * 128 + x, where x,y are symbol positions (0-127)
+            // Calculate texture coordinates from texsym field using OpenGL-compatible method
+            // texsym directly indexes into the 128x128 symbol grid
             let texsym = render_cell.texsym;
-            let symbol_x = (texsym % 128) as f32; // X position in symbol grid (0-127)
-            let symbol_y = (texsym / 128) as f32; // Y position in symbol grid (0-127)
             
-            // Convert symbol positions to pixel coordinates
-            let pixel_x = symbol_x * PIXELS_PER_SYMBOL; // X in pixels (0-1016)
-            let pixel_y = symbol_y * PIXELS_PER_SYMBOL; // Y in pixels (0-1016)
+            // Calculate symbol grid position (matches OpenGL make_symbols_frame logic)
+            let symbols_per_row = 128;
+            let symbol_x = (texsym % symbols_per_row) as f32;
+            let symbol_y = (texsym / symbols_per_row) as f32;
             
-            // Convert pixel coordinates to texture coordinates (0.0-1.0)
+            // Convert to pixel coordinates (each symbol is 8x8 pixels in 1024x1024 texture)
+            let pixel_x = symbol_x * PIXELS_PER_SYMBOL;
+            let pixel_y = symbol_y * PIXELS_PER_SYMBOL;
+            
+            // Convert to normalized texture coordinates (0.0-1.0)
+            // Match OpenGL uv calculation: uv_left = x / tex_width
             let tex_left = pixel_x / TEXTURE_SIZE;
             let tex_right = (pixel_x + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
             let tex_top = pixel_y / TEXTURE_SIZE;
