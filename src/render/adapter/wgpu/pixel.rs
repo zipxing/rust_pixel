@@ -8,7 +8,7 @@
 //! instanced drawing for high performance.
 
 use super::*;
-use super::shader_source::*;
+
 
 /// Vertex data structure for WGPU rendering
 /// 
@@ -358,8 +358,7 @@ impl WgpuPixelRender {
         // Constants for texture atlas layout
         // symbols.png is 1024x1024 pixels with 128x128 symbol positions
         // Each symbol occupies 8x8 pixels (1024÷128=8)
-        const ATLAS_WIDTH_SYMBOLS: f32 = 128.0; // 128 symbols wide
-        const ATLAS_HEIGHT_SYMBOLS: f32 = 128.0; // 128 symbols tall
+
         const PIXELS_PER_SYMBOL: f32 = 8.0; // Each symbol is 8x8 pixels
         const TEXTURE_SIZE: f32 = 1024.0; // Total texture size in pixels
         
@@ -392,16 +391,18 @@ impl WgpuPixelRender {
                 let cx = render_cell.cx as f32;
                 let cy = render_cell.cy as f32;
                 
-                // Calculate the actual rotation center in screen coordinates
+                                // Calculate the actual rotation center in screen coordinates
                 // The rotation center is relative to the adjusted render_cell position
                 let center_x = adjusted_x + cx;
                 let center_y = adjusted_y + cy;
                 
                 // Apply rotation to each corner around the center
-                // Add 90 degrees (π/2) to match OpenGL/SDL bullet direction behavior
-                let corrected_angle = render_cell.angle + std::f32::consts::PI / 2.0;
-                let cos_a = corrected_angle.cos();
-                let sin_a = corrected_angle.sin();
+                // The key insight: render_cell.angle comes from push_render_buffer's complex formula
+                // But we need to understand what coordinate system it represents
+                // Let's try negating the angle to see if it fixes the direction
+                let angle = -render_cell.angle; // Try negating the angle
+                let cos_a = angle.cos();
+                let sin_a = angle.sin();
                 
                 let corners = [
                     (left, bottom),   // bottom-left
