@@ -57,45 +57,35 @@ impl WgpuSymbolRenderer {
             let bottom = adjusted_y + render_cell.h as f32;
             
             // Apply rotation if angle is not zero
-            // Simplified approach: rotate the quad corners directly around the rotation center
             let (left_ndc, right_ndc, top_ndc, bottom_ndc) = if render_cell.angle != 0.0 {
-                let cx = render_cell.cx as f32;
-                let cy = render_cell.cy as f32;
-                
-                // Calculate the actual rotation center in screen coordinates
-                // The rotation center is relative to the adjusted render_cell position
-                let center_x = adjusted_x + cx;
-                let center_y = adjusted_y + cy;
-                
-                // Apply rotation to each corner around the center
-                // The key insight: render_cell.angle comes from push_render_buffer's complex formula
-                // But we need to understand what coordinate system it represents
-                // Let's try negating the angle to see if it fixes the direction
-                let angle = -render_cell.angle; // Try negating the angle
-                let cos_a = angle.cos();
-                let sin_a = angle.sin();
-                
-                let corners = [
+                // Calculate quad corners for rotation
+                let corners = vec![
                     (left, bottom),   // bottom-left
                     (right, bottom),  // bottom-right
                     (right, top),     // top-right
                     (left, top),      // top-left
                 ];
                 
+                // Rotation center
+                let cx = render_cell.cx;
+                let cy = render_cell.cy;
+                
+                // Rotate corners around center
                 let rotated_corners: Vec<(f32, f32)> = corners.iter().map(|(x, y)| {
-                    // Translate to origin (relative to rotation center)
-                    let dx = x - center_x;
-                    let dy = y - center_y;
+                    let translated_x = x - cx;
+                    let translated_y = y - cy;
                     
-                    // Apply rotation
-                    let rotated_x = dx * cos_a - dy * sin_a;
-                    let rotated_y = dx * sin_a + dy * cos_a;
+                    let cos_angle = render_cell.angle.cos();
+                    let sin_angle = render_cell.angle.sin();
                     
-                    // Translate back
-                    (rotated_x + center_x, rotated_y + center_y)
+                    let rotated_x = translated_x * cos_angle - translated_y * sin_angle;
+                    let rotated_y = translated_x * sin_angle + translated_y * cos_angle;
+                    
+                    (rotated_x + cx, rotated_y + cy)
                 }).collect();
                 
-                // Convert to NDC
+                // Convert rotated corners to NDC
+                // Simplified approach: rotate the quad corners directly around the rotation center
                 let ndc_corners: Vec<(f32, f32)> = rotated_corners.iter().map(|(x, y)| {
                     let x_ndc = (x / window_width) * 2.0 - 1.0;
                     let y_ndc = 1.0 - (y / window_height) * 2.0;
@@ -113,7 +103,63 @@ impl WgpuSymbolRenderer {
                 ((left_ndc, bottom_ndc), (right_ndc, bottom_ndc), (right_ndc, top_ndc), (left_ndc, top_ndc))
             };
             
-            // Use foreground color from render cell
+            // First, render background if it exists (similar to GL mode)
+            if let Some(bcolor) = render_cell.bcolor {
+                // Use a solid block symbol for background (index 1280 like GL mode)
+                // Calculate texture coordinates for background symbol (solid block)
+                let bg_texsym = 1280; // Same as GL mode - should be a solid block symbol
+                
+                let symbols_per_row = 128;
+                let bg_symbol_x = (bg_texsym % symbols_per_row) as f32;
+                let bg_symbol_y = (bg_texsym / symbols_per_row) as f32;
+                
+                let bg_pixel_x = bg_symbol_x * PIXELS_PER_SYMBOL;
+                let bg_pixel_y = bg_symbol_y * PIXELS_PER_SYMBOL;
+                
+                let bg_tex_left = bg_pixel_x / TEXTURE_SIZE;
+                let bg_tex_right = (bg_pixel_x + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
+                let bg_tex_top = bg_pixel_y / TEXTURE_SIZE;
+                let bg_tex_bottom = (bg_pixel_y + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
+                
+                // Use background color
+                let bg_color = [bcolor.0, bcolor.1, bcolor.2, bcolor.3];
+                
+                // Create background quad vertices (6 vertices for 2 triangles)
+                vertices.push(super::pixel::WgpuVertex {
+                    position: [left_ndc.0, left_ndc.1],  // bottom-left
+                    tex_coords: [bg_tex_left, bg_tex_bottom],
+                    color: bg_color,
+                });
+                vertices.push(super::pixel::WgpuVertex {
+                    position: [right_ndc.0, right_ndc.1],  // bottom-right
+                    tex_coords: [bg_tex_right, bg_tex_bottom],
+                    color: bg_color,
+                });
+                vertices.push(super::pixel::WgpuVertex {
+                    position: [top_ndc.0, top_ndc.1],  // top-right
+                    tex_coords: [bg_tex_right, bg_tex_top],
+                    color: bg_color,
+                });
+                
+                // Second triangle for background
+                vertices.push(super::pixel::WgpuVertex {
+                    position: [left_ndc.0, left_ndc.1],  // bottom-left
+                    tex_coords: [bg_tex_left, bg_tex_bottom],
+                    color: bg_color,
+                });
+                vertices.push(super::pixel::WgpuVertex {
+                    position: [top_ndc.0, top_ndc.1],  // top-right
+                    tex_coords: [bg_tex_right, bg_tex_top],
+                    color: bg_color,
+                });
+                vertices.push(super::pixel::WgpuVertex {
+                    position: [bottom_ndc.0, bottom_ndc.1],  // top-left
+                    tex_coords: [bg_tex_left, bg_tex_top],
+                    color: bg_color,
+                });
+            }
+            
+            // Then render the foreground symbol
             let color = [render_cell.fcolor.0, render_cell.fcolor.1, render_cell.fcolor.2, render_cell.fcolor.3];
             
             // Calculate texture coordinates from texsym field using OpenGL-compatible method
@@ -136,7 +182,7 @@ impl WgpuSymbolRenderer {
             let tex_top = pixel_y / TEXTURE_SIZE;
             let tex_bottom = (pixel_y + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
             
-            // Create quad vertices (using triangle list, so need 6 vertices per quad)
+            // Create foreground quad vertices (using triangle list, so need 6 vertices per quad)
             // Use the calculated (potentially rotated) corner positions
             // Corners are: [bottom-left, bottom-right, top-right, top-left]
             vertices.push(super::pixel::WgpuVertex {
@@ -155,7 +201,7 @@ impl WgpuSymbolRenderer {
                 color,
             });
             
-            // Second triangle
+            // Second triangle for foreground
             vertices.push(super::pixel::WgpuVertex {
                 position: [left_ndc.0, left_ndc.1],  // bottom-left
                 tex_coords: [tex_left, tex_bottom],
