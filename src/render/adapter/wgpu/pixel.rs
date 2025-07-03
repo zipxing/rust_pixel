@@ -8,6 +8,8 @@
 //! instanced drawing for high performance.
 
 use super::*;
+use super::render_symbols::WgpuSymbolRenderer;
+use super::shader_source;
 
 
 /// Vertex data structure for WGPU rendering
@@ -84,6 +86,9 @@ pub struct WgpuPixelRender {
     /// Base renderer data (shared resources)
     base: WgpuRenderBase,
     
+    /// Symbol renderer for vertex generation
+    symbol_renderer: WgpuSymbolRenderer,
+    
     /// Surface format for render target compatibility
     surface_format: wgpu::TextureFormat,
     
@@ -114,6 +119,7 @@ impl WgpuPixelRender {
     pub fn new_with_format(canvas_width: u32, canvas_height: u32, surface_format: wgpu::TextureFormat) -> Self {
         Self {
             base: WgpuRenderBase::new(0, canvas_width, canvas_height),
+            symbol_renderer: WgpuSymbolRenderer::new(canvas_width, canvas_height),
             surface_format,
             vertex_count: 0,
             vertex_buffer: None,  
@@ -275,7 +281,7 @@ impl WgpuPixelRender {
         /// Prepare drawing with actual game buffer content
     pub fn prepare_draw_with_buffer(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, buffer: &crate::render::buffer::Buffer) {
         // For now, generate vertices based on buffer content
-        let vertices = self.generate_vertices_from_buffer(buffer);
+        let vertices = self.symbol_renderer.generate_vertices_from_buffer(buffer);
         self.vertex_count = vertices.len() as u32;
         
         // Debug: Print rendering information (only first frame)
@@ -322,7 +328,7 @@ impl WgpuPixelRender {
     /// through the complete game rendering pipeline, including sprites, 
     /// borders, logo, and other game elements.
     pub fn prepare_draw_with_render_cells(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, render_cells: &[crate::render::adapter::RenderCell]) {
-        let vertices = self.generate_vertices_from_render_cells(render_cells);
+        let vertices = self.symbol_renderer.generate_vertices_from_render_cells(render_cells);
         self.vertex_count = vertices.len() as u32;
         
         // Debug output removed for performance
@@ -351,312 +357,9 @@ impl WgpuPixelRender {
         }
     }
 
-    /// Generate vertices from processed render cells
-    fn generate_vertices_from_render_cells(&self, render_cells: &[crate::render::adapter::RenderCell]) -> Vec<WgpuVertex> {
-        let mut vertices = Vec::new();
-        
-        // Constants for texture atlas layout
-        // symbols.png is 1024x1024 pixels with 128x128 symbol positions
-        // Each symbol occupies 8x8 pixels (1024÷128=8)
 
-        const PIXELS_PER_SYMBOL: f32 = 8.0; // Each symbol is 8x8 pixels
-        const TEXTURE_SIZE: f32 = 1024.0; // Total texture size in pixels
-        
 
-        
-        // Convert render cells to vertices
-        for render_cell in render_cells {
-            // Convert screen coordinates to normalized device coordinates
-            // Use actual canvas dimensions from base renderer
-            let window_width = self.base.canvas_width as f32;
-            let window_height = self.base.canvas_height as f32;
-            
-            // Compensate for the PIXEL_SYM_WIDTH/HEIGHT offset added in push_render_buffer
-            // OpenGL version subtracts this in the transformation matrix
-            let sym_width = 8.0; // PIXEL_SYM_WIDTH for 1024x1024 texture
-            let sym_height = 8.0; // PIXEL_SYM_HEIGHT for 1024x1024 texture
-            let adjusted_x = render_cell.x - sym_width;
-            let adjusted_y = render_cell.y - sym_height;
-            
-            let left = adjusted_x;
-            let right = adjusted_x + render_cell.w as f32;
-            let top = adjusted_y;
-            let bottom = adjusted_y + render_cell.h as f32;
-            
 
-            
-            // Apply rotation if angle is not zero
-            // Simplified approach: rotate the quad corners directly around the rotation center
-            let (left_ndc, right_ndc, top_ndc, bottom_ndc) = if render_cell.angle != 0.0 {
-                let cx = render_cell.cx as f32;
-                let cy = render_cell.cy as f32;
-                
-                                // Calculate the actual rotation center in screen coordinates
-                // The rotation center is relative to the adjusted render_cell position
-                let center_x = adjusted_x + cx;
-                let center_y = adjusted_y + cy;
-                
-                // Apply rotation to each corner around the center
-                // The key insight: render_cell.angle comes from push_render_buffer's complex formula
-                // But we need to understand what coordinate system it represents
-                // Let's try negating the angle to see if it fixes the direction
-                let angle = -render_cell.angle; // Try negating the angle
-                let cos_a = angle.cos();
-                let sin_a = angle.sin();
-                
-                let corners = [
-                    (left, bottom),   // bottom-left
-                    (right, bottom),  // bottom-right
-                    (right, top),     // top-right
-                    (left, top),      // top-left
-                ];
-                
-                let rotated_corners: Vec<(f32, f32)> = corners.iter().map(|(x, y)| {
-                    // Translate to origin (relative to rotation center)
-                    let dx = x - center_x;
-                    let dy = y - center_y;
-                    
-                    // Apply rotation
-                    let rotated_x = dx * cos_a - dy * sin_a;
-                    let rotated_y = dx * sin_a + dy * cos_a;
-                    
-                    // Translate back
-                    (rotated_x + center_x, rotated_y + center_y)
-                }).collect();
-                
-                // Convert to NDC
-                let ndc_corners: Vec<(f32, f32)> = rotated_corners.iter().map(|(x, y)| {
-                    let x_ndc = (x / window_width) * 2.0 - 1.0;
-                    let y_ndc = 1.0 - (y / window_height) * 2.0;
-                    (x_ndc, y_ndc)
-                }).collect();
-                
-                (ndc_corners[0], ndc_corners[1], ndc_corners[2], ndc_corners[3])
-            } else {
-                // No rotation - simple conversion to NDC
-                let left_ndc = (left / window_width) * 2.0 - 1.0;
-                let right_ndc = (right / window_width) * 2.0 - 1.0;
-                let top_ndc = 1.0 - (top / window_height) * 2.0;
-                let bottom_ndc = 1.0 - (bottom / window_height) * 2.0;
-                
-                ((left_ndc, bottom_ndc), (right_ndc, bottom_ndc), (right_ndc, top_ndc), (left_ndc, top_ndc))
-            };
-            
-            // Use foreground color from render cell
-            let color = [render_cell.fcolor.0, render_cell.fcolor.1, render_cell.fcolor.2, render_cell.fcolor.3];
-            
-            // Calculate texture coordinates from texsym field using OpenGL-compatible method
-            // texsym directly indexes into the 128x128 symbol grid
-            let texsym = render_cell.texsym;
-            
-            // Calculate symbol grid position (matches OpenGL make_symbols_frame logic)
-            let symbols_per_row = 128;
-            let symbol_x = (texsym % symbols_per_row) as f32;
-            let symbol_y = (texsym / symbols_per_row) as f32;
-            
-            // Convert to pixel coordinates (each symbol is 8x8 pixels in 1024x1024 texture)
-            let pixel_x = symbol_x * PIXELS_PER_SYMBOL;
-            let pixel_y = symbol_y * PIXELS_PER_SYMBOL;
-            
-            // Convert to normalized texture coordinates (0.0-1.0)
-            // Match OpenGL uv calculation: uv_left = x / tex_width
-            let tex_left = pixel_x / TEXTURE_SIZE;
-            let tex_right = (pixel_x + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
-            let tex_top = pixel_y / TEXTURE_SIZE;
-            let tex_bottom = (pixel_y + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
-            
-            // Debug output removed for performance
-            
-            // Create quad vertices (using triangle list, so need 6 vertices per quad)
-            // Use the calculated (potentially rotated) corner positions
-            // Corners are: [bottom-left, bottom-right, top-right, top-left]
-            vertices.push(WgpuVertex {
-                position: [left_ndc.0, left_ndc.1],  // bottom-left
-                tex_coords: [tex_left, tex_bottom],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [right_ndc.0, right_ndc.1],  // bottom-right
-                tex_coords: [tex_right, tex_bottom],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [top_ndc.0, top_ndc.1],  // top-right
-                tex_coords: [tex_right, tex_top],
-                color,
-            });
-            
-            // Second triangle
-            vertices.push(WgpuVertex {
-                position: [left_ndc.0, left_ndc.1],  // bottom-left
-                tex_coords: [tex_left, tex_bottom],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [top_ndc.0, top_ndc.1],  // top-right
-                tex_coords: [tex_right, tex_top],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [bottom_ndc.0, bottom_ndc.1],  // top-left
-                tex_coords: [tex_left, tex_top],
-                color,
-            });
-        }
-        
-        vertices
-    }
-
-    /// Generate vertices from buffer content
-    fn generate_vertices_from_buffer(&self, buffer: &crate::render::buffer::Buffer) -> Vec<WgpuVertex> {
-        // Get buffer dimensions
-        let buffer_width = buffer.area.width as f32;
-        let buffer_height = buffer.area.height as f32;
-        
-        let mut vertices = Vec::new();
-        let mut debug_skipped = 0;
-        let mut debug_rendered = 0;
-        
-        // Generate quads for each cell in the buffer
-        for y in 0..buffer.area.height {
-            for x in 0..buffer.area.width {
-                let cell = buffer.get(x, y);
-                
-                // Get cell info: (symidx, texidx, fg_color, bg_color)
-                let cell_info = cell.get_cell_info();
-                let symidx = cell_info.0;
-                let fg_color = cell_info.2;
-                let bg_color = cell_info.3;
-                
-                // Debug output removed for performance
-                
-                // Convert buffer coordinates to normalized device coordinates
-                // NDC: (-1,-1) = bottom-left, (1,1) = top-right
-                // Buffer: (0,0) = top-left, (width,height) = bottom-right
-                let left = (x as f32 / buffer_width) * 2.0 - 1.0;
-                let right = ((x + 1) as f32 / buffer_width) * 2.0 - 1.0;
-                // Flip Y axis: buffer y=0 should map to NDC y=1 (top)
-                let top = 1.0 - (y as f32 / buffer_height) * 2.0;
-                let bottom = 1.0 - ((y + 1) as f32 / buffer_height) * 2.0;
-                
-                // Only render cells with actual content - skip empty cells
-                let render_color = if cell.symbol != " " && cell.symbol != "" {
-                    // Non-empty symbol: use foreground color
-                    debug_rendered += 1;
-                    fg_color
-                } else if bg_color != crate::render::style::Color::Reset {
-                    // Empty symbol but has background: use background color
-                    debug_rendered += 1;
-                    bg_color
-                } else {
-                    // Skip empty cells with Reset background - no fallback gray
-                    debug_skipped += 1;
-                    continue;
-                };
-                
-                // Convert color to RGBA float array
-                let (r, g, b, a) = render_color.get_rgba();
-                if a == 0 {
-                    debug_skipped += 1;
-                    continue; // Skip fully transparent cells
-                }
-                let color = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0];
-                
-                // Create quad vertices (using triangle list, so need 6 vertices per quad)
-                vertices.push(WgpuVertex {
-                    position: [left, bottom],
-                    tex_coords: [0.0, 1.0],
-                    color,
-                });
-                vertices.push(WgpuVertex {
-                    position: [right, bottom],
-                    tex_coords: [1.0, 1.0],
-                    color,
-                });
-                vertices.push(WgpuVertex {
-                    position: [right, top],
-                    tex_coords: [1.0, 0.0],
-                    color,
-                });
-                
-                // Second triangle
-                vertices.push(WgpuVertex {
-                    position: [left, bottom],
-                    tex_coords: [0.0, 1.0],
-                    color,
-                });
-                vertices.push(WgpuVertex {
-                    position: [right, top],
-                    tex_coords: [1.0, 0.0],
-                    color,
-                });
-                vertices.push(WgpuVertex {
-                    position: [left, top],
-                    tex_coords: [0.0, 0.0],
-                    color,
-                });
-            }
-        }
-        
-        // Debug buffer statistics (only first frame)
-        static mut FIRST_STATS: bool = true;
-        unsafe {
-            if FIRST_STATS {
-                println!("WGPU Debug: Buffer {}x{}, rendered {} cells, skipped {} cells", 
-                         buffer_width, buffer_height, debug_rendered, debug_skipped);
-                FIRST_STATS = false;
-            }
-        }
-        
-        // If no vertices generated, show a simple test pattern to confirm WGPU works
-        if vertices.is_empty() {
-            println!("WGPU Debug: No game content found, showing test pattern");
-            
-            // Create a simple colored square in the center of screen
-            let size = 0.2; // 20% of screen
-            let left = -size;
-            let right = size;
-            let top = size;
-            let bottom = -size;
-            let color = [1.0, 0.0, 0.0, 1.0]; // Red
-            
-            // Create quad vertices
-            vertices.push(WgpuVertex {
-                position: [left, bottom],
-                tex_coords: [0.0, 1.0],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [right, bottom],
-                tex_coords: [1.0, 1.0],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [right, top],
-                tex_coords: [1.0, 0.0],
-                color,
-            });
-            
-            // Second triangle
-            vertices.push(WgpuVertex {
-                position: [left, bottom],
-                tex_coords: [0.0, 1.0],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [right, top],
-                tex_coords: [1.0, 0.0],
-                color,
-            });
-            vertices.push(WgpuVertex {
-                position: [left, top],
-                tex_coords: [0.0, 0.0],
-                color,
-            });
-        }
-        
-        vertices
-    }
 }
 
 impl WgpuRender for WgpuPixelRender {
@@ -670,70 +373,15 @@ impl WgpuRender for WgpuPixelRender {
     }
 
     fn create_shader(&mut self, device: &wgpu::Device) {
-        // Create shader modules from custom WGSL source (non-instanced version)
-        let vertex_shader_source = r#"
-struct VertexInput {
-    @location(0) position: vec2<f32>,
-    @location(1) tex_coords: vec2<f32>,
-    @location(2) color: vec4<f32>,
-}
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2<f32>,
-    @location(1) color: vec4<f32>,
-}
-
-struct Uniforms {
-    transform: mat4x4<f32>,
-}
-
-@group(0) @binding(0)
-var<uniform> uniforms: Uniforms;
-
-@vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
-    var output: VertexOutput;
-    
-    // Apply uniform transformation
-    output.clip_position = uniforms.transform * vec4<f32>(input.position, 0.0, 1.0);
-    output.tex_coords = input.tex_coords;
-    output.color = input.color;
-    
-    return output;
-}
-"#;
-
-        let fragment_shader_source = r#"
-@group(0) @binding(1)
-var t_symbols: texture_2d<f32>;
-@group(0) @binding(2)
-var s_symbols: sampler;
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2<f32>,
-    @location(1) color: vec4<f32>,
-}
-
-@fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let tex_color = textureSample(t_symbols, s_symbols, input.tex_coords);
-    if (tex_color.a < 0.1) {
-        discard;
-    }
-    return tex_color * input.color;
-}
-"#;
-
+        // Create shader modules from shader_source module
         let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Vertex Shader"),
-            source: wgpu::ShaderSource::Wgsl(vertex_shader_source.into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source::PIXEL_UNIFORM_VERTEX_SHADER.into()),
         });
 
         let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Fragment Shader"), 
-            source: wgpu::ShaderSource::Wgsl(fragment_shader_source.into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source::PIXEL_TEXTURE_FRAGMENT_SHADER.into()),
         });
 
         // Create bind group layout for texture and sampler
