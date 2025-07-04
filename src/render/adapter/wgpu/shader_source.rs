@@ -127,6 +127,7 @@ struct VertexOutput {
 
 struct Uniforms {
     transform: mat4x4<f32>,
+    color_filter: vec4<f32>,
 }
 
 @group(0) @binding(0)
@@ -139,6 +140,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     // Apply uniform transformation
     output.clip_position = uniforms.transform * vec4<f32>(input.position, 0.0, 1.0);
     output.tex_coords = input.tex_coords;
+    // 暂时去掉colorFilter，直接使用原始颜色
     output.color = input.color;
     
     return output;
@@ -161,9 +163,11 @@ struct VertexOutput {
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let tex_color = textureSample(t_symbols, s_symbols, input.tex_coords);
+    
     if (tex_color.a < 0.1) {
         discard;
     }
+    
     return tex_color * input.color;
 }
 "#; 

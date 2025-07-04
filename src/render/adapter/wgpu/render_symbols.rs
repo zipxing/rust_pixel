@@ -38,14 +38,12 @@ impl WgpuSymbolRenderer {
         const PIXELS_PER_SYMBOL: f32 = 8.0; // Each symbol is 8x8 pixels
         const TEXTURE_SIZE: f32 = 1024.0; // Total texture size in pixels
         
+        // Canvas dimensions for NDC conversion
+        let window_width = self.canvas_width;
+        let window_height = self.canvas_height;
+        
         // Convert render cells to vertices
         for render_cell in render_cells {
-            // Convert screen coordinates to normalized device coordinates
-            let window_width = self.canvas_width;
-            let window_height = self.canvas_height;
-            
-            // Compensate for the PIXEL_SYM_WIDTH/HEIGHT offset added in push_render_buffer
-            // OpenGL version subtracts this in the transformation matrix
             let sym_width = 8.0; // PIXEL_SYM_WIDTH for 1024x1024 texture
             let sym_height = 8.0; // PIXEL_SYM_HEIGHT for 1024x1024 texture
             let adjusted_x = render_cell.x - sym_width;

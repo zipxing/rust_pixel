@@ -882,7 +882,7 @@ impl WinitAdapter {
                 .formats
                 .iter()
                 .copied()
-                .find(|f| f.is_srgb())
+                .find(|f| !f.is_srgb()) // 优先选择线性格式，匹配GL模式
                 .unwrap_or(surface_caps.formats[0]);
 
             let surface_config = wgpu::SurfaceConfiguration {

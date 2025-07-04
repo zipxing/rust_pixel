@@ -64,19 +64,18 @@ impl WgpuVertex {
 unsafe impl bytemuck::Pod for WgpuVertex {}
 unsafe impl bytemuck::Zeroable for WgpuVertex {}
 
-/// Uniform data structure for shader transformations
+/// WGPU uniform data structure
 /// 
-/// Contains transformation matrix for converting screen coordinates
-/// to normalized device coordinates in shaders.
+/// This structure defines the uniform buffer layout that matches the 
+/// WGSL shader uniform structure.
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct WgpuUniforms {
     /// 4x4 transformation matrix (column-major order)
     pub transform: [[f32; 4]; 4],
+    /// Color filter like GL mode (r, g, b, a) - 暂时保留结构但不使用
+    pub color_filter: [f32; 4],
 }
-
-unsafe impl bytemuck::Pod for WgpuUniforms {}
-unsafe impl bytemuck::Zeroable for WgpuUniforms {}
 
 /// Main pixel renderer for WGPU
 /// 
@@ -146,7 +145,7 @@ impl WgpuPixelRender {
         
         println!("WGPU Debug: Loaded symbol texture {}x{} from {}", texture_width, texture_height, texture_path);
         
-        // Create WGPU texture
+        // Create WGPU texture (use linear format to exactly match GL mode)
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Symbol Texture"),
             size: wgpu::Extent3d {
@@ -157,7 +156,7 @@ impl WgpuPixelRender {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba8Unorm, // Linear format like GL mode
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -317,6 +316,7 @@ impl WgpuPixelRender {
                     [0.0, 0.0, 1.0, 0.0],
                     [0.0, 0.0, 0.0, 1.0],
                 ],
+                color_filter: [1.0, 1.0, 1.0, 1.0],
             };
             queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
@@ -352,6 +352,7 @@ impl WgpuPixelRender {
                     [0.0, 0.0, 1.0, 0.0],
                     [0.0, 0.0, 0.0, 1.0],
                 ],
+                color_filter: [1.0, 1.0, 1.0, 1.0],
             };
             queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
@@ -364,8 +365,8 @@ impl WgpuPixelRender {
 
 impl WgpuRender for WgpuPixelRender {
     fn new(canvas_width: u32, canvas_height: u32) -> Self {
-        // Use a default format, will be set properly in new_with_format
-        Self::new_with_format(canvas_width, canvas_height, wgpu::TextureFormat::Bgra8UnormSrgb)
+        // Use linear surface format to exactly match GL mode (no gamma correction)
+        Self::new_with_format(canvas_width, canvas_height, wgpu::TextureFormat::Bgra8Unorm)
     }
 
     fn get_base(&mut self) -> &mut WgpuRenderBase {
@@ -441,7 +442,18 @@ impl WgpuRender for WgpuPixelRender {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: self.surface_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -523,6 +535,7 @@ impl WgpuRender for WgpuPixelRender {
                     [0.0, 0.0, 1.0, 0.0],
                     [0.0, 0.0, 0.0, 1.0],
                 ],
+                color_filter: [1.0, 1.0, 1.0, 1.0],
             };
             queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
