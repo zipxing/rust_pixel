@@ -2,18 +2,17 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! # WGPU Pixel Renderer Module
-//! 
+//!
 //! Main pixel rendering implementation for WGPU pipeline.
 //! Handles texture-based character and symbol rendering with
 //! instanced drawing for high performance.
 
-use super::*;
 use super::render_symbols::WgpuSymbolRenderer;
 use super::shader_source;
-
+use super::*;
 
 /// Vertex data structure for WGPU rendering
-/// 
+///
 /// Represents a single vertex with position, texture coordinates, and color.
 /// Uses `#[repr(C)]` to ensure consistent memory layout for GPU upload.
 #[repr(C)]
@@ -29,7 +28,7 @@ pub struct WgpuVertex {
 
 impl WgpuVertex {
     /// Vertex buffer layout descriptor for WGPU
-    /// 
+    ///
     /// Defines how vertex data is structured in GPU memory,
     /// including attribute locations, formats, and offsets.
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -65,8 +64,8 @@ unsafe impl bytemuck::Pod for WgpuVertex {}
 unsafe impl bytemuck::Zeroable for WgpuVertex {}
 
 /// WGPU uniform data structure
-/// 
-/// This structure defines the uniform buffer layout that matches the 
+///
+/// This structure defines the uniform buffer layout that matches the
 /// WGSL shader uniform structure.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -78,50 +77,54 @@ pub struct WgpuUniforms {
 }
 
 /// Main pixel renderer for WGPU
-/// 
+///
 /// Manages the complete pixel rendering pipeline including shaders,
 /// textures, buffers, and render state for character-based graphics.
 pub struct WgpuPixelRender {
     /// Base renderer data (shared resources)
     base: WgpuRenderBase,
-    
+
     /// Symbol renderer for vertex generation
     symbol_renderer: WgpuSymbolRenderer,
-    
+
     /// Surface format for render target compatibility
     surface_format: wgpu::TextureFormat,
-    
+
     /// Current vertex count for drawing
     vertex_count: u32,
-    
+
     /// Vertex buffer for quad geometry
     vertex_buffer: Option<wgpu::Buffer>,
-    
+
     /// Index buffer for quad indices
     index_buffer: Option<wgpu::Buffer>,
-    
+
     /// Uniform buffer for transformation matrices
     uniform_buffer: Option<wgpu::Buffer>,
-    
+
     /// Main texture for symbols and characters
     symbol_texture: Option<texture::WgpuTexture>,
-    
+
     /// Bind group layout for shader resources
     bind_group_layout: Option<wgpu::BindGroupLayout>,
-    
+
     /// Bind group for current frame resources
     bind_group: Option<wgpu::BindGroup>,
 }
 
 impl WgpuPixelRender {
     /// Create new WgpuPixelRender with specific surface format
-    pub fn new_with_format(canvas_width: u32, canvas_height: u32, surface_format: wgpu::TextureFormat) -> Self {
+    pub fn new_with_format(
+        canvas_width: u32,
+        canvas_height: u32,
+        surface_format: wgpu::TextureFormat,
+    ) -> Self {
         Self {
             base: WgpuRenderBase::new(0, canvas_width, canvas_height),
             symbol_renderer: WgpuSymbolRenderer::new(canvas_width, canvas_height),
             surface_format,
             vertex_count: 0,
-            vertex_buffer: None,  
+            vertex_buffer: None,
             index_buffer: None,
             uniform_buffer: None,
             symbol_texture: None,
@@ -129,22 +132,30 @@ impl WgpuPixelRender {
             bind_group: None,
         }
     }
-    
+
     /// Load the symbol texture from the specified path
-    pub fn load_symbol_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, texture_path: &str) -> Result<(), String> {
+    pub fn load_symbol_texture(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_path: &str,
+    ) -> Result<(), String> {
         // Load the texture file
         let texture_bytes = std::fs::read(texture_path)
             .map_err(|e| format!("Failed to read texture file {}: {}", texture_path, e))?;
-        
+
         let texture_image = image::load_from_memory(&texture_bytes)
             .map_err(|e| format!("Failed to load texture image: {}", e))?
             .to_rgba8();
-        
+
         let texture_width = texture_image.width();
         let texture_height = texture_image.height();
-        
-        println!("WGPU Debug: Loaded symbol texture {}x{} from {}", texture_width, texture_height, texture_path);
-        
+
+        println!(
+            "WGPU Debug: Loaded symbol texture {}x{} from {}",
+            texture_width, texture_height, texture_path
+        );
+
         // Create WGPU texture (use linear format to exactly match GL mode)
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Symbol Texture"),
@@ -160,7 +171,7 @@ impl WgpuPixelRender {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        
+
         // Write texture data
         queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -181,10 +192,10 @@ impl WgpuPixelRender {
                 depth_or_array_layers: 1,
             },
         );
-        
+
         // Create texture view
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         // Create sampler
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -200,7 +211,7 @@ impl WgpuPixelRender {
             anisotropy_clamp: 1,
             label: Some("Symbol Sampler"),
         });
-        
+
         // Store texture in WgpuTexture wrapper
         self.symbol_texture = Some(texture::WgpuTexture {
             texture,
@@ -209,15 +220,17 @@ impl WgpuPixelRender {
             width: texture_width,
             height: texture_height,
         });
-        
+
         Ok(())
     }
-    
+
     /// Create bind group for texture and uniform buffer
     pub fn create_bind_group(&mut self, device: &wgpu::Device) {
-        if let (Some(bind_group_layout), Some(symbol_texture), Some(uniform_buffer)) = 
-            (&self.bind_group_layout, &self.symbol_texture, &self.uniform_buffer) {
-            
+        if let (Some(bind_group_layout), Some(symbol_texture), Some(uniform_buffer)) = (
+            &self.bind_group_layout,
+            &self.symbol_texture,
+            &self.uniform_buffer,
+        ) {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: bind_group_layout,
                 entries: &[
@@ -231,72 +244,90 @@ impl WgpuPixelRender {
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::Sampler(symbol_texture.sampler.as_ref().unwrap()),
+                        resource: wgpu::BindingResource::Sampler(
+                            symbol_texture.sampler.as_ref().unwrap(),
+                        ),
                     },
                 ],
                 label: Some("Symbol Bind Group"),
             });
-            
+
             self.bind_group = Some(bind_group);
         }
     }
 
     /// Vertex data for a fullscreen quad
-    /// 
+    ///
     /// Two triangles forming a rectangle covering the entire screen.
     /// Used as base geometry for all symbol rendering.
     const VERTICES: &'static [WgpuVertex] = &[
         // Triangle 1
         WgpuVertex {
-            position: [-1.0, -1.0],  // Bottom left
+            position: [-1.0, -1.0], // Bottom left
             tex_coords: [0.0, 1.0],
-            color: [1.0, 0.0, 0.0, 1.0],  // Red
+            color: [1.0, 0.0, 0.0, 1.0], // Red
         },
         WgpuVertex {
-            position: [1.0, -1.0],   // Bottom right
+            position: [1.0, -1.0], // Bottom right
             tex_coords: [1.0, 1.0],
-            color: [0.0, 1.0, 0.0, 1.0],  // Green
+            color: [0.0, 1.0, 0.0, 1.0], // Green
         },
         WgpuVertex {
-            position: [1.0, 1.0],    // Top right
+            position: [1.0, 1.0], // Top right
             tex_coords: [1.0, 0.0],
-            color: [0.0, 0.0, 1.0, 1.0],  // Blue
+            color: [0.0, 0.0, 1.0, 1.0], // Blue
         },
         WgpuVertex {
-            position: [-1.0, 1.0],   // Top left
+            position: [-1.0, 1.0], // Top left
             tex_coords: [0.0, 0.0],
-            color: [1.0, 1.0, 0.0, 1.0],  // Yellow
+            color: [1.0, 1.0, 0.0, 1.0], // Yellow
         },
     ];
 
     /// Index data for quad triangulation
-    /// 
+    ///
     /// Two triangles: (0,1,2) and (2,3,0) forming a rectangle.
     const INDICES: &'static [u16] = &[
-        0, 1, 2,  // First triangle
-        2, 3, 0,  // Second triangle
+        0, 1, 2, // First triangle
+        2, 3, 0, // Second triangle
     ];
 
-        /// Prepare drawing with actual game buffer content
-    pub fn prepare_draw_with_buffer(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, buffer: &crate::render::buffer::Buffer) {
+    /// Prepare drawing with actual game buffer content
+    pub fn prepare_draw_with_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        buffer: &crate::render::buffer::Buffer,
+    ) {
         // For now, generate vertices based on buffer content
         let vertices = self.symbol_renderer.generate_vertices_from_buffer(buffer);
         self.vertex_count = vertices.len() as u32;
-        
+
         // Debug: Print rendering information (only first frame)
         static mut FIRST_FRAME: bool = true;
         unsafe {
             if FIRST_FRAME && vertices.len() > 0 {
-                println!("WGPU Debug: Generated {} vertices, first 3 colors:", vertices.len());
+                println!(
+                    "WGPU Debug: Generated {} vertices, first 3 colors:",
+                    vertices.len()
+                );
                 for i in 0..(3.min(vertices.len())) {
                     let v = &vertices[i];
-                    println!("  Vertex {}: pos=[{:.2}, {:.2}], color=[{:.2}, {:.2}, {:.2}, {:.2}]",
-                             i, v.position[0], v.position[1], v.color[0], v.color[1], v.color[2], v.color[3]);
+                    println!(
+                        "  Vertex {}: pos=[{:.2}, {:.2}], color=[{:.2}, {:.2}, {:.2}, {:.2}]",
+                        i,
+                        v.position[0],
+                        v.position[1],
+                        v.color[0],
+                        v.color[1],
+                        v.color[2],
+                        v.color[3]
+                    );
                 }
                 FIRST_FRAME = false;
             }
         }
-        
+
         // Upload generated vertex data
         if let Some(vertex_buffer) = &self.vertex_buffer {
             queue.write_buffer(vertex_buffer, 0, bytemuck::cast_slice(&vertices));
@@ -306,7 +337,7 @@ impl WgpuPixelRender {
         if let Some(index_buffer) = &self.index_buffer {
             queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(Self::INDICES));
         }
-        
+
         // Upload uniform data (identity matrix for now)
         if let Some(uniform_buffer) = &self.uniform_buffer {
             let uniforms = WgpuUniforms {
@@ -323,16 +354,23 @@ impl WgpuPixelRender {
     }
 
     /// Prepare drawing with processed render cells (preferred method)
-    /// 
-    /// This method receives RenderCell data that has already been processed 
-    /// through the complete game rendering pipeline, including sprites, 
+    ///
+    /// This method receives RenderCell data that has already been processed
+    /// through the complete game rendering pipeline, including sprites,
     /// borders, logo, and other game elements.
-    pub fn prepare_draw_with_render_cells(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, render_cells: &[crate::render::adapter::RenderCell]) {
-        let vertices = self.symbol_renderer.generate_vertices_from_render_cells(render_cells);
+    pub fn prepare_draw_with_render_cells(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        render_cells: &[crate::render::adapter::RenderCell],
+    ) {
+        let vertices = self
+            .symbol_renderer
+            .generate_vertices_from_render_cells(render_cells);
         self.vertex_count = vertices.len() as u32;
-        
+
         // Debug output removed for performance
-        
+
         // Upload generated vertex data
         if let Some(vertex_buffer) = &self.vertex_buffer {
             queue.write_buffer(vertex_buffer, 0, bytemuck::cast_slice(&vertices));
@@ -342,7 +380,7 @@ impl WgpuPixelRender {
         if let Some(index_buffer) = &self.index_buffer {
             queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(Self::INDICES));
         }
-        
+
         // Upload uniform data (identity matrix for now)
         if let Some(uniform_buffer) = &self.uniform_buffer {
             let uniforms = WgpuUniforms {
@@ -357,10 +395,6 @@ impl WgpuPixelRender {
             queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
     }
-
-
-
-
 }
 
 impl WgpuRender for WgpuPixelRender {
@@ -381,7 +415,7 @@ impl WgpuRender for WgpuPixelRender {
         });
 
         let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Symbol Fragment Shader"), 
+            label: Some("Symbol Fragment Shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source::PIXEL_TEXTURE_FRAGMENT_SHADER.into()),
         });
 
@@ -422,11 +456,12 @@ impl WgpuRender for WgpuPixelRender {
         });
 
         // Create render pipeline layout with bind group
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Symbol Render Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Symbol Render Pipeline Layout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Symbol Render Pipeline"),
@@ -525,7 +560,7 @@ impl WgpuRender for WgpuPixelRender {
         if let Some(index_buffer) = &self.index_buffer {
             queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(Self::INDICES));
         }
-        
+
         // Upload uniform data (identity matrix for now)
         if let Some(uniform_buffer) = &self.uniform_buffer {
             let uniforms = WgpuUniforms {
@@ -541,8 +576,6 @@ impl WgpuRender for WgpuPixelRender {
         }
     }
 
-
-
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         // Begin render pass with black background for final version
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -552,7 +585,7 @@ impl WgpuRender for WgpuPixelRender {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.0,  // Black background for game
+                        r: 0.0, // Black background for game
                         g: 0.0,
                         b: 0.0,
                         a: 1.0,
@@ -589,4 +622,3 @@ impl WgpuRender for WgpuPixelRender {
         // For now, no cleanup required
     }
 }
-

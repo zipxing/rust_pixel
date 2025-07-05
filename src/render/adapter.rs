@@ -2,21 +2,21 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! # Render Adapter Module
-//! 
+//!
 //! This module defines the render adapter architecture for RustPixel, providing unified
 //! rendering interfaces across different platforms and rendering backends.
-//! 
+//!
 //! ## Supported Rendering Backends
 //! - **SDL**: Desktop platform based on SDL2 library
 //! - **Winit**: Cross-platform window management with OpenGL
-//! - **Web**: WebGL-based browser rendering 
+//! - **Web**: WebGL-based browser rendering
 //! - **Crossterm**: Terminal text-mode rendering
 //!
 //! ## Architecture Overview
-//! 
+//!
 //! Based on the principle.md design document, RustPixel uses a trait-based adapter
 //! pattern to abstract different rendering backends:
-//! 
+//!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                    Game Loop (Frame-based)                  │
@@ -42,9 +42,9 @@
 //! ```
 //!
 //! ## Rendering Pipeline
-//! 
+//!
 //! The rendering system supports two modes based on principle.md:
-//! 
+//!
 //! ### Text Mode Rendering
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
@@ -74,11 +74,11 @@
 //! │              └─────────────────────┘                        │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
-//! 
+//!
 //! ### Graphics Mode Rendering
-//! 
+//!
 //! Graphics mode uses a more complex two-pass rendering pipeline:
-//! 
+//!
 //! #### Pass 1: Buffer to RenderCell Conversion
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
@@ -97,7 +97,7 @@
 //! │              └─────────────────────┘                        │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
-//! 
+//!
 //! #### Pass 2: OpenGL Rendering Pipeline
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
@@ -141,7 +141,12 @@ use crate::{
     render::{buffer::Buffer, sprite::Sprites},
     util::{Rand, Rect},
 };
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 use crate::{
     render::style::Color,
     util::{ARect, PointF32, PointI32, PointU16},
@@ -187,11 +192,11 @@ pub mod winit;
 pub mod cross;
 
 /// Path to the symbols texture file
-/// 
+///
 /// The symbols texture contains 8x8 blocks where each block contains 16x16 symbols,
 /// totaling 128 × 128 symbols. This texture serves as a character atlas for rendering
 /// text and symbols in graphics mode.
-/// 
+///
 /// Layout:
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -209,11 +214,16 @@ pub mod cross;
 /// │  └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘         │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
 /// Calculate symbol width based on texture dimensions
-/// 
+///
 /// Symbol size is calculated based on the size of the texture.
 /// For a 128×128 symbol grid, each symbol's width is texture_width / 128.
 pub fn init_sym_width(width: u32) -> f32 {
@@ -221,7 +231,7 @@ pub fn init_sym_width(width: u32) -> f32 {
 }
 
 /// Calculate symbol height based on texture dimensions
-/// 
+///
 /// Symbol size is calculated based on the size of the texture.
 /// For a 128×128 symbol grid, each symbol's height is texture_height / 128.
 pub fn init_sym_height(height: u32) -> f32 {
@@ -229,37 +239,37 @@ pub fn init_sym_height(height: u32) -> f32 {
 }
 
 /// Global symbol width in pixels (initialized once)
-/// 
+///
 /// This value is calculated once during initialization and cached for performance.
 /// Used throughout the rendering pipeline for texture coordinate calculations.
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
 /// Global symbol height in pixels (initialized once)
-/// 
+///
 /// This value is calculated once during initialization and cached for performance.
 /// Used throughout the rendering pipeline for texture coordinate calculations.
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
 /// RustPixel Logo width in characters
-/// 
+///
 /// This defines the width of the startup logo animation in character units.
 /// Used during the initial startup sequence for graphics mode rendering.
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 
 /// RustPixel Logo height in characters
-/// 
+///
 /// This defines the height of the startup logo animation in character units.
 /// Used during the initial startup sequence for graphics mode rendering.
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
 
 /// RustPixel Logo data array
-/// 
+///
 /// Contains the logo image data as a flattened array of bytes. Each character
 /// position is represented by 3 bytes: [symbol_id, texture_id, flags].
 /// The array size is PIXEL_LOGO_WIDTH × PIXEL_LOGO_HEIGHT × 3 bytes.
-/// 
+///
 /// Logo display process:
 /// 1. During startup (stage <= LOGO_FRAME), this data is rendered
 /// 2. Each triplet [symbol, texture, flags] defines a character
@@ -311,16 +321,16 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 ];
 
 /// Pre-render unit structure for OpenGL rendering
-/// 
+///
 /// RenderCell serves as an intermediate data format between the game buffer
 /// and the GPU rendering pipeline. This design provides several advantages:
-/// 
+///
 /// ## Design Benefits
 /// - **GPU-Optimized**: Data is pre-formatted for efficient GPU upload
 /// - **Batch Processing**: Multiple cells can be rendered in a single draw call
 /// - **Flexible Rendering**: Supports rotation, scaling, and complex effects
 /// - **Memory Efficient**: Compact representation for large scenes
-/// 
+///
 /// ## Rendering Pipeline Integration
 /// ```text
 /// ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -328,63 +338,63 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 /// │(Characters) │    │   Array     │    │  Rendering  │
 /// └─────────────┘    └─────────────┘    └─────────────┘
 /// ```
-/// 
+///
 /// Each RenderCell contains all information needed to render one character
 /// or sprite, including colors, position, rotation, and texture coordinates.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
     /// Foreground color as RGBA components (0.0-1.0 range)
-    /// 
+    ///
     /// Used for character/symbol rendering. The alpha component controls
     /// transparency and blending operations.
     pub fcolor: (f32, f32, f32, f32),
-    
+
     /// Optional background color as RGBA components
-    /// 
+    ///
     /// When present, renders a colored background behind the symbol.
     /// If None, the background is transparent.
     pub bcolor: Option<(f32, f32, f32, f32)>,
-    
+
     /// Texture and symbol index packed into a single value
-    /// 
+    ///
     /// - High bits: texture index (which texture to use)
     /// - Low bits: symbol index (which character/symbol in the texture)
     pub texsym: usize,
-    
+
     /// X position in screen coordinates
     pub x: f32,
-    
+
     /// Y position in screen coordinates  
     pub y: f32,
-    
+
     /// Width in pixels
     pub w: u32,
-    
+
     /// Height in pixels
     pub h: u32,
-    
+
     /// Rotation angle in radians
-    /// 
+    ///
     /// Used for sprite rotation effects. 0.0 means no rotation.
     pub angle: f32,
-    
+
     /// Center X coordinate for rotation
-    /// 
+    ///
     /// Defines the pivot point around which rotation occurs.
     pub cx: f32,
-    
+
     /// Center Y coordinate for rotation
-    /// 
+    ///
     /// Defines the pivot point around which rotation occurs.
     pub cy: f32,
 }
 
 /// Adapter base data structure containing shared information and OpenGL resources
-/// 
+///
 /// AdapterBase holds common data and OpenGL resources shared across all graphics
 /// mode adapters (SDL, Winit, Web). This design follows the principle of separation
 /// of concerns while avoiding code duplication.
-/// 
+///
 /// ## Architecture Role
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -403,64 +413,64 @@ pub struct RenderCell {
 pub struct AdapterBase {
     /// Game name identifier
     pub game_name: String,
-    
+
     /// Project root path for asset loading
     pub project_path: String,
-    
+
     /// Window title displayed in graphics mode
     pub title: String,
-    
+
     /// Game area width in character cells
     pub cell_w: u16,
-    
+
     /// Game area height in character cells
     pub cell_h: u16,
-    
+
     /// Physical window width in pixels
     pub pixel_w: u32,
-    
+
     /// Physical window height in pixels
     pub pixel_h: u32,
-    
+
     /// Horizontal scaling ratio for different DPI displays
-    /// 
+    ///
     /// Used to handle high-DPI displays and maintain consistent rendering
     /// across different screen resolutions.
     pub ratio_x: f32,
-    
+
     /// Vertical scaling ratio for different DPI displays
-    /// 
+    ///
     /// Used to handle high-DPI displays and maintain consistent rendering
     /// across different screen resolutions.
     pub ratio_y: f32,
-    
+
     /// Random number generator for effects and animations
     pub rd: Rand,
-    
+
     /// Render flag controlling immediate vs buffered rendering
-    /// 
+    ///
     /// - true: Direct rendering to screen (normal mode)
     /// - false: Buffered rendering for external access (used for FFI/WASM)
     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub rflag: bool,
-    
+
     /// Render buffer storing RenderCell array for buffered mode
-    /// 
+    ///
     /// When rflag is false, rendered data is stored here instead of
     /// being directly drawn to screen. Used for external access to
     /// rendering data (e.g., Python FFI, WASM exports).
     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub rbuf: Vec<RenderCell>,
-    
+
     /// OpenGL context handle
-    /// 
+    ///
     /// Provides access to OpenGL functions for rendering operations.
     /// Uses the glow crate for cross-platform OpenGL abstraction.
     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
     pub gl: Option<glow::Context>,
-    
+
     /// OpenGL pixel renderer instance
-    /// 
+    ///
     /// High-level OpenGL rendering interface that manages shaders,
     /// textures, and render targets for the pixel-based rendering pipeline.
     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
@@ -493,23 +503,23 @@ impl AdapterBase {
 }
 
 /// Unified rendering interface definition
-/// 
+///
 /// The Adapter trait defines a common interface for all rendering backends in RustPixel.
 /// This design follows the adapter pattern, allowing different rendering technologies
 /// to be used interchangeably while providing a consistent API.
-/// 
+///
 /// ## Supported Backends
 /// - **SDL Adapter**: Desktop rendering with SDL2
 /// - **Winit Adapter**: Cross-platform window management with OpenGL  
 /// - **Web Adapter**: Browser rendering with WebGL
 /// - **Crossterm Adapter**: Terminal text mode rendering
-/// 
+///
 /// ## Interface Design Principles
 /// 1. **Abstraction**: Hide backend-specific implementation details
 /// 2. **Consistency**: Same API across all platforms
 /// 3. **Performance**: Minimal overhead in the abstraction layer
 /// 4. **Flexibility**: Support for different rendering modes and features
-/// 
+///
 /// ## Typical Usage Flow
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -525,11 +535,11 @@ impl AdapterBase {
 /// ```
 pub trait Adapter {
     /// Initialize the rendering adapter
-    /// 
+    ///
     /// Sets up the rendering backend with specified parameters. This includes
     /// creating windows, initializing OpenGL contexts, loading textures, and
     /// preparing all necessary resources for rendering.
-    /// 
+    ///
     /// # Parameters
     /// - `w`: Game area width in character cells
     /// - `h`: Game area height in character cells  
@@ -537,50 +547,50 @@ pub trait Adapter {
     /// - `ry`: Vertical scaling ratio for high-DPI displays
     /// - `s`: Window title string
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, s: String);
-    
+
     /// Reset the adapter to initial state
-    /// 
+    ///
     /// Clears any accumulated state while keeping the rendering context alive.
     /// Used for restarting games or switching between different game modes.
     fn reset(&mut self);
-    
+
     /// Get mutable reference to the base adapter data
-    /// 
+    ///
     /// Provides access to shared data structures like OpenGL context,
     /// render buffers, and common settings. Used internally by adapter
     /// implementations.
     fn get_base(&mut self) -> &mut AdapterBase;
-    
+
     /// Poll for input events with timeout
-    /// 
+    ///
     /// Checks for user input events (keyboard, mouse, window events) and
     /// fills the provided event vector. Returns true if events were received.
-    /// 
+    ///
     /// # Parameters
     /// - `timeout`: Maximum time to wait for events
     /// - `ev`: Event vector to fill with received events
-    /// 
+    ///
     /// # Returns
     /// true if events were received, false if timeout occurred
     fn poll_event(&mut self, timeout: Duration, ev: &mut Vec<Event>) -> bool;
 
     /// Main rendering function - draws complete frame to screen
-    /// 
+    ///
     /// This is the core rendering method that processes the game buffer and
     /// sprites, then renders them to the screen. The implementation varies
     /// by backend but follows the same general pipeline:
-    /// 
+    ///
     /// 1. Convert game data to render format (RenderCell for graphics mode)
     /// 2. Process sprites and effects  
     /// 3. Apply any transitions or post-processing
     /// 4. Present the final image to screen
-    /// 
+    ///
     /// # Parameters
     /// - `current_buffer`: Current frame's character buffer
     /// - `previous_buffer`: Previous frame's buffer (for diff rendering)
     /// - `pixel_sprites`: Array of sprites to render
     /// - `stage`: Rendering stage (affects logo display, transitions, etc.)
-    /// 
+    ///
     /// # Returns
     /// Result indicating success or error message
     fn draw_all_to_screen(
@@ -653,10 +663,10 @@ pub trait Adapter {
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
     /// Main OpenGL rendering pipeline with double buffering and render textures
-    /// 
+    ///
     /// This method implements the core graphics rendering pipeline for SDL, Winit, and Web
     /// modes. It follows a two-pass rendering approach with multiple render targets:
-    /// 
+    ///
     /// ## Rendering Pipeline Architecture  
     /// ```text
     /// ┌─────────────────────────────────────────────────────────────┐
@@ -707,12 +717,12 @@ pub trait Adapter {
     /// │  └─────────────────────────┘                                │
     /// └─────────────────────────────────────────────────────────────┘
     /// ```
-    /// 
+    ///
     /// ## Render Targets
     /// - **Render Texture 2**: Main game content (characters, sprites, borders)
     /// - **Render Texture 3**: Transition effects and overlays
     /// - **Screen Buffer**: Final composite output
-    /// 
+    ///
     /// ## Rendering Modes
     /// - **rflag=true**: Normal rendering directly to screen
     /// - **rflag=false**: Buffered mode - stores render data for external access (FFI/WASM)
@@ -727,7 +737,7 @@ pub trait Adapter {
         // Pass 1: Convert game data (buffer + sprites) to GPU-ready format
         let rbuf =
             self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
-        
+
         // Pass 2: Render to screen or buffer based on mode
         if self.get_base().rflag {
             // Normal mode: Render through GPU pipeline
@@ -748,11 +758,11 @@ pub trait Adapter {
     }
 
     /// Render texture composition to screen - final rendering stage
-    /// 
+    ///
     /// This method performs the final composite rendering step, combining multiple
     /// render textures into the final screen output. It handles layer composition,
     /// scaling for different display ratios, and transition effects.
-    /// 
+    ///
     /// ## Rendering Order and Layers
     /// ```text
     /// ┌─────────────────────────────────────────────────────────────┐
@@ -785,7 +795,7 @@ pub trait Adapter {
     /// │  └─────────────────────────┘                               │
     /// └─────────────────────────────────────────────────────────────┘
     /// ```
-    /// 
+    ///
     /// ## High-DPI Display Scaling
     /// The method handles different display pixel densities by calculating proper
     /// scaling ratios and viewport transformations, ensuring consistent rendering
@@ -807,15 +817,15 @@ pub trait Adapter {
                 pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
             }
 
-            // Layer 2: Draw render_texture 3 (transition effects and overlays)  
+            // Layer 2: Draw render_texture 3 (transition effects and overlays)
             // Contains: transition effects, visual overlays, special effects
             if !pix.get_render_texture_hidden(3) {
                 // Calculate proper scaling for high-DPI displays
-                let pcw = pix.canvas_width as f32;   // Physical canvas width
-                let pch = pix.canvas_height as f32;  // Physical canvas height
-                let rx = bs.ratio_x;  // Horizontal scaling ratio
-                let ry = bs.ratio_y;  // Vertical scaling ratio
-                
+                let pcw = pix.canvas_width as f32; // Physical canvas width
+                let pch = pix.canvas_height as f32; // Physical canvas height
+                let rx = bs.ratio_x; // Horizontal scaling ratio
+                let ry = bs.ratio_y; // Vertical scaling ratio
+
                 // Calculate scaled dimensions for transition layer
                 // Base size is 40x25 characters scaled by symbol size and DPI ratio
                 let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
@@ -824,7 +834,7 @@ pub trait Adapter {
                 // Create transform with proper scaling
                 let mut t2 = GlTransform::new();
                 t2.scale(pw / pcw, ph / pch);
-                
+
                 // Draw transition layer with calculated viewport and transform
                 // Positioned at bottom-left with calculated dimensions
                 pix.draw_general2d(
@@ -887,7 +897,12 @@ pub trait Adapter {
     }
 
     // draw main buffer & pixel sprites to render buffer...
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn draw_all_to_render_buffer(
         &mut self,
         cb: &Buffer,
@@ -959,13 +974,18 @@ pub trait Adapter {
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 /// Convert game data to RenderCell format with texture coordinate calculation
-/// 
+///
 /// This function converts individual game elements (characters, sprites, etc.) into
 /// GPU-ready RenderCell format. It handles texture coordinate calculation, color
 /// conversion, and transformation parameters.
-/// 
+///
 /// ## Conversion Process
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -985,7 +1005,7 @@ pub trait Adapter {
 /// │               └─────────────────────┘                       │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-/// 
+///
 /// # Parameters
 /// - `rbuf`: Target RenderCell vector to append to
 /// - `fc`: Foreground color as (R,G,B,A) in 0-255 range
@@ -1049,7 +1069,12 @@ fn push_render_buffer(
     rbuf.push(wc);
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 fn render_helper(
     cell_w: u16,
     r: PointF32,
@@ -1100,11 +1125,11 @@ fn render_helper(
 
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 /// Render pixel sprites with rotation and transformation support
-/// 
+///
 /// This function processes individual sprite objects and converts them to renderable
 /// format. It supports advanced features like rotation, scaling, and complex
 /// transformations while maintaining efficient rendering performance.
-/// 
+///
 /// ## Sprite Rendering Pipeline
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -1136,19 +1161,24 @@ fn render_helper(
 /// │                        └─────────────────────┘              │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-/// 
+///
 /// ## Features Supported
 /// - **Rotation**: Full 360-degree rotation around sprite center
 /// - **Scaling**: Display ratio compensation for different screen densities
 /// - **Transparency**: Alpha blending and background color support
 /// - **Instanced Rendering**: Efficient batch processing for multiple sprites
-/// 
+///
 /// # Parameters
 /// - `pixel_spt`: Sprite object containing pixel data and transformation info
 /// - `rx`: Horizontal scaling ratio for display compensation
 /// - `ry`: Vertical scaling ratio for display compensation  
 /// - `f`: Callback function to process each sprite pixel
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
     // Callback signature: (fg_color, bg_color, bg_rect, sym_rect, dst_rect, tex_idx, sym_idx, angle, center_point)
@@ -1190,8 +1220,10 @@ where
             let y = i / pw as usize;
             // center point ...
             let ccp = PointI32 {
-                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as i32,
-                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as i32,
+                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH.get().expect("lazylock init")
+                    / rx) as i32,
+                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+                    / ry) as i32,
             };
             let mut fc = sh.2.get_rgba();
             fc.3 = s.alpha;
@@ -1208,14 +1240,19 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 /// Main buffer rendering with character-to-pixel conversion
-/// 
+///
 /// This function processes the main game buffer containing character data and
 /// converts it to renderable format. It follows the principle.md design where
 /// characters are the fundamental rendering unit, with each character mapped
 /// to symbols in the texture atlas.
-/// 
+///
 /// ## Buffer Rendering Process
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -1242,7 +1279,7 @@ where
 /// │                                └─────────────────────┘     │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-/// 
+///
 /// ## Character Data Structure
 /// Each character in the buffer contains:
 /// - **Symbol Index**: Which character/symbol to display
@@ -1250,7 +1287,7 @@ where
 /// - **Foreground Color**: Primary character color
 /// - **Background Color**: Optional background fill color
 /// - **Style Flags**: Bold, italic, underline, etc.
-/// 
+///
 /// # Parameters
 /// - `buf`: Game buffer containing character grid data
 /// - `width`: Buffer width in characters
@@ -1283,13 +1320,18 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 /// Window border rendering for windowed display modes
-/// 
+///
 /// This function renders decorative borders around the game area for SDL and Winit
 /// modes. The border provides visual separation between the game content and the
 /// desktop environment, creating a more polished windowed gaming experience.
-/// 
+///
 /// ## Border Layout
 /// ```text
 /// ┌───────────────────────────────────────────────────────┐
@@ -1306,13 +1348,13 @@ where
 /// │  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘  │
 /// └───────────────────────────────────────────────────────┘
 /// ```
-/// 
+///
 /// The border consists of:
 /// - **Top/Bottom Edges**: Horizontal line characters
 /// - **Left/Right Edges**: Vertical line characters  
 /// - **Corners**: Corner junction characters
 /// - **Consistent Styling**: Matches the game's visual theme
-/// 
+///
 /// # Parameters
 /// - `cell_w`: Game area width in characters
 /// - `cell_h`: Game area height in characters
@@ -1357,13 +1399,18 @@ where
     }
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 /// RustPixel Logo animation rendering with dynamic effects
-/// 
+///
 /// This function renders the animated RustPixel logo during the startup sequence.
 /// It provides a visually appealing introduction to the framework with dynamic
 /// effects and proper centering across different screen resolutions.
-/// 
+///
 /// ## Logo Animation Sequence
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
@@ -1385,19 +1432,19 @@ where
 /// │  └─────────────────┘                    └─────────────────┘ │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-/// 
+///
 /// ## Rendering Features
 /// - **Centered Positioning**: Automatically centers on any screen size
 /// - **Dynamic Colors**: Randomly generated color effects for visual appeal
 /// - **Smooth Animation**: Frame-based timing for consistent display
 /// - **High-DPI Support**: Proper scaling for different display densities
 /// - **Cross-platform**: Works consistently across SDL, Winit, and Web modes
-/// 
+///
 /// ## Logo Data Processing
 /// The function processes the PIXEL_LOGO constant array where each character
 /// is represented by 3 bytes: [symbol_id, texture_id, flags]. The logo is
 /// dynamically positioned and colored based on the current animation stage.
-/// 
+///
 /// # Parameters
 /// - `srx`: Screen horizontal scaling ratio
 /// - `sry`: Screen vertical scaling ratio  
@@ -1464,4 +1511,3 @@ where
         }
     }
 }
-
