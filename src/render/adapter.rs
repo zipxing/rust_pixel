@@ -837,9 +837,9 @@ pub trait Adapter {
                 let ry = bs.ratio_y; // Vertical scaling ratio
 
                 // Calculate scaled dimensions for transition layer
-                // Base size is 40x25 characters scaled by symbol size and DPI ratio
-                let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = 25.0 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                // Use actual game area dimensions instead of hardcoded 40x25
+                let pw = bs.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = bs.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
                 // Create transform with proper scaling
                 let mut t2 = GlTransform::new();

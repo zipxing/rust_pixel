@@ -939,6 +939,9 @@ impl WinitAdapter {
         // 初始化Transition渲染器（用于转场效果）
         wgpu_pixel_renderer.init_transition_renderer(&wgpu_device);
 
+        // 设置ratio参数以匹配OpenGL版本的坐标变换
+        wgpu_pixel_renderer.set_ratio(self.base.ratio_x, self.base.ratio_y);
+
         // 存储所有 WGPU 对象
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_device = Some(wgpu_device);
@@ -1266,8 +1269,9 @@ impl WinitAdapter {
                 let pch = pixel_renderer.canvas_height as f32;
                 let rx = self.base.ratio_x;
                 let ry = self.base.ratio_y;
-                let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = 25.0 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                // 使用实际的游戏区域尺寸而不是硬编码的40x25
+                let pw = self.base.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = self.base.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
                 let mut t2 = WgpuTransform::new();
                 t2.scale(pw / pcw, ph / pch);

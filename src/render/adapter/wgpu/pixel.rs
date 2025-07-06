@@ -726,6 +726,14 @@ impl WgpuPixelRender {
     pub fn get_general2d_render_mut(&mut self) -> Option<&mut WgpuGeneral2dRender> {
         Some(&mut self.general2d_renderer)
     }
+
+    /// Set the ratio parameters for coordinate transformation
+    /// 
+    /// This method configures the ratio parameters that are used for coordinate
+    /// transformation to match the OpenGL version's behavior exactly.
+    pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
+        self.symbol_renderer.set_ratio(ratio_x, ratio_y);
+    }
 }
 
 impl WgpuRender for WgpuPixelRender {

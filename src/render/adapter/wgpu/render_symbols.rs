@@ -14,6 +14,8 @@ use crate::render::style::Color;
 pub struct WgpuSymbolRenderer {
     canvas_width: f32,
     canvas_height: f32,
+    ratio_x: f32,
+    ratio_y: f32,
 }
 
 impl WgpuSymbolRenderer {
@@ -22,7 +24,15 @@ impl WgpuSymbolRenderer {
         Self {
             canvas_width: canvas_width as f32,
             canvas_height: canvas_height as f32,
+            ratio_x: 1.0,
+            ratio_y: 1.0,
         }
+    }
+    
+    /// Set the ratio parameters for coordinate transformation
+    pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
+        self.ratio_x = ratio_x;
+        self.ratio_y = ratio_y;
     }
 
     /// Generate vertices from processed render cells
@@ -42,21 +52,31 @@ impl WgpuSymbolRenderer {
         let window_width = self.canvas_width;
         let window_height = self.canvas_height;
         
+        // Get symbol dimensions from global constants (matches OpenGL version)
+        let sym_width = crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_height = crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+        
         // Convert render cells to vertices
         for render_cell in render_cells {
-            let sym_width = 8.0; // PIXEL_SYM_WIDTH for 1024x1024 texture
-            let sym_height = 8.0; // PIXEL_SYM_HEIGHT for 1024x1024 texture
-            let adjusted_x = render_cell.x - sym_width;
-            let adjusted_y = render_cell.y - sym_height;
+            // Apply the same transformation chain as OpenGL version
+            // The RenderCell coordinates contain PIXEL_SYM_WIDTH/HEIGHT offset which needs OpenGL-style transform
             
-            let left = adjusted_x;
-            let right = adjusted_x + render_cell.w as f32;
-            let top = adjusted_y;
-            let bottom = adjusted_y + render_cell.h as f32;
+            // Use the RenderCell coordinates directly (they already contain proper positioning)
+            // Apply simple transformation for position and size
+            let base_x = render_cell.x;
+            let base_y = render_cell.y;
+            let width = render_cell.w as f32;
+            let height = render_cell.h as f32;
             
-            // Apply rotation if angle is not zero
+            // Calculate basic quad bounds
+            let left = base_x;
+            let right = base_x + width;
+            let top = base_y;
+            let bottom = base_y + height;
+            
+            // Handle rotation around the center point if needed
             let (left_ndc, right_ndc, top_ndc, bottom_ndc) = if render_cell.angle != 0.0 {
-                // Calculate quad corners for rotation
+                // Define the quad corners in world space
                 let corners = vec![
                     (left, bottom),   // bottom-left
                     (right, bottom),  // bottom-right
@@ -64,26 +84,27 @@ impl WgpuSymbolRenderer {
                     (left, top),      // top-left
                 ];
                 
-                // Rotation center
-                let cx = render_cell.cx;
-                let cy = render_cell.cy;
+                // Apply rotation around the center point (use the center from RenderCell)
+                let center_x = render_cell.x + render_cell.cx;
+                let center_y = render_cell.y + render_cell.cy;
                 
-                // Rotate corners around center
                 let rotated_corners: Vec<(f32, f32)> = corners.iter().map(|(x, y)| {
-                    let translated_x = x - cx;
-                    let translated_y = y - cy;
+                    // Translate to origin (center point)
+                    let translated_x = x - center_x;
+                    let translated_y = y - center_y;
                     
-                    let cos_angle = render_cell.angle.cos();
-                    let sin_angle = render_cell.angle.sin();
+                                         // Apply rotation (use negative angle to match OpenGL coordinate system)
+                     let cos_angle = (-render_cell.angle).cos();
+                     let sin_angle = (-render_cell.angle).sin();
                     
                     let rotated_x = translated_x * cos_angle - translated_y * sin_angle;
                     let rotated_y = translated_x * sin_angle + translated_y * cos_angle;
                     
-                    (rotated_x + cx, rotated_y + cy)
+                    // Translate back
+                    (rotated_x + center_x, rotated_y + center_y)
                 }).collect();
                 
-                // Convert rotated corners to NDC
-                // Simplified approach: rotate the quad corners directly around the rotation center
+                // Convert to NDC
                 let ndc_corners: Vec<(f32, f32)> = rotated_corners.iter().map(|(x, y)| {
                     let x_ndc = (x / window_width) * 2.0 - 1.0;
                     let y_ndc = 1.0 - (y / window_height) * 2.0;
@@ -323,5 +344,6 @@ impl WgpuSymbolRenderer {
     pub fn update_canvas_size(&mut self, width: u32, height: u32) {
         self.canvas_width = width as f32;
         self.canvas_height = height as f32;
+        // ratio parameters remain unchanged
     }
 } 
