@@ -260,13 +260,14 @@ impl WgpuPixelRender {
     /// 
     /// This method sets up the render pass to render to a specific render texture
     /// instead of the screen, enabling off-screen rendering for transition effects.
+    /// The returned render pass is fully configured with the instanced rendering pipeline.
     /// 
     /// # Parameters
     /// - `encoder`: Command encoder for the render pass
     /// - `rtidx`: Render texture index (0-3)
     /// 
     /// # Returns
-    /// Result containing the render pass or error
+    /// Result containing the fully configured render pass or error
     pub fn begin_render_to_texture<'a>(
         &'a self,
         encoder: &'a mut wgpu::CommandEncoder,
@@ -278,7 +279,7 @@ impl WgpuPixelRender {
 
         let render_texture = &self.render_textures[rtidx];
         
-        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(&format!("Render to Texture {}", rtidx)),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: render_texture.get_view(),
@@ -292,6 +293,31 @@ impl WgpuPixelRender {
             occlusion_query_set: None,
             timestamp_writes: None,
         });
+
+        // Set up the instanced rendering pipeline automatically
+        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+            render_pass.set_pipeline(pipeline);
+
+            // Set quad vertex buffer (buffer 0)
+            if let Some(quad_vertex_buffer) = &self.quad_vertex_buffer {
+                render_pass.set_vertex_buffer(0, quad_vertex_buffer.slice(..));
+            }
+
+            // Set instance buffer (buffer 1)
+            if let Some(instance_buffer) = &self.instance_buffer {
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            }
+
+            // Set index buffer
+            if let Some(index_buffer) = &self.index_buffer {
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            }
+
+            // Set bind group with texture and uniform buffer
+            if let Some(bind_group) = &self.bind_group {
+                render_pass.set_bind_group(0, bind_group, &[]);
+            }
+        }
 
         Ok(render_pass)
     }

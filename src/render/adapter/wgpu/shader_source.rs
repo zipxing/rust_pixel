@@ -256,7 +256,8 @@ fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
     // Step 5: - vec2(1.0, 1.0) to convert to NDC coordinates
     let ndc_pos = normalized - vec2<f32>(1.0, 1.0);
     
-    output.clip_position = vec4<f32>(ndc_pos, 0.0, 1.0);
+    // Step 6: Flip Y coordinate to match WGPU coordinate system (Y-axis up in OpenGL, Y-axis down in WGPU)
+    output.clip_position = vec4<f32>(ndc_pos.x, -ndc_pos.y, 0.0, 1.0);
     
     // Color modulation: colorj = color * colorFilter
     output.colorj = instance.color * transform.colorFilter;
