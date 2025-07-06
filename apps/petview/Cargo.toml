@@ -22,9 +22,10 @@ wasm-bindgen-futures = "0.4.50"
 web-sys = "0.3.77"
 petview_lib = { path = "./lib" }
 rust_pixel = { path = "../..", default-features = false }
+wgpu = { version = "0.20", optional = true }
 
 [features]
 sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
-wgpu = [ "rust_pixel/wgpu", "rust_pixel/winit" ]
+wgpu = [ "rust_pixel/wgpu", "rust_pixel/winit", "dep:wgpu" ]
 winit = ["rust_pixel/winit"]

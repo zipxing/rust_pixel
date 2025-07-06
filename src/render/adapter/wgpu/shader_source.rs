@@ -170,4 +170,617 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     
     return tex_color * input.color;
 }
-"#; 
+"#;
+
+// Transition shaders (converted from OpenGL GLSL to WGSL)
+
+// Complete General2D shader combining vertex and fragment stages
+pub const GENERAL2D_SHADER: &str = r#"
+// Common structures and uniforms
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct General2dUniforms {
+    transform: mat4x4<f32>,
+    area: vec4<f32>,     // [x, y, width, height]
+    color: vec4<f32>,    // [r, g, b, a]
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: General2dUniforms;
+
+@group(0) @binding(1)
+var texture_input: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture_sampler: sampler;
+
+// Vertex shader
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    
+    // Apply area mapping to texture coordinates
+    out.tex_coords = vec2<f32>(
+        mix(uniforms.area.x, uniforms.area.x + uniforms.area.z, vertex.tex_coords.x),
+        mix(uniforms.area.y, uniforms.area.y + uniforms.area.w, vertex.tex_coords.y)
+    );
+    
+    // Apply transform matrix to vertex position
+    out.clip_position = uniforms.transform * vec4<f32>(vertex.position, 0.0, 1.0);
+    
+    return out;
+}
+
+// Fragment shader
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    let tex_color = textureSample(texture_input, texture_sampler, input.tex_coords);
+    return tex_color * uniforms.color;
+}
+"#;
+
+// For backward compatibility, provide separate vertex and fragment shaders
+// (these are now just parts of the complete shader above)
+pub const GENERAL2D_VERTEX_SRC: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct General2dUniforms {
+    transform: mat4x4<f32>,
+    area: vec4<f32>,     // [x, y, width, height]
+    color: vec4<f32>,    // [r, g, b, a]
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: General2dUniforms;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    
+    // Apply area mapping to texture coordinates
+    out.tex_coords = vec2<f32>(
+        mix(uniforms.area.x, uniforms.area.x + uniforms.area.z, vertex.tex_coords.x),
+        mix(uniforms.area.y, uniforms.area.y + uniforms.area.w, vertex.tex_coords.y)
+    );
+    
+    // Apply transform matrix to vertex position
+    out.clip_position = uniforms.transform * vec4<f32>(vertex.position, 0.0, 1.0);
+    
+    return out;
+}
+"#;
+
+// Fragment shader (without duplicate definitions)
+pub const GENERAL2D_FRAGMENT_SRC: &str = r#"
+@group(0) @binding(1)
+var texture_input: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture_sampler: sampler;
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    let tex_color = textureSample(texture_input, texture_sampler, input.tex_coords);
+    return tex_color * uniforms.color;
+}
+"#;
+
+// Transition effect shaders (converted from OpenGL GLSL to WGSL)
+// These support 7 different transition effects matching the OpenGL version
+
+// Common transition vertex shader
+pub const TRANSITION_VERTEX_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+"#;
+
+// Transition 0: Squares effect
+pub const TRANSITION_SQUARES_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn transition(uv: vec2<f32>) -> vec4<f32> {
+    let squaresMin = vec2<i32>(20, 20);
+    let steps = 50;
+    let d = min(uniforms.progress, 1.0 - uniforms.progress);
+    let dist = select(d, ceil(d * f32(steps)) / f32(steps), steps > 0);
+    let squareSize = 2.0 * dist / vec2<f32>(squaresMin);
+    let p = select(uv, (floor(uv / squareSize) + 0.5) * squareSize, dist > 0.0);
+    return mix(getFromColor(p), getToColor(p), uniforms.progress);
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+// Transition 1: Heart effect
+pub const TRANSITION_HEART_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn inHeart(p: vec2<f32>, center: vec2<f32>, size: f32) -> f32 {
+    if (size == 0.0) { return 0.0; }
+    let o = (p - center) / (1.6 * size);
+    let a = o.x * o.x + o.y * o.y - 0.3;
+    return step(a * a * a, o.x * o.x * o.y * o.y * o.y);
+}
+
+fn transition(uv: vec2<f32>) -> vec4<f32> {
+    return mix(
+        getFromColor(uv),
+        getToColor(uv),
+        inHeart(uv, vec2<f32>(0.5, 0.4), uniforms.progress)
+    );
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+// Transition 2: Noise effect
+pub const TRANSITION_NOISE_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn noise(co: vec2<f32>) -> f32 {
+    let a = 12.9898;
+    let b = 78.233;
+    let c = 43758.5453;
+    let dt = dot(co * uniforms.progress, vec2<f32>(a, b));
+    let sn = dt % 3.14159265;
+    return fract(sin(sn) * c);
+}
+
+fn transition(p: vec2<f32>) -> vec4<f32> {
+    if (uniforms.progress < 0.05) {
+        return getFromColor(p);
+    } else if (uniforms.progress > (1.0 - 0.05)) {
+        return getToColor(p);
+    } else {
+        return vec4<f32>(vec3<f32>(noise(p)), 1.0);
+    }
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+// Transition 3: Zoom rotate effect
+pub const TRANSITION_ZOOM_ROTATE_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn transition(uv: vec2<f32>) -> vec4<f32> {
+    let phase = select(uniforms.progress * 2.0, (uniforms.progress - 0.5) * 2.0, uniforms.progress < 0.5);
+    let angleOffset = select(mix(0.0, 6.0 * 0.03927, phase), mix(-6.0 * 0.03927, 0.0, phase), uniforms.progress < 0.5);
+    let newScale = select(mix(1.0, 1.2, phase), mix(1.2, 1.0, phase), uniforms.progress < 0.5);
+    let center = vec2<f32>(0.0, 0.0);
+    let assumedCenter = vec2<f32>(0.5, 0.5);
+    var p = (uv - vec2<f32>(0.5, 0.5)) / newScale * vec2<f32>(1.2, 1.0);
+    let angle = atan2(p.y, p.x) + angleOffset;
+    let dist = distance(center, p);
+    p.x = cos(angle) * dist / 1.2 + 0.5;
+    p.y = sin(angle) * dist + 0.5;
+    let c = select(getFromColor(p), getToColor(p), uniforms.progress < 0.5);
+    return c + select(mix(0.0, 1.0, phase), mix(1.0, 0.0, phase), uniforms.progress < 0.5);
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+// Transition 4: Wave effect
+pub const TRANSITION_WAVE_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn transition(uv: vec2<f32>) -> vec4<f32> {
+    let time = uniforms.progress;
+    let stime = sin(time * 3.14159265 / 2.0);
+    let phase = time * 3.14159265 * 3.0;
+    let y = abs(cos(phase)) * (1.0 - stime);
+    let d = uv.y - y;
+    let from_color = getFromColor(vec2<f32>(uv.x, uv.y + (1.0 - y)));
+    let to_color = getToColor(uv);
+    return mix(to_color, from_color, step(d, 0.0));
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+// Transition 5: Distortion effect
+pub const TRANSITION_DISTORTION_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn transition(p: vec2<f32>) -> vec4<f32> {
+    let size = 0.04;
+    let zoom = 50.0;
+    let colorSeparation = 0.3;
+    
+    let inv = 1.0 - uniforms.progress;
+    let disp = size * vec2<f32>(cos(zoom * p.x), sin(zoom * p.y));
+    let texTo = getToColor(p + inv * disp);
+    let texFrom = vec4<f32>(
+        getFromColor(p + uniforms.progress * disp * (1.0 - colorSeparation)).r,
+        getFromColor(p + uniforms.progress * disp).g,
+        getFromColor(p + uniforms.progress * disp * (1.0 + colorSeparation)).b,
+        1.0
+    );
+    return texTo * uniforms.progress + texFrom * inv;
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+// Transition 6: Ripple effect
+pub const TRANSITION_RIPPLE_SHADER: &str = r#"
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coords: vec2<f32>,
+}
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+}
+
+struct TransitionUniforms {
+    progress: f32,
+    _padding1: vec3<f32>,
+    _padding2: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> uniforms: TransitionUniforms;
+
+@group(0) @binding(1)
+var texture1: texture_2d<f32>;
+
+@group(0) @binding(2)
+var texture2: texture_2d<f32>;
+
+@group(0) @binding(3)
+var texture_sampler: sampler;
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.clip_position = vec4<f32>(vertex.position, 0.0, 1.0);
+    output.tex_coords = vertex.tex_coords;
+    return output;
+}
+
+fn getFromColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture1, texture_sampler, uv);
+}
+
+fn getToColor(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(texture2, texture_sampler, uv);
+}
+
+fn transition(p: vec2<f32>) -> vec4<f32> {
+    let amplitude = 30.0;
+    let speed = 30.0;
+    
+    let dir = p - vec2<f32>(0.5);
+    let dist = length(dir);
+    
+    if (dist > uniforms.progress) {
+        return mix(getFromColor(p), getToColor(p), uniforms.progress);
+    } else {
+        let offset = dir * sin(dist * amplitude - uniforms.progress * speed);
+        return mix(getFromColor(p + offset), getToColor(p), uniforms.progress);
+    }
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    return transition(input.tex_coords);
+}
+"#;
+
+/// Get all transition shader sources
+/// Returns a vector of 7 transition shader sources
+pub fn get_transition_shaders() -> Vec<&'static str> {
+    vec![
+        TRANSITION_SQUARES_SHADER,
+        TRANSITION_HEART_SHADER,
+        TRANSITION_NOISE_SHADER,
+        TRANSITION_ZOOM_ROTATE_SHADER,
+        TRANSITION_WAVE_SHADER,
+        TRANSITION_DISTORTION_SHADER,
+        TRANSITION_RIPPLE_SHADER,
+    ]
+} 

@@ -140,7 +140,7 @@ pub struct WinitAdapter {
     /// 窗口初始化参数（用于在resumed中创建窗口）
     pub window_init_params: Option<WindowInitParams>,
 
-    // OpenGL backend objects (only when wgpu feature is disabled)
+    // OpenGL backend objects (only when wgpu is disabled)
     #[cfg(not(feature = "wgpu"))]
     /// OpenGL显示上下文
     pub gl_display: Option<glutin::display::Display>,
@@ -151,7 +151,7 @@ pub struct WinitAdapter {
     /// OpenGL渲染表面
     pub gl_surface: Option<Surface<WindowSurface>>,
 
-    // WGPU backend objects (only when wgpu feature is enabled)
+    // WGPU backend objects (only when wgpu is enabled)
     #[cfg(feature = "wgpu")]
     /// WGPU instance for creating devices and surfaces
     pub wgpu_instance: Option<wgpu::Instance>,
@@ -928,6 +928,17 @@ impl WinitAdapter {
         // 创建bind group
         wgpu_pixel_renderer.create_bind_group(&wgpu_device);
 
+        // 初始化render textures（4个离屏渲染目标）
+        if let Err(e) = wgpu_pixel_renderer.init_render_textures(&wgpu_device) {
+            panic!("Failed to initialize render textures: {}", e);
+        }
+        
+        // 初始化General2D渲染器（用于转场效果）
+        wgpu_pixel_renderer.init_general2d_renderer(&wgpu_device);
+        
+        // 初始化Transition渲染器（用于转场效果）
+        wgpu_pixel_renderer.init_transition_renderer(&wgpu_device);
+
         // 存储所有 WGPU 对象
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_device = Some(wgpu_device);
@@ -1070,8 +1081,14 @@ impl WinitAdapter {
     /// 
     /// # WGPU 渲染流程
     /// 1. 处理窗口拖拽移动
-    /// 2. 获取当前表面纹理
+    /// 2. 使用与OpenGL相同的渲染管线生成RenderCell数据
     /// 3. 创建渲染通道并执行渲染
+    /// 4. 提交命令并呈现帧
+    /// 
+    /// # WGPU 渲染流程
+    /// 1. 处理窗口拖拽移动
+    /// 2. 使用与OpenGL相同的完整渲染管线，包括render texture系统
+    /// 3. 调用draw_render_textures_to_screen_wgpu将最终结果渲染到屏幕
     /// 4. 提交命令并呈现帧
     #[cfg(feature = "wgpu")]
     fn draw_all_to_screen_wgpu(
@@ -1089,18 +1106,110 @@ impl WinitAdapter {
             self.drag.dy,
         );
 
-        // 2. 使用与OpenGL版本相同的渲染管线：先处理游戏数据生成RenderCell
-        let render_cells = self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
+        // 2. 调用完整的渲染管线（与OpenGL版本相同）
+        // 这会处理所有游戏逻辑、精灵、边框、logo等，并渲染到render texture
+        self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
+
+        // 3. 将render texture渲染到屏幕（与OpenGL版本对应）
+        self.draw_render_textures_to_screen_wgpu()?;
+
+        // 4. 请求重绘（与 OpenGL 版本相同）
+        if let Some(window) = &self.window {
+            window.as_ref().request_redraw();
+        }
+
+        Ok(())
+    }
+
+    /// WGPU版本的转场渲染到纹理（为petview等应用提供高级API）
+    #[cfg(feature = "wgpu")]
+    pub fn render_transition_to_texture_wgpu(
+        &mut self,
+        target_texture_idx: usize,
+        shader_idx: usize,
+        progress: f32,
+    ) -> Result<(), String> {
+        if let (Some(device), Some(queue), Some(pixel_renderer)) = (
+            &self.wgpu_device,
+            &self.wgpu_queue,
+            &mut self.wgpu_pixel_renderer,
+        ) {
+            // 创建命令编码器
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Transition Render Encoder"),
+            });
+
+            // 使用新的render_trans_frame_to_texture方法，避免借用冲突
+            pixel_renderer.render_trans_frame_to_texture(
+                device,
+                queue,
+                &mut encoder,
+                target_texture_idx,
+                shader_idx,
+                progress,
+            )?;
+            
+            // 提交命令
+            queue.submit(std::iter::once(encoder.finish()));
+        } else {
+            return Err("WGPU components not initialized".to_string());
+        }
         
-        // 3. 执行 WGPU 渲染流程
+        Ok(())
+    }
+
+    /// WGPU版本的render texture到屏幕渲染
+    /// 
+    /// 这是WGPU版本的draw_render_textures_to_screen方法，与OpenGL版本对应。
+    /// 负责将render texture中的内容最终合成到屏幕上，支持转场效果。
+    /// 
+    /// 完整的WGPU渲染流程：
+    /// 1. 将RenderCell数据渲染到render texture 2（主场景）
+    /// 2. 将render texture 2和3合成到屏幕（最终输出）
+    #[cfg(feature = "wgpu")]
+    fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
             &self.wgpu_device,
             &self.wgpu_queue,
             &self.wgpu_surface,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 准备绘制数据（使用处理过的RenderCell数据）
-            pixel_renderer.prepare_draw_with_render_cells(device, queue, &render_cells);
+            // 步骤1：将RenderCell数据渲染到render texture 2
+            // 这对应OpenGL版本的draw_render_buffer_to_texture(&rbuf, 2, false)
+            let rbuf = &self.base.rbuf;
+            if !rbuf.is_empty() {
+                // 准备渲染数据（在开始渲染通道之前）
+                pixel_renderer.prepare_draw_with_render_cells(device, queue, rbuf);
+
+                // 创建命令编码器用于渲染到render texture
+                let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("RustPixel Render Texture Encoder"),
+                });
+
+                // 开始渲染到render texture 2
+                let mut render_pass = pixel_renderer.begin_render_to_texture(&mut rt_encoder, 2)?;
+                if let Some(pipeline) = pixel_renderer.get_render_pipeline() {
+                    render_pass.set_pipeline(pipeline);
+                }
+
+                // 设置缓冲区和绑定组
+                if let Some(vertex_buffer) = pixel_renderer.get_vertex_buffer() {
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    if let Some(bind_group) = pixel_renderer.get_bind_group() {
+                        render_pass.set_bind_group(0, bind_group, &[]);
+                        render_pass.draw(0..pixel_renderer.get_vertex_count(), 0..1);
+                    }
+                }
+
+                // 结束渲染通道
+                std::mem::drop(render_pass);
+                
+                // 提交render texture渲染命令
+                queue.submit(std::iter::once(rt_encoder.finish()));
+            }
+
+            // 步骤2：将render texture合成到屏幕
+            // 这对应OpenGL版本的draw_render_textures_to_screen()
             
             // 获取当前表面纹理
             let output = surface
@@ -1111,26 +1220,76 @@ impl WinitAdapter {
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-            // 创建命令编码器
+            // 创建命令编码器用于最终合成
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("RustPixel Render Encoder"),
+                label: Some("RustPixel Screen Render Encoder"),
             });
 
-            // 使用像素渲染器执行渲染
-            pixel_renderer.draw(&mut encoder, &view);
+            // 使用与OpenGL版本相同的逻辑渲染render texture到屏幕
+            use crate::render::adapter::wgpu::transform::WgpuTransform;
+            use crate::render::adapter::wgpu::color::WgpuColor;
+            use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 
-            // 提交命令
+            // 确保General2D渲染器使用正确的surface格式
+            let surface_format = if let Some(surface_config) = &self.wgpu_surface_config {
+                surface_config.format
+            } else {
+                wgpu::TextureFormat::Bgra8Unorm // 默认格式
+            };
+            
+            // 重新初始化General2D渲染器以使用正确的surface格式
+            if let Some(general2d) = pixel_renderer.get_general2d_render_mut() {
+                general2d.create_shader_with_format(device, surface_format);
+                general2d.create_buffer(device);
+            }
+
+            let c = WgpuColor::new(1.0, 1.0, 1.0, 1.0);
+
+            // 绘制render_texture 2（主缓冲区）- 对应OpenGL版本的逻辑
+            if !pixel_renderer.get_render_texture_hidden(2) {
+                let t = WgpuTransform::new();
+                pixel_renderer.draw_general2d(
+                    device,
+                    queue,
+                    &mut encoder,
+                    &view,
+                    2,
+                    [0.0, 0.0, 1.0, 1.0],
+                    &t,
+                    &c,
+                )?;
+            }
+
+            // 绘制render_texture 3（转场缓冲区）- 对应OpenGL版本的逻辑
+            if !pixel_renderer.get_render_texture_hidden(3) {
+                let pcw = pixel_renderer.canvas_width as f32;
+                let pch = pixel_renderer.canvas_height as f32;
+                let rx = self.base.ratio_x;
+                let ry = self.base.ratio_y;
+                let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = 25.0 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+
+                let mut t2 = WgpuTransform::new();
+                t2.scale(pw / pcw, ph / pch);
+                pixel_renderer.draw_general2d(
+                    device,
+                    queue,
+                    &mut encoder,
+                    &view,
+                    3,
+                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
+                    &t2,
+                    &c,
+                )?;
+            }
+
+            // 提交最终合成命令
             queue.submit(std::iter::once(encoder.finish()));
             
             // 呈现帧
             output.present();
         } else {
             return Err("WGPU components not initialized".to_string());
-        }
-
-        // 4. 请求重绘（与 OpenGL 版本相同）
-        if let Some(window) = &self.window {
-            window.as_ref().request_redraw();
         }
 
         Ok(())
