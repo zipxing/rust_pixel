@@ -864,6 +864,7 @@ pub trait Adapter {
         #[cfg(feature = "wgpu")]
         {
             use crate::render::adapter::winit::WinitAdapter;
+            use crate::render::adapter::wgpu::WgpuRender;
             
             // First, convert buffer to render buffer to avoid borrowing conflicts
             let rbuf = self.buffer_to_render_buffer(buf);
@@ -874,8 +875,9 @@ pub trait Adapter {
                     &winit_adapter.wgpu_device,
                     &winit_adapter.wgpu_queue
                 ) {
-                    // Prepare render data
-                    wgpu_pixel_renderer.prepare_draw_with_render_cells(device, queue, &rbuf);
+                    // Prepare all render data first
+                    wgpu_pixel_renderer.prepare_draw(device, queue); // Upload base vertices, indices, uniforms
+                    wgpu_pixel_renderer.prepare_draw_with_render_cells(device, queue, &rbuf); // Upload instance data
                     
                     // Create command encoder for rendering to texture
                     let mut encoder = device.create_command_encoder(&::wgpu::CommandEncoderDescriptor {
@@ -886,18 +888,9 @@ pub trait Adapter {
                     {
                         let render_pass_result = wgpu_pixel_renderer.begin_render_to_texture(&mut encoder, rtidx);
                         if let Ok(mut render_pass) = render_pass_result {
-                            if let Some(pipeline) = wgpu_pixel_renderer.get_render_pipeline() {
-                                render_pass.set_pipeline(pipeline);
-                            }
-                            
-                            // Set buffers and bind group
-                            if let Some(vertex_buffer) = wgpu_pixel_renderer.get_vertex_buffer() {
-                                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                                if let Some(bind_group) = wgpu_pixel_renderer.get_bind_group() {
-                                    render_pass.set_bind_group(0, bind_group, &[]);
-                                    render_pass.draw(0..wgpu_pixel_renderer.get_vertex_count(), 0..1);
-                                }
-                            }
+                            // begin_render_to_texture already sets up the pipeline, buffers, and bind groups
+                            // Just perform the instanced draw call
+                            render_pass.draw_indexed(0..6, 0, 0..wgpu_pixel_renderer.get_instance_count());
                         }
                         // render_pass is automatically dropped here
                     }

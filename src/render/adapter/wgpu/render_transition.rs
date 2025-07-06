@@ -93,6 +93,9 @@ impl WgpuRender for WgpuTransitionRender {
     }
 
     fn create_shader(&mut self, device: &wgpu::Device) {
+        // NOTE: We cannot create render pipelines here because we don't know the target format yet.
+        // Pipelines will be created on-demand in create_pipeline_for_format()
+        
         // Create bind group layout for transition shaders
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Transition Bind Group Layout"),
@@ -137,64 +140,8 @@ impl WgpuRender for WgpuTransitionRender {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
-            ],
+            ]
         });
-
-        // Create pipeline layout
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Transition Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        // Create shader modules for all 7 transition effects
-        let transition_shaders = shader_source::get_transition_shaders();
-        for (i, shader_source) in transition_shaders.iter().enumerate() {
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(&format!("Transition Shader {}", i)),
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(shader_source)),
-            });
-
-            // Create render pipeline for this transition effect
-            let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(&format!("Transition Render Pipeline {}", i)),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &[TransitionVertex::desc()],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: wgpu::TextureFormat::Bgra8Unorm, // Use Bgra8Unorm to match surface format
-                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: None,
-                    unclipped_depth: false,
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    conservative: false,
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState {
-                    count: 1,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
-                multiview: None,
-            });
-
-            self.render_pipelines[i] = Some(render_pipeline);
-        }
 
         // Create texture sampler
         let texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -265,43 +212,10 @@ impl WgpuRender for WgpuTransitionRender {
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
-        if self.shader_idx >= self.render_pipelines.len() {
-            return;
-        }
-
-        let pipeline = match &self.render_pipelines[self.shader_idx] {
-            Some(pipeline) => pipeline,
-            None => return,
-        };
-
-        let bind_group = match &self.current_bind_group {
-            Some(bind_group) => bind_group,
-            None => return,
-        };
-
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Transition Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-
-        render_pass.set_pipeline(pipeline);
-        render_pass.set_bind_group(0, bind_group, &[]);
-        
-        if let (Some(vertex_buffer), Some(index_buffer)) = (&self.vertex_buffer, &self.index_buffer) {
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..6, 0, 0..1);
-        }
+        // This method is kept for WgpuRender trait compatibility but is deprecated.
+        // It cannot work properly without knowing the device and target format.
+        log::warn!("Transition draw() called without device and format. This method is deprecated.");
+        // Cannot render without device reference and target format
     }
 
     fn cleanup(&mut self, _device: &wgpu::Device) {
@@ -392,7 +306,92 @@ impl WgpuTransitionRender {
         self
     }
 
+    /// Create or get render pipeline for specific format and shader index
+    /// 
+    /// This method creates render pipelines on-demand for the target texture format,
+    /// ensuring format compatibility between the transition renderer and target texture.
+    fn get_or_create_pipeline(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat, shader_idx: usize) -> Option<&wgpu::RenderPipeline> {
+        // Check if we already have a pipeline for this shader
+        if shader_idx < self.render_pipelines.len() && self.render_pipelines[shader_idx].is_some() {
+            return self.render_pipelines[shader_idx].as_ref();
+        }
+
+        // Ensure we have bind group layout
+        let bind_group_layout = match &self.bind_group_layout {
+            Some(layout) => layout,
+            None => return None,
+        };
+
+        // Create pipeline layout
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Transition Pipeline Layout"),
+            bind_group_layouts: &[bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        // Get transition shader sources
+        let transition_shaders = shader_source::get_transition_shaders();
+        if shader_idx >= transition_shaders.len() {
+            return None;
+        }
+
+        // Create shader module for this transition effect
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(&format!("Transition Shader {}", shader_idx)),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(transition_shaders[shader_idx])),
+        });
+
+        // Create render pipeline for this transition effect with the correct format
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(&format!("Transition Render Pipeline {} (format: {:?})", shader_idx, format)),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[TransitionVertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format, // Use the target texture format
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
+        // Store the pipeline (expand vector if needed)
+        while self.render_pipelines.len() <= shader_idx {
+            self.render_pipelines.push(None);
+        }
+        self.render_pipelines[shader_idx] = Some(render_pipeline);
+        
+        self.render_pipelines[shader_idx].as_ref()
+    }
+
     /// Draw transition effect - main API matching OpenGL version
+    /// 
+    /// This method now automatically detects the target texture format and creates
+    /// the appropriate render pipeline if needed.
     pub fn draw_transition(
         &mut self,
         device: &wgpu::Device,
@@ -405,6 +404,76 @@ impl WgpuTransitionRender {
         self.set_shader_index(shader_idx);
         self.set_progress(progress);
         self.prepare_draw(device, queue);
-        self.draw(encoder, view);
+        self.draw_with_format(device, encoder, view, wgpu::TextureFormat::Bgra8Unorm); // Default format, should be improved
+    }
+
+    /// Draw transition effect with specific target format
+    /// 
+    /// This version allows specifying the exact target texture format for proper
+    /// render pipeline creation and format matching.
+    pub fn draw_transition_with_format(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        target_format: wgpu::TextureFormat,
+        shader_idx: usize,
+        progress: f32,
+    ) {
+        self.set_shader_index(shader_idx);
+        self.set_progress(progress);
+        self.prepare_draw(device, queue);
+        self.draw_with_format(device, encoder, view, target_format);
+    }
+
+    /// Internal draw method with format specification
+    fn draw_with_format(
+        &mut self, 
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder, 
+        view: &wgpu::TextureView,
+        target_format: wgpu::TextureFormat,
+    ) {
+        // Get or create pipeline for the target format - this might modify self
+        let pipeline_exists = self.get_or_create_pipeline(device, target_format, self.shader_idx).is_some();
+        if !pipeline_exists {
+            return;
+        }
+
+        // Now safely access the pipeline and other fields
+        let pipeline = match &self.render_pipelines[self.shader_idx] {
+            Some(pipeline) => pipeline,
+            None => return,
+        };
+
+        let bind_group = match &self.current_bind_group {
+            Some(bind_group) => bind_group,
+            None => return,
+        };
+
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Transition Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        render_pass.set_pipeline(pipeline);
+        render_pass.set_bind_group(0, bind_group, &[]);
+        
+        if let (Some(vertex_buffer), Some(index_buffer)) = (&self.vertex_buffer, &self.index_buffer) {
+            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..6, 0, 0..1);
+        }
     }
 } 

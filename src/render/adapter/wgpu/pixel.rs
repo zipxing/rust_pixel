@@ -413,12 +413,13 @@ impl WgpuPixelRender {
         // Set textures on transition renderer
         self.transition_renderer.set_textures(device, texture1_view, texture2_view);
 
-        // Draw transition effect
-        self.transition_renderer.draw_transition(
+        // Draw transition effect with the correct target format
+        self.transition_renderer.draw_transition_with_format(
             device,
             queue,
             encoder,
             target_view,
+            self.surface_format, // Use the same format as render textures
             shader_idx,
             progress,
         );
@@ -456,12 +457,13 @@ impl WgpuPixelRender {
         // Set textures on transition renderer
         self.transition_renderer.set_textures(device, texture1_view, texture2_view);
 
-        // Draw transition effect
-        self.transition_renderer.draw_transition(
+        // Draw transition effect with the correct target format
+        self.transition_renderer.draw_transition_with_format(
             device,
             queue,
             encoder,
             target_view,
+            self.surface_format, // Use the same format as render textures
             shader_idx,
             progress,
         );
@@ -681,6 +683,11 @@ impl WgpuPixelRender {
     /// Get mutable reference to the General2D renderer (for internal access)
     pub fn get_general2d_render_mut(&mut self) -> Option<&mut WgpuGeneral2dRender> {
         Some(&mut self.general2d_renderer)
+    }
+
+    /// Get current instance count for drawing operations
+    pub fn get_instance_count(&self) -> u32 {
+        self.instance_count
     }
 
     /// Set the ratio parameters for coordinate transformation
