@@ -1,403 +1,418 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! # WGPU Symbol Renderer Module
-//!
-//! Extracted symbol rendering logic from WgpuPixelRender.
-//! Handles vertex generation from RenderCell data and coordinate transformations.
+//! WGPU Symbol Renderer Module using Instanced Rendering
+//! 
+//! This module implements instanced rendering for symbols, exactly matching
+//! the OpenGL version's behavior. Each symbol is drawn as an instance of
+//! a base quad geometry with instance-specific transform and color data.
 
-use super::*;
-use crate::render::adapter::RenderCell;
-use crate::render::style::Color;
-const ADJX: f32 = 0.05;
-const ADJY: f32 = 0.06;
+use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 
-/// Symbol rendering helper for WgpuPixelRender
+/// Symbol instance data for WGPU (matches OpenGL layout exactly)
+/// This corresponds to the per-instance attributes in OpenGL version
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct WgpuSymbolInstance {
+    /// a1: [origin_x, origin_y, uv_left, uv_top]
+    pub a1: [f32; 4],
+    /// a2: [uv_width, uv_height, m00*width, m10*height]  
+    pub a2: [f32; 4],
+    /// a3: [m01*width, m11*height, m20, m21]
+    pub a3: [f32; 4],
+    /// color: [r, g, b, a]
+    pub color: [f32; 4],
+}
+
+unsafe impl bytemuck::Pod for WgpuSymbolInstance {}
+unsafe impl bytemuck::Zeroable for WgpuSymbolInstance {}
+
+/// Transform uniform data (matches OpenGL UBO layout)
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct WgpuTransformUniforms {
+    /// tw: [m00, m10, m20, canvas_width] 
+    pub tw: [f32; 4],
+    /// th: [m01, m11, m21, canvas_height]
+    pub th: [f32; 4],
+    /// colorFilter: [r, g, b, a]
+    pub color_filter: [f32; 4],
+}
+
+unsafe impl bytemuck::Pod for WgpuTransformUniforms {}
+unsafe impl bytemuck::Zeroable for WgpuTransformUniforms {}
+
+/// Base quad vertex for instanced rendering
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct WgpuQuadVertex {
+    /// Vertex position in unit quad coordinates (0,0) to (1,1)
+    pub position: [f32; 2],
+}
+
+unsafe impl bytemuck::Pod for WgpuQuadVertex {}
+unsafe impl bytemuck::Zeroable for WgpuQuadVertex {}
+
+/// Symbol frame data (equivalent to OpenGL GlCell)
+#[derive(Clone, Debug)]
+pub struct WgpuSymbolFrame {
+    pub width: f32,
+    pub height: f32,
+    pub origin_x: f32,
+    pub origin_y: f32,
+    pub uv_left: f32,
+    pub uv_top: f32,
+    pub uv_width: f32,
+    pub uv_height: f32,
+}
+
+/// WGPU Symbol Renderer using instanced rendering
+/// 
+/// This renderer exactly matches the OpenGL GlRenderSymbols behavior:
+/// - Uses a single base quad geometry
+/// - Each symbol is an instance with its own transform and UV data
+/// - Performs the same complex transformation chain in the vertex shader
 pub struct WgpuSymbolRenderer {
     canvas_width: f32,
     canvas_height: f32,
-    ratio_x: f32,
-    ratio_y: f32,
+    
+    /// Transform stack (equivalent to OpenGL transform_stack)
+    transform_stack: WgpuTransformStack,
+    
+    /// Symbol frames (equivalent to OpenGL symbols)
+    symbols: Vec<WgpuSymbolFrame>,
+    
+    /// Current instance buffer data
+    instance_buffer: Vec<WgpuSymbolInstance>,
+    
+    /// Instance count for current frame
+    instance_count: usize,
+    
+    /// Max instances capacity
+    max_instances: usize,
+    
+    /// Ratio parameters for coordinate transformation
+    pub ratio_x: f32,
+    pub ratio_y: f32,
+}
+
+/// Transform stack equivalent to OpenGL GlTransform
+#[derive(Clone, Debug)]
+pub struct WgpuTransformStack {
+    pub m00: f32,
+    pub m10: f32,
+    pub m20: f32,
+    pub m01: f32,
+    pub m11: f32,
+    pub m21: f32,
+}
+
+impl WgpuTransformStack {
+    pub fn new() -> Self {
+        Self {
+            m00: 1.0,
+            m10: 0.0,
+            m20: 0.0,
+            m01: 0.0,
+            m11: 1.0,
+            m21: 0.0,
+        }
+    }
+    
+    pub fn new_with_values(m00: f32, m10: f32, m20: f32, m01: f32, m11: f32, m21: f32) -> Self {
+        Self { m00, m10, m20, m01, m11, m21 }
+    }
 }
 
 impl WgpuSymbolRenderer {
-    /// Create new symbol renderer with canvas dimensions
     pub fn new(canvas_width: u32, canvas_height: u32) -> Self {
+        // Initialize transform stack to match OpenGL version:
+        // GlTransform::new_with_values(1.0, 0.0, 0.0, 0.0, -1.0, canvas_height as f32)
+        let transform_stack = WgpuTransformStack::new_with_values(
+            1.0, 0.0, 0.0,           // [m00, m10, m20]
+            0.0, -1.0, canvas_height as f32  // [m01, m11, m21]
+        );
+        
+        let max_instances = (canvas_width * canvas_height) as usize; // Conservative estimate
+        
         Self {
             canvas_width: canvas_width as f32,
             canvas_height: canvas_height as f32,
+            transform_stack,
+            symbols: Vec::new(),
+            instance_buffer: Vec::with_capacity(max_instances),
+            instance_count: 0,
+            max_instances,
             ratio_x: 1.0,
             ratio_y: 1.0,
         }
     }
-
-    /// Set the ratio parameters for coordinate transformation
+    
+    /// Load symbol texture and create symbol frames (equivalent to OpenGL load_texture)
+    pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
+        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+        
+        let th = (texh as f32 / sym_height) as usize;
+        let tw = (texw as f32 / sym_width) as usize;
+        
+        self.symbols.clear();
+        for i in 0..th {
+            for j in 0..tw {
+                let frame = self.make_symbols_frame(
+                    texw as f32, texh as f32,
+                    j as f32 * sym_width,
+                    i as f32 * sym_height,
+                );
+                self.symbols.push(frame);
+            }
+        }
+        
+        // Debug: Print symbols info
+        println!("WGPU Debug: Loaded {} symbols from {}x{} texture ({}x{} symbols grid)", 
+            self.symbols.len(), texw, texh, tw, th);
+    }
+    
+    /// Create symbol frame (equivalent to OpenGL make_symbols_frame)
+    fn make_symbols_frame(&self, tex_width: f32, tex_height: f32, x: f32, y: f32) -> WgpuSymbolFrame {
+        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+        
+        let origin_x = 1.0;
+        let origin_y = 1.0;
+        let uv_left = x / tex_width;
+        let uv_top = y / tex_height;
+        let uv_width = sym_width / tex_width;
+        let uv_height = sym_height / tex_height;
+        
+        WgpuSymbolFrame {
+            width: sym_width,
+            height: sym_height,
+            origin_x,
+            origin_y,
+            uv_left,
+            uv_top,
+            uv_width,
+            uv_height,
+        }
+    }
+    
+    /// Generate instance data from render cells (equivalent to OpenGL render_rbuf)
+    pub fn generate_instances_from_render_cells(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
+        self.instance_buffer.clear();
+        self.instance_count = 0;
+        
+        for r in render_cells {
+            // Create transform starting from global transform_stack (like OpenGL version)
+            let mut transform = self.transform_stack.clone();
+            
+            let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+            let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+            
+            // Apply the same transformation chain as OpenGL:
+            // 1. translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT)
+            transform.m20 += transform.m00 * (r.x + r.cx - sym_width) + transform.m10 * (r.y + r.cy - sym_height);
+            transform.m21 += transform.m01 * (r.x + r.cx - sym_width) + transform.m11 * (r.y + r.cy - sym_height);
+            
+            // 2. rotate(r.angle) if angle != 0
+            if r.angle != 0.0 {
+                let cos = r.angle.cos();
+                let sin = r.angle.sin();
+                let m00 = transform.m00;
+                let m01 = transform.m01;
+                transform.m00 = m00 * cos - transform.m10 * sin;
+                transform.m10 = m00 * sin + transform.m10 * cos;
+                transform.m01 = m01 * cos - transform.m11 * sin;
+                transform.m11 = m01 * sin + transform.m11 * cos;
+            }
+            
+            // 3. translate(-r.cx + PIXEL_SYM_WIDTH / ratio_x, -r.cy + PIXEL_SYM_HEIGHT / ratio_y)
+            let tx = -r.cx + sym_width / ratio_x;
+            let ty = -r.cy + sym_height / ratio_y;
+            transform.m20 += transform.m00 * tx + transform.m10 * ty;
+            transform.m21 += transform.m01 * tx + transform.m11 * ty;
+            
+            // 4. scale(1.0 / ratio_x, 1.0 / ratio_y)
+            transform.m00 *= 1.0 / ratio_x;
+            transform.m10 *= 1.0 / ratio_y;
+            transform.m01 *= 1.0 / ratio_x;
+            transform.m11 *= 1.0 / ratio_y;
+            
+            // Draw background if it exists
+            if let Some(b) = r.bcolor {
+                self.draw_symbol_instance(1280, &transform, [b.0, b.1, b.2, b.3]);
+            }
+            
+            // Draw foreground symbol
+            self.draw_symbol_instance(r.texsym, &transform, [r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3]);
+        }
+    }
+    
+    /// Add a symbol instance (equivalent to OpenGL draw_symbol)
+    fn draw_symbol_instance(&mut self, sym: usize, transform: &WgpuTransformStack, color: [f32; 4]) {
+        if self.instance_count >= self.max_instances {
+            println!("WGPU Debug: Instance count limit reached: {}/{}", self.instance_count, self.max_instances);
+            return;
+        }
+        if sym >= self.symbols.len() {
+            println!("WGPU Debug: Symbol index {} out of bounds, symbols.len()={}", sym, self.symbols.len());
+            return;
+        }
+        
+        let frame = &self.symbols[sym];
+        
+        // Create instance data matching OpenGL layout exactly
+        let instance = WgpuSymbolInstance {
+            // a1: [origin_x, origin_y, uv_left, uv_top]
+            a1: [frame.origin_x, frame.origin_y, frame.uv_left, frame.uv_top],
+            
+            // a2: [uv_width, uv_height, m00*width, m10*height]
+            a2: [
+                frame.uv_width, 
+                frame.uv_height,
+                transform.m00 * frame.width,
+                transform.m10 * frame.height
+            ],
+            
+            // a3: [m01*width, m11*height, m20, m21]
+            a3: [
+                transform.m01 * frame.width,
+                transform.m11 * frame.height,
+                transform.m20,
+                transform.m21
+            ],
+            
+            // color: [r, g, b, a]
+            color,
+        };
+        
+        self.instance_buffer.push(instance);
+        self.instance_count += 1;
+    }
+    
+    /// Get base quad vertices (equivalent to OpenGL quad vertices)
+    pub fn get_base_quad_vertices() -> &'static [WgpuQuadVertex] {
+        // Base quad vertices in unit coordinates (matches OpenGL TRIANGLE_FAN order)
+        // OpenGL uses: [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]
+        &[
+            WgpuQuadVertex { position: [0.0, 0.0] }, // Bottom-left
+            WgpuQuadVertex { position: [0.0, 1.0] }, // Top-left  
+            WgpuQuadVertex { position: [1.0, 1.0] }, // Top-right
+            WgpuQuadVertex { position: [1.0, 0.0] }, // Bottom-right
+        ]
+    }
+    
+    /// Get base quad indices for triangle list rendering
+    pub fn get_base_quad_indices() -> &'static [u16] {
+        // Convert TRIANGLE_FAN to TRIANGLE_LIST: (0,1,2) and (2,3,0)
+        &[0, 1, 2, 2, 3, 0]
+    }
+    
+    /// Get current instance buffer data
+    pub fn get_instance_buffer(&self) -> &[WgpuSymbolInstance] {
+        &self.instance_buffer[..self.instance_count]
+    }
+    
+    /// Get instance count
+    pub fn get_instance_count(&self) -> u32 {
+        self.instance_count as u32
+    }
+    
+    /// Get transform uniforms (equivalent to OpenGL UBO)
+    pub fn get_transform_uniforms(&self) -> WgpuTransformUniforms {
+        WgpuTransformUniforms {
+            // tw: [m00, m10, m20, canvas_width]
+            tw: [
+                self.transform_stack.m00,
+                self.transform_stack.m10, 
+                self.transform_stack.m20,
+                self.canvas_width
+            ],
+            // th: [m01, m11, m21, canvas_height]
+            th: [
+                self.transform_stack.m01,
+                self.transform_stack.m11,
+                self.transform_stack.m21,
+                self.canvas_height
+            ],
+            // colorFilter: [r, g, b, a] - default to white (no filtering)
+            color_filter: [1.0, 1.0, 1.0, 1.0],
+        }
+    }
+    
+    /// Update canvas dimensions
+    pub fn update_canvas_size(&mut self, width: u32, height: u32) {
+        self.canvas_width = width as f32;
+        self.canvas_height = height as f32;
+        
+        // Update transform stack canvas height (matches OpenGL behavior)
+        self.transform_stack.m21 = height as f32;
+    }
+    
+    /// Set ratio parameters for coordinate transformation
     pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
         self.ratio_x = ratio_x;
         self.ratio_y = ratio_y;
     }
-
-    /// Generate vertices from processed render cells
-    ///
-    /// This is the main rendering interface that converts RenderCell data
-    /// into GPU-ready vertex data with proper coordinate transformations.
-    pub fn generate_vertices_from_render_cells(
-        &self,
-        render_cells: &[RenderCell],
-    ) -> Vec<super::pixel::WgpuVertex> {
-        let mut vertices = Vec::new();
-
-        // Constants for texture atlas layout
-        // symbols.png is 1024x1024 pixels with 128x128 symbol positions
-        // Each symbol occupies 8x8 pixels (1024÷128=8)
-        const PIXELS_PER_SYMBOL: f32 = 8.0; // Each symbol is 8x8 pixels
-        const TEXTURE_SIZE: f32 = 1024.0; // Total texture size in pixels
-
-        // Canvas dimensions for NDC conversion
-        let window_width = self.canvas_width;
-        let window_height = self.canvas_height;
-
-        // Get symbol dimensions from global constants (matches OpenGL version)
-        let sym_width = crate::render::adapter::PIXEL_SYM_WIDTH
-            .get()
-            .expect("lazylock init");
-        let sym_height = crate::render::adapter::PIXEL_SYM_HEIGHT
-            .get()
-            .expect("lazylock init");
-
-        // Convert render cells to vertices
-        for render_cell in render_cells {
-            // Apply the same transformation chain as OpenGL version
-            // The RenderCell coordinates contain PIXEL_SYM_WIDTH/HEIGHT offset which needs OpenGL-style transform
-
-            // Use the RenderCell coordinates directly (they already contain proper positioning)
-            // Apply simple transformation for position and size
-            // Use the RenderCell coordinates directly (they already contain proper positioning)
-            let base_x = render_cell.x;
-            let base_y = render_cell.y;
-            let width = render_cell.w as f32;
-            let height = render_cell.h as f32;
-
-            // Calculate basic quad bounds
-            let left = base_x;
-            let right = base_x + width;
-            let top = base_y;
-            let bottom = base_y + height;
-
-            // Handle rotation around the center point if needed
-            let (left_ndc, right_ndc, top_ndc, bottom_ndc) = if render_cell.angle != 0.0 {
-                // Define the quad corners in world space
-                let corners = vec![
-                    (left, bottom),  // bottom-left
-                    (right, bottom), // bottom-right
-                    (right, top),    // top-right
-                    (left, top),     // top-left
-                ];
-
-                // Apply rotation around the center point (use the center from RenderCell)
-                let center_x = render_cell.x + render_cell.cx;
-                let center_y = render_cell.y + render_cell.cy;
-
-                let rotated_corners: Vec<(f32, f32)> = corners
-                    .iter()
-                    .map(|(x, y)| {
-                        // Translate to origin (center point)
-                        let translated_x = x - center_x;
-                        let translated_y = y - center_y;
-
-                        // Apply rotation (use negative angle to match OpenGL coordinate system)
-                        let cos_angle = (-render_cell.angle).cos();
-                        let sin_angle = (-render_cell.angle).sin();
-
-                        let rotated_x = translated_x * cos_angle - translated_y * sin_angle;
-                        let rotated_y = translated_x * sin_angle + translated_y * cos_angle;
-
-                        // Translate back
-                        (rotated_x + center_x, rotated_y + center_y)
-                    })
-                    .collect();
-
-                // Convert to NDC and apply OpenGL shader offset
-                let ndc_corners: Vec<(f32, f32)> = rotated_corners
-                    .iter()
-                    .map(|(x, y)| {
-                        let x_ndc = (x / window_width) * 2.0 - 1.0;
-                        let y_ndc = 1.0 - (y / window_height) * 2.0;
-                        // Apply hardcoded offset for debugging
-                        let offset_x = ADJX; // Adjust this value for testing
-                        let offset_y = ADJY; // Adjust this value for testing
-                        (x_ndc - offset_x, y_ndc - offset_y)
-                    })
-                    .collect();
-
-                (
-                    ndc_corners[0],
-                    ndc_corners[1],
-                    ndc_corners[2],
-                    ndc_corners[3],
-                )
-            } else {
-                // No rotation - simple conversion to NDC and apply OpenGL shader offset
-                let left_ndc = (left / window_width) * 2.0 - 1.0;
-                let right_ndc = (right / window_width) * 2.0 - 1.0;
-                let top_ndc = 1.0 - (top / window_height) * 2.0;
-                let bottom_ndc = 1.0 - (bottom / window_height) * 2.0;
-
-                // Apply hardcoded offset for debugging
-                let offset_x = ADJX; // Adjust this value for testing
-                let offset_y = ADJY; // Adjust this value for testing
-                (
-                    (left_ndc - offset_x, bottom_ndc - offset_y),
-                    (right_ndc - offset_x, bottom_ndc - offset_y),
-                    (right_ndc - offset_x, top_ndc - offset_y),
-                    (left_ndc - offset_x, top_ndc - offset_y),
-                )
-            };
-
-            // First, render background if it exists (similar to GL mode)
-            if let Some(bcolor) = render_cell.bcolor {
-                // Use a solid block symbol for background (index 1280 like GL mode)
-                // Calculate texture coordinates for background symbol (solid block)
-                let bg_texsym = 1280; // Same as GL mode - should be a solid block symbol
-
-                let symbols_per_row = 128;
-                let bg_symbol_x = (bg_texsym % symbols_per_row) as f32;
-                let bg_symbol_y = (bg_texsym / symbols_per_row) as f32;
-
-                let bg_pixel_x = bg_symbol_x * PIXELS_PER_SYMBOL;
-                let bg_pixel_y = bg_symbol_y * PIXELS_PER_SYMBOL;
-
-                let bg_tex_left = bg_pixel_x / TEXTURE_SIZE;
-                let bg_tex_right = (bg_pixel_x + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
-                let bg_tex_top = bg_pixel_y / TEXTURE_SIZE;
-                let bg_tex_bottom = (bg_pixel_y + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
-
-                // Use background color
-                let bg_color = [bcolor.0, bcolor.1, bcolor.2, bcolor.3];
-
-                // Create background quad vertices (6 vertices for 2 triangles)
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [left_ndc.0, left_ndc.1], // bottom-left
-                    tex_coords: [bg_tex_left, bg_tex_bottom],
-                    color: bg_color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [right_ndc.0, right_ndc.1], // bottom-right
-                    tex_coords: [bg_tex_right, bg_tex_bottom],
-                    color: bg_color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [top_ndc.0, top_ndc.1], // top-right
-                    tex_coords: [bg_tex_right, bg_tex_top],
-                    color: bg_color,
-                });
-
-                // Second triangle for background
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [left_ndc.0, left_ndc.1], // bottom-left
-                    tex_coords: [bg_tex_left, bg_tex_bottom],
-                    color: bg_color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [top_ndc.0, top_ndc.1], // top-right
-                    tex_coords: [bg_tex_right, bg_tex_top],
-                    color: bg_color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [bottom_ndc.0, bottom_ndc.1], // top-left
-                    tex_coords: [bg_tex_left, bg_tex_top],
-                    color: bg_color,
-                });
-            }
-
-            // Then render the foreground symbol
-            let color = [
-                render_cell.fcolor.0,
-                render_cell.fcolor.1,
-                render_cell.fcolor.2,
-                render_cell.fcolor.3,
-            ];
-
-            // Calculate texture coordinates from texsym field using OpenGL-compatible method
-            // texsym directly indexes into the 128x128 symbol grid
-            let texsym = render_cell.texsym;
-
-            // Calculate symbol grid position (matches OpenGL make_symbols_frame logic)
-            let symbols_per_row = 128;
-            let symbol_x = (texsym % symbols_per_row) as f32;
-            let symbol_y = (texsym / symbols_per_row) as f32;
-
-            // Convert to pixel coordinates (each symbol is 8x8 pixels in 1024x1024 texture)
-            let pixel_x = symbol_x * PIXELS_PER_SYMBOL;
-            let pixel_y = symbol_y * PIXELS_PER_SYMBOL;
-
-            // Convert to normalized texture coordinates (0.0-1.0)
-            // Match OpenGL uv calculation: uv_left = x / tex_width
-            let tex_left = pixel_x / TEXTURE_SIZE;
-            let tex_right = (pixel_x + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
-            let tex_top = pixel_y / TEXTURE_SIZE;
-            let tex_bottom = (pixel_y + PIXELS_PER_SYMBOL) / TEXTURE_SIZE;
-
-            // Create foreground quad vertices (using triangle list, so need 6 vertices per quad)
-            // Use the calculated (potentially rotated) corner positions
-            // Corners are: [bottom-left, bottom-right, top-right, top-left]
-            vertices.push(super::pixel::WgpuVertex {
-                position: [left_ndc.0, left_ndc.1], // bottom-left
-                tex_coords: [tex_left, tex_bottom],
-                color,
-            });
-            vertices.push(super::pixel::WgpuVertex {
-                position: [right_ndc.0, right_ndc.1], // bottom-right
-                tex_coords: [tex_right, tex_bottom],
-                color,
-            });
-            vertices.push(super::pixel::WgpuVertex {
-                position: [top_ndc.0, top_ndc.1], // top-right
-                tex_coords: [tex_right, tex_top],
-                color,
-            });
-
-            // Second triangle for foreground
-            vertices.push(super::pixel::WgpuVertex {
-                position: [left_ndc.0, left_ndc.1], // bottom-left
-                tex_coords: [tex_left, tex_bottom],
-                color,
-            });
-            vertices.push(super::pixel::WgpuVertex {
-                position: [top_ndc.0, top_ndc.1], // top-right
-                tex_coords: [tex_right, tex_top],
-                color,
-            });
-            vertices.push(super::pixel::WgpuVertex {
-                position: [bottom_ndc.0, bottom_ndc.1], // top-left
-                tex_coords: [tex_left, tex_top],
-                color,
-            });
-        }
-
-        vertices
+    
+    /// Generate vertices from buffer (legacy method for compatibility)
+    /// This method exists for backward compatibility but is no longer used
+    /// in the instanced rendering pipeline
+    pub fn generate_vertices_from_buffer(&self, _buffer: &crate::render::buffer::Buffer) -> Vec<crate::render::adapter::wgpu::pixel::WgpuVertex> {
+        // Return empty vector since we now use instanced rendering
+        Vec::new()
     }
+}
 
-    /// Generate vertices from game buffer (alternative interface)
-    ///
-    /// This method processes the raw game buffer and converts it to vertex data.
-    /// Less efficient than render_cells method but provides compatibility.
-    pub fn generate_vertices_from_buffer(
-        &self,
-        buffer: &crate::render::buffer::Buffer,
-    ) -> Vec<super::pixel::WgpuVertex> {
-        let mut vertices = Vec::new();
-
-        // Buffer dimensions
-        let buffer_width = buffer.area.width as f32;
-        let buffer_height = buffer.area.height as f32;
-
-        // Calculate scaling factors
-        let scale_x = self.canvas_width / buffer_width;
-        let scale_y = self.canvas_height / buffer_height;
-
-        // Symbol texture atlas constants
-        const SYMBOLS_PER_ROW: u32 = 16; // 16x16 grid in texture
-        const SYMBOL_SIZE: f32 = 1.0 / 16.0; // Each symbol is 1/16 of texture
-
-        // Process each cell in the buffer
-        for y in 0..buffer.area.height {
-            for x in 0..buffer.area.width {
-                let cell = buffer.get(x, y);
-
-                // Skip empty cells (space character or transparent)
-                if cell.symbol == " " || cell.fg == Color::Reset {
-                    continue;
-                }
-
-                // Calculate screen position
-                // Calculate screen position
-                let screen_x = x as f32 * scale_x;
-                let screen_y = y as f32 * scale_y;
-                let cell_width = scale_x;
-                let cell_height = scale_y;
-
-                // Convert to NDC coordinates and apply OpenGL shader offset
-                let left = (screen_x / self.canvas_width) * 2.0 - 1.0;
-                let right = ((screen_x + cell_width) / self.canvas_width) * 2.0 - 1.0;
-                let top = 1.0 - (screen_y / self.canvas_height) * 2.0;
-                let bottom = 1.0 - ((screen_y + cell_height) / self.canvas_height) * 2.0;
-
-                // Apply hardcoded offset for debugging
-                let offset_x = ADJX; // Adjust this value for testing
-                let offset_y = ADJY; // Adjust this value for testing
-                let left = left - offset_x;
-                let right = right - offset_x;
-                let top = top - offset_y;
-                let bottom = bottom - offset_y;
-
-                // Calculate texture coordinates based on character
-                // Map ASCII characters to texture atlas positions
-                let char_index = if let Some(ch) = cell.symbol.chars().next() {
-                    ch as u32
-                } else {
-                    32 // space character
-                };
-                let tex_x = (char_index % SYMBOLS_PER_ROW) as f32;
-                let tex_y = (char_index / SYMBOLS_PER_ROW) as f32;
-
-                let tex_left = tex_x * SYMBOL_SIZE;
-                let tex_right = (tex_x + 1.0) * SYMBOL_SIZE;
-                let tex_top = tex_y * SYMBOL_SIZE;
-                let tex_bottom = (tex_y + 1.0) * SYMBOL_SIZE;
-
-                // Use cell color
-                let (r, g, b, a) = cell.fg.get_rgba();
-                let color = [
-                    r as f32 / 255.0,
-                    g as f32 / 255.0,
-                    b as f32 / 255.0,
-                    a as f32 / 255.0,
-                ];
-
-                // Create quad (6 vertices for 2 triangles)
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [left, bottom],
-                    tex_coords: [tex_left, tex_bottom],
-                    color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [right, bottom],
-                    tex_coords: [tex_right, tex_bottom],
-                    color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [right, top],
-                    tex_coords: [tex_right, tex_top],
-                    color,
-                });
-
-                // Second triangle
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [left, bottom],
-                    tex_coords: [tex_left, tex_bottom],
-                    color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [right, top],
-                    tex_coords: [tex_right, tex_top],
-                    color,
-                });
-                vertices.push(super::pixel::WgpuVertex {
-                    position: [left, top],
-                    tex_coords: [tex_left, tex_top],
-                    color,
-                });
-            }
+impl WgpuQuadVertex {
+    /// Vertex buffer layout descriptor for base quad
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<WgpuQuadVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+            ],
         }
-
-        vertices
     }
+}
 
-    /// Update canvas dimensions (for window resize)
-    pub fn update_canvas_size(&mut self, width: u32, height: u32) {
-        self.canvas_width = width as f32;
-        self.canvas_height = height as f32;
-        // ratio parameters remain unchanged
+impl WgpuSymbolInstance {
+    /// Instance buffer layout descriptor
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<WgpuSymbolInstance>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                // a1: vec4<f32> at location 1
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // a2: vec4<f32> at location 2
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // a3: vec4<f32> at location 3
+                wgpu::VertexAttribute {
+                    offset: (2 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // color: vec4<f32> at location 4
+                wgpu::VertexAttribute {
+                    offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        }
     }
 }

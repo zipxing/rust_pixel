@@ -7,7 +7,7 @@
 //! Handles texture-based character and symbol rendering with
 //! instanced drawing for high performance.
 
-use super::render_symbols::WgpuSymbolRenderer;
+use super::render_symbols::{WgpuSymbolRenderer, WgpuSymbolInstance, WgpuQuadVertex, WgpuTransformUniforms};
 use super::render_general2d::WgpuGeneral2dRender;
 use super::render_transition::WgpuTransitionRender;
 use super::shader_source;
@@ -101,16 +101,19 @@ pub struct WgpuPixelRender {
     /// Surface format for render target compatibility
     surface_format: wgpu::TextureFormat,
 
-    /// Current vertex count for drawing
-    vertex_count: u32,
+    /// Current instance count for drawing
+    instance_count: u32,
 
-    /// Vertex buffer for quad geometry
-    vertex_buffer: Option<wgpu::Buffer>,
+    /// Base quad vertex buffer (shared for all symbols)
+    quad_vertex_buffer: Option<wgpu::Buffer>,
 
-    /// Index buffer for quad indices
+    /// Instance buffer for per-symbol data
+    instance_buffer: Option<wgpu::Buffer>,
+
+    /// Index buffer for quad triangulation
     index_buffer: Option<wgpu::Buffer>,
 
-    /// Uniform buffer for transformation matrices
+    /// Uniform buffer for transform data
     uniform_buffer: Option<wgpu::Buffer>,
 
     /// Main texture for symbols and characters
@@ -143,8 +146,9 @@ impl WgpuPixelRender {
             general2d_renderer: WgpuGeneral2dRender::new(canvas_width, canvas_height),
             transition_renderer: WgpuTransitionRender::new(canvas_width, canvas_height),
             surface_format,
-            vertex_count: 0,
-            vertex_buffer: None,
+            instance_count: 0,
+            quad_vertex_buffer: None,
+            instance_buffer: None,
             index_buffer: None,
             uniform_buffer: None,
             symbol_texture: None,
@@ -527,6 +531,9 @@ impl WgpuPixelRender {
             height: texture_height,
         });
 
+        // Load texture data into symbol renderer
+        self.symbol_renderer.load_texture(texture_width as i32, texture_height as i32, &texture_image);
+
         Ok(())
     }
 
@@ -562,41 +569,7 @@ impl WgpuPixelRender {
         }
     }
 
-    /// Vertex data for a fullscreen quad
-    ///
-    /// Two triangles forming a rectangle covering the entire screen.
-    /// Used as base geometry for all symbol rendering.
-    const VERTICES: &'static [WgpuVertex] = &[
-        // Triangle 1
-        WgpuVertex {
-            position: [-1.0, -1.0], // Bottom left
-            tex_coords: [0.0, 1.0],
-            color: [1.0, 0.0, 0.0, 1.0], // Red
-        },
-        WgpuVertex {
-            position: [1.0, -1.0], // Bottom right
-            tex_coords: [1.0, 1.0],
-            color: [0.0, 1.0, 0.0, 1.0], // Green
-        },
-        WgpuVertex {
-            position: [1.0, 1.0], // Top right
-            tex_coords: [1.0, 0.0],
-            color: [0.0, 0.0, 1.0, 1.0], // Blue
-        },
-        WgpuVertex {
-            position: [-1.0, 1.0], // Top left
-            tex_coords: [0.0, 0.0],
-            color: [1.0, 1.0, 0.0, 1.0], // Yellow
-        },
-    ];
-
-    /// Index data for quad triangulation
-    ///
-    /// Two triangles: (0,1,2) and (2,3,0) forming a rectangle.
-    const INDICES: &'static [u16] = &[
-        0, 1, 2, // First triangle
-        2, 3, 0, // Second triangle
-    ];
+    // 已移除未使用的VERTICES和INDICES常量
 
     /// Prepare drawing with actual game buffer content
     pub fn prepare_draw_with_buffer(
@@ -605,58 +578,14 @@ impl WgpuPixelRender {
         queue: &wgpu::Queue,
         buffer: &crate::render::buffer::Buffer,
     ) {
-        // For now, generate vertices based on buffer content
-        let vertices = self.symbol_renderer.generate_vertices_from_buffer(buffer);
-        self.vertex_count = vertices.len() as u32;
-
-        // Debug: Print rendering information (only first frame)
-        static mut FIRST_FRAME: bool = true;
-        unsafe {
-            if FIRST_FRAME && vertices.len() > 0 {
-                println!(
-                    "WGPU Debug: Generated {} vertices, first 3 colors:",
-                    vertices.len()
-                );
-                for i in 0..(3.min(vertices.len())) {
-                    let v = &vertices[i];
-                    println!(
-                        "  Vertex {}: pos=[{:.2}, {:.2}], color=[{:.2}, {:.2}, {:.2}, {:.2}]",
-                        i,
-                        v.position[0],
-                        v.position[1],
-                        v.color[0],
-                        v.color[1],
-                        v.color[2],
-                        v.color[3]
-                    );
-                }
-                FIRST_FRAME = false;
-            }
-        }
-
-        // Upload generated vertex data
-        if let Some(vertex_buffer) = &self.vertex_buffer {
-            queue.write_buffer(vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-        }
-
-        // Upload index data
-        if let Some(index_buffer) = &self.index_buffer {
-            queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(Self::INDICES));
-        }
-
-        // Upload uniform data (identity matrix for now)
-        if let Some(uniform_buffer) = &self.uniform_buffer {
-            let uniforms = WgpuUniforms {
-                transform: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
-                color_filter: [1.0, 1.0, 1.0, 1.0],
-            };
-            queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        }
+        // Note: This method exists for compatibility but is simplified
+        // In practice, prepare_draw_with_render_cells is used directly
+        // since the adapter already converts buffers to render cells
+        
+        // For now, create an empty render cells array
+        // This will be properly implemented when the full adapter pipeline is connected
+        let render_cells = vec![];
+        self.prepare_draw_with_render_cells(device, queue, &render_cells);
     }
 
     /// Prepare drawing with processed render cells (preferred method)
@@ -670,34 +599,25 @@ impl WgpuPixelRender {
         queue: &wgpu::Queue,
         render_cells: &[crate::render::adapter::RenderCell],
     ) {
-        let vertices = self
-            .symbol_renderer
-            .generate_vertices_from_render_cells(render_cells);
-        self.vertex_count = vertices.len() as u32;
+        // Generate instance data using symbol renderer
+        self.symbol_renderer.generate_instances_from_render_cells(
+            render_cells,
+            self.symbol_renderer.ratio_x,
+            self.symbol_renderer.ratio_y,
+        );
 
-        // Debug output removed for performance
+        // Get instance data from symbol renderer
+        let instances = self.symbol_renderer.get_instance_buffer();
+        self.instance_count = self.symbol_renderer.get_instance_count();
 
-        // Upload generated vertex data
-        if let Some(vertex_buffer) = &self.vertex_buffer {
-            queue.write_buffer(vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+        // Upload instance data
+        if let Some(instance_buffer) = &self.instance_buffer {
+            queue.write_buffer(instance_buffer, 0, bytemuck::cast_slice(instances));
         }
 
-        // Upload index data
-        if let Some(index_buffer) = &self.index_buffer {
-            queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(Self::INDICES));
-        }
-
-        // Upload uniform data (identity matrix for now)
+        // Upload transform uniform data
         if let Some(uniform_buffer) = &self.uniform_buffer {
-            let uniforms = WgpuUniforms {
-                transform: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
-                color_filter: [1.0, 1.0, 1.0, 1.0],
-            };
+            let uniforms = self.symbol_renderer.get_transform_uniforms();
             queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
     }
@@ -707,9 +627,19 @@ impl WgpuPixelRender {
         self.base.render_pipelines.get(0)
     }
 
-    /// Get the vertex buffer (for internal access)
+    /// Get the quad vertex buffer (for internal access)
     pub fn get_vertex_buffer(&self) -> Option<&wgpu::Buffer> {
-        self.vertex_buffer.as_ref()
+        self.quad_vertex_buffer.as_ref()
+    }
+
+    /// Get the instance buffer (for internal access)
+    pub fn get_instance_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.instance_buffer.as_ref()
+    }
+
+    /// Get the index buffer (for internal access)
+    pub fn get_index_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.index_buffer.as_ref()
     }
 
     /// Get the bind group (for internal access)
@@ -717,9 +647,9 @@ impl WgpuPixelRender {
         self.bind_group.as_ref()
     }
 
-    /// Get the vertex count (for internal access)
+    /// Get the instance count (for internal access)
     pub fn get_vertex_count(&self) -> u32 {
-        self.vertex_count
+        self.instance_count
     }
 
     /// Get mutable reference to the General2D renderer (for internal access)
@@ -747,22 +677,22 @@ impl WgpuRender for WgpuPixelRender {
     }
 
     fn create_shader(&mut self, device: &wgpu::Device) {
-        // Create shader modules from shader_source module
+        // Create shader modules for instanced rendering
         let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Symbol Vertex Shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_source::PIXEL_UNIFORM_VERTEX_SHADER.into()),
+            label: Some("Symbol Instanced Vertex Shader"),
+            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_VERTEX_SHADER.into()),
         });
 
         let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Symbol Fragment Shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_source::PIXEL_TEXTURE_FRAGMENT_SHADER.into()),
+            label: Some("Symbol Instanced Fragment Shader"),
+            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER.into()),
         });
 
-        // Create bind group layout for texture and sampler
+        // Create bind group layout for instanced rendering
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Symbol Bind Group Layout"),
+            label: Some("Symbol Instanced Bind Group Layout"),
             entries: &[
-                // Uniform buffer (transformation matrix)
+                // Uniform buffer (transform data)
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -797,18 +727,18 @@ impl WgpuRender for WgpuPixelRender {
         // Create render pipeline layout with bind group
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Symbol Render Pipeline Layout"),
+                label: Some("Symbol Instanced Render Pipeline Layout"),
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Symbol Render Pipeline"),
+            label: Some("Symbol Instanced Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &vertex_shader,
                 entry_point: "vs_main",
-                buffers: &[WgpuVertex::desc()],
+                buffers: &[WgpuQuadVertex::desc(), WgpuSymbolInstance::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -856,63 +786,69 @@ impl WgpuRender for WgpuPixelRender {
     }
 
     fn create_buffer(&mut self, device: &wgpu::Device) {
-        // Create vertex buffer with enough space for many vertices
-        // Estimate max vertices based on canvas size: each cell could be 6 vertices (2 triangles)
-        let max_vertices = self.base.canvas_width * self.base.canvas_height * 6;
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Pixel Vertex Buffer"),
-            size: (max_vertices as usize * std::mem::size_of::<WgpuVertex>()) as u64,
+        // Create base quad vertex buffer (shared by all instances)
+        let quad_vertices = WgpuSymbolRenderer::get_base_quad_vertices();
+        let quad_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Quad Vertex Buffer"),
+            size: (quad_vertices.len() * std::mem::size_of::<WgpuQuadVertex>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // Create index buffer
+        // Create instance buffer with enough space for many instances
+        let max_instances = self.base.canvas_width * self.base.canvas_height; // Conservative estimate
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Symbol Instance Buffer"),
+            size: (max_instances as usize * std::mem::size_of::<WgpuSymbolInstance>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create index buffer for triangulated quad
+        let quad_indices = WgpuSymbolRenderer::get_base_quad_indices();
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Pixel Index Buffer"),
-            size: (Self::INDICES.len() * std::mem::size_of::<u16>()) as u64,
+            label: Some("Quad Index Buffer"),
+            size: (quad_indices.len() * std::mem::size_of::<u16>()) as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // Create uniform buffer
+        // Create uniform buffer for transform data
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Pixel Uniform Buffer"),
-            size: std::mem::size_of::<WgpuUniforms>() as u64,
+            label: Some("Transform Uniform Buffer"),
+            size: std::mem::size_of::<WgpuTransformUniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         // Store buffers
-        self.vertex_buffer = Some(vertex_buffer);
+        self.quad_vertex_buffer = Some(quad_vertex_buffer);
+        self.instance_buffer = Some(instance_buffer);
         self.index_buffer = Some(index_buffer);
         self.uniform_buffer = Some(uniform_buffer);
     }
 
     fn prepare_draw(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        // Upload test vertex data
-        self.vertex_count = Self::VERTICES.len() as u32;
-        if let Some(vertex_buffer) = &self.vertex_buffer {
-            queue.write_buffer(vertex_buffer, 0, bytemuck::cast_slice(Self::VERTICES));
+        // Upload base quad vertex data
+        let quad_vertices = WgpuSymbolRenderer::get_base_quad_vertices();
+        if let Some(quad_vertex_buffer) = &self.quad_vertex_buffer {
+            queue.write_buffer(quad_vertex_buffer, 0, bytemuck::cast_slice(quad_vertices));
         }
 
-        // Upload index data
+        // Upload quad index data
+        let quad_indices = WgpuSymbolRenderer::get_base_quad_indices();
         if let Some(index_buffer) = &self.index_buffer {
-            queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(Self::INDICES));
+            queue.write_buffer(index_buffer, 0, bytemuck::cast_slice(quad_indices));
         }
 
-        // Upload uniform data (identity matrix for now)
+        // Upload transform uniform data
         if let Some(uniform_buffer) = &self.uniform_buffer {
-            let uniforms = WgpuUniforms {
-                transform: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
-                color_filter: [1.0, 1.0, 1.0, 1.0],
-            };
+            let uniforms = self.symbol_renderer.get_transform_uniforms();
             queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
+
+        // Initialize instance count to 0 (will be set in prepare_draw_with_render_cells)
+        self.instance_count = 0;
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
@@ -937,21 +873,34 @@ impl WgpuRender for WgpuPixelRender {
             occlusion_query_set: None,
         });
 
-        // Set pipeline and buffers
+        // Set pipeline and buffers for instanced rendering
         if let Some(pipeline) = self.base.render_pipelines.get(0) {
             render_pass.set_pipeline(pipeline);
 
-            if let Some(vertex_buffer) = &self.vertex_buffer {
-                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            // Set quad vertex buffer (buffer 0)
+            if let Some(quad_vertex_buffer) = &self.quad_vertex_buffer {
+                render_pass.set_vertex_buffer(0, quad_vertex_buffer.slice(..));
+            }
 
-                // Set bind group with texture and uniform buffer
-                if let Some(bind_group) = &self.bind_group {
-                    render_pass.set_bind_group(0, bind_group, &[]);
-                }
+            // Set instance buffer (buffer 1)
+            if let Some(instance_buffer) = &self.instance_buffer {
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            }
 
-                // Draw vertices directly (triangle list mode)
-                // Use the actual vertex count from the last prepare_draw_with_buffer call
-                render_pass.draw(0..self.vertex_count, 0..1);
+            // Set index buffer
+            if let Some(index_buffer) = &self.index_buffer {
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            }
+
+            // Set bind group with texture and uniform buffer
+            if let Some(bind_group) = &self.bind_group {
+                render_pass.set_bind_group(0, bind_group, &[]);
+            }
+
+            // Draw using instanced rendering
+            if self.instance_count > 0 {
+                let quad_indices = WgpuSymbolRenderer::get_base_quad_indices();
+                render_pass.draw_indexed(0..quad_indices.len() as u32, 0, 0..self.instance_count);
             }
         }
     }

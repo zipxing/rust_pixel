@@ -1167,8 +1167,8 @@ impl WinitAdapter {
     /// 负责将render texture中的内容最终合成到屏幕上，支持转场效果。
     /// 
     /// 完整的WGPU渲染流程：
-    /// 1. 将RenderCell数据渲染到render texture 2（主场景）
-    /// 2. 将render texture 2和3合成到屏幕（最终输出）
+    /// 1. 将RenderCell数据渲染到render texture 2
+    /// 2. 将render texture 2和3合成到屏幕
     #[cfg(feature = "wgpu")]
     fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
@@ -1182,116 +1182,76 @@ impl WinitAdapter {
             let rbuf = &self.base.rbuf;
             if !rbuf.is_empty() {
                 // 准备渲染数据（在开始渲染通道之前）
-                pixel_renderer.prepare_draw_with_render_cells(device, queue, rbuf);
+                pixel_renderer.prepare_draw(device, queue); // 上传基础顶点、索引和uniform数据
+                pixel_renderer.prepare_draw_with_render_cells(device, queue, rbuf); // 上传实例数据
+                
+                // 获取当前表面纹理
+                let output = surface
+                    .get_current_texture()
+                    .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
 
-                // 创建命令编码器用于渲染到render texture
-                let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("RustPixel Render Texture Encoder"),
+                let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                // 创建命令编码器用于渲染到屏幕
+                let mut screen_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("RustPixel Direct Screen Render Encoder"),
                 });
 
-                // 开始渲染到render texture 2
-                let mut render_pass = pixel_renderer.begin_render_to_texture(&mut rt_encoder, 2)?;
+                // 开始渲染到屏幕
+                let mut render_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Screen Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+
                 if let Some(pipeline) = pixel_renderer.get_render_pipeline() {
                     render_pass.set_pipeline(pipeline);
                 }
 
-                // 设置缓冲区和绑定组
-                if let Some(vertex_buffer) = pixel_renderer.get_vertex_buffer() {
-                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    if let Some(bind_group) = pixel_renderer.get_bind_group() {
-                        render_pass.set_bind_group(0, bind_group, &[]);
-                        render_pass.draw(0..pixel_renderer.get_vertex_count(), 0..1);
+                // 设置缓冲区和绑定组 - 实例化渲染
+                if let Some(quad_vertex_buffer) = pixel_renderer.get_vertex_buffer() {
+                    render_pass.set_vertex_buffer(0, quad_vertex_buffer.slice(..));
+                }
+                
+                // 设置实例缓冲区
+                if let Some(instance_buffer) = pixel_renderer.get_instance_buffer() {
+                    render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                }
+                
+                // 设置索引缓冲区
+                if let Some(index_buffer) = pixel_renderer.get_index_buffer() {
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                }
+                
+                if let Some(bind_group) = pixel_renderer.get_bind_group() {
+                    render_pass.set_bind_group(0, bind_group, &[]);
+                    
+                    // 使用实例化索引渲染
+                    let instance_count = pixel_renderer.get_vertex_count(); // 现在返回实例数量
+                    if instance_count > 0 {
+                        // 绘制基础四边形的6个索引，重复instance_count次
+                        render_pass.draw_indexed(0..6, 0, 0..instance_count);
                     }
                 }
 
                 // 结束渲染通道
                 std::mem::drop(render_pass);
                 
-                // 提交render texture渲染命令
-                queue.submit(std::iter::once(rt_encoder.finish()));
+                // 提交渲染命令并呈现帧
+                queue.submit(std::iter::once(screen_encoder.finish()));
+                output.present();
             }
-
-            // 步骤2：将render texture合成到屏幕
-            // 这对应OpenGL版本的draw_render_textures_to_screen()
-            
-            // 获取当前表面纹理
-            let output = surface
-                .get_current_texture()
-                .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
-
-            let view = output
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-
-            // 创建命令编码器用于最终合成
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("RustPixel Screen Render Encoder"),
-            });
-
-            // 使用与OpenGL版本相同的逻辑渲染render texture到屏幕
-            use crate::render::adapter::wgpu::transform::WgpuTransform;
-            use crate::render::adapter::wgpu::color::WgpuColor;
-            use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
-
-            // 确保General2D渲染器使用正确的surface格式
-            let surface_format = if let Some(surface_config) = &self.wgpu_surface_config {
-                surface_config.format
-            } else {
-                wgpu::TextureFormat::Bgra8Unorm // 默认格式
-            };
-            
-            // 重新初始化General2D渲染器以使用正确的surface格式
-            if let Some(general2d) = pixel_renderer.get_general2d_render_mut() {
-                general2d.create_shader_with_format(device, surface_format);
-                general2d.create_buffer(device);
-            }
-
-            let c = WgpuColor::new(1.0, 1.0, 1.0, 1.0);
-
-            // 绘制render_texture 2（主缓冲区）- 对应OpenGL版本的逻辑
-            if !pixel_renderer.get_render_texture_hidden(2) {
-                let t = WgpuTransform::new();
-                pixel_renderer.draw_general2d(
-                    device,
-                    queue,
-                    &mut encoder,
-                    &view,
-                    2,
-                    [0.0, 0.0, 1.0, 1.0],
-                    &t,
-                    &c,
-                )?;
-            }
-
-            // 绘制render_texture 3（转场缓冲区）- 对应OpenGL版本的逻辑
-            if !pixel_renderer.get_render_texture_hidden(3) {
-                let pcw = pixel_renderer.canvas_width as f32;
-                let pch = pixel_renderer.canvas_height as f32;
-                let rx = self.base.ratio_x;
-                let ry = self.base.ratio_y;
-                // 使用实际的游戏区域尺寸而不是硬编码的40x25
-                let pw = self.base.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = self.base.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
-
-                let mut t2 = WgpuTransform::new();
-                t2.scale(pw / pcw, ph / pch);
-                pixel_renderer.draw_general2d(
-                    device,
-                    queue,
-                    &mut encoder,
-                    &view,
-                    3,
-                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                    &t2,
-                    &c,
-                )?;
-            }
-
-            // 提交最终合成命令
-            queue.submit(std::iter::once(encoder.finish()));
-            
-            // 呈现帧
-            output.present();
         } else {
             return Err("WGPU components not initialized".to_string());
         }
