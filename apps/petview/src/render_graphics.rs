@@ -194,7 +194,8 @@ impl Render for PetviewRender {
             }
             
             let p1 = self.panel.get_pixel_sprite("petimg1");
-            asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
+            let image_name = format!("{}.pix", model.img_count - model.img_cur);
+            asset2sprite!(p1, ctx, &image_name);
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
             
             // Draw to texture for both modes
@@ -203,7 +204,8 @@ impl Render for PetviewRender {
             }
 
             let p2 = self.panel.get_pixel_sprite("petimg2");
-            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            let image_name2 = format!("{}.pix", model.img_count - model.img_next);
+            asset2sprite!(p2, ctx, &image_name2);
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
             
             // Draw to texture for both modes
@@ -212,35 +214,24 @@ impl Render for PetviewRender {
             }
 
             let p3 = self.panel.get_pixel_sprite("petimg3");
-            asset2sprite!(p3, ctx, &format!("{}.pix", model.img_count - model.img_next));
-            p3.set_hidden(true);
+            let image_name3 = format!("{}.pix", model.img_count - model.img_next);
+            asset2sprite!(p3, ctx, &image_name3);
+            p3.set_hidden(false); // 让图片可见，不隐藏
 
             let p4 = self.panel.get_pixel_sprite("petimg4");
-            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_count - model.img_next));
-            p4.set_hidden(true);
+            let image_name4 = format!("{}.pix", model.img_count - model.img_next);
+            asset2sprite!(p4, ctx, &image_name4);
+            p4.set_hidden(false); // 让图片可见，不隐藏
 
             if l1 && l2 {
                 model.tex_ready = true;
-                info!("tex_ready.........");
+                info!("tex_ready - images loaded to render textures 0 and 1");
             }
         }
         if event_check("PetView.Timer", "pet_timer") {
-            // Common transition logic for both OpenGL and WGPU modes
+            // 恢复完整的转场逻辑，添加关键调试信息
             match PetviewState::from_usize(ctx.state as usize).unwrap() {
                 PetviewState::Normal => {
-                    // OpenGL mode
-                    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-                    {
-                        let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
-                            pix.bind_target(gl, 3);
-                            pix.set_render_texture_hidden(3, false);
-                            let p3 = self.panel.get_pixel_sprite("petimg3");
-                            p3.set_hidden(true);
-                            pix.render_trans_frame(&gl, 0, 1.0);
-                        }
-                    }
-                    
                     // WGPU mode
                     #[cfg(feature = "wgpu")]
                     {
@@ -253,77 +244,20 @@ impl Render for PetviewRender {
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
                                 
+                                info!("TRANSITION: Normal state - attempting transition effect 0 with progress 1.0");
                                 // 使用高级API进行转场渲染
                                 if let Err(e) = winit_adapter.render_transition_to_texture_wgpu(3, 0, 1.0) {
-                                    info!("WGPU transition error: {}", e);
+                                    info!("TRANSITION ERROR: {}", e);
+                                } else {
+                                    info!("TRANSITION: Normal state transition successful");
                                 }
-                                
-                                info!("WGPU: Normal state - render texture 3 visible");
-                            }
-                        }
-                    }
-                }
-                PetviewState::TransBuf => {
-                    // OpenGL mode - complex distortion effects
-                    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-                    {
-                        let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
-                            pix.bind_target(gl, 3);
-                            pix.set_render_texture_hidden(3, true);
-                            let p4 = self.panel.get_pixel_sprite("petimg4");
-                            let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                            let distortion_fn1 =
-                                |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                            let mut tbuf = p4.content.clone();
-                            let clen = tbuf.content.len();
-                            apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                            let distortion_fn2 =
-                                |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                            apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-                            for _ in 0..model.transbuf_stage / 2 {
-                                tbuf.content[ctx.rand.rand() as usize % clen]
-                                    .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                    .set_fg(Color::Rgba(155, 155, 155, 155));
-                            }
-
-                            let p3 = self.panel.get_pixel_sprite("petimg3");
-                            p3.content = tbuf.clone();
-                            p3.set_alpha(((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8);
-                            p3.set_hidden(false);
-                        }
-                    }
-                    
-                    // WGPU mode - simplified preparation phase
-                    #[cfg(feature = "wgpu")]
-                    {
-                        use rust_pixel::render::adapter::winit::WinitAdapter;
-                        use std::any::Any;
-                        
-                        if let Some(winit_adapter) = ctx.adapter.as_any().downcast_mut::<WinitAdapter>() {
-                            if let Some(wgpu_pixel_renderer) = &mut winit_adapter.wgpu_pixel_renderer {
-                                wgpu_pixel_renderer.set_render_texture_hidden(3, true);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                                info!("WGPU: TransBuf stage - preparing transition");
                             }
                         }
                     }
                 }
                 PetviewState::TransGl => {
-                    // OpenGL mode
-                    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-                    {
-                        let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
-                            pix.bind_target(gl, 3);
-                            pix.set_render_texture_hidden(3, false);
-                            let p3 = self.panel.get_pixel_sprite("petimg3");
-                            p3.set_hidden(true);
-                            pix.render_trans_frame(&gl, model.trans_effect, model.progress);
-                        }
-                    }
+                    info!("TRANSITION: TransGl state - effect: {}, progress: {:.2}", 
+                          model.trans_effect, model.progress);
                     
                     // WGPU mode - full transition effects
                     #[cfg(feature = "wgpu")]
@@ -343,13 +277,19 @@ impl Render for PetviewRender {
                                     model.trans_effect, 
                                     model.progress
                                 ) {
-                                    info!("WGPU transition error: {}", e);
+                                    info!("TRANSITION ERROR: {}", e);
+                                } else {
+                                    info!("TRANSITION: TransGl transition successful - effect: {}, progress: {:.2}", 
+                                          model.trans_effect, model.progress);
                                 }
-                                
-                                info!("WGPU: TransGl - effect: {}, progress: {:.2}", model.trans_effect, model.progress);
                             }
                         }
                     }
+                }
+                _ => {
+                    // 其他状态暂时保持sprite可见
+                    let p3 = self.panel.get_pixel_sprite("petimg3");
+                    p3.set_hidden(false);
                 }
             }
             
