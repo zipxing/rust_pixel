@@ -1479,25 +1479,26 @@ impl Adapter for WinitAdapter {
                 pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
             }
 
-            // draw render_texture 3 ( gl transition )
-            if !pix.get_render_texture_hidden(3) {
-                let pcw = pix.canvas_width as f32;
-                let pch = pix.canvas_height as f32;
-                let rx = bs.ratio_x;
-                let ry = bs.ratio_y;
-                let pw = 40.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = 25.0 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                    // draw render_texture 3 ( gl transition )
+        if !pix.get_render_texture_hidden(3) {
+            let pcw = pix.canvas_width as f32;
+            let pch = pix.canvas_height as f32;
+            let rx = bs.ratio_x;
+            let ry = bs.ratio_y;
+            // Use actual game area dimensions instead of hardcoded 40x25
+            let pw = bs.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+            let ph = bs.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
-                let mut t2 = GlTransform::new();
-                t2.scale(pw / pcw, ph / pch);
-                pix.draw_general2d(
-                    gl,
-                    3,
-                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                    &t2,
-                    &c,
-                );
-            }
+            let mut t2 = GlTransform::new();
+            t2.scale(pw / pcw, ph / pch);
+            pix.draw_general2d(
+                gl,
+                3,
+                [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
+                &t2,
+                &c,
+            );
+        }
         }
     }
 }
