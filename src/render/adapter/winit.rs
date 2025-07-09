@@ -1166,9 +1166,10 @@ impl WinitAdapter {
     /// 这是WGPU版本的draw_render_textures_to_screen方法，与OpenGL版本对应。
     /// 负责将render texture中的内容最终合成到屏幕上，支持转场效果。
     /// 
-    /// 完整的WGPU渲染流程：
-    /// 1. 将RenderCell数据渲染到render texture 2
-    /// 2. 将render texture 2和3合成到屏幕
+    /// 正确的WGPU渲染流程：
+    /// 1. 将RenderCell数据渲染到render texture 2（主缓冲区）
+    /// 2. 将render texture 2合成到屏幕（如果不隐藏）
+    /// 3. 将render texture 3合成到屏幕（如果不隐藏，用于转场效果）
     #[cfg(feature = "wgpu")]
     fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
@@ -1177,14 +1178,35 @@ impl WinitAdapter {
             &self.wgpu_surface,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 步骤1：将RenderCell数据渲染到render texture 2
-            // 这对应OpenGL版本的draw_render_buffer_to_texture(&rbuf, 2, false)
             let rbuf = &self.base.rbuf;
             if !rbuf.is_empty() {
-                // 准备渲染数据（在开始渲染通道之前）
-                pixel_renderer.prepare_draw(device, queue); // 上传基础顶点、索引和uniform数据
-                pixel_renderer.prepare_draw_with_render_cells(device, queue, rbuf); // 上传实例数据
+                // 步骤1：将RenderCell数据渲染到render texture 2（主缓冲区）
+                // 这对应OpenGL版本的draw_render_buffer_to_texture(&rbuf, 2, false)
+                {
+                    // 准备渲染数据
+                    pixel_renderer.prepare_draw(device, queue);
+                    pixel_renderer.prepare_draw_with_render_cells(device, queue, rbuf);
+                    
+                    // 创建命令编码器用于渲染到纹理
+                    let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Render to RT2 Encoder"),
+                    });
+                    
+                    // 渲染到render texture 2
+                    {
+                        let render_pass_result = pixel_renderer.begin_render_to_texture(&mut rt_encoder, 2);
+                        if let Ok(mut render_pass) = render_pass_result {
+                            // begin_render_to_texture已经设置好了pipeline、buffers和bind groups
+                            render_pass.draw_indexed(0..6, 0, 0..pixel_renderer.get_instance_count());
+                        }
+                        // render_pass自动drop
+                    }
+                    
+                    // 提交渲染到纹理的命令
+                    queue.submit(std::iter::once(rt_encoder.finish()));
+                }
                 
+                // 步骤2：将render texture合成到屏幕
                 // 获取当前表面纹理
                 let output = surface
                     .get_current_texture()
@@ -1194,61 +1216,81 @@ impl WinitAdapter {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                // 创建命令编码器用于渲染到屏幕
+                // 创建命令编码器用于屏幕合成
                 let mut screen_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("RustPixel Direct Screen Render Encoder"),
+                    label: Some("Screen Composition Encoder"),
                 });
 
-                // 开始渲染到屏幕
-                let mut render_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Screen Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-
-                if let Some(pipeline) = pixel_renderer.get_render_pipeline() {
-                    render_pass.set_pipeline(pipeline);
+                // 清空屏幕
+                {
+                    let _clear_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Clear Screen Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+                    // clear_pass自动drop
                 }
 
-                // 设置缓冲区和绑定组 - 实例化渲染
-                if let Some(quad_vertex_buffer) = pixel_renderer.get_vertex_buffer() {
-                    render_pass.set_vertex_buffer(0, quad_vertex_buffer.slice(..));
-                }
-                
-                // 设置实例缓冲区
-                if let Some(instance_buffer) = pixel_renderer.get_instance_buffer() {
-                    render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
-                }
-                
-                // 设置索引缓冲区
-                if let Some(index_buffer) = pixel_renderer.get_index_buffer() {
-                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                }
-                
-                if let Some(bind_group) = pixel_renderer.get_bind_group() {
-                    render_pass.set_bind_group(0, bind_group, &[]);
+                // 绘制render texture 2（主缓冲区）到屏幕
+                if !pixel_renderer.get_render_texture_hidden(2) {
+                    use crate::render::adapter::wgpu::transform::WgpuTransform;
+                    use crate::render::adapter::wgpu::color::WgpuColor;
                     
-                    // 使用实例化索引渲染
-                    let instance_count = pixel_renderer.get_vertex_count(); // 现在返回实例数量
-                    if instance_count > 0 {
-                        // 绘制基础四边形的6个索引，重复instance_count次
-                        render_pass.draw_indexed(0..6, 0, 0..instance_count);
-                    }
+                    let transform = WgpuTransform::new();
+                    let color = WgpuColor::new(1.0, 1.0, 1.0, 1.0);
+                    
+                    pixel_renderer.draw_general2d(
+                        device,
+                        queue,
+                        &mut screen_encoder,
+                        &view,
+                        2, // render texture 2
+                        [0.0, 0.0, 1.0, 1.0], // 全屏区域
+                        &transform,
+                        &color,
+                    )?;
                 }
 
-                // 结束渲染通道
-                std::mem::drop(render_pass);
+                // 绘制render texture 3（转场效果）到屏幕
+                if !pixel_renderer.get_render_texture_hidden(3) {
+                    use crate::render::adapter::wgpu::transform::WgpuTransform;
+                    use crate::render::adapter::wgpu::color::WgpuColor;
+                    
+                    let pcw = pixel_renderer.canvas_width as f32;
+                    let pch = pixel_renderer.canvas_height as f32;
+                    let rx = self.base.ratio_x;
+                    let ry = self.base.ratio_y;
+                    
+                    // 使用固定的游戏区域尺寸（匹配OpenGL版本）
+                    let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                    let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+
+                    let mut transform = WgpuTransform::new();
+                    transform.scale(pw / pcw, ph / pch);
+                    let color = WgpuColor::new(1.0, 1.0, 1.0, 1.0);
+                    
+                    pixel_renderer.draw_general2d(
+                        device,
+                        queue,
+                        &mut screen_encoder,
+                        &view,
+                        3, // render texture 3
+                        [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch], // 游戏区域
+                        &transform,
+                        &color,
+                    )?;
+                }
                 
-                // 提交渲染命令并呈现帧
+                // 提交屏幕合成命令并呈现帧
                 queue.submit(std::iter::once(screen_encoder.finish()));
                 output.present();
             }
