@@ -7,14 +7,16 @@
 //! Handles texture-based character and symbol rendering with
 //! instanced drawing for high performance.
 
-use super::render_symbols::{WgpuSymbolRenderer, WgpuSymbolInstance, WgpuQuadVertex, WgpuTransformUniforms};
+use super::color::WgpuColor;
 use super::render_general2d::WgpuGeneral2dRender;
+use super::render_symbols::{
+    WgpuQuadVertex, WgpuSymbolInstance, WgpuSymbolRenderer, WgpuTransformUniforms,
+};
 use super::render_transition::WgpuTransitionRender;
 use super::shader_source;
-use super::*;
 use super::texture::WgpuRenderTexture;
 use super::transform::WgpuTransform;
-use super::color::WgpuColor;
+use super::*;
 
 /// Vertex data structure for WGPU rendering
 ///
@@ -161,7 +163,7 @@ impl WgpuPixelRender {
     }
 
     /// Initialize render textures (similar to OpenGL GlPixel)
-    /// 
+    ///
     /// Creates 4 render textures for transition effects:
     /// - 0: transition texture 1 (hidden by default)
     /// - 1: transition texture 2 (hidden by default)
@@ -170,30 +172,36 @@ impl WgpuPixelRender {
     pub fn init_render_textures(&mut self, device: &wgpu::Device) -> Result<(), String> {
         // Clear existing render textures
         self.render_textures.clear();
-        
+
         // Create 4 render textures with appropriate hidden states
         let rt_hidden = [true, true, false, false];
-        
+
         for i in 0..4 {
             let render_texture = WgpuRenderTexture::new_with_format(
                 device,
                 self.canvas_width,
                 self.canvas_height,
-                self.surface_format,  // Use surface format to match pipelines
+                self.surface_format, // Use surface format to match pipelines
                 rt_hidden[i],
             )?;
-            
+
             self.render_textures.push(render_texture);
-            
-            log::info!("WGPU render texture {} created ({}x{}, format: {:?}, hidden: {})", 
-                i, self.canvas_width, self.canvas_height, self.surface_format, rt_hidden[i]);
+
+            log::info!(
+                "WGPU render texture {} created ({}x{}, format: {:?}, hidden: {})",
+                i,
+                self.canvas_width,
+                self.canvas_height,
+                self.surface_format,
+                rt_hidden[i]
+            );
         }
-        
+
         Ok(())
     }
 
     /// Initialize General2D renderer for texture-to-texture rendering
-    /// 
+    ///
     /// # Parameters
     /// - `device`: WGPU device handle
     pub fn init_general2d_renderer(&mut self, device: &wgpu::Device) {
@@ -201,7 +209,7 @@ impl WgpuPixelRender {
     }
 
     /// Initialize Transition renderer for transition effects
-    /// 
+    ///
     /// # Parameters
     /// - `device`: WGPU device handle
     pub fn init_transition_renderer(&mut self, device: &wgpu::Device) {
@@ -209,10 +217,10 @@ impl WgpuPixelRender {
     }
 
     /// Get render texture hidden state (matches OpenGL GlPixel interface)
-    /// 
+    ///
     /// # Parameters
     /// - `rtidx`: Render texture index (0-3)
-    /// 
+    ///
     /// # Returns
     /// True if hidden, false if visible
     pub fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
@@ -224,7 +232,7 @@ impl WgpuPixelRender {
     }
 
     /// Set render texture hidden state (matches OpenGL GlPixel interface)
-    /// 
+    ///
     /// # Parameters
     /// - `rtidx`: Render texture index (0-3)
     /// - `hidden`: New hidden state
@@ -235,10 +243,10 @@ impl WgpuPixelRender {
     }
 
     /// Get a reference to a specific render texture
-    /// 
+    ///
     /// # Parameters
     /// - `rtidx`: Render texture index (0-3)
-    /// 
+    ///
     /// # Returns
     /// Optional reference to the render texture
     pub fn get_render_texture(&self, rtidx: usize) -> Option<&WgpuRenderTexture> {
@@ -246,10 +254,10 @@ impl WgpuPixelRender {
     }
 
     /// Get a mutable reference to a specific render texture
-    /// 
+    ///
     /// # Parameters
     /// - `rtidx`: Render texture index (0-3)
-    /// 
+    ///
     /// # Returns
     /// Optional mutable reference to the render texture
     pub fn get_render_texture_mut(&mut self, rtidx: usize) -> Option<&mut WgpuRenderTexture> {
@@ -257,15 +265,15 @@ impl WgpuPixelRender {
     }
 
     /// Render to a specific render texture (similar to OpenGL bind_target)
-    /// 
+    ///
     /// This method sets up the render pass to render to a specific render texture
     /// instead of the screen, enabling off-screen rendering for transition effects.
     /// The returned render pass is fully configured with the instanced rendering pipeline.
-    /// 
+    ///
     /// # Parameters
     /// - `encoder`: Command encoder for the render pass
     /// - `rtidx`: Render texture index (0-3)
-    /// 
+    ///
     /// # Returns
     /// Result containing the fully configured render pass or error
     pub fn begin_render_to_texture<'a>(
@@ -278,7 +286,7 @@ impl WgpuPixelRender {
         }
 
         let render_texture = &self.render_textures[rtidx];
-        
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(&format!("Render to Texture {}", rtidx)),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -323,10 +331,10 @@ impl WgpuPixelRender {
     }
 
     /// Draw a render texture to screen or another render target using General2D renderer
-    /// 
+    ///
     /// This method provides the same interface as OpenGL GlPixel.draw_general2d(),
     /// allowing WGPU mode to render render textures with transformations and color modulation.
-    /// 
+    ///
     /// # Parameters
     /// - `device`: WGPU device handle
     /// - `queue`: WGPU queue handle
@@ -377,7 +385,7 @@ impl WgpuPixelRender {
     }
 
     /// Render transition frame (matches OpenGL GlPixel::render_trans_frame interface)
-    /// 
+    ///
     /// # Parameters
     /// - `device`: WGPU device handle
     /// - `queue`: WGPU queue handle
@@ -398,20 +406,24 @@ impl WgpuPixelRender {
         if self.render_textures.len() < 2 {
             return Err("Not enough render textures for transition effect".to_string());
         }
-        
+
         if target_texture_idx >= self.render_textures.len() {
-            return Err(format!("Target texture index {} out of range", target_texture_idx));
+            return Err(format!(
+                "Target texture index {} out of range",
+                target_texture_idx
+            ));
         }
 
         // Get texture views for render textures 0 and 1 (source textures)
         let texture1_view = &self.render_textures[0].view;
         let texture2_view = &self.render_textures[1].view;
-        
+
         // Get target texture view
         let target_view = &self.render_textures[target_texture_idx].view;
 
         // Set textures on transition renderer
-        self.transition_renderer.set_textures(device, texture1_view, texture2_view);
+        self.transition_renderer
+            .set_textures(device, texture1_view, texture2_view);
 
         // Draw transition effect with the correct target format
         self.transition_renderer.draw_transition_with_format(
@@ -426,9 +438,9 @@ impl WgpuPixelRender {
 
         Ok(())
     }
-    
+
     /// Render transition frame (matches OpenGL GlPixel::render_trans_frame interface)
-    /// 
+    ///
     /// # Parameters
     /// - `device`: WGPU device handle
     /// - `queue`: WGPU queue handle
@@ -455,7 +467,8 @@ impl WgpuPixelRender {
         let texture2_view = &self.render_textures[1].view;
 
         // Set textures on transition renderer
-        self.transition_renderer.set_textures(device, texture1_view, texture2_view);
+        self.transition_renderer
+            .set_textures(device, texture1_view, texture2_view);
 
         // Draw transition effect with the correct target format
         self.transition_renderer.draw_transition_with_format(
@@ -560,7 +573,11 @@ impl WgpuPixelRender {
         });
 
         // Load texture data into symbol renderer
-        self.symbol_renderer.load_texture(texture_width as i32, texture_height as i32, &texture_image);
+        self.symbol_renderer.load_texture(
+            texture_width as i32,
+            texture_height as i32,
+            &texture_image,
+        );
 
         Ok(())
     }
@@ -609,7 +626,7 @@ impl WgpuPixelRender {
         // Note: This method exists for compatibility but is simplified
         // In practice, prepare_draw_with_render_cells is used directly
         // since the adapter already converts buffers to render cells
-        
+
         // For now, create an empty render cells array
         // This will be properly implemented when the full adapter pipeline is connected
         let render_cells = vec![];
@@ -691,7 +708,7 @@ impl WgpuPixelRender {
     }
 
     /// Set the ratio parameters for coordinate transformation
-    /// 
+    ///
     /// This method configures the ratio parameters that are used for coordinate
     /// transformation to match the OpenGL version's behavior exactly.
     pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
@@ -718,7 +735,9 @@ impl WgpuRender for WgpuPixelRender {
 
         let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Instanced Fragment Shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(
+                shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER.into(),
+            ),
         });
 
         // Create bind group layout for instanced rendering

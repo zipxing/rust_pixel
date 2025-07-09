@@ -840,6 +840,8 @@ pub trait Adapter {
                 // Use actual game area dimensions instead of hardcoded 40x25
                 let pw = bs.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                 let ph = bs.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                // let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                // let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
                 // Create transform with proper scaling
                 let mut t2 = GlTransform::new();
