@@ -156,6 +156,12 @@ use crate::{
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 use crate::render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform};
 use std::any::Any;
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 use std::sync::OnceLock;
 use std::time::Duration;
 // use log::info;
@@ -226,6 +232,12 @@ pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 ///
 /// Symbol size is calculated based on the size of the texture.
 /// For a 128×128 symbol grid, each symbol's width is texture_width / 128.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub fn init_sym_width(width: u32) -> f32 {
     width as f32 / 128.0
 }
@@ -234,6 +246,12 @@ pub fn init_sym_width(width: u32) -> f32 {
 ///
 /// Symbol size is calculated based on the size of the texture.
 /// For a 128×128 symbol grid, each symbol's height is texture_height / 128.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub fn init_sym_height(height: u32) -> f32 {
     height as f32 / 128.0
 }
@@ -242,26 +260,48 @@ pub fn init_sym_height(height: u32) -> f32 {
 ///
 /// This value is calculated once during initialization and cached for performance.
 /// Used throughout the rendering pipeline for texture coordinate calculations.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
 /// Global symbol height in pixels (initialized once)
 ///
 /// This value is calculated once during initialization and cached for performance.
 /// Used throughout the rendering pipeline for texture coordinate calculations.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
 /// RustPixel Logo width in characters
 ///
 /// This defines the width of the startup logo animation in character units.
 /// Used during the initial startup sequence for graphics mode rendering.
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 
 /// RustPixel Logo height in characters
 ///
 /// This defines the height of the startup logo animation in character units.
 /// Used during the initial startup sequence for graphics mode rendering.
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
 
 /// RustPixel Logo data array
@@ -275,7 +315,12 @@ pub const PIXEL_LOGO_HEIGHT: usize = 12;
 /// 2. Each triplet [symbol, texture, flags] defines a character
 /// 3. Logo is centered on screen with animated effects
 /// 4. After logo timeout, normal game rendering begins
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
     32, 15, 1, 32, 202, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 239, 1, 32, 15, 1, 100, 239, 1, 32,
     239, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0,
@@ -341,6 +386,12 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 ///
 /// Each RenderCell contains all information needed to render one character
 /// or sprite, including colors, position, rotation, and texture coordinates.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
     /// Foreground color as RGBA components (0.0-1.0 range)
@@ -451,7 +502,12 @@ pub struct AdapterBase {
     ///
     /// - true: Direct rendering to screen (normal mode)
     /// - false: Buffered rendering for external access (used for FFI/WASM)
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     pub rflag: bool,
 
     /// Render buffer storing RenderCell array for buffered mode
@@ -459,7 +515,12 @@ pub struct AdapterBase {
     /// When rflag is false, rendered data is stored here instead of
     /// being directly drawn to screen. Used for external access to
     /// rendering data (e.g., Python FFI, WASM exports).
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     pub rbuf: Vec<RenderCell>,
 
     /// OpenGL context handle
@@ -490,9 +551,19 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
-            #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+            #[cfg(any(
+                feature = "sdl",
+                feature = "winit",
+                feature = "wgpu",
+                target_arch = "wasm32"
+            ))]
             rflag: true,
-            #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+            #[cfg(any(
+                feature = "sdl",
+                feature = "winit",
+                feature = "wgpu",
+                target_arch = "wasm32"
+            ))]
             rbuf: vec![],
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl: None,
@@ -638,11 +709,19 @@ pub trait Adapter {
     where
         Self: Sized,
     {
-        let bs = self.get_base();
-        bs.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
-            / bs.ratio_x) as u32;
-        bs.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
-            / bs.ratio_y) as u32;
+        #[cfg(any(
+            feature = "sdl",
+            feature = "winit",
+            feature = "wgpu",
+            target_arch = "wasm32"
+        ))]
+        {
+            let bs = self.get_base();
+            bs.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
+                / bs.ratio_x) as u32;
+            bs.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+                / bs.ratio_y) as u32;
+        }
         self
     }
 
@@ -725,7 +804,12 @@ pub trait Adapter {
     /// ## Rendering Modes
     /// - **rflag=true**: Normal rendering directly to screen
     /// - **rflag=false**: Buffered mode - stores render data for external access (FFI/WASM)
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn draw_all_graph(
         &mut self,
         current_buffer: &Buffer,
@@ -751,7 +835,12 @@ pub trait Adapter {
         }
     }
 
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn only_render_buffer(&mut self) {
         self.get_base().rflag = false;
     }
@@ -799,12 +888,17 @@ pub trait Adapter {
     /// The method handles different display pixel densities by calculating proper
     /// scaling ratios and viewport transformations, ensuring consistent rendering
     /// across various screen types including Retina displays.
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn draw_render_textures_to_screen(&mut self) {
         #[cfg(feature = "wgpu")]
         {
             use crate::render::adapter::winit::WinitAdapter;
-            
+
             if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
                 if let Err(e) = winit_adapter.draw_render_textures_to_screen_wgpu() {
                     eprintln!("WGPU draw_render_textures_to_screen error: {}", e);
@@ -812,7 +906,7 @@ pub trait Adapter {
                 return;
             }
         }
-        
+
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
             // OpenGL mode implementation
@@ -866,49 +960,60 @@ pub trait Adapter {
     }
 
     // draw buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         #[cfg(feature = "wgpu")]
         {
-            use crate::render::adapter::winit::WinitAdapter;
             use crate::render::adapter::wgpu::WgpuRender;
-            
+            use crate::render::adapter::winit::WinitAdapter;
+
             // First, convert buffer to render buffer to avoid borrowing conflicts
             let rbuf = self.buffer_to_render_buffer(buf);
-            
+
             if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
                 if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
                     &mut winit_adapter.wgpu_pixel_renderer,
                     &winit_adapter.wgpu_device,
-                    &winit_adapter.wgpu_queue
+                    &winit_adapter.wgpu_queue,
                 ) {
                     // Prepare all render data first
                     wgpu_pixel_renderer.prepare_draw(device, queue); // Upload base vertices, indices, uniforms
                     wgpu_pixel_renderer.prepare_draw_with_render_cells(device, queue, &rbuf); // Upload instance data
-                    
+
                     // Create command encoder for rendering to texture
-                    let mut encoder = device.create_command_encoder(&::wgpu::CommandEncoderDescriptor {
-                        label: Some("Buffer to Texture Encoder"),
-                    });
-                    
+                    let mut encoder =
+                        device.create_command_encoder(&::wgpu::CommandEncoderDescriptor {
+                            label: Some("Buffer to Texture Encoder"),
+                        });
+
                     // Render to the specified render texture
                     {
-                        let render_pass_result = wgpu_pixel_renderer.begin_render_to_texture(&mut encoder, rtidx);
+                        let render_pass_result =
+                            wgpu_pixel_renderer.begin_render_to_texture(&mut encoder, rtidx);
                         if let Ok(mut render_pass) = render_pass_result {
                             // begin_render_to_texture already sets up the pipeline, buffers, and bind groups
                             // Just perform the instanced draw call
-                            render_pass.draw_indexed(0..6, 0, 0..wgpu_pixel_renderer.get_instance_count());
+                            render_pass.draw_indexed(
+                                0..6,
+                                0,
+                                0..wgpu_pixel_renderer.get_instance_count(),
+                            );
                         }
                         // render_pass is automatically dropped here
                     }
-                    
+
                     // Now we can safely finish the encoder
                     queue.submit(std::iter::once(encoder.finish()));
                     return;
                 }
             }
         }
-        
+
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
             let rbuf = self.buffer_to_render_buffer(buf);
@@ -919,20 +1024,26 @@ pub trait Adapter {
     }
 
     // draw render buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
         #[cfg(feature = "wgpu")]
         {
             use crate::render::adapter::winit::WinitAdapter;
-            
+
             if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
-                if let Err(e) = winit_adapter.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
+                if let Err(e) = winit_adapter.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug)
+                {
                     eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
                 }
                 return;
             }
         }
-        
+
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
             // OpenGL mode implementation
@@ -954,7 +1065,12 @@ pub trait Adapter {
     }
 
     // buffer to render buffer - unified for both OpenGL and WGPU
-    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
     fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
         let rx = self.get_base().ratio_x;
