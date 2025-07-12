@@ -1122,7 +1122,7 @@ impl WinitAdapter {
     /// 2. 将render texture 2合成到屏幕（如果不隐藏）
     /// 3. 将render texture 3合成到屏幕（如果不隐藏，用于转场效果）
     #[cfg(feature = "wgpu")]
-    fn draw_render_textures_to_screen_wgpu_impl(&mut self) -> Result<(), String> {
+    pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
             &self.wgpu_device,
             &self.wgpu_queue,
@@ -1222,14 +1222,14 @@ impl WinitAdapter {
         Ok(())
     }
 
-    /// WGPU版本的render texture到屏幕渲染（统一接口）
-    /// 
-    /// 这个方法提供了与OpenGL版本相同的接口，统一了两种渲染后端的调用方式。
-    /// 它不需要render buffer参数，因为数据已经在之前的draw_render_buffer_to_texture中处理过了。
-    #[cfg(feature = "wgpu")]
-    pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
-        self.draw_render_textures_to_screen_wgpu_impl()
-    }
+    // /// WGPU版本的render texture到屏幕渲染（统一接口）
+    // /// 
+    // /// 这个方法提供了与OpenGL版本相同的接口，统一了两种渲染后端的调用方式。
+    // /// 它不需要render buffer参数，因为数据已经在之前的draw_render_buffer_to_texture中处理过了。
+    // #[cfg(feature = "wgpu")]
+    // pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
+    //     self.draw_render_textures_to_screen_wgpu_impl()
+    // }
 }
 
 impl Adapter for WinitAdapter {
