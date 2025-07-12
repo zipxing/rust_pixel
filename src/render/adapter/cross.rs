@@ -122,7 +122,7 @@ impl Adapter for CrosstermAdapter {
         false
     }
 
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,

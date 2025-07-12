@@ -179,7 +179,7 @@ impl Panel {
         let cb = &self.buffers[self.current];
         let pb = &self.buffers[1 - self.current];
         ctx.adapter
-            .draw_all_to_screen(cb, pb, &mut self.layers, ctx.stage)
+            .draw_all(cb, pb, &mut self.layers, ctx.stage)
             .unwrap();
         ctx.adapter.hide_cursor().unwrap();
 

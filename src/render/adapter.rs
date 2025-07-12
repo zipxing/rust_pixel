@@ -451,7 +451,7 @@ pub struct AdapterBase {
     ///
     /// - true: Direct rendering to screen (normal mode)
     /// - false: Buffered rendering for external access (used for FFI/WASM)
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
     pub rflag: bool,
 
     /// Render buffer storing RenderCell array for buffered mode
@@ -459,7 +459,7 @@ pub struct AdapterBase {
     /// When rflag is false, rendered data is stored here instead of
     /// being directly drawn to screen. Used for external access to
     /// rendering data (e.g., Python FFI, WASM exports).
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
     pub rbuf: Vec<RenderCell>,
 
     /// OpenGL context handle
@@ -490,9 +490,9 @@ impl AdapterBase {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rd: Rand::new(),
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+            #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
             rflag: true,
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+            #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
             rbuf: vec![],
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl: None,
@@ -523,14 +523,14 @@ impl AdapterBase {
 /// ## Typical Usage Flow
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
-/// │                    Game Application                          │
+/// │                    Game Application                         │
 /// │                                                             │
 /// │  1. init() ──────────► Initialize renderer                  │
 /// │  2. Loop:                                                   │
 /// │     ├── poll_event() ─► Handle input events                 │
 /// │     ├── (game logic) ──► Update game state                  │
-/// │     └── draw_all_to_screen() ──► Render frame               │
-/// │  3. (cleanup) ────────► Automatic cleanup on drop          │
+/// │     └── draw_all() ──► Render frame                         │
+/// │  3. (cleanup) ────────► Automatic cleanup on drop           │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 pub trait Adapter {
@@ -593,7 +593,7 @@ pub trait Adapter {
     ///
     /// # Returns
     /// Result indicating success or error message
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
@@ -672,22 +672,21 @@ pub trait Adapter {
     /// ┌─────────────────────────────────────────────────────────────┐
     /// │                     Pass 1: Data Conversion                 │
     /// │                                                             │
-    /// │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-    /// │  │   Buffer    │    │   Sprites   │    │    Logo     │     │
-    /// │  │             │    │             │    │             │     │
-    /// │  └─────────────┘    └─────────────┘    └─────────────┘     │
-    /// │         │                 │                    │           │
-    /// │         └─────────────────┼────────────────────┘           │
-    /// │                           ▼                                │
-    /// │                ┌─────────────────────┐                     │
-    /// │                │  draw_all_to_render │                     │
-    /// │                │      _buffer()      │                     │
-    /// │                └─────────────────────┘                     │
-    /// │                           │                                │
-    /// │                           ▼                                │
-    /// │                ┌─────────────────────┐                     │
-    /// │                │Vec<RenderCell> rbuf │                     │
-    /// │                └─────────────────────┘                     │
+    /// │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
+    /// │  │   Buffer    │    │   Sprites   │    │    Logo     │      │
+    /// │  │             │    │             │    │             │      │
+    /// │  └─────────────┘    └─────────────┘    └─────────────┘      │
+    /// │         │                 │                    │            │
+    /// │         └─────────────────┼────────────────────┘            │
+    /// │                           ▼                                 │
+    /// │                ┌───────────────────────┐                    │
+    /// │                │ generate_render_buffer│                    │
+    /// │                └───────────────────────┘                    │
+    /// │                           │                                 │
+    /// │                           ▼                                 │
+    /// │                ┌─────────────────────┐                      │
+    /// │                │Vec<RenderCell> rbuf │                      │
+    /// │                └─────────────────────┘                      │
     /// └─────────────────────────────────────────────────────────────┘
     ///                              │
     ///                              ▼
@@ -736,7 +735,7 @@ pub trait Adapter {
     ) {
         // Pass 1: Convert game data (buffer + sprites) to GPU-ready format
         let rbuf =
-            self.draw_all_to_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
+            self.generate_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
 
         // Pass 2: Render to screen or buffer based on mode
         if self.get_base().rflag {
@@ -974,14 +973,14 @@ pub trait Adapter {
         rbuf
     }
 
-    // draw main buffer & pixel sprites to render buffer...
+    // merge main buffer & pixel sprites to render buffer...
     #[cfg(any(
         feature = "sdl",
         feature = "winit",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_all_to_render_buffer(
+    fn generate_render_buffer(
         &mut self,
         cb: &Buffer,
         _pb: &Buffer,
@@ -1070,11 +1069,11 @@ pub trait Adapter {
 /// │                  Data Transformation                        │
 /// │                                                             │
 /// │  Game Data Input:                                           │
-/// │  ├── Colors (u8 RGBA) ────────► Normalized (f32 RGBA)      │
-/// │  ├── Texture & Symbol Index ──► Packed texsym value        │
-/// │  ├── Screen Rectangle ─────────► Position & dimensions     │
-/// │  ├── Rotation angle ───────────► Angle + center point      │
-/// │  └── Background color ─────────► Optional background       │
+/// │  ├── Colors (u8 RGBA) ────────► Normalized (f32 RGBA)       │
+/// │  ├── Texture & Symbol Index ──► Packed texsym value         │
+/// │  ├── Screen Rectangle ─────────► Position & dimensions      │
+/// │  ├── Rotation angle ───────────► Angle + center point       │
+/// │  └── Background color ─────────► Optional background        │
 /// │                                                             │
 /// │                       ▼                                     │
 /// │               ┌─────────────────────┐                       │

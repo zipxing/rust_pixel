@@ -288,7 +288,7 @@ impl Adapter for SdlAdapter {
         false
     }
 
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,

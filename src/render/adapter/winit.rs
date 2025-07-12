@@ -1221,15 +1221,6 @@ impl WinitAdapter {
 
         Ok(())
     }
-
-    // /// WGPU版本的render texture到屏幕渲染（统一接口）
-    // /// 
-    // /// 这个方法提供了与OpenGL版本相同的接口，统一了两种渲染后端的调用方式。
-    // /// 它不需要render buffer参数，因为数据已经在之前的draw_render_buffer_to_texture中处理过了。
-    // #[cfg(feature = "wgpu")]
-    // pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
-    //     self.draw_render_textures_to_screen_wgpu_impl()
-    // }
 }
 
 impl Adapter for WinitAdapter {
@@ -1333,16 +1324,13 @@ impl Adapter for WinitAdapter {
     /// - `previous_buffer`: 前一帧缓冲区
     /// - `pixel_sprites`: 像素精灵列表
     /// - `stage`: 渲染阶段
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // 统一的渲染流程，适用于OpenGL和WGPU两种模式
-        
-        // 1. 处理窗口拖拽移动
         winit_move_win(
             &mut self.drag.need,
             self.window.as_ref().map(|v| &**v),
@@ -1350,12 +1338,11 @@ impl Adapter for WinitAdapter {
             self.drag.dy,
         );
 
-        // 2. 调用完整的渲染管线（两种模式现在都使用相同的流程）
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
 
         #[cfg(not(feature = "wgpu"))]
         {
-            // OpenGL模式：交换缓冲区
+            // OpenGL模式：交换缓冲区,Wgpu模式是不需要的
             if let Some(surface) = &self.gl_surface {
                 if let Some(context) = &self.gl_context {
                     surface.swap_buffers(context).unwrap();
@@ -1363,7 +1350,6 @@ impl Adapter for WinitAdapter {
             }
         }
             
-        // 请求重绘
         if let Some(window) = &self.window {
             window.as_ref().request_redraw();
         }
