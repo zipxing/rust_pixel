@@ -740,21 +740,11 @@ pub trait Adapter {
 
         // Pass 2: Render to screen or buffer based on mode
         if self.get_base().rflag {
-            #[cfg(feature = "wgpu")]
-            {
-                // WGPU mode: Store render data for use by draw_render_textures_to_screen_wgpu
-                // The actual rendering to render texture 2 happens in winit.rs
-                self.get_base().rbuf = rbuf;
-            }
-            
-            #[cfg(not(feature = "wgpu"))]
-            {
-                // OpenGL mode: Render through GPU pipeline
-                // 1. Draw RenderCell array to render_texture 2 (main scene)
-                self.draw_render_buffer_to_texture(&rbuf, 2, false);
-                // 2. Composite render_texture 2 & 3 to screen (final output)
-                self.draw_render_textures_to_screen();
-            }
+            // Both OpenGL and WGPU use the same unified rendering pipeline
+            // 1. Draw RenderCell array to render_texture 2 (main scene)
+            self.draw_render_buffer_to_texture(&rbuf, 2, false);
+            // 2. Composite render_texture 2 & 3 to screen (final output)
+            self.draw_render_textures_to_screen();
         } else {
             // Buffered mode: Store render data for external access
             // Used by FFI interfaces and WASM exports to access raw render data
@@ -812,50 +802,66 @@ pub trait Adapter {
     /// across various screen types including Retina displays.
     #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
     fn draw_render_textures_to_screen(&mut self) {
-        let bs = self.get_base();
-
-        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
-            // Bind to screen framebuffer (0) for final output
-            pix.bind_screen(gl);
-            let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
-
-            // Layer 1: Draw render_texture 2 (main game content)
-            // Contains: characters, sprites, borders, logo
-            if !pix.get_render_texture_hidden(2) {
-                let t = GlTransform::new();
-                // Full-screen quad with identity transform
-                pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+        #[cfg(feature = "wgpu")]
+        {
+            use crate::render::adapter::winit::WinitAdapter;
+            
+            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
+                if let Err(e) = winit_adapter.draw_render_textures_to_screen_wgpu() {
+                    eprintln!("WGPU draw_render_textures_to_screen error: {}", e);
+                }
+                return;
             }
+        }
+        
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+        {
+            // OpenGL mode implementation
+            let bs = self.get_base();
 
-            // Layer 2: Draw render_texture 3 (transition effects and overlays)
-            // Contains: transition effects, visual overlays, special effects
-            if !pix.get_render_texture_hidden(3) {
-                // Calculate proper scaling for high-DPI displays
-                let pcw = pix.canvas_width as f32; // Physical canvas width
-                let pch = pix.canvas_height as f32; // Physical canvas height
-                let rx = bs.ratio_x; // Horizontal scaling ratio
-                let ry = bs.ratio_y; // Vertical scaling ratio
+            if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+                // Bind to screen framebuffer (0) for final output
+                pix.bind_screen(gl);
+                let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
 
-                // Calculate scaled dimensions for transition layer
-                // Use actual game area dimensions instead of hardcoded 40x25
-                // let pw = bs.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                // let ph = bs.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
-                let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                // Layer 1: Draw render_texture 2 (main game content)
+                // Contains: characters, sprites, borders, logo
+                if !pix.get_render_texture_hidden(2) {
+                    let t = GlTransform::new();
+                    // Full-screen quad with identity transform
+                    pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+                }
 
-                // Create transform with proper scaling
-                let mut t2 = GlTransform::new();
-                t2.scale(pw / pcw, ph / pch);
+                // Layer 2: Draw render_texture 3 (transition effects and overlays)
+                // Contains: transition effects, visual overlays, special effects
+                if !pix.get_render_texture_hidden(3) {
+                    // Calculate proper scaling for high-DPI displays
+                    let pcw = pix.canvas_width as f32; // Physical canvas width
+                    let pch = pix.canvas_height as f32; // Physical canvas height
+                    let rx = bs.ratio_x; // Horizontal scaling ratio
+                    let ry = bs.ratio_y; // Vertical scaling ratio
 
-                // Draw transition layer with calculated viewport and transform
-                // Positioned at bottom-left with calculated dimensions
-                pix.draw_general2d(
-                    gl,
-                    3,
-                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                    &t2,
-                    &c,
-                );
+                    // Calculate scaled dimensions for transition layer
+                    // Use actual game area dimensions instead of hardcoded 40x25
+                    // let pw = bs.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                    // let ph = bs.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                    let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                    let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+
+                    // Create transform with proper scaling
+                    let mut t2 = GlTransform::new();
+                    t2.scale(pw / pcw, ph / pch);
+
+                    // Draw transition layer with calculated viewport and transform
+                    // Positioned at bottom-left with calculated dimensions
+                    pix.draw_general2d(
+                        gl,
+                        3,
+                        [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
+                        &t2,
+                        &c,
+                    );
+                }
             }
         }
     }
@@ -913,22 +919,38 @@ pub trait Adapter {
         }
     }
 
-    // draw render buffer to render texture...
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    // draw render buffer to render texture - unified for both OpenGL and WGPU
+    #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
     fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
-        let bs = self.get_base();
-        let rx = bs.ratio_x;
-        let ry = bs.ratio_y;
-        if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
-            pix.bind_target(gl, rtidx);
-            if debug {
-                // set red background for debug...
-                pix.set_clear_color(GlColor::new(1.0, 0.0, 0.0, 1.0));
-            } else {
-                pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
+        #[cfg(feature = "wgpu")]
+        {
+            use crate::render::adapter::winit::WinitAdapter;
+            
+            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
+                if let Err(e) = winit_adapter.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
+                    eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
+                }
+                return;
             }
-            pix.clear(gl);
-            pix.render_rbuf(gl, rbuf, rx, ry);
+        }
+        
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+        {
+            // OpenGL mode implementation
+            let bs = self.get_base();
+            let rx = bs.ratio_x;
+            let ry = bs.ratio_y;
+            if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+                pix.bind_target(gl, rtidx);
+                if debug {
+                    // set red background for debug...
+                    pix.set_clear_color(GlColor::new(1.0, 0.0, 0.0, 1.0));
+                } else {
+                    pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
+                }
+                pix.clear(gl);
+                pix.render_rbuf(gl, rbuf, rx, ry);
+            }
         }
     }
 
