@@ -914,7 +914,7 @@ pub trait Adapter {
         };
 
         // render windows border, for sdl, winit and wgpu mode
-        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
+        // #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
         render_border(cw, ch, rx, ry, &mut rfunc);
 
         // render main buffer...
