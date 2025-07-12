@@ -1200,7 +1200,6 @@ fn render_helper(
     )
 }
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 /// Render pixel sprites with rotation and transformation support
 ///
 /// This function processes individual sprite objects and converts them to renderable
@@ -1493,18 +1492,18 @@ where
 /// ┌─────────────────────────────────────────────────────────────┐
 /// │                    Logo Animation Timeline                  │
 /// │                                                             │
-/// │  Stage 0 ────────────────────────────────► LOGO_FRAME      │
+/// │  Stage 0 ────────────────────────────────► LOGO_FRAME       │
 /// │    │                                            │           │
 /// │    ▼                                            ▼           │
 /// │  ┌─────────────────┐                    ┌─────────────────┐ │
 /// │  │  Logo Display   │                    │  Start Game     │ │
 /// │  │                 │                    │   Rendering     │ │
 /// │  │  ┌───────────┐  │                    │                 │ │
-/// │  │  │ ██████    │  │   Dynamic Effects:  │                 │ │
-/// │  │  │ ██  ██    │  │   - Random colors   │                 │ │
-/// │  │  │ ██████    │  │   - Centered pos    │                 │ │
-/// │  │  │ ██  ██    │  │   - Smooth trans    │                 │ │
-/// │  │  │ ██  ██    │  │   - Frame timing    │                 │ │
+/// │  │  │ ██████    │  │   Dynamic Effects: │                 │ │
+/// │  │  │ ██  ██    │  │   - Random colors  │                 │ │
+/// │  │  │ ██████    │  │   - Centered pos   │                 │ │
+/// │  │  │ ██  ██    │  │   - Smooth trans   │                 │ │
+/// │  │  │ ██  ██    │  │   - Frame timing   │                 │ │
 /// │  │  └───────────┘  │                    │                 │ │
 /// │  └─────────────────┘                    └─────────────────┘ │
 /// └─────────────────────────────────────────────────────────────┘
