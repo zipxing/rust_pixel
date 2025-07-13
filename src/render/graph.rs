@@ -25,7 +25,7 @@ pub struct Graph {
 impl Graph {
     pub fn new() -> Self {
         Self {
-            rflag: false,
+            rflag: true,
             rbuf: vec![],
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl: None,
