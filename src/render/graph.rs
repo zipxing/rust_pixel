@@ -241,6 +241,10 @@ pub struct Graph {
 }
 
 impl Graph {
+    /// 创建新的图形渲染上下文
+    ///
+    /// 初始化所有图形模式相关的数据结构和渲染状态。
+    /// 渲染标志默认为true（直接渲染到屏幕）。
     pub fn new() -> Self {
         Self {
             pixel_w: 0,
@@ -248,12 +252,56 @@ impl Graph {
             ratio_x: 1.0,
             ratio_y: 1.0,
             rflag: true,
-            rbuf: vec![],
+            rbuf: Vec::new(),
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl: None,
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             gl_pixel: None,
         }
+    }
+
+    /// 设置X轴缩放比例
+    ///
+    /// 用于处理不同DPI显示器的缩放适配。
+    /// 该值会影响像素宽度计算和渲染坐标转换。
+    ///
+    /// # 参数
+    /// - `rx`: X轴缩放比例（1.0为标准比例）
+    pub fn set_ratiox(&mut self, rx: f32) {
+        self.ratio_x = rx;
+    }
+
+    /// 设置Y轴缩放比例
+    ///
+    /// 用于处理不同DPI显示器的缩放适配。
+    /// 该值会影响像素高度计算和渲染坐标转换。
+    ///
+    /// # 参数
+    /// - `ry`: Y轴缩放比例（1.0为标准比例）
+    pub fn set_ratioy(&mut self, ry: f32) {
+        self.ratio_y = ry;
+    }
+
+    /// 根据当前设置计算并设置像素尺寸
+    ///
+    /// 基于单元格数量、符号尺寸和缩放比例计算实际的像素宽度和高度。
+    /// 这是图形模式窗口大小计算的核心方法。
+    ///
+    /// # 参数
+    /// - `cell_w`: 游戏区域宽度（字符单元格数）
+    /// - `cell_h`: 游戏区域高度（字符单元格数）
+    ///
+    /// # 计算公式
+    /// ```text
+    /// pixel_w = (cell_w + 2) * symbol_width / ratio_x
+    /// pixel_h = (cell_h + 2) * symbol_height / ratio_y
+    /// ```
+    /// 其中 +2 是为了边框预留空间
+    pub fn set_pixel_size(&mut self, cell_w: u16, cell_h: u16) {
+        self.pixel_w = ((cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
+            / self.ratio_x) as u32;
+        self.pixel_h = ((cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+            / self.ratio_y) as u32;
     }
 }
 

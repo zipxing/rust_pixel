@@ -425,7 +425,7 @@ pub trait Adapter {
         Self: Sized,
     {
         let bs = self.get_base();
-        bs.gr.ratio_x = rx;
+        bs.gr.set_ratiox(rx);
         self
     }
 
@@ -440,7 +440,7 @@ pub trait Adapter {
         Self: Sized,
     {
         let bs = self.get_base();
-        bs.gr.ratio_y = ry;
+        bs.gr.set_ratioy(ry);
         self
     }
 
@@ -455,10 +455,7 @@ pub trait Adapter {
         Self: Sized,
     {
         let bs = self.get_base();
-        bs.gr.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
-            / bs.gr.ratio_x) as u32;
-        bs.gr.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
-            / bs.gr.ratio_y) as u32;
+        bs.gr.set_pixel_size(bs.cell_w, bs.cell_h);
         self
     }
 
