@@ -13,28 +13,6 @@ use std::sync::OnceLock;
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
 use crate::render::adapter::gl::pixel::GlPixel;
 
-pub struct Graph {
-    pub rflag: bool,
-    pub rbuf: Vec<RenderCell>,
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    pub gl: Option<glow::Context>,
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    pub gl_pixel: Option<GlPixel>,
-}
-
-impl Graph {
-    pub fn new() -> Self {
-        Self {
-            rflag: true,
-            rbuf: vec![],
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            gl: None,
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            gl_pixel: None,
-        }
-    }
-}
-
 /// 符号纹理文件路径
 ///
 /// 符号纹理包含8x8块，每块包含16x16符号，总共128×128符号。
@@ -214,6 +192,49 @@ pub struct RenderCell {
     /// 定义旋转发生的轴心点。
     pub cy: f32,
 }
+
+pub struct Graph {
+    /// Render flag controlling immediate vs buffered rendering
+    ///
+    /// - true: Direct rendering to screen (normal mode)
+    /// - false: Buffered rendering for external access (used for FFI/WASM)
+    pub rflag: bool,
+
+    /// Render buffer storing RenderCell array for buffered mode
+    ///
+    /// When rflag is false, rendered data is stored rbuf instead of
+    /// being directly drawn to screen. Used for external access to
+    /// rendering data (e.g., Python FFI, WASM exports).
+    pub rbuf: Vec<RenderCell>,
+
+    /// OpenGL context handle
+    ///
+    /// Provides access to OpenGL functions for rendering operations.
+    /// Uses the glow crate for cross-platform OpenGL abstraction.
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    pub gl: Option<glow::Context>,
+
+    /// OpenGL pixel renderer instance
+    ///
+    /// High-level OpenGL rendering interface that manages shaders,
+    /// textures, and render targets for the pixel-based rendering pipeline.
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    pub gl_pixel: Option<GlPixel>,
+}
+
+impl Graph {
+    pub fn new() -> Self {
+        Self {
+            rflag: true,
+            rbuf: vec![],
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+            gl: None,
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+            gl_pixel: None,
+        }
+    }
+}
+
 
 /// Convert game data to RenderCell format with texture coordinate calculation
 ///

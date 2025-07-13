@@ -285,33 +285,6 @@ pub struct AdapterBase {
         target_arch = "wasm32"
     ))]
     pub gr: Graph,
-
-    // /// Render buffer storing RenderCell array for buffered mode
-    // ///
-    // /// When rflag is false, rendered data is stored here instead of
-    // /// being directly drawn to screen. Used for external access to
-    // /// rendering data (e.g., Python FFI, WASM exports).
-    // #[cfg(any(
-    //     feature = "sdl",
-    //     feature = "winit",
-    //     feature = "wgpu",
-    //     target_arch = "wasm32"
-    // ))]
-    // pub rbuf: Vec<RenderCell>,
-
-    // /// OpenGL context handle
-    // ///
-    // /// Provides access to OpenGL functions for rendering operations.
-    // /// Uses the glow crate for cross-platform OpenGL abstraction.
-    // #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    // pub gl: Option<glow::Context>,
-
-    // /// OpenGL pixel renderer instance
-    // ///
-    // /// High-level OpenGL rendering interface that manages shaders,
-    // /// textures, and render targets for the pixel-based rendering pipeline.
-    // #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    // pub gl_pixel: Option<GlPixel>,
 }
 
 impl AdapterBase {
