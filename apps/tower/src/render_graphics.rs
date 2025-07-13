@@ -60,7 +60,7 @@ impl TowerRender {
             let li = [9u8, 10, 11, 12, 13, 14, 15, 22, 23];
             pl.set_pos(
                 m.obj.pixel_pos.x as u16,
-                m.obj.pixel_pos.y as u16 - ctx.adapter.cell_height() as u16,
+                m.obj.pixel_pos.y as u16 - ctx.cell_height() as u16,
             );
             let step = m.obj.max_life as usize / 8 + 1;
             pl.set_graph_sym(
@@ -87,8 +87,8 @@ impl TowerRender {
             } else {
                 // 怪物中弹的炸弹波纹...
                 pl.set_pos(
-                    b.obj.pixel_pos.x as u16 + ctx.adapter.cell_width() as u16 / 4,
-                    b.obj.pixel_pos.y as u16 + ctx.adapter.cell_height() as u16 / 4,
+                    b.obj.pixel_pos.x as u16 + ctx.cell_width() as u16 / 4,
+                    b.obj.pixel_pos.y as u16 + ctx.cell_height() as u16 / 4,
                 );
                 pl.set_graph_sym(0, 0, 2, 25, Color::Indexed(8));
             }
@@ -128,8 +128,8 @@ impl TowerRender {
         self.panel.draw_objpool(&mut d.towers, |pl, m| {
             asset2sprite!(pl, ctx, &format!("pix/tower{}.pix", m.obj.ttype + 1));
             pl.set_pos(
-                ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
-                ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
+                ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.cell_width()) as u16,
+                ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.cell_height()) as u16,
             );
             if m.obj.target.is_some() {
                 pl.set_angle((ctx.stage % 20 * 18) as f64);
@@ -153,8 +153,8 @@ impl TowerRender {
 
         self.panel.draw_objpool(&mut d.blocks, |pl, m| {
             pl.set_pos(
-                ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
-                ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.adapter.cell_width()) as u16,
+                ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.cell_width()) as u16,
+                ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.cell_height()) as u16,
             );
         });
     }
