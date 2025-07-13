@@ -81,14 +81,6 @@ impl Adapter for CrosstermAdapter {
         self.show_cursor().unwrap();
     }
 
-    fn cell_width(&self) -> f32 {
-        0.0
-    }
-
-    fn cell_height(&self) -> f32 {
-        0.0
-    }
-
     fn hide_cursor(&mut self) -> Result<(), String> {
         to_error(execute!(self.writer, Hide))?;
         Ok(())

@@ -400,61 +400,6 @@ pub trait Adapter {
         Rect::new(0, 0, bs.cell_w, bs.cell_h)
     }
 
-    fn set_ratiox(&mut self, rx: f32) -> &mut Self
-    where
-        Self: Sized,
-    {
-        #[cfg(any(
-            feature = "sdl",
-            feature = "winit",
-            feature = "wgpu",
-            target_arch = "wasm32"
-        ))]
-        {
-            let bs = self.get_base();
-            bs.gr.ratio_x = rx;
-        }
-        self
-    }
-
-    fn set_ratioy(&mut self, ry: f32) -> &mut Self
-    where
-        Self: Sized,
-    {
-        #[cfg(any(
-            feature = "sdl",
-            feature = "winit",
-            feature = "wgpu",
-            target_arch = "wasm32"
-        ))]
-        {
-            let bs = self.get_base();
-            bs.gr.ratio_y = ry;
-        }
-        self
-    }
-
-    fn set_pixel_size(&mut self) -> &mut Self
-    where
-        Self: Sized,
-    {
-        #[cfg(any(
-            feature = "sdl",
-            feature = "winit",
-            feature = "wgpu",
-            target_arch = "wasm32"
-        ))]
-        {
-            let bs = self.get_base();
-            bs.gr.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
-                / bs.gr.ratio_x) as u32;
-            bs.gr.pixel_h = ((bs.cell_h + 2) as f32
-                * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
-                / bs.gr.ratio_y) as u32;
-        }
-        self
-    }
-
     fn set_title(&mut self, s: String) -> &mut Self
     where
         Self: Sized,
@@ -464,12 +409,74 @@ pub trait Adapter {
         self
     }
 
-    fn cell_width(&self) -> f32;
-    fn cell_height(&self) -> f32;
     fn hide_cursor(&mut self) -> Result<(), String>;
     fn show_cursor(&mut self) -> Result<(), String>;
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_ratiox(&mut self, rx: f32) -> &mut Self
+    where
+        Self: Sized,
+    {
+        let bs = self.get_base();
+        bs.gr.ratio_x = rx;
+        self
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_ratioy(&mut self, ry: f32) -> &mut Self
+    where
+        Self: Sized,
+    {
+        let bs = self.get_base();
+        bs.gr.ratio_y = ry;
+        self
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_pixel_size(&mut self) -> &mut Self
+    where
+        Self: Sized,
+    {
+        let bs = self.get_base();
+        bs.gr.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
+            / bs.gr.ratio_x) as u32;
+        bs.gr.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+            / bs.gr.ratio_y) as u32;
+        self
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn cell_width(&self) -> f32;
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn cell_height(&self) -> f32;
 
     /// Main OpenGL rendering pipeline with double buffering and render textures
     ///
