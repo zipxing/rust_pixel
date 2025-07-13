@@ -414,8 +414,6 @@ pub trait Adapter {
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
-
-
     #[cfg(any(
         feature = "sdl",
         feature = "winit",
