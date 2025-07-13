@@ -1021,8 +1021,8 @@ impl WinitAdapter {
     /// # 返回值
     /// 返回对应的边框区域类型
     fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
-        let w = self.cell_width();
-        let h = self.cell_height();
+        let w = self.base.gr.cell_width();
+        let h = self.base.gr.cell_height();
         let sw = self.base.cell_w + 2;
         if y >= 0.0 && y < h as f64 {
             if x >= 0.0 && x <= ((sw - 1) as f32 * w) as f64 {
@@ -1270,14 +1270,6 @@ impl Adapter for WinitAdapter {
     }
 
     fn reset(&mut self) {}
-
-    fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.gr.ratio_x
-    }
-
-    fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.gr.ratio_y
-    }
 
     /// 轮询事件
     ///

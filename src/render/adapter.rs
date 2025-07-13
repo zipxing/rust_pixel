@@ -414,22 +414,6 @@ pub trait Adapter {
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn cell_width(&self) -> f32;
-
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn cell_height(&self) -> f32;
-
     /// Main OpenGL rendering pipeline with double buffering and render textures
     ///
     /// This method implements the core graphics rendering pipeline for SDL, Winit, and Web

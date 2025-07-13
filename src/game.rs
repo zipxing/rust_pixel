@@ -134,7 +134,7 @@ where
 
     /// init render and model
     pub fn init(&mut self) {
-        info!("Init game...hahaha");
+        info!("Init game...");
         self.model.init(&mut self.context);
         self.render.init(&mut self.context, &mut self.model);
     }

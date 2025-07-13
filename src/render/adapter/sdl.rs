@@ -90,8 +90,8 @@ impl SdlAdapter {
     }
 
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
-        let w = self.cell_width();
-        let h = self.cell_height();
+        let w = self.base.gr.cell_width();
+        let h = self.base.gr.cell_height();
         let sw = self.base.cell_w + 2;
         if y >= 0 && y < h as i32 {
             if x >= 0 && x <= ((sw - 1) as f32 * w) as i32 {
@@ -252,14 +252,6 @@ impl Adapter for SdlAdapter {
     }
 
     fn reset(&mut self) {}
-
-    fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.gr.ratio_x
-    }
-
-    fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.gr.ratio_y
-    }
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
         let mut ses: Vec<SEvent> = vec![];

@@ -303,6 +303,28 @@ impl Graph {
         self.pixel_h = ((cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
             / self.ratio_y) as u32;
     }
+
+    /// 获取单个字符单元格的宽度（像素）
+    ///
+    /// 基于符号纹理尺寸和当前X轴缩放比例计算单个字符单元格的实际像素宽度。
+    /// 这个值用于精确的位置计算和渲染布局。
+    ///
+    /// # 返回值
+    /// 单个字符单元格的像素宽度
+    pub fn cell_width(&self) -> f32 {
+        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.ratio_x
+    }
+
+    /// 获取单个字符单元格的高度（像素）
+    ///
+    /// 基于符号纹理尺寸和当前Y轴缩放比例计算单个字符单元格的实际像素高度。
+    /// 这个值用于精确的位置计算和渲染布局。
+    ///
+    /// # 返回值
+    /// 单个字符单元格的像素高度
+    pub fn cell_height(&self) -> f32 {
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.ratio_y
+    }
 }
 
 /// Convert game data to RenderCell format with texture coordinate calculation

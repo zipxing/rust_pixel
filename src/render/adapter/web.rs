@@ -85,14 +85,6 @@ impl Adapter for WebAdapter {
 
     fn reset(&mut self) {}
 
-    fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.gr.ratio_x
-    }
-
-    fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.gr.ratio_y
-    }
-
     fn poll_event(&mut self, _timeout: Duration, _es: &mut Vec<Event>) -> bool {
         false
     }

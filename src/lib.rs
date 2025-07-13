@@ -68,7 +68,7 @@ macro_rules! pixel_game {
                 let m = [<$name Model>]::new();
                 let r = [<$name Render>]::new();
                 let pp = get_project_path();
-                info!("asset path : {:?}", pp);
+                println!("asset path : {:?}", pp);
                 let mut g = Game::new(m, r, stringify!([<$name:lower>]), &pp);
                 g.init();
                 [<$name Game>] { g }
@@ -78,7 +78,6 @@ macro_rules! pixel_game {
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             impl [<$name Game>] {
                 pub fn new() -> Self {
-                    info!("hahahahahhahahaha....");
                     init_game()
                 }
 
