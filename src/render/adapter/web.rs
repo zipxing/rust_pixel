@@ -37,9 +37,9 @@ impl WebAdapter {
         PIXEL_SYM_HEIGHT
             .set(init_sym_height(texheight as u32))
             .expect("lazylock init");
-        self.set_pixel_size();
-        self.base.gl_pixel = Some(GlPixel::new(
-            self.base.gl.as_ref().unwrap(),
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
+        self.base.gr.gl_pixel = Some(GlPixel::new(
+            self.base.gr.gl.as_ref().unwrap(),
             "#version 300 es",
             self.base.gr.pixel_w as i32,
             self.base.gr.pixel_h as i32,
@@ -53,10 +53,9 @@ impl WebAdapter {
 
 impl Adapter for WebAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, s: String) {
-        self.set_size(w, h)
-            .set_ratiox(rx)
-            .set_ratioy(ry)
-            .set_title(s);
+        self.set_size(w, h).set_title(s);
+        self.base.gr.set_ratiox(rx);
+        self.base.gr.set_ratioy(ry);
 
         use wasm_bindgen::JsCast;
         let canvas = web_sys::window()
@@ -76,7 +75,7 @@ impl Adapter for WebAdapter {
         let gl = glow::Context::from_webgl2_context(webgl2_context);
 
         // Store the OpenGL context
-        self.base.gl = Some(gl);
+        self.base.gr.gl = Some(gl);
         info!("Window & gl init ok...");
     }
 
@@ -98,7 +97,7 @@ impl Adapter for WebAdapter {
         false
     }
 
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,

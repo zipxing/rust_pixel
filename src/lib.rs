@@ -68,7 +68,7 @@ macro_rules! pixel_game {
                 let m = [<$name Model>]::new();
                 let r = [<$name Render>]::new();
                 let pp = get_project_path();
-                println!("asset path : {:?}", pp);
+                info!("asset path : {:?}", pp);
                 let mut g = Game::new(m, r, stringify!([<$name:lower>]), &pp);
                 g.init();
                 [<$name Game>] { g }
@@ -78,6 +78,7 @@ macro_rules! pixel_game {
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             impl [<$name Game>] {
                 pub fn new() -> Self {
+                    info!("hahahahahhahahaha....");
                     init_game()
                 }
 
@@ -94,7 +95,7 @@ macro_rules! pixel_game {
                         .downcast_ref::<WebAdapter>()
                         .unwrap()
                         .base;
-                    if let Some(pe) = input_events_from_web(t, e, abase.pixel_h, abase.ratio_x, abase.ratio_y) {
+                    if let Some(pe) = input_events_from_web(t, e, abase.gr.pixel_h, abase.gr.ratio_x, abase.gr.ratio_y) {
                         self.g.context.input_events.push(pe);
                     }
                 }
@@ -121,11 +122,11 @@ macro_rules! pixel_game {
                 }
 
                 pub fn get_ratiox(&mut self) -> f32 {
-                    self.g.context.adapter.get_base().ratio_x
+                    self.g.context.adapter.get_base().gr.ratio_x
                 }
 
                 pub fn get_ratioy(&mut self) -> f32 {
-                    self.g.context.adapter.get_base().ratio_y
+                    self.g.context.adapter.get_base().gr.ratio_y
                 }
             }
 

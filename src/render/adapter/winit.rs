@@ -504,11 +504,10 @@ impl WinitAdapter {
             PIXEL_SYM_WIDTH.get().expect("lazylock init"),
             PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
         );
-        self.set_size(w, h)
-            .set_ratiox(rx)
-            .set_ratioy(ry)
-            .set_pixel_size()
-            .set_title(title);
+        self.set_size(w, h).set_title(title);
+        self.base.gr.set_ratiox(rx);
+        self.base.gr.set_ratioy(ry);
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
         info!(
             "pixel_w={} pixel_h={}",
@@ -770,11 +769,10 @@ impl WinitAdapter {
         );
 
         // 设置基础参数
-        self.set_size(w, h)
-            .set_ratiox(rx)
-            .set_ratioy(ry)
-            .set_pixel_size()
-            .set_title(title.clone());
+        self.set_size(w, h).set_title(title.clone());
+        self.base.gr.set_ratiox(rx);
+        self.base.gr.set_ratioy(ry);
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
         info!(
             "pixel_w={} pixel_h={}",

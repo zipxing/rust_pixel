@@ -414,50 +414,7 @@ pub trait Adapter {
     fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
     fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn set_ratiox(&mut self, rx: f32) -> &mut Self
-    where
-        Self: Sized,
-    {
-        let bs = self.get_base();
-        bs.gr.set_ratiox(rx);
-        self
-    }
 
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn set_ratioy(&mut self, ry: f32) -> &mut Self
-    where
-        Self: Sized,
-    {
-        let bs = self.get_base();
-        bs.gr.set_ratioy(ry);
-        self
-    }
-
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn set_pixel_size(&mut self) -> &mut Self
-    where
-        Self: Sized,
-    {
-        let bs = self.get_base();
-        bs.gr.set_pixel_size(bs.cell_w, bs.cell_h);
-        self
-    }
 
     #[cfg(any(
         feature = "sdl",

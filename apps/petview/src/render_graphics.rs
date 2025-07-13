@@ -88,6 +88,7 @@ fn apply_distortion(
 
 pub struct PetviewRender {
     pub panel: Panel,
+    pub init: bool,
 }
 
 impl PetviewRender {
@@ -122,24 +123,17 @@ impl PetviewRender {
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
-        Self { panel }
+        Self { panel, init: false }
     }
-}
 
-impl Render for PetviewRender {
-    type Model = PetviewModel;
+    // 不能把这个初始化，直接放在init方法里，因为web模式下
+    // 资源是异步加载的，那个时候还没有加载到
+    // 所以需要每帧去轮询
+    fn do_init(&mut self, ctx: &mut Context) {
+        if self.init {
+            return;
+        }
 
-    fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter
-            .init(PETW + 2, PETH, 0.4, 0.4, "petview".to_string());
-        self.panel.init(ctx);
-
-        let p1 = self.panel.get_pixel_sprite("petimg1");
-        asset2sprite!(p1, ctx, "1.pix");
-
-        let p2 = self.panel.get_pixel_sprite("petimg2");
-        asset2sprite!(p2, ctx, "2.pix");
-        // ctx.adapter.only_render_buffer();
         let rx = ctx.adapter.get_base().gr.ratio_x;
         let ry = ctx.adapter.get_base().gr.ratio_y;
         let p3 = self.panel.get_pixel_sprite("petimg3");
@@ -157,6 +151,26 @@ impl Render for PetviewRender {
             (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
             (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
         );
+
+        self.init = true;
+        info!("PETVIEW INIT OK...!!!!");
+    }
+}
+
+impl Render for PetviewRender {
+    type Model = PetviewModel;
+
+    fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
+        ctx.adapter
+            .init(PETW + 2, PETH, 0.4, 0.4, "petview".to_string());
+        self.panel.init(ctx);
+
+        let p1 = self.panel.get_pixel_sprite("petimg1");
+        asset2sprite!(p1, ctx, "1.pix");
+
+        let p2 = self.panel.get_pixel_sprite("petimg2");
+        asset2sprite!(p2, ctx, "2.pix");
+        // ctx.adapter.only_render_buffer();
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {}
@@ -378,6 +392,7 @@ impl Render for PetviewRender {
     }
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
+        self.do_init(ctx);
         self.panel.draw(ctx).unwrap();
     }
 }
