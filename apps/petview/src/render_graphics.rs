@@ -157,7 +157,6 @@ impl Render for PetviewRender {
             (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
             (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
         );
-
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {}
@@ -169,44 +168,56 @@ impl Render for PetviewRender {
             if let Some(pix) = &mut ctx.adapter.get_base().gr.gl_pixel {
                 pix.set_render_texture_hidden(3, false);
             }
-            
+
             #[cfg(feature = "wgpu")]
             {
                 use rust_pixel::render::adapter::wgpu::pixel::WgpuPixelRender;
-                use std::any::Any;
                 use rust_pixel::render::adapter::winit::WinitAdapter;
-                
+                use std::any::Any;
+
                 if let Some(winit_adapter) = ctx.adapter.as_any().downcast_mut::<WinitAdapter>() {
                     if let Some(wgpu_pixel_renderer) = &mut winit_adapter.wgpu_pixel_renderer {
                         wgpu_pixel_renderer.set_render_texture_hidden(3, false);
                     }
                 }
             }
-            
+
             let p1 = self.panel.get_pixel_sprite("petimg1");
             asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
-            
+
             // Draw to texture for both modes
             if l1 {
                 ctx.adapter.draw_buffer_to_texture(&p1.content, 0);
             }
 
             let p2 = self.panel.get_pixel_sprite("petimg2");
-            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            asset2sprite!(
+                p2,
+                ctx,
+                &format!("{}.pix", model.img_count - model.img_next)
+            );
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
-            
+
             // Draw to texture for both modes
             if l2 {
                 ctx.adapter.draw_buffer_to_texture(&p2.content, 1);
             }
 
             let p3 = self.panel.get_pixel_sprite("petimg3");
-            asset2sprite!(p3, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            asset2sprite!(
+                p3,
+                ctx,
+                &format!("{}.pix", model.img_count - model.img_next)
+            );
             p3.set_hidden(true);
 
             let p4 = self.panel.get_pixel_sprite("petimg4");
-            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            asset2sprite!(
+                p4,
+                ctx,
+                &format!("{}.pix", model.img_count - model.img_next)
+            );
             p4.set_hidden(true);
 
             if l1 && l2 {
@@ -230,24 +241,30 @@ impl Render for PetviewRender {
                             pix.render_trans_frame(&gl, 0, 1.0);
                         }
                     }
-                    
+
                     // WGPU mode
                     #[cfg(feature = "wgpu")]
                     {
                         use rust_pixel::render::adapter::winit::WinitAdapter;
                         use std::any::Any;
-                        
-                        if let Some(winit_adapter) = ctx.adapter.as_any().downcast_mut::<WinitAdapter>() {
-                            if let Some(wgpu_pixel_renderer) = &mut winit_adapter.wgpu_pixel_renderer {
+
+                        if let Some(winit_adapter) =
+                            ctx.adapter.as_any().downcast_mut::<WinitAdapter>()
+                        {
+                            if let Some(wgpu_pixel_renderer) =
+                                &mut winit_adapter.wgpu_pixel_renderer
+                            {
                                 wgpu_pixel_renderer.set_render_texture_hidden(3, false);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
-                                
+
                                 // 使用高级API进行转场渲染
-                                if let Err(e) = winit_adapter.render_transition_to_texture_wgpu(3, 0, 1.0) {
+                                if let Err(e) =
+                                    winit_adapter.render_transition_to_texture_wgpu(3, 0, 1.0)
+                                {
                                     info!("WGPU transition error: {}", e);
                                 }
-                                
+
                                 info!("WGPU: Normal state - render texture 3 visible");
                             }
                         }
@@ -280,19 +297,25 @@ impl Render for PetviewRender {
 
                             let p3 = self.panel.get_pixel_sprite("petimg3");
                             p3.content = tbuf.clone();
-                            p3.set_alpha(((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8);
+                            p3.set_alpha(
+                                ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
+                            );
                             p3.set_hidden(false);
                         }
                     }
-                    
+
                     // WGPU mode - simplified preparation phase
                     #[cfg(feature = "wgpu")]
                     {
                         use rust_pixel::render::adapter::winit::WinitAdapter;
                         use std::any::Any;
-                        
-                        if let Some(winit_adapter) = ctx.adapter.as_any().downcast_mut::<WinitAdapter>() {
-                            if let Some(wgpu_pixel_renderer) = &mut winit_adapter.wgpu_pixel_renderer {
+
+                        if let Some(winit_adapter) =
+                            ctx.adapter.as_any().downcast_mut::<WinitAdapter>()
+                        {
+                            if let Some(wgpu_pixel_renderer) =
+                                &mut winit_adapter.wgpu_pixel_renderer
+                            {
                                 wgpu_pixel_renderer.set_render_texture_hidden(3, true);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
@@ -314,35 +337,42 @@ impl Render for PetviewRender {
                             pix.render_trans_frame(&gl, model.trans_effect, model.progress);
                         }
                     }
-                    
+
                     // WGPU mode - full transition effects
                     #[cfg(feature = "wgpu")]
                     {
                         use rust_pixel::render::adapter::winit::WinitAdapter;
                         use std::any::Any;
-                        
-                        if let Some(winit_adapter) = ctx.adapter.as_any().downcast_mut::<WinitAdapter>() {
-                            if let Some(wgpu_pixel_renderer) = &mut winit_adapter.wgpu_pixel_renderer {
+
+                        if let Some(winit_adapter) =
+                            ctx.adapter.as_any().downcast_mut::<WinitAdapter>()
+                        {
+                            if let Some(wgpu_pixel_renderer) =
+                                &mut winit_adapter.wgpu_pixel_renderer
+                            {
                                 wgpu_pixel_renderer.set_render_texture_hidden(3, false);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
-                                
+
                                 // 使用高级API进行转场渲染，使用实际的转场效果和进度
                                 if let Err(e) = winit_adapter.render_transition_to_texture_wgpu(
-                                    3, 
-                                    model.trans_effect, 
-                                    model.progress
+                                    3,
+                                    model.trans_effect,
+                                    model.progress,
                                 ) {
                                     info!("WGPU transition error: {}", e);
                                 }
-                                
-                                info!("WGPU: TransGl - effect: {}, progress: {:.2}", model.trans_effect, model.progress);
+
+                                info!(
+                                    "WGPU: TransGl - effect: {}, progress: {:.2}",
+                                    model.trans_effect, model.progress
+                                );
                             }
                         }
                     }
                 }
             }
-            
+
             timer_fire("PetView.Timer", 1);
         }
     }

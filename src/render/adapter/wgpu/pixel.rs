@@ -206,7 +206,8 @@ impl WgpuPixelRender {
     /// - `device`: WGPU device handle
     pub fn init_general2d_renderer(&mut self, device: &wgpu::Device) {
         // 确保General2D渲染器使用与surface相同的格式
-        self.general2d_renderer.create_shader_with_format(device, self.surface_format);
+        self.general2d_renderer
+            .create_shader_with_format(device, self.surface_format);
         self.general2d_renderer.create_buffer(device);
     }
 

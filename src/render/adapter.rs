@@ -448,7 +448,8 @@ pub trait Adapter {
             let bs = self.get_base();
             bs.gr.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
                 / bs.gr.ratio_x) as u32;
-            bs.gr.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+            bs.gr.pixel_h = ((bs.cell_h + 2) as f32
+                * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
                 / bs.gr.ratio_y) as u32;
         }
         self
@@ -904,8 +905,7 @@ pub trait Adapter {
     target_arch = "wasm32"
 ))]
 pub use crate::render::graph::{
-    Graph, init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
-    render_main_buffer, render_pixel_sprites, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
+    init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
+    render_main_buffer, render_pixel_sprites, Graph, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
 };
-

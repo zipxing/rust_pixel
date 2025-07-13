@@ -257,7 +257,6 @@ impl Graph {
     }
 }
 
-
 /// Convert game data to RenderCell format with texture coordinate calculation
 ///
 /// This function converts individual game elements (characters, sprites, etc.) into

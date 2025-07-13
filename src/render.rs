@@ -2,9 +2,9 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! # 渲染模块
-//! 
+//!
 //! 支持两种渲染模式：文本模式和图形模式。
-//! 
+//!
 //! ## 子模块
 //! - `adapter`: 渲染适配器接口（crossterm、sdl、web、winit）
 //! - `cell`: 基础绘制单元，即一个字符
