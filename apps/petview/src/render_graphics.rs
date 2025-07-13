@@ -140,8 +140,8 @@ impl Render for PetviewRender {
         let p2 = self.panel.get_pixel_sprite("petimg2");
         asset2sprite!(p2, ctx, "2.pix");
         // ctx.adapter.only_render_buffer();
-        let rx = ctx.adapter.get_base().ratio_x;
-        let ry = ctx.adapter.get_base().ratio_y;
+        let rx = ctx.adapter.get_base().gr.ratio_x;
+        let ry = ctx.adapter.get_base().gr.ratio_y;
         let p3 = self.panel.get_pixel_sprite("petimg3");
         p3.set_pos(
             (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,

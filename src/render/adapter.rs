@@ -256,10 +256,7 @@ pub struct AdapterBase {
     /// Random number generator for effects and animations
     pub rd: Rand,
 
-    /// Render flag controlling immediate vs buffered rendering
-    ///
-    /// - true: Direct rendering to screen (normal mode)
-    /// - false: Buffered rendering for external access (used for FFI/WASM)
+    /// Datas using by graph mode
     #[cfg(any(
         feature = "sdl",
         feature = "winit",
