@@ -852,6 +852,14 @@ impl WinitAdapter {
     /// 执行初始清屏操作
     ///
     /// 防止窗口创建时的白屏闪烁，立即清空屏幕并显示黑色背景。
+    ///
+    /// WGPU 模式不需要 initial_clear_screen，原因如下：
+    /// - 更好的资源管理：WGPU 的 Surface 配置机制确保了良好的初始状态
+    /// - 延迟渲染：命令缓冲区模式让我们可以在 present 前准备好所有内容
+    /// - 默认 Clear 行为：RenderPass 默认就有 clear 操作
+    /// - 原子性操作：整个渲染过程是原子的，要么全部完成要么不显示
+    ///
+    /// 这就是现代图形 API（Vulkan、Metal、D3D12）相比传统 OpenGL 的优势之一：更好的资源管理和更少的意外行为。
     #[cfg(not(feature = "wgpu"))]
     fn initial_clear_screen(&mut self) {
         if let (Some(gl), Some(_gl_pixel)) = (&self.base.gr.gl, &mut self.base.gr.gl_pixel) {
