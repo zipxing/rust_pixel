@@ -41,8 +41,8 @@ impl WebAdapter {
         self.base.gl_pixel = Some(GlPixel::new(
             self.base.gl.as_ref().unwrap(),
             "#version 300 es",
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
+            self.base.gr.pixel_w as i32,
+            self.base.gr.pixel_h as i32,
             texwidth,
             texheight,
             tex,
@@ -87,11 +87,11 @@ impl Adapter for WebAdapter {
     fn reset(&mut self) {}
 
     fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
+        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.gr.ratio_x
     }
 
     fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.gr.ratio_y
     }
 
     fn poll_event(&mut self, _timeout: Duration, _es: &mut Vec<Event>) -> bool {

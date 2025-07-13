@@ -512,7 +512,7 @@ impl WinitAdapter {
 
         info!(
             "pixel_w={} pixel_h={}",
-            self.base.pixel_w, self.base.pixel_h
+            self.base.gr.pixel_w, self.base.gr.pixel_h
         );
 
         // Create event loop
@@ -520,7 +520,7 @@ impl WinitAdapter {
 
         // For Retina displays, we need to adjust window logical size so its physical size matches our render area
         // First create a temporary window to get the scale factor
-        let temp_window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
+        let temp_window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
         let temp_display_builder = DisplayBuilder::new().with_window_attributes(Some(
             winit::window::WindowAttributes::default()
                 .with_title(&self.base.title)
@@ -548,8 +548,8 @@ impl WinitAdapter {
 
         // For consistency with SDL: on Retina displays, we want the window to be 2x larger
         // So logical size = original size (not divided by scale factor)
-        let adjusted_logical_w = self.base.pixel_w;
-        let adjusted_logical_h = self.base.pixel_h;
+        let adjusted_logical_w = self.base.gr.pixel_w;
+        let adjusted_logical_h = self.base.gr.pixel_h;
         let window_size = LogicalSize::new(adjusted_logical_w, adjusted_logical_h);
 
         info!(
@@ -596,7 +596,7 @@ impl WinitAdapter {
         );
         info!(
             "Render area size: {}x{}",
-            self.base.pixel_w, self.base.pixel_h
+            self.base.gr.pixel_w, self.base.gr.pixel_h
         );
 
         let gl_display = gl_config.display();
@@ -652,8 +652,8 @@ impl WinitAdapter {
         self.base.gr.gl_pixel = Some(GlPixel::new(
             self.base.gr.gl.as_ref().unwrap(),
             "#version 330 core",
-            self.base.pixel_w as i32, // Use logical size for coordinate system
-            self.base.pixel_h as i32, // Use logical size for coordinate system
+            self.base.gr.pixel_w as i32, // Use logical size for coordinate system
+            self.base.gr.pixel_h as i32, // Use logical size for coordinate system
             texwidth as i32,
             texheight as i32,
             &teximg,
@@ -662,14 +662,14 @@ impl WinitAdapter {
         // Ratio remains the same, but OpenGL will render at higher resolution on Retina
         info!(
             "Using standard ratio: {}x{}, OpenGL framebuffer: {}x{} (2x on Retina)",
-            self.base.ratio_x, self.base.ratio_y, physical_size.width, physical_size.height
+            self.base.gr.ratio_x, self.base.gr.ratio_y, physical_size.width, physical_size.height
         );
 
         self.app_handler = Some(WinitAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
-            ratio_x: self.base.ratio_x, // Standard ratio - OpenGL handles scaling automatically
-            ratio_y: self.base.ratio_y, // Standard ratio - OpenGL handles scaling automatically
+            ratio_x: self.base.gr.ratio_x, // Standard ratio - OpenGL handles scaling automatically
+            ratio_y: self.base.gr.ratio_y, // Standard ratio - OpenGL handles scaling automatically
             should_exit: false,
             adapter_ref: self as *mut WinitAdapter,
         });
@@ -773,7 +773,7 @@ impl WinitAdapter {
 
         info!(
             "pixel_w={} pixel_h={}",
-            self.base.pixel_w, self.base.pixel_h
+            self.base.gr.pixel_w, self.base.gr.pixel_h
         );
 
         // 2. 创建事件循环，但延迟创建窗口到resumed方法中
@@ -796,8 +796,8 @@ impl WinitAdapter {
         self.app_handler = Some(WinitAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
-            ratio_x: self.base.ratio_x,
-            ratio_y: self.base.ratio_y,
+            ratio_x: self.base.gr.ratio_x,
+            ratio_y: self.base.gr.ratio_y,
             should_exit: false,
             adapter_ref: self as *mut WinitAdapter,
         });
@@ -811,7 +811,7 @@ impl WinitAdapter {
         let params = self.window_init_params.as_ref().unwrap().clone();
         
         // 计算窗口大小（处理 Retina 显示器）
-        let window_size = LogicalSize::new(self.base.pixel_w, self.base.pixel_h);
+        let window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
         
         let window_attributes = winit::window::Window::default_attributes()
             .with_title(&params.title)
@@ -827,7 +827,7 @@ impl WinitAdapter {
         let physical_size = window.inner_size();
         info!(
             "Window created - logical: {}x{}, physical: {}x{}",
-            self.base.pixel_w, self.base.pixel_h,
+            self.base.gr.pixel_w, self.base.gr.pixel_h,
             physical_size.width, physical_size.height
         );
 
@@ -907,8 +907,8 @@ impl WinitAdapter {
         // 创建并初始化 WGPU 像素渲染器
         // 使用逻辑尺寸创建渲染器以避免缓冲区过大，坐标转换在着色器中处理
         let mut wgpu_pixel_renderer = WgpuPixelRender::new_with_format(
-            self.base.pixel_w,    // 使用逻辑尺寸避免缓冲区过大
-            self.base.pixel_h,    // 使用逻辑尺寸避免缓冲区过大
+            self.base.gr.pixel_w,    // 使用逻辑尺寸避免缓冲区过大
+            self.base.gr.pixel_h,    // 使用逻辑尺寸避免缓冲区过大
             wgpu_surface_config.format, // Use actual surface format
         );
         
@@ -938,7 +938,7 @@ impl WinitAdapter {
         wgpu_pixel_renderer.init_transition_renderer(&wgpu_device);
 
         // 设置ratio参数以匹配OpenGL版本的坐标变换
-        wgpu_pixel_renderer.set_ratio(self.base.ratio_x, self.base.ratio_y);
+        wgpu_pixel_renderer.set_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
 
         // 存储所有 WGPU 对象
         self.wgpu_instance = Some(wgpu_instance);
@@ -1189,8 +1189,8 @@ impl WinitAdapter {
                 
                 let pcw = pixel_renderer.canvas_width as f32;
                 let pch = pixel_renderer.canvas_height as f32;
-                let rx = self.base.ratio_x;
-                let ry = self.base.ratio_y;
+                let rx = self.base.gr.ratio_x;
+                let ry = self.base.gr.ratio_y;
                 
                 // 使用实际的游戏区域尺寸（匹配OpenGL版本）
                 let pw = self.base.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
@@ -1257,11 +1257,11 @@ impl Adapter for WinitAdapter {
     fn reset(&mut self) {}
 
     fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
+        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.gr.ratio_x
     }
 
     fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.gr.ratio_y
     }
 
     /// 轮询事件
@@ -1473,8 +1473,8 @@ impl Adapter for WinitAdapter {
                 if !pix.get_render_texture_hidden(3) {
                     let pcw = pix.canvas_width as f32;
                     let pch = pix.canvas_height as f32;
-                    let rx = bs.ratio_x;
-                    let ry = bs.ratio_y;
+                    let rx = bs.gr.ratio_x;
+                    let ry = bs.gr.ratio_y;
                     // Use actual game area dimensions instead of hardcoded 40x25
                     let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                     let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;

@@ -194,6 +194,24 @@ pub struct RenderCell {
 }
 
 pub struct Graph {
+    /// Physical window width in pixels
+    pub pixel_w: u32,
+
+    /// Physical window height in pixels
+    pub pixel_h: u32,
+
+    /// Horizontal scaling ratio for different DPI displays
+    ///
+    /// Used to handle high-DPI displays and maintain consistent rendering
+    /// across different screen resolutions.
+    pub ratio_x: f32,
+
+    /// Vertical scaling ratio for different DPI displays
+    ///
+    /// Used to handle high-DPI displays and maintain consistent rendering
+    /// across different screen resolutions.
+    pub ratio_y: f32,
+
     /// Render flag controlling immediate vs buffered rendering
     ///
     /// - true: Direct rendering to screen (normal mode)
@@ -225,6 +243,10 @@ pub struct Graph {
 impl Graph {
     pub fn new() -> Self {
         Self {
+            pixel_w: 0,
+            pixel_h: 0,
+            ratio_x: 1.0,
+            ratio_y: 1.0,
             rflag: true,
             rbuf: vec![],
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]

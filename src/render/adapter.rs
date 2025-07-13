@@ -253,24 +253,6 @@ pub struct AdapterBase {
     /// Game area height in character cells
     pub cell_h: u16,
 
-    /// Physical window width in pixels
-    pub pixel_w: u32,
-
-    /// Physical window height in pixels
-    pub pixel_h: u32,
-
-    /// Horizontal scaling ratio for different DPI displays
-    ///
-    /// Used to handle high-DPI displays and maintain consistent rendering
-    /// across different screen resolutions.
-    pub ratio_x: f32,
-
-    /// Vertical scaling ratio for different DPI displays
-    ///
-    /// Used to handle high-DPI displays and maintain consistent rendering
-    /// across different screen resolutions.
-    pub ratio_y: f32,
-
     /// Random number generator for effects and animations
     pub rd: Rand,
 
@@ -295,10 +277,6 @@ impl AdapterBase {
             title: "".to_string(),
             cell_w: 0,
             cell_h: 0,
-            pixel_w: 0,
-            pixel_h: 0,
-            ratio_x: 1.0,
-            ratio_y: 1.0,
             rd: Rand::new(),
             #[cfg(any(
                 feature = "sdl",
@@ -429,8 +407,16 @@ pub trait Adapter {
     where
         Self: Sized,
     {
-        let bs = self.get_base();
-        bs.ratio_x = rx;
+        #[cfg(any(
+            feature = "sdl",
+            feature = "winit",
+            feature = "wgpu",
+            target_arch = "wasm32"
+        ))]
+        {
+            let bs = self.get_base();
+            bs.gr.ratio_x = rx;
+        }
         self
     }
 
@@ -438,8 +424,16 @@ pub trait Adapter {
     where
         Self: Sized,
     {
-        let bs = self.get_base();
-        bs.ratio_y = ry;
+        #[cfg(any(
+            feature = "sdl",
+            feature = "winit",
+            feature = "wgpu",
+            target_arch = "wasm32"
+        ))]
+        {
+            let bs = self.get_base();
+            bs.gr.ratio_y = ry;
+        }
         self
     }
 
@@ -455,10 +449,10 @@ pub trait Adapter {
         ))]
         {
             let bs = self.get_base();
-            bs.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
-                / bs.ratio_x) as u32;
-            bs.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
-                / bs.ratio_y) as u32;
+            bs.gr.pixel_w = ((bs.cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
+                / bs.gr.ratio_x) as u32;
+            bs.gr.pixel_h = ((bs.cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
+                / bs.gr.ratio_y) as u32;
         }
         self
     }
@@ -669,8 +663,8 @@ pub trait Adapter {
                     // Calculate proper scaling for high-DPI displays
                     let pcw = pix.canvas_width as f32; // Physical canvas width
                     let pch = pix.canvas_height as f32; // Physical canvas height
-                    let rx = bs.ratio_x; // Horizontal scaling ratio
-                    let ry = bs.ratio_y; // Vertical scaling ratio
+                    let rx = bs.gr.ratio_x; // Horizontal scaling ratio
+                    let ry = bs.gr.ratio_y; // Vertical scaling ratio
 
                     // Calculate scaled dimensions for transition layer
                     // Use actual game area dimensions instead of hardcoded 40x25
@@ -786,8 +780,8 @@ pub trait Adapter {
         {
             // OpenGL mode implementation
             let bs = self.get_base();
-            let rx = bs.ratio_x;
-            let ry = bs.ratio_y;
+            let rx = bs.gr.ratio_x;
+            let ry = bs.gr.ratio_y;
             if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 pix.bind_target(gl, rtidx);
                 if debug {
@@ -811,8 +805,8 @@ pub trait Adapter {
     ))]
     fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
-        let rx = self.get_base().ratio_x;
-        let ry = self.get_base().ratio_y;
+        let rx = self.get_base().gr.ratio_x;
+        let ry = self.get_base().gr.ratio_y;
         let pz = PointI32 { x: 0, y: 0 };
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
@@ -848,10 +842,10 @@ pub trait Adapter {
         // render logo...
         if stage <= LOGO_FRAME {
             render_logo(
-                self.get_base().ratio_x,
-                self.get_base().ratio_y,
-                self.get_base().pixel_w,
-                self.get_base().pixel_h,
+                self.get_base().gr.ratio_x,
+                self.get_base().gr.ratio_y,
+                self.get_base().gr.pixel_w,
+                self.get_base().gr.pixel_h,
                 &mut self.get_base().rd,
                 stage,
                 |fc, _s1, s2, texidx, symidx| {
@@ -863,8 +857,8 @@ pub trait Adapter {
 
         let cw = self.get_base().cell_w;
         let ch = self.get_base().cell_h;
-        let rx = self.get_base().ratio_x;
-        let ry = self.get_base().ratio_y;
+        let rx = self.get_base().gr.ratio_x;
+        let ry = self.get_base().gr.ratio_y;
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
                          _s0: ARect,

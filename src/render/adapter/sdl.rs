@@ -186,7 +186,7 @@ impl Adapter for SdlAdapter {
             .set_title(title);
         info!(
             "pixel_w={} pixel_h={}",
-            self.base.pixel_w, self.base.pixel_h
+            self.base.gr.pixel_w, self.base.gr.pixel_h
         );
 
         // init video subsystem...
@@ -198,7 +198,7 @@ impl Adapter for SdlAdapter {
         gl_attr.set_context_version(3, 3);
 
         let window = video_subsystem
-            .window(&self.base.title, self.base.pixel_w, self.base.pixel_h)
+            .window(&self.base.title, self.base.gr.pixel_w, self.base.gr.pixel_h)
             .opengl()
             .position_centered()
             .borderless()
@@ -224,8 +224,8 @@ impl Adapter for SdlAdapter {
         self.base.gr.gl_pixel = Some(GlPixel::new(
             self.base.gr.gl.as_ref().unwrap(),
             "#version 330 core",
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
+            self.base.gr.pixel_w as i32,
+            self.base.gr.pixel_h as i32,
             texwidth as i32,
             texheight as i32,
             &teximg,
@@ -255,11 +255,11 @@ impl Adapter for SdlAdapter {
     fn reset(&mut self) {}
 
     fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
+        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.gr.ratio_x
     }
 
     fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.gr.ratio_y
     }
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
@@ -269,7 +269,7 @@ impl Adapter for SdlAdapter {
                 ses.push(event.clone());
                 // convert sdl events to pixel events, providing a unified processing interfaces
                 if let Some(et) =
-                    input_events_from_sdl(&event, self.base.ratio_x, self.base.ratio_y)
+                    input_events_from_sdl(&event, self.base.gr.ratio_x, self.base.gr.ratio_y)
                 {
                     if !self.drag.draging {
                         es.push(et);
