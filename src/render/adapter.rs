@@ -7,10 +7,14 @@
 //! rendering interfaces across different platforms and rendering backends.
 //!
 //! ## Supported Rendering Backends
-//! - **SDL**: Desktop platform based on SDL2 library
-//! - **Winit**: Cross-platform window management with OpenGL
-//! - **Web**: WebGL-based browser rendering
+//! ### TextMode
 //! - **Crossterm**: Terminal text-mode rendering
+//!
+//! ### GraphMode
+//! - **SDL**: Desktop platform based on SDL2 library
+//! - **Winit**: Cross-platform window management with OpenGL(winit + glow)
+//! - **Wgpu**: Cross-platform window management with Wgpu(winit + wgpu)
+//! - **Web**: WebGL-based browser rendering(webgl)
 //!
 //! ## Architecture Overview
 //!
@@ -212,10 +216,6 @@ pub mod cross;
 /// │  └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘         │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
-
-
-
-
 /// Adapter base data structure containing shared information and OpenGL resources
 ///
 /// AdapterBase holds common data and OpenGL resources shared across all graphics
@@ -583,7 +583,7 @@ pub trait Adapter {
     /// ## Rendering Order and Layers
     /// ```text
     /// ┌─────────────────────────────────────────────────────────────┐
-    /// │                    Screen Composition                        │
+    /// │                    Screen Composition                       │
     /// │                                                             │
     /// │  Background (Clear Color)                                   │
     /// │      ▲                                                      │
