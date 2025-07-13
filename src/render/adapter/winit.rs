@@ -641,7 +641,7 @@ impl WinitAdapter {
         };
 
         // Store the OpenGL context and objects
-        self.base.gl = Some(gl);
+        self.base.gr.gl = Some(gl);
         self.window = Some(Arc::new(window));
         self.gl_display = Some(gl_display);
         self.gl_context = Some(gl_context);
@@ -649,8 +649,8 @@ impl WinitAdapter {
 
         // Create GlPixel with logical dimensions for consistent coordinate system
         // The framebuffer is still high-res (physical size), but GlPixel will handle scaling
-        self.base.gl_pixel = Some(GlPixel::new(
-            self.base.gl.as_ref().unwrap(),
+        self.base.gr.gl_pixel = Some(GlPixel::new(
+            self.base.gr.gl.as_ref().unwrap(),
             "#version 330 core",
             self.base.pixel_w as i32, // Use logical size for coordinate system
             self.base.pixel_h as i32, // Use logical size for coordinate system
@@ -686,7 +686,7 @@ impl WinitAdapter {
         // Perform initial clear to prevent white flash on window creation
         // This is important for winit mode because the window is immediately visible
         // after creation, unlike SDL mode
-        if let (Some(gl), Some(gl_pixel)) = (&self.base.gl, &mut self.base.gl_pixel) {
+        if let (Some(gl), Some(gl_pixel)) = (&self.base.gr.gl, &mut self.base.gr.gl_pixel) {
             use glow::HasContext;
             
             unsafe {
@@ -1192,9 +1192,9 @@ impl WinitAdapter {
                 let rx = self.base.ratio_x;
                 let ry = self.base.ratio_y;
                 
-                // 使用固定的游戏区域尺寸（匹配OpenGL版本）
-                let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                // 使用实际的游戏区域尺寸（匹配OpenGL版本）
+                let pw = self.base.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = self.base.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
                 let mut transform = WgpuTransform::new();
                 transform.scale(pw / pcw, ph / pch);
@@ -1445,7 +1445,7 @@ impl Adapter for WinitAdapter {
 
             let bs = self.get_base();
 
-            if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 // First bind screen with GlPixel's logical viewport
                 pix.bind_screen(gl);
 
@@ -1476,8 +1476,6 @@ impl Adapter for WinitAdapter {
                     let rx = bs.ratio_x;
                     let ry = bs.ratio_y;
                     // Use actual game area dimensions instead of hardcoded 40x25
-                    // let pw = bs.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                    // let ph = bs.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
                     let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                     let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 

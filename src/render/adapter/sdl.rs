@@ -218,11 +218,11 @@ impl Adapter for SdlAdapter {
         };
 
         // Store the OpenGL context
-        self.base.gl = Some(gl);
+        self.base.gr.gl = Some(gl);
         self.sdl_window = Some(window);
 
-        self.base.gl_pixel = Some(GlPixel::new(
-            self.base.gl.as_ref().unwrap(),
+        self.base.gr.gl_pixel = Some(GlPixel::new(
+            self.base.gr.gl.as_ref().unwrap(),
             "#version 330 core",
             self.base.pixel_w as i32,
             self.base.pixel_h as i32,

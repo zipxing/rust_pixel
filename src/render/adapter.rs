@@ -284,34 +284,34 @@ pub struct AdapterBase {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    pub rflag: bool,
+    pub gr: Graph,
 
-    /// Render buffer storing RenderCell array for buffered mode
-    ///
-    /// When rflag is false, rendered data is stored here instead of
-    /// being directly drawn to screen. Used for external access to
-    /// rendering data (e.g., Python FFI, WASM exports).
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    pub rbuf: Vec<RenderCell>,
+    // /// Render buffer storing RenderCell array for buffered mode
+    // ///
+    // /// When rflag is false, rendered data is stored here instead of
+    // /// being directly drawn to screen. Used for external access to
+    // /// rendering data (e.g., Python FFI, WASM exports).
+    // #[cfg(any(
+    //     feature = "sdl",
+    //     feature = "winit",
+    //     feature = "wgpu",
+    //     target_arch = "wasm32"
+    // ))]
+    // pub rbuf: Vec<RenderCell>,
 
-    /// OpenGL context handle
-    ///
-    /// Provides access to OpenGL functions for rendering operations.
-    /// Uses the glow crate for cross-platform OpenGL abstraction.
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    pub gl: Option<glow::Context>,
+    // /// OpenGL context handle
+    // ///
+    // /// Provides access to OpenGL functions for rendering operations.
+    // /// Uses the glow crate for cross-platform OpenGL abstraction.
+    // #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    // pub gl: Option<glow::Context>,
 
-    /// OpenGL pixel renderer instance
-    ///
-    /// High-level OpenGL rendering interface that manages shaders,
-    /// textures, and render targets for the pixel-based rendering pipeline.
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    pub gl_pixel: Option<GlPixel>,
+    // /// OpenGL pixel renderer instance
+    // ///
+    // /// High-level OpenGL rendering interface that manages shaders,
+    // /// textures, and render targets for the pixel-based rendering pipeline.
+    // #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    // pub gl_pixel: Option<GlPixel>,
 }
 
 impl AdapterBase {
@@ -333,18 +333,7 @@ impl AdapterBase {
                 feature = "wgpu",
                 target_arch = "wasm32"
             ))]
-            rflag: true,
-            #[cfg(any(
-                feature = "sdl",
-                feature = "winit",
-                feature = "wgpu",
-                target_arch = "wasm32"
-            ))]
-            rbuf: vec![],
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            gl: None,
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            gl_pixel: None,
+            gr: Graph::new(),
         }
     }
 }
@@ -598,7 +587,7 @@ pub trait Adapter {
             self.generate_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
 
         // Pass 2: Render to screen or buffer based on mode
-        if self.get_base().rflag {
+        if self.get_base().gr.rflag {
             // Both OpenGL and WGPU use the same unified rendering pipeline
             // 1. Draw RenderCell array to render_texture 2 (main scene)
             self.draw_render_buffer_to_texture(&rbuf, 2, false);
@@ -607,7 +596,7 @@ pub trait Adapter {
         } else {
             // Buffered mode: Store render data for external access
             // Used by FFI interfaces and WASM exports to access raw render data
-            self.get_base().rbuf = rbuf;
+            self.get_base().gr.rbuf = rbuf;
         }
     }
 
@@ -618,7 +607,7 @@ pub trait Adapter {
         target_arch = "wasm32"
     ))]
     fn only_render_buffer(&mut self) {
-        self.get_base().rflag = false;
+        self.get_base().gr.rflag = false;
     }
 
     /// Render texture composition to screen - final rendering stage
@@ -688,7 +677,7 @@ pub trait Adapter {
             // OpenGL mode implementation
             let bs = self.get_base();
 
-            if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 // Bind to screen framebuffer (0) for final output
                 pix.bind_screen(gl);
                 let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
@@ -826,7 +815,7 @@ pub trait Adapter {
             let bs = self.get_base();
             let rx = bs.ratio_x;
             let ry = bs.ratio_y;
-            if let (Some(pix), Some(gl)) = (&mut bs.gl_pixel, &mut bs.gl) {
+            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 pix.bind_target(gl, rtidx);
                 if debug {
                     // set red background for debug...
@@ -951,7 +940,7 @@ pub trait Adapter {
     target_arch = "wasm32"
 ))]
 pub use crate::render::graph::{
-    init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
+    Graph, init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
     render_main_buffer, render_pixel_sprites, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
 };

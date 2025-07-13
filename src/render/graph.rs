@@ -10,6 +10,31 @@ use crate::{
 };
 use std::sync::OnceLock;
 
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+use crate::render::adapter::gl::pixel::GlPixel;
+
+pub struct Graph {
+    pub rflag: bool,
+    pub rbuf: Vec<RenderCell>,
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    pub gl: Option<glow::Context>,
+    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+    pub gl_pixel: Option<GlPixel>,
+}
+
+impl Graph {
+    pub fn new() -> Self {
+        Self {
+            rflag: false,
+            rbuf: vec![],
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+            gl: None,
+            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+            gl_pixel: None,
+        }
+    }
+}
+
 /// 符号纹理文件路径
 ///
 /// 符号纹理包含8x8块，每块包含16x16符号，总共128×128符号。

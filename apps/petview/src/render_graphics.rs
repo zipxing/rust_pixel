@@ -166,7 +166,7 @@ impl Render for PetviewRender {
         if !model.tex_ready {
             // Set render texture 3 visible for both modes
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            if let Some(pix) = &mut ctx.adapter.get_base().gl_pixel {
+            if let Some(pix) = &mut ctx.adapter.get_base().gr.gl_pixel {
                 pix.set_render_texture_hidden(3, false);
             }
             
@@ -222,7 +222,7 @@ impl Render for PetviewRender {
                     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
                     {
                         let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
+                        if let (Some(pix), Some(gl)) = (&mut sa.gr.gl_pixel, &mut sa.gr.gl) {
                             pix.bind_target(gl, 3);
                             pix.set_render_texture_hidden(3, false);
                             let p3 = self.panel.get_pixel_sprite("petimg3");
@@ -258,7 +258,7 @@ impl Render for PetviewRender {
                     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
                     {
                         let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
+                        if let (Some(pix), Some(gl)) = (&mut sa.gr.gl_pixel, &mut sa.gr.gl) {
                             pix.bind_target(gl, 3);
                             pix.set_render_texture_hidden(3, true);
                             let p4 = self.panel.get_pixel_sprite("petimg4");
@@ -306,7 +306,7 @@ impl Render for PetviewRender {
                     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
                     {
                         let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
+                        if let (Some(pix), Some(gl)) = (&mut sa.gr.gl_pixel, &mut sa.gr.gl) {
                             pix.bind_target(gl, 3);
                             pix.set_render_texture_hidden(3, false);
                             let p3 = self.panel.get_pixel_sprite("petimg3");
