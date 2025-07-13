@@ -209,13 +209,24 @@ pub struct WinitAppHandler {
 
 impl ApplicationHandler for WinitAppHandler {
     /// 应用程序恢复时的回调
+    ///
+    /// 在resumed事件中创建窗口和渲染资源。
+    /// 这是统一的生命周期管理方式，适用于两种渲染后端。
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         unsafe {
             let adapter = &mut *self.adapter_ref;
-            // 如果是WGPU模式且窗口尚未创建，则创建窗口和资源
-            #[cfg(feature = "wgpu")]
+            
+            // 如果窗口尚未创建且有初始化参数，则创建窗口和资源
             if adapter.window.is_none() && adapter.window_init_params.is_some() {
-                adapter.create_wgpu_window_and_resources(event_loop);
+                #[cfg(feature = "wgpu")]
+                {
+                    adapter.create_wgpu_window_and_resources(event_loop);
+                }
+                
+                #[cfg(not(feature = "wgpu"))]
+                {
+                    adapter.create_glow_window_and_context(event_loop);
+                }
             }
         }
     }
@@ -475,11 +486,28 @@ impl WinitAdapter {
         }
     }
 
-    #[cfg(not(feature = "wgpu"))]
-    fn init_glow(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
-        info!("Initializing GLOW adapter...");
+    /// 通用初始化方法 - 处理所有公共逻辑
+    ///
+    /// 这个方法处理两种渲染后端都需要的初始化步骤：
+    /// 1. 加载纹理文件和设置符号尺寸
+    /// 2. 设置基础参数（尺寸、比例、像素大小）
+    /// 3. 创建事件循环
+    /// 4. 设置应用处理器
+    /// 5. 存储窗口初始化参数
+    ///
+    /// # 参数
+    /// - `w`: 逻辑宽度（字符数）
+    /// - `h`: 逻辑高度（字符数）
+    /// - `rx`: X轴缩放比例
+    /// - `ry`: Y轴缩放比例
+    /// - `title`: 窗口标题
+    ///
+    /// # 返回值
+    /// 返回纹理路径，用于后续的渲染器初始化
+    fn init_common(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) -> String {
+        info!("Initializing Winit adapter common components...");
 
-        // 1. 加载纹理文件和设置符号尺寸（与 OpenGL 版本相同）
+        // 1. 加载纹理文件和设置符号尺寸
         let texture_path = format!(
             "{}{}{}",
             self.base.project_path,
@@ -492,87 +520,101 @@ impl WinitAdapter {
             .to_rgba8();
         let texwidth = teximg.width();
         let texheight = teximg.height();
+        
         PIXEL_SYM_WIDTH
             .set(init_sym_width(texwidth))
             .expect("lazylock init");
         PIXEL_SYM_HEIGHT
             .set(init_sym_height(texheight))
             .expect("lazylock init");
-        info!("gl_pixel load texture...{}", texture_path);
+
+        info!("Loaded texture: {}", texture_path);
         info!(
-            "symbol_w={} symbol_h={}",
+            "Symbol dimensions: {}x{}",
             PIXEL_SYM_WIDTH.get().expect("lazylock init"),
             PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
         );
-        self.set_size(w, h).set_title(title);
+
+        // 2. 设置基础参数
+        self.set_size(w, h).set_title(title.clone());
         self.base.gr.set_ratiox(rx);
         self.base.gr.set_ratioy(ry);
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
         info!(
-            "pixel_w={} pixel_h={}",
+            "Window pixel size: {}x{}",
             self.base.gr.pixel_w, self.base.gr.pixel_h
         );
 
-        // Create event loop
+        // 3. 创建事件循环
         let event_loop = EventLoop::new().unwrap();
+        self.event_loop = Some(event_loop);
 
-        // For Retina displays, we need to adjust window logical size so its physical size matches our render area
-        // First create a temporary window to get the scale factor
-        let temp_window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
-        let temp_display_builder = DisplayBuilder::new().with_window_attributes(Some(
-            winit::window::WindowAttributes::default()
-                .with_title(&self.base.title)
-                .with_inner_size(temp_window_size)
-                .with_decorations(false)
-                .with_resizable(false),
-        ));
-        let (temp_window, temp_gl_config) = temp_display_builder
-            .build(&event_loop, ConfigTemplateBuilder::new(), |configs| {
-                configs
-                    .reduce(|accum, config| {
-                        if config.num_samples() > accum.num_samples() {
-                            config
-                        } else {
-                            accum
-                        }
-                    })
-                    .unwrap()
-            })
-            .unwrap();
-        let temp_window = temp_window.unwrap();
+        // 4. 存储窗口初始化参数，用于在resumed中创建窗口
+        self.window_init_params = Some(WindowInitParams {
+            width: w,
+            height: h,
+            ratio_x: rx,
+            ratio_y: ry,
+            title,
+            texture_path: texture_path.clone(),
+        });
 
-        // Get scale factor and calculate proper window size to match SDL behavior
-        let scale_factor = temp_window.scale_factor();
+        // 5. 设置应用处理器
+        self.app_handler = Some(WinitAppHandler {
+            pending_events: Vec::new(),
+            cursor_position: (0.0, 0.0),
+            ratio_x: self.base.gr.ratio_x,
+            ratio_y: self.base.gr.ratio_y,
+            should_exit: false,
+            adapter_ref: self as *mut WinitAdapter,
+        });
 
-        // For consistency with SDL: on Retina displays, we want the window to be 2x larger
-        // So logical size = original size (not divided by scale factor)
-        let adjusted_logical_w = self.base.gr.pixel_w;
-        let adjusted_logical_h = self.base.gr.pixel_h;
-        let window_size = LogicalSize::new(adjusted_logical_w, adjusted_logical_h);
+        info!("Common initialization completed, window will be created in resumed()");
+        texture_path
+    }
 
-        info!(
-            "Scale factor: {}, Window logical size: {}x{} (same as SDL)",
-            scale_factor, adjusted_logical_w, adjusted_logical_h
-        );
-        info!(
-            "Expected physical size: {}x{} (2x render size on Retina)",
-            (adjusted_logical_w as f64 * scale_factor) as u32,
-            (adjusted_logical_h as f64 * scale_factor) as u32
-        );
+    /// OpenGL (glow) 后端初始化
+    ///
+    /// 使用统一的生命周期管理，窗口创建推迟到resumed事件中。
+    #[cfg(not(feature = "wgpu"))]
+    fn init_glow(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
+        info!("Initializing Winit adapter with OpenGL backend...");
+        let _texture_path = self.init_common(w, h, rx, ry, title);
+        // 窗口创建将在resumed事件中完成
+    }
+
+    /// WGPU 后端初始化
+    ///
+    /// 使用统一的生命周期管理，窗口创建推迟到resumed事件中。
+    #[cfg(feature = "wgpu")]
+    fn init_wgpu(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
+        info!("Initializing Winit adapter with WGPU backend...");
+        let _texture_path = self.init_common(w, h, rx, ry, title);
+        // 窗口创建将在resumed事件中完成
+    }
+
+    /// 在resumed事件中创建OpenGL窗口和上下文
+    #[cfg(not(feature = "wgpu"))]
+    fn create_glow_window_and_context(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let params = self.window_init_params.as_ref().unwrap().clone();
+        
+        info!("Creating OpenGL window and context...");
+
+        // 计算窗口大小（处理 Retina 显示器）
+        let window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
 
         let template = ConfigTemplateBuilder::new();
-
         let display_builder = DisplayBuilder::new().with_window_attributes(Some(
-            winit::window::WindowAttributes::default()
-                .with_title(&self.base.title)
+            winit::window::Window::default_attributes()
+                .with_title(&params.title)
                 .with_inner_size(window_size)
-                .with_decorations(false) // borderless like SDL version
+                .with_decorations(false) // 无边框，与SDL版本一致
                 .with_resizable(false),
         ));
 
         let (window, gl_config) = display_builder
-            .build(&event_loop, template, |configs| {
+            .build(event_loop, template, |configs| {
                 configs
                     .reduce(|accum, config| {
                         if config.num_samples() > accum.num_samples() {
@@ -585,19 +627,15 @@ impl WinitAdapter {
             })
             .unwrap();
 
-        let window = window.unwrap();
-
-        // Get actual physical size - should be 2x render size on Retina
+        let window = Arc::new(window.unwrap());
         let physical_size = window.inner_size();
+        
         info!(
-            "Actual window physical size: {}x{} (2x on Retina)",
-            physical_size.width, physical_size.height
-        );
-        info!(
-            "Render area size: {}x{}",
-            self.base.gr.pixel_w, self.base.gr.pixel_h
+            "Window created - logical: {}x{}, physical: {}x{}",
+            self.base.gr.pixel_w, self.base.gr.pixel_h, physical_size.width, physical_size.height
         );
 
+        // 创建OpenGL上下文
         let gl_display = gl_config.display();
         let raw_window_handle = window.window_handle().unwrap().as_raw();
 
@@ -611,7 +649,6 @@ impl WinitAdapter {
                 .expect("failed to create context")
         };
 
-        // Use physical size for surface to match actual framebuffer (2x on Retina)
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
             std::num::NonZeroU32::new(physical_size.width).unwrap(),
@@ -629,192 +666,57 @@ impl WinitAdapter {
             .make_current(&surface)
             .expect("failed to make context current");
 
-        // Create the OpenGL context using glow
+        // 创建glow上下文
         let gl = unsafe {
             glow::Context::from_loader_function(|s| {
                 let s = std::ffi::CString::new(s)
                     .expect("failed to construct C string from string for gl proc address");
-
                 gl_display.get_proc_address(s.as_c_str())
             })
         };
 
-        // Store the OpenGL context and objects
-        self.base.gr.gl = Some(gl);
-        self.window = Some(Arc::new(window));
-        self.gl_display = Some(gl_display);
-        self.gl_context = Some(gl_context);
-        self.gl_surface = Some(surface);
-
-        // Create GlPixel with logical dimensions for consistent coordinate system
-        // The framebuffer is still high-res (physical size), but GlPixel will handle scaling
-        self.base.gr.gl_pixel = Some(GlPixel::new(
-            self.base.gr.gl.as_ref().unwrap(),
-            "#version 330 core",
-            self.base.gr.pixel_w as i32, // Use logical size for coordinate system
-            self.base.gr.pixel_h as i32, // Use logical size for coordinate system
-            texwidth as i32,
-            texheight as i32,
-            &teximg,
-        ));
-
-        // Ratio remains the same, but OpenGL will render at higher resolution on Retina
-        info!(
-            "Using standard ratio: {}x{}, OpenGL framebuffer: {}x{} (2x on Retina)",
-            self.base.gr.ratio_x, self.base.gr.ratio_y, physical_size.width, physical_size.height
-        );
-
-        self.app_handler = Some(WinitAppHandler {
-            pending_events: Vec::new(),
-            cursor_position: (0.0, 0.0),
-            ratio_x: self.base.gr.ratio_x, // Standard ratio - OpenGL handles scaling automatically
-            ratio_y: self.base.gr.ratio_y, // Standard ratio - OpenGL handles scaling automatically
-            should_exit: false,
-            adapter_ref: self as *mut WinitAdapter,
-        });
-
-        // Store event loop for later use
-        self.event_loop = Some(event_loop);
-
-        // Set custom mouse cursor (similar to SDL version)
-        self.set_mouse_cursor();
-
-        // Ensure cursor is visible (similar to SDL version)
-        self.show_cursor().unwrap();
-
-        // Perform initial clear to prevent white flash on window creation
-        // This is important for winit mode because the window is immediately visible
-        // after creation, unlike SDL mode
-        if let (Some(gl), Some(gl_pixel)) = (&self.base.gr.gl, &mut self.base.gr.gl_pixel) {
-            use glow::HasContext;
-
-            unsafe {
-                // Bind the screen framebuffer
-                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-
-                // Get actual window physical size for viewport
-                if let Some(window) = &self.window {
-                    let physical_size = window.inner_size();
-                    gl.viewport(
-                        0,
-                        0,
-                        physical_size.width as i32,
-                        physical_size.height as i32,
-                    );
-                }
-
-                // Set black clear color and clear the screen
-                gl.clear_color(0.0, 0.0, 0.0, 1.0);
-                gl.clear(glow::COLOR_BUFFER_BIT);
-            }
-
-            // Swap buffers to display the cleared screen immediately
-            if let (Some(surface), Some(context)) = (&self.gl_surface, &self.gl_context) {
-                surface.swap_buffers(context).unwrap();
-            }
-        }
-
-        info!("Winit window & OpenGL context initialized successfully");
-    }
-
-    /// 初始化现代 WGPU 渲染后端
-    ///
-    /// 使用 wgpu 技术栈初始化现代 GPU 渲染环境。
-    /// 提供跨平台的现代 GPU API 支持，包括 Vulkan、Metal、D3D12 等。
-    ///
-    /// # 参数
-    /// - `w`: 逻辑宽度（字符数）
-    /// - `h`: 逻辑高度（字符数）
-    /// - `rx`: X轴缩放比例
-    /// - `ry`: Y轴缩放比例
-    /// - `title`: 窗口标题
-    ///
-    /// # 初始化流程
-    /// 1. 加载纹理资源并设置符号尺寸
-    /// 2. 创建事件循环和窗口
-    /// 3. 初始化 WGPU 实例、适配器、设备
-    /// 4. 创建窗口表面和配置
-    /// 5. 初始化 WGPU 像素渲染器
-    /// 6. 设置自定义光标和事件处理器
-    #[cfg(feature = "wgpu")]
-    fn init_wgpu(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
-        info!("Initializing WGPU adapter...");
-
-        // 1. 加载纹理文件和设置符号尺寸（与 OpenGL 版本相同）
-        let texture_path = format!(
-            "{}{}{}",
-            self.base.project_path,
-            std::path::MAIN_SEPARATOR,
-            PIXEL_TEXTURE_FILE
-        );
-        let teximg = image::open(&texture_path)
+        // 加载纹理并创建GlPixel
+        let teximg = image::open(&params.texture_path)
             .map_err(|e| e.to_string())
             .unwrap()
             .to_rgba8();
         let texwidth = teximg.width();
         let texheight = teximg.height();
 
-        PIXEL_SYM_WIDTH
-            .set(init_sym_width(texwidth))
-            .expect("lazylock init");
-        PIXEL_SYM_HEIGHT
-            .set(init_sym_height(texheight))
-            .expect("lazylock init");
+        self.base.gr.gl_pixel = Some(GlPixel::new(
+            &gl,
+            "#version 330 core",
+            self.base.gr.pixel_w as i32,
+            self.base.gr.pixel_h as i32,
+            texwidth as i32,
+            texheight as i32,
+            &teximg,
+        ));
 
-        info!("WGPU load texture...{}", texture_path);
-        info!(
-            "symbol_w={} symbol_h={}",
-            PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-            PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
-        );
+        // 存储OpenGL对象
+        self.base.gr.gl = Some(gl);
+        self.window = Some(window);
+        self.gl_display = Some(gl_display);
+        self.gl_context = Some(gl_context);
+        self.gl_surface = Some(surface);
 
-        // 设置基础参数
-        self.set_size(w, h).set_title(title.clone());
-        self.base.gr.set_ratiox(rx);
-        self.base.gr.set_ratioy(ry);
-        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
+        // 设置光标和执行初始清屏
+        self.set_mouse_cursor();
+        self.show_cursor().unwrap();
+        self.initial_clear_screen();
 
-        info!(
-            "pixel_w={} pixel_h={}",
-            self.base.gr.pixel_w, self.base.gr.pixel_h
-        );
-
-        // 2. 创建事件循环，但延迟创建窗口到resumed方法中
-        let event_loop = EventLoop::new().unwrap();
-
-        // 存储窗口初始化参数，稍后在resumed中使用
-        self.window_init_params = Some(WindowInitParams {
-            width: w,
-            height: h,
-            ratio_x: rx,
-            ratio_y: ry,
-            title,
-            texture_path,
-        });
-
-        // 3. 存储事件循环，窗口将在resumed方法中创建
-        self.event_loop = Some(event_loop);
-
-        // 4. 配置事件处理器
-        self.app_handler = Some(WinitAppHandler {
-            pending_events: Vec::new(),
-            cursor_position: (0.0, 0.0),
-            ratio_x: self.base.gr.ratio_x,
-            ratio_y: self.base.gr.ratio_y,
-            should_exit: false,
-            adapter_ref: self as *mut WinitAdapter,
-        });
-
-        info!("WGPU adapter initialization prepared, window will be created in resumed()");
+        info!("OpenGL window & context initialized successfully");
     }
 
-    /// 在resumed方法中创建WGPU窗口和相关资源
+    /// 在resumed事件中创建WGPU窗口和相关资源
     #[cfg(feature = "wgpu")]
     fn create_wgpu_window_and_resources(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
     ) {
         let params = self.window_init_params.as_ref().unwrap().clone();
+
+        info!("Creating WGPU window and resources...");
 
         // 计算窗口大小（处理 Retina 显示器）
         let window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
@@ -831,7 +733,6 @@ impl WinitAdapter {
                 .expect("Failed to create window"),
         );
 
-        // 获取实际物理尺寸
         let physical_size = window.inner_size();
         info!(
             "Window created - logical: {}x{}, physical: {}x{}",
@@ -844,10 +745,9 @@ impl WinitAdapter {
             ..Default::default()
         });
 
-        // 先存储窗口，稍后创建surface
         self.window = Some(window.clone());
 
-        // 创建窗口表面（使用 unsafe 方式避免生命周期问题）
+        // 创建窗口表面
         let wgpu_surface = unsafe {
             wgpu_instance
                 .create_surface_unsafe(
@@ -857,9 +757,8 @@ impl WinitAdapter {
                 .expect("Failed to create surface")
         };
 
-        // 异步获取适配器和设备（使用 pollster 简化）
+        // 异步获取适配器和设备
         let (wgpu_device, wgpu_queue, wgpu_surface_config) = pollster::block_on(async {
-            // 请求适配器
             let adapter = wgpu_instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::default(),
@@ -871,7 +770,6 @@ impl WinitAdapter {
 
             info!("WGPU adapter found: {:?}", adapter.get_info());
 
-            // 请求设备和队列
             let (device, queue) = adapter
                 .request_device(
                     &wgpu::DeviceDescriptor {
@@ -884,13 +782,12 @@ impl WinitAdapter {
                 .await
                 .expect("Failed to create WGPU device");
 
-            // 配置表面
             let surface_caps = wgpu_surface.get_capabilities(&adapter);
             let surface_format = surface_caps
                 .formats
                 .iter()
                 .copied()
-                .find(|f| !f.is_srgb()) // 优先选择线性格式，匹配GL模式
+                .find(|f| !f.is_srgb())
                 .unwrap_or(surface_caps.formats[0]);
 
             let surface_config = wgpu::SurfaceConfiguration {
@@ -915,41 +812,27 @@ impl WinitAdapter {
         });
 
         // 创建并初始化 WGPU 像素渲染器
-        // 使用逻辑尺寸创建渲染器以避免缓冲区过大，坐标转换在着色器中处理
         let mut wgpu_pixel_renderer = WgpuPixelRender::new_with_format(
-            self.base.gr.pixel_w,       // 使用逻辑尺寸避免缓冲区过大
-            self.base.gr.pixel_h,       // 使用逻辑尺寸避免缓冲区过大
-            wgpu_surface_config.format, // Use actual surface format
+            self.base.gr.pixel_w,
+            self.base.gr.pixel_h,
+            wgpu_surface_config.format,
         );
 
-        // 加载纹理
-        if let Err(e) =
-            wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path)
-        {
+        // 初始化所有WGPU组件
+        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path) {
             panic!("Failed to load symbol texture: {}", e);
         }
 
-        // 创建shader和渲染管线
         wgpu_pixel_renderer.create_shader(&wgpu_device);
-
-        // 创建buffers
         wgpu_pixel_renderer.create_buffer(&wgpu_device);
-
-        // 创建bind group
         wgpu_pixel_renderer.create_bind_group(&wgpu_device);
 
-        // 初始化render textures（4个离屏渲染目标）
         if let Err(e) = wgpu_pixel_renderer.init_render_textures(&wgpu_device) {
             panic!("Failed to initialize render textures: {}", e);
         }
 
-        // 初始化General2D渲染器（用于转场效果）
         wgpu_pixel_renderer.init_general2d_renderer(&wgpu_device);
-
-        // 初始化Transition渲染器（用于转场效果）
         wgpu_pixel_renderer.init_transition_renderer(&wgpu_device);
-
-        // 设置ratio参数以匹配OpenGL版本的坐标变换
         wgpu_pixel_renderer.set_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
 
         // 存储所有 WGPU 对象
@@ -960,10 +843,34 @@ impl WinitAdapter {
         self.wgpu_surface_config = Some(wgpu_surface_config);
         self.wgpu_pixel_renderer = Some(wgpu_pixel_renderer);
 
-        // 设置自定义光标
+        // 设置光标
         self.set_mouse_cursor();
 
         info!("WGPU window & context initialized successfully");
+    }
+
+    /// 执行初始清屏操作
+    ///
+    /// 防止窗口创建时的白屏闪烁，立即清空屏幕并显示黑色背景。
+    #[cfg(not(feature = "wgpu"))]
+    fn initial_clear_screen(&mut self) {
+        if let (Some(gl), Some(_gl_pixel)) = (&self.base.gr.gl, &mut self.base.gr.gl_pixel) {
+            use glow::HasContext;
+
+            unsafe {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+                if let Some(window) = &self.window {
+                    let physical_size = window.inner_size();
+                    gl.viewport(0, 0, physical_size.width as i32, physical_size.height as i32);
+                }
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+
+            if let (Some(surface), Some(context)) = (&self.gl_surface, &self.gl_context) {
+                surface.swap_buffers(context).unwrap();
+            }
+        }
     }
 
     /// 设置自定义鼠标光标
