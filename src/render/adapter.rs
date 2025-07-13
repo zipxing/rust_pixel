@@ -153,7 +153,7 @@ use crate::{
 };
 
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-use crate::render::adapter::gl::{color::GlColor, pixel::GlPixel, transform::GlTransform};
+use crate::render::adapter::gl::{color::GlColor, transform::GlTransform};
 use std::any::Any;
 use std::time::Duration;
 // use log::info;
