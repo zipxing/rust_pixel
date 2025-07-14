@@ -43,7 +43,7 @@ pub fn init_log(level: LevelFilter, file_path: &str) {
             .build(
                 Root::builder()
                     .appender("logfile")
-                    .build(LevelFilter::Trace),
+                    .build(level),
             )
             .unwrap();
         let _handle = log4rs::init_config(config).unwrap();

@@ -1510,48 +1510,7 @@ impl Adapter for WinitAdapter {
             }
         }
 
-        // WGPU调试模式 - 设置环境变量 RUST_PIXEL_DEBUG_WGPU=1 启用
-        #[cfg(feature = "wgpu")]
-        {
-            static mut DEBUG_FRAME_COUNT: u32 = 0;
-            static DEBUG_ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-            
-            let debug_enabled = *DEBUG_ENABLED.get_or_init(|| {
-                std::env::var("RUST_PIXEL_DEBUG_WGPU").unwrap_or_default() == "1"
-            });
-            
-            if debug_enabled {
-                unsafe {
-                    DEBUG_FRAME_COUNT += 1;
-                    
-                    // 每100帧打印一次渲染信息
-                    if DEBUG_FRAME_COUNT % 100 == 1 {
-                        self.debug_print_render_info();
-                    }
-                    
-                    // 第10帧：保存render texture进行调试
-                    if DEBUG_FRAME_COUNT == 10 {
-                        info!("=== WGPU Render Texture 调试保存 ===");
-                        
-                        // 先执行一次正常渲染
-                        self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
-                        
-                        // 保存不同的render texture
-                        for i in 0..4 {
-                            let filename = format!("debug_rt{}.png", i);
-                            match self.debug_save_render_texture_to_file(i, &filename) {
-                                Ok(()) => info!("✓ 成功保存 render texture {} 到 {}", i, filename),
-                                Err(e) => info!("✗ 保存 render texture {} 失败: {}", i, e),
-                            }
-                        }
-                        
-                        info!("调试图片已保存到当前目录，可以检查渲染内容");
-                        info!("=====================================");
-                        return Ok(()); // 第10帧只做调试
-                    }
-                }
-            }
-        }
+        // WGPU调试模式已移除，提高性能
 
         if let Some(window) = &self.window {
             window.as_ref().request_redraw();

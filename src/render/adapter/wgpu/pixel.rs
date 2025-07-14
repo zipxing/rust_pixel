@@ -198,14 +198,7 @@ impl WgpuPixelRender {
 
             self.render_textures.push(render_texture);
 
-            log::info!(
-                "WGPU render texture {} created ({}x{}, format: {:?}, hidden: {})",
-                i,
-                self.canvas_width,
-                self.canvas_height,
-                self.surface_format,
-                rt_hidden[i]
-            );
+            // Render texture created successfully (debug output removed for performance)
         }
 
         Ok(())
@@ -524,10 +517,7 @@ impl WgpuPixelRender {
         let texture_width = texture_image.width();
         let texture_height = texture_image.height();
 
-        println!(
-            "WGPU Debug: Loaded symbol texture {}x{} from {}",
-            texture_width, texture_height, texture_path
-        );
+        // Symbol texture loaded successfully (debug output removed for performance)
 
         // Create WGPU texture (use linear format to exactly match GL mode)
         let texture = device.create_texture(&wgpu::TextureDescriptor {

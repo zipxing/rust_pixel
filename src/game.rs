@@ -82,7 +82,7 @@ where
         let ap = project_path.to_string();
         let ctx = Context::new(name, &ap);
         init_log(
-            log::LevelFilter::Trace,
+            log::LevelFilter::Info,
             &format!("log{}{}.log", std::path::MAIN_SEPARATOR, name),
         );
         info!("{}(rust_pixel) start...{:?}", name, &ap);

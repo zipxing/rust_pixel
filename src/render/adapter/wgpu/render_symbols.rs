@@ -168,9 +168,7 @@ impl WgpuSymbolRenderer {
             }
         }
         
-        // Debug: Print symbols info
-        println!("WGPU Debug: Loaded {} symbols from {}x{} texture ({}x{} symbols grid)", 
-            self.symbols.len(), texw, texh, tw, th);
+        // Symbols loaded successfully (debug output removed for performance)
     }
     
     /// Create symbol frame (equivalent to OpenGL make_symbols_frame)
@@ -251,11 +249,11 @@ impl WgpuSymbolRenderer {
     /// Add a symbol instance (equivalent to OpenGL draw_symbol)
     fn draw_symbol_instance(&mut self, sym: usize, transform: &WgpuTransformStack, color: [f32; 4]) {
         if self.instance_count >= self.max_instances {
-            println!("WGPU Debug: Instance count limit reached: {}/{}", self.instance_count, self.max_instances);
+            // Instance limit reached (debug output removed for performance)
             return;
         }
         if sym >= self.symbols.len() {
-            println!("WGPU Debug: Symbol index {} out of bounds, symbols.len()={}", sym, self.symbols.len());
+            // Symbol index out of bounds (debug output removed for performance)
             return;
         }
         
