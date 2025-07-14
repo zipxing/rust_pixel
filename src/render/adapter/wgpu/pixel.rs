@@ -182,7 +182,10 @@ impl WgpuPixelRender {
         self.render_textures.clear();
 
         // Create 4 render textures with appropriate hidden states
-        let rt_hidden = [true, true, false, false];
+        // RT0, RT1: hidden (for transition effects)
+        // RT2: visible (main buffer)
+        // RT3: hidden (only shown during transitions)
+        let rt_hidden = [true, true, false, true];
 
         for i in 0..4 {
             let render_texture = WgpuRenderTexture::new_with_format(

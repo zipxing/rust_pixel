@@ -26,8 +26,7 @@ pub const GAME_FRAME: u32 = 60;
 #[cfg(not(any(feature = "sdl", feature = "winit", target_arch = "wasm32")))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-// pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
-pub const LOGO_FRAME: u32 = 4;
+pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
 
 /// Re-export paste for use in macros
 #[cfg(not(feature = "base"))]

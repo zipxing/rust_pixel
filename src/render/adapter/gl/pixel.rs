@@ -62,7 +62,7 @@ impl GlPixel {
 
         // create 4 render texture for gl transition...
         let mut render_textures = vec![];
-        let rt_hidden = [true, true, false, false];
+        let rt_hidden = [true, true, false, true];
         for i in 0..4 {
             let w = canvas_width as u32;
             let h = canvas_height as u32;
