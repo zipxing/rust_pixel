@@ -253,15 +253,18 @@ impl WgpuPixelRender {
         }
     }
 
-    /// Get a reference to a specific render texture
+    /// Get render texture by index (for debugging and general access)
+    ///
+    /// This method provides access to render textures for debugging purposes,
+    /// such as saving them to image files, and general render texture access.
     ///
     /// # Parameters
-    /// - `rtidx`: Render texture index (0-3)
+    /// - `index`: Render texture index (0-3)
     ///
     /// # Returns
-    /// Optional reference to the render texture
-    pub fn get_render_texture(&self, rtidx: usize) -> Option<&WgpuRenderTexture> {
-        self.render_textures.get(rtidx)
+    /// Reference to the render texture if it exists
+    pub fn get_render_texture(&self, index: usize) -> Option<&WgpuRenderTexture> {
+        self.render_textures.get(index)
     }
 
     /// Get a mutable reference to a specific render texture

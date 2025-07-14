@@ -1221,6 +1221,174 @@ impl WinitAdapter {
 
         Ok(())
     }
+
+    /// 调试方法：保存render texture为PNG图片文件
+    /// 
+    /// 这个方法将指定的render texture保存为PNG文件，用于调试渲染问题
+    #[cfg(feature = "wgpu")]
+    pub fn debug_save_render_texture_to_file(&mut self, rt_index: usize, filename: &str) -> Result<(), String> {
+        if let (Some(device), Some(queue), Some(pixel_renderer)) = (
+            &self.wgpu_device,
+            &self.wgpu_queue,
+            &mut self.wgpu_pixel_renderer,
+        ) {
+            info!("Saving render texture {} to {}", rt_index, filename);
+            
+            // 获取render texture
+            let render_texture = pixel_renderer.get_render_texture(rt_index)
+                .ok_or_else(|| format!("Render texture {} not found", rt_index))?;
+            
+            let texture_width = render_texture.width;
+            let texture_height = render_texture.height;
+            let bytes_per_pixel = 4; // RGBA
+            let unpadded_bytes_per_row = texture_width * bytes_per_pixel;
+            
+            // WGPU requires bytes_per_row to be a multiple of COPY_BYTES_PER_ROW_ALIGNMENT (256)
+            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+            let bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
+            let buffer_size = (bytes_per_row * texture_height) as u64;
+            
+            info!("Texture copy info: {}x{}, unpadded: {}, aligned: {}, buffer_size: {}", 
+                  texture_width, texture_height, unpadded_bytes_per_row, bytes_per_row, buffer_size);
+            
+            // 创建staging buffer用于读取texture数据
+            let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Render Texture Staging Buffer"),
+                size: buffer_size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            
+            // 创建命令编码器
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Texture Copy Encoder"),
+            });
+            
+            // 复制texture到buffer
+            encoder.copy_texture_to_buffer(
+                wgpu::ImageCopyTexture {
+                    texture: &render_texture.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::ImageCopyBuffer {
+                    buffer: &staging_buffer,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(bytes_per_row),
+                        rows_per_image: Some(texture_height),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: texture_width,
+                    height: texture_height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            
+            // 提交命令
+            queue.submit(std::iter::once(encoder.finish()));
+            
+            // 映射buffer并读取数据（异步操作）
+            let buffer_slice = staging_buffer.slice(..);
+            let (sender, receiver) = std::sync::mpsc::channel();
+            
+            buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+                sender.send(result).unwrap();
+            });
+            
+            // 等待映射完成
+            device.poll(wgpu::Maintain::Wait);
+            
+            match receiver.recv() {
+                Ok(Ok(())) => {
+                    // 读取数据
+                    let data = buffer_slice.get_mapped_range();
+                    let mut rgba_data = vec![0u8; (texture_width * texture_height * 4) as usize];
+                    
+                    // 复制数据（处理padding）
+                    for y in 0..texture_height {
+                        let src_start = (y * bytes_per_row) as usize;
+                        let dst_start = (y * texture_width * 4) as usize;
+                        let row_size = (texture_width * 4) as usize;
+                        
+                        // 只复制实际像素数据，跳过padding
+                        rgba_data[dst_start..dst_start + row_size]
+                            .copy_from_slice(&data[src_start..src_start + row_size]);
+                    }
+                    
+                    // 解除映射
+                    drop(data);
+                    staging_buffer.unmap();
+                    
+                    // 保存为PNG文件
+                    match image::save_buffer(
+                        filename,
+                        &rgba_data,
+                        texture_width,
+                        texture_height,
+                        image::ColorType::Rgba8,
+                    ) {
+                        Ok(()) => {
+                            info!("Successfully saved render texture {} to {}", rt_index, filename);
+                            Ok(())
+                        }
+                        Err(e) => {
+                            Err(format!("Failed to save image: {}", e))
+                        }
+                    }
+                }
+                Ok(Err(e)) => {
+                    Err(format!("Failed to map buffer: {:?}", e))
+                }
+                Err(e) => {
+                    Err(format!("Failed to receive mapping result: {}", e))
+                }
+            }
+        } else {
+            Err("WGPU components not initialized".to_string())
+        }
+    }
+
+    /// 调试方法：打印当前渲染状态信息
+    #[cfg(feature = "wgpu")]
+    pub fn debug_print_render_info(&self) {
+        info!("=== WGPU渲染状态信息 ===");
+        
+        // 基础参数
+        info!("基础参数:");
+        info!("  Cell数量: {}x{}", self.base.cell_w, self.base.cell_h);
+        info!("  窗口像素尺寸: {}x{}", self.base.gr.pixel_w, self.base.gr.pixel_h);
+        info!("  比例: {:.3}x{:.3}", self.base.gr.ratio_x, self.base.gr.ratio_y);
+        
+        // 符号尺寸
+        if let (Some(sym_w), Some(sym_h)) = (
+            PIXEL_SYM_WIDTH.get(), 
+            PIXEL_SYM_HEIGHT.get()
+        ) {
+            info!("  符号尺寸: {}x{}", sym_w, sym_h);
+            
+            // 计算游戏区域
+            let game_area_w = self.base.cell_w as f32 * sym_w / self.base.gr.ratio_x;
+            let game_area_h = self.base.cell_h as f32 * sym_h / self.base.gr.ratio_y;
+            info!("  游戏区域: {:.2}x{:.2}", game_area_w, game_area_h);
+        }
+        
+        // WGPU状态
+        if let Some(pixel_renderer) = &self.wgpu_pixel_renderer {
+            info!("WGPU状态:");
+            info!("  Canvas尺寸: {}x{}", pixel_renderer.canvas_width, pixel_renderer.canvas_height);
+            
+            // Render texture状态
+            for i in 0..4 {
+                let hidden = pixel_renderer.get_render_texture_hidden(i);
+                info!("  RenderTexture{}: {}", i, if hidden { "隐藏" } else { "显示" });
+            }
+        }
+        
+        info!("========================");
+    }
 }
 
 impl Adapter for WinitAdapter {
@@ -1338,6 +1506,49 @@ impl Adapter for WinitAdapter {
             if let Some(surface) = &self.gl_surface {
                 if let Some(context) = &self.gl_context {
                     surface.swap_buffers(context).unwrap();
+                }
+            }
+        }
+
+        // WGPU调试模式 - 设置环境变量 RUST_PIXEL_DEBUG_WGPU=1 启用
+        #[cfg(feature = "wgpu")]
+        {
+            static mut DEBUG_FRAME_COUNT: u32 = 0;
+            static DEBUG_ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            
+            let debug_enabled = *DEBUG_ENABLED.get_or_init(|| {
+                std::env::var("RUST_PIXEL_DEBUG_WGPU").unwrap_or_default() == "1"
+            });
+            
+            if debug_enabled {
+                unsafe {
+                    DEBUG_FRAME_COUNT += 1;
+                    
+                    // 每100帧打印一次渲染信息
+                    if DEBUG_FRAME_COUNT % 100 == 1 {
+                        self.debug_print_render_info();
+                    }
+                    
+                    // 第10帧：保存render texture进行调试
+                    if DEBUG_FRAME_COUNT == 10 {
+                        info!("=== WGPU Render Texture 调试保存 ===");
+                        
+                        // 先执行一次正常渲染
+                        self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
+                        
+                        // 保存不同的render texture
+                        for i in 0..4 {
+                            let filename = format!("debug_rt{}.png", i);
+                            match self.debug_save_render_texture_to_file(i, &filename) {
+                                Ok(()) => info!("✓ 成功保存 render texture {} 到 {}", i, filename),
+                                Err(e) => info!("✗ 保存 render texture {} 失败: {}", i, e),
+                            }
+                        }
+                        
+                        info!("调试图片已保存到当前目录，可以检查渲染内容");
+                        info!("=====================================");
+                        return Ok(()); // 第10帧只做调试
+                    }
                 }
             }
         }
