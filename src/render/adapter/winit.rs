@@ -1010,25 +1010,35 @@ impl WinitAdapter {
             &self.wgpu_queue,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 准备渲染数据
-            pixel_renderer.prepare_draw(device, queue);
-            pixel_renderer.prepare_draw_with_render_cells(device, queue, rbuf);
+            // 使用统一的WgpuPixelRender封装，匹配OpenGL版本的接口
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            
+            // 绑定目标render texture
+            pixel_renderer.bind_target(rtidx);
+            
+            // 设置清除颜色
+            if debug {
+                // 调试模式使用红色背景
+                pixel_renderer.set_clear_color(crate::render::adapter::wgpu::color::WgpuColor::new(1.0, 0.0, 0.0, 1.0));
+            } else {
+                // 正常模式使用黑色背景
+                pixel_renderer.set_clear_color(crate::render::adapter::wgpu::color::WgpuColor::new(0.0, 0.0, 0.0, 1.0));
+            }
+            
+            // 清除目标
+            pixel_renderer.clear();
+            
+            // 渲染RenderCell数据到当前绑定的目标
+            pixel_renderer.render_rbuf(device, queue, rbuf, rx, ry);
 
             // 创建命令编码器用于渲染到纹理
             let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some(&format!("Render to RT{} Encoder", rtidx)),
             });
 
-            // 渲染到指定的render texture
-            {
-                let render_pass_result =
-                    pixel_renderer.begin_render_to_texture(&mut rt_encoder, rtidx);
-                if let Ok(mut render_pass) = render_pass_result {
-                    // begin_render_to_texture已经设置好了pipeline、buffers和bind groups
-                    render_pass.draw_indexed(0..6, 0, 0..pixel_renderer.get_instance_count());
-                }
-                // render_pass自动drop
-            }
+            // 执行渲染到当前绑定的目标
+            pixel_renderer.render_to_current_target(&mut rt_encoder, None)?;
 
             // 提交渲染到纹理的命令
             queue.submit(std::iter::once(rt_encoder.finish()));
@@ -1064,6 +1074,10 @@ impl WinitAdapter {
             let view = output
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
+
+            // 使用统一的WgpuPixelRender封装，匹配OpenGL版本的接口
+            // 绑定屏幕作为渲染目标
+            pixel_renderer.bind_screen();
 
             // 创建命令编码器用于屏幕合成
             let mut screen_encoder =

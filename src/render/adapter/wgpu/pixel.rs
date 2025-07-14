@@ -133,6 +133,12 @@ pub struct WgpuPixelRender {
     /// Canvas dimensions for render texture compatibility
     pub canvas_width: u32,
     pub canvas_height: u32,
+
+    /// Current render target (None = screen, Some(idx) = render texture)
+    current_render_target: Option<usize>,
+
+    /// Clear color for render operations
+    clear_color: WgpuColor,
 }
 
 impl WgpuPixelRender {
@@ -159,6 +165,8 @@ impl WgpuPixelRender {
             render_textures: Vec::new(),
             canvas_width,
             canvas_height,
+            current_render_target: None,
+            clear_color: WgpuColor::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 
@@ -296,7 +304,12 @@ impl WgpuPixelRender {
                 view: render_texture.get_view(),
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: self.clear_color.r as f64,
+                        g: self.clear_color.g as f64,
+                        b: self.clear_color.b as f64,
+                        a: self.clear_color.a as f64,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -716,6 +729,165 @@ impl WgpuPixelRender {
     /// transformation to match the OpenGL version's behavior exactly.
     pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
         self.symbol_renderer.set_ratio(ratio_x, ratio_y);
+    }
+
+    /// Bind screen as render target (matches OpenGL GlPixel interface)
+    ///
+    /// This method sets the render target to screen, equivalent to OpenGL's
+    /// glBindFramebuffer(GL_FRAMEBUFFER, 0).
+    pub fn bind_screen(&mut self) {
+        self.current_render_target = None;
+    }
+
+    /// Bind render texture as render target (matches OpenGL GlPixel interface)
+    ///
+    /// This method sets the render target to a specific render texture,
+    /// equivalent to OpenGL's glBindFramebuffer(GL_FRAMEBUFFER, texture_fbo).
+    ///
+    /// # Parameters
+    /// - `render_texture_idx`: Index of render texture to bind (0-3)
+    pub fn bind_target(&mut self, render_texture_idx: usize) {
+        self.current_render_target = Some(render_texture_idx);
+    }
+
+    /// Set clear color for render operations (matches OpenGL GlPixel interface)
+    ///
+    /// # Parameters
+    /// - `color`: Clear color to use for subsequent clear operations
+    pub fn set_clear_color(&mut self, color: WgpuColor) {
+        self.clear_color = color;
+    }
+
+    /// Clear current render target (matches OpenGL GlPixel interface)
+    ///
+    /// This method clears the current render target with the configured clear color.
+    /// Note: In WGPU, clearing happens when beginning a render pass, so this method
+    /// stores the clear request to be applied during the next render operation.
+    pub fn clear(&mut self) {
+        // In WGPU, clearing is handled when beginning render pass
+        // The clear_color is already stored and will be used automatically
+    }
+
+    /// Render RenderCell buffer to current render target (matches OpenGL GlPixel interface)
+    ///
+    /// This method provides the same interface as OpenGL GlPixel.render_rbuf(),
+    /// allowing WGPU mode to render RenderCell data with the same API.
+    ///
+    /// # Parameters
+    /// - `device`: WGPU device handle
+    /// - `queue`: WGPU queue handle
+    /// - `rbuf`: RenderCell data array
+    /// - `ratio_x`: X-axis ratio for coordinate transformation
+    /// - `ratio_y`: Y-axis ratio for coordinate transformation
+    pub fn render_rbuf(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        rbuf: &[crate::render::adapter::RenderCell],
+        ratio_x: f32,
+        ratio_y: f32,
+    ) {
+        // Set ratios for coordinate transformation
+        self.symbol_renderer.set_ratio(ratio_x, ratio_y);
+        
+        // Prepare draw data
+        self.prepare_draw(device, queue);
+        self.prepare_draw_with_render_cells(device, queue, rbuf);
+    }
+
+    /// Render to current bound target (used after render_rbuf)
+    ///
+    /// This method executes the actual rendering to the currently bound target,
+    /// either screen or render texture, matching the OpenGL workflow.
+    ///
+    /// # Parameters
+    /// - `encoder`: Command encoder for render commands
+    /// - `screen_view`: Optional screen view (required if rendering to screen)
+    ///
+    /// # Returns
+    /// Result indicating success or error
+    pub fn render_to_current_target(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        screen_view: Option<&wgpu::TextureView>,
+    ) -> Result<(), String> {
+        match self.current_render_target {
+            None => {
+                // Render to screen
+                if let Some(view) = screen_view {
+                    self.render_to_screen(encoder, view);
+                } else {
+                    return Err("Screen view required for screen rendering".to_string());
+                }
+            }
+            Some(rtidx) => {
+                // Render to render texture
+                let render_pass_result = self.begin_render_to_texture(encoder, rtidx);
+                if let Ok(mut render_pass) = render_pass_result {
+                    render_pass.draw_indexed(0..6, 0, 0..self.instance_count);
+                } else {
+                    return Err(format!("Failed to begin render to texture {}", rtidx));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Render to screen with current clear color
+    ///
+    /// # Parameters
+    /// - `encoder`: Command encoder for render commands
+    /// - `view`: Target screen view
+    fn render_to_screen(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Pixel Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: self.clear_color.r as f64,
+                        g: self.clear_color.g as f64,
+                        b: self.clear_color.b as f64,
+                        a: self.clear_color.a as f64,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        // Set pipeline and buffers for instanced rendering
+        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+            render_pass.set_pipeline(pipeline);
+
+            // Set quad vertex buffer (buffer 0)
+            if let Some(quad_vertex_buffer) = &self.quad_vertex_buffer {
+                render_pass.set_vertex_buffer(0, quad_vertex_buffer.slice(..));
+            }
+
+            // Set instance buffer (buffer 1)
+            if let Some(instance_buffer) = &self.instance_buffer {
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            }
+
+            // Set index buffer
+            if let Some(index_buffer) = &self.index_buffer {
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            }
+
+            // Set bind group with texture and uniform buffer
+            if let Some(bind_group) = &self.bind_group {
+                render_pass.set_bind_group(0, bind_group, &[]);
+            }
+
+            // Draw using instanced rendering
+            if self.instance_count > 0 {
+                render_pass.draw_indexed(0..6, 0, 0..self.instance_count);
+            }
+        }
     }
 }
 
