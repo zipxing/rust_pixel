@@ -121,30 +121,28 @@ impl WgpuRender for WgpuGeneral2dRender {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        // Create uniform buffer
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("General2D Uniform Buffer"),
-            size: mem::size_of::<General2dUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // Uniform buffer will be created per draw call in prepare_draw() to avoid state conflicts
 
         self.vertex_buffer = Some(vertex_buffer);
         self.index_buffer = Some(index_buffer);
-        self.uniform_buffer = Some(uniform_buffer);
+        self.uniform_buffer = None; // Will be created per draw call
     }
 
     fn prepare_draw(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        // Update uniform buffer with current transform, area, and color
+        // Create uniform data with current transform, area, and color
         let uniforms = General2dUniforms {
             transform: self.transform.to_matrix4(),
             area: self.area,
             color: self.color.to_array(),
         };
 
-        if let Some(uniform_buffer) = &self.uniform_buffer {
-            queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        }
+        // Create a NEW uniform buffer for each draw call to avoid state conflicts
+        // This ensures each draw_general2d call has independent uniform data
+        self.uniform_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("General2D Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM,
+        }));
     }
 
     fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
