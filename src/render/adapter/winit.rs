@@ -180,6 +180,9 @@ pub struct WinitAdapter {
     /// 自定义鼠标光标
     pub custom_cursor: Option<CustomCursor>,
 
+    /// 光标是否已经设置（延迟设置标志）
+    pub cursor_set: bool,
+
     /// 窗口拖拽数据
     drag: Drag,
 }
@@ -213,20 +216,35 @@ impl ApplicationHandler for WinitAppHandler {
     /// 在resumed事件中创建窗口和渲染资源。
     /// 这是统一的生命周期管理方式，适用于两种渲染后端。
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        unsafe {
-            let adapter = &mut *self.adapter_ref;
-            
-            // 如果窗口尚未创建且有初始化参数，则创建窗口和资源
-            if adapter.window.is_none() && adapter.window_init_params.is_some() {
-                #[cfg(feature = "wgpu")]
-                {
-                    adapter.create_wgpu_window_and_resources(event_loop);
-                }
-                
+        // 在这里创建窗口和渲染上下文
+        if let Some(adapter) = unsafe { self.adapter_ref.as_mut() } {
+            if adapter.window.is_none() {
                 #[cfg(not(feature = "wgpu"))]
                 {
                     adapter.create_glow_window_and_context(event_loop);
                 }
+
+                #[cfg(feature = "wgpu")]
+                {
+                    adapter.create_wgpu_window_and_resources(event_loop);
+                }
+            }
+
+            // 延迟设置光标 - 在窗口完全初始化后进行
+            if !adapter.cursor_set {
+                // 在设置光标前先清屏 - 可能有助于解决透明度问题
+                #[cfg(not(feature = "wgpu"))]
+                {
+                    adapter.initial_clear_screen();
+                }
+
+                #[cfg(feature = "wgpu")]
+                {
+                    adapter.clear_screen_wgpu();
+                }
+
+                adapter.set_mouse_cursor();
+                adapter.cursor_set = true;
             }
         }
     }
@@ -482,6 +500,7 @@ impl WinitAdapter {
             should_exit: false,
             app_handler: None,
             custom_cursor: None,
+            cursor_set: false,
             drag: Default::default(),
         }
     }
@@ -701,7 +720,6 @@ impl WinitAdapter {
         self.gl_surface = Some(surface);
 
         // 设置光标和执行初始清屏
-        self.set_mouse_cursor();
         self.show_cursor().unwrap();
         self.initial_clear_screen();
 
@@ -843,9 +861,6 @@ impl WinitAdapter {
         self.wgpu_surface_config = Some(wgpu_surface_config);
         self.wgpu_pixel_renderer = Some(wgpu_pixel_renderer);
 
-        // 设置光标
-        self.set_mouse_cursor();
-
         info!("WGPU window & context initialized successfully");
     }
 
@@ -881,15 +896,55 @@ impl WinitAdapter {
         }
     }
 
+    /// WGPU模式的清屏操作
+    ///
+    /// 在设置光标前执行清屏，可能有助于解决光标透明度问题
+    #[cfg(feature = "wgpu")]
+    fn clear_screen_wgpu(&mut self) {
+        if let (Some(device), Some(queue), Some(surface)) = (
+            &self.wgpu_device,
+            &self.wgpu_queue,
+            &self.wgpu_surface,
+        ) {
+            if let Ok(output) = surface.get_current_texture() {
+                let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Cursor Clear Screen Encoder"),
+                });
+
+                {
+                    let _clear_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Cursor Clear Screen Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+                    // clear_pass自动drop
+                }
+
+                queue.submit(std::iter::once(encoder.finish()));
+                output.present();
+            }
+        }
+    }
+
     /// 设置自定义鼠标光标
     ///
-    /// 加载并设置自定义的鼠标光标图像。光标图像从assets/pix/cursor.png加载，
-    /// 如果加载失败则使用系统默认光标。
-    ///
-    /// # 实现细节
-    /// - 支持PNG格式的光标图像
+    /// 从assets/pix/cursor.png加载光标图像，并设置为窗口的自定义光标。
     /// - 自动转换为RGBA8格式
     /// - 热点位置设置为(0, 0)
+    /// - 处理透明度和预乘alpha
     fn set_mouse_cursor(&mut self) {
         // 构建光标图像文件路径
         let cursor_path = format!(
@@ -902,24 +957,25 @@ impl WinitAdapter {
         if let Ok(cursor_img) = image::open(&cursor_path) {
             let cursor_rgba = cursor_img.to_rgba8();
             let (width, height) = cursor_rgba.dimensions();
-            let cursor_data = cursor_rgba.into_raw();
+            let mut cursor_data = cursor_rgba.into_raw();
+
+            // 预乘alpha处理 - 这是解决光标透明度问题的常见方法
+            for chunk in cursor_data.chunks_exact_mut(4) {
+                let alpha = chunk[3] as f32 / 255.0;
+                chunk[0] = (chunk[0] as f32 * alpha) as u8; // R * alpha
+                chunk[1] = (chunk[1] as f32 * alpha) as u8; // G * alpha
+                chunk[2] = (chunk[2] as f32 * alpha) as u8; // B * alpha
+            }
 
             // Create CustomCursor source from image data
-            if let Ok(cursor_source) =
-                CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0)
-            {
-                // Need to create the actual cursor from the source using event_loop
-                if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
-                    let custom_cursor = event_loop.create_custom_cursor(cursor_source);
-                    self.custom_cursor = Some(custom_cursor.clone());
-                    window.as_ref().set_cursor(custom_cursor);
-                    // Ensure cursor is visible after setting custom cursor
-                    window.as_ref().set_cursor_visible(true);
-                }
-            }
-        } else {
-            // If custom cursor fails to load, ensure standard cursor is visible
-            if let Some(window) = &self.window {
+            let cursor_source = CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0).unwrap();
+
+            // Need to create the actual cursor from the source using event_loop
+            if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
+                let custom_cursor = event_loop.create_custom_cursor(cursor_source);
+                self.custom_cursor = Some(custom_cursor.clone());
+                window.as_ref().set_cursor(custom_cursor);
+                // Ensure cursor is visible after setting custom cursor
                 window.as_ref().set_cursor_visible(true);
             }
         }
