@@ -18,6 +18,7 @@
 
 pub mod adapter;
 pub mod buffer;
+pub mod pixel_renderer;
 pub mod cell;
 pub mod graph;
 pub mod image;

@@ -169,3 +169,105 @@ impl GlPixel {
         self.r_trans.draw_trans(gl, sidx, progress);
     }
 }
+
+// Implementation of the unified PixelRenderer trait for OpenGL backend
+impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
+    fn get_canvas_size(&self) -> (u32, u32) {
+        (self.canvas_width, self.canvas_height)
+    }
+    
+    fn draw_general2d(
+        &mut self,
+        context: &mut crate::render::pixel_renderer::RenderContext,
+        rtidx: usize,
+        area: [f32; 4],
+        transform: &crate::render::pixel_renderer::UnifiedTransform,
+        color: &crate::render::pixel_renderer::UnifiedColor,
+    ) -> Result<(), String> {
+        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
+            // Convert unified types to OpenGL-specific types
+            let gl_transform = transform.to_gl_transform();
+            let gl_color = color.to_gl_color();
+            
+            // Use existing OpenGL implementation
+            self.draw_general2d(*gl, rtidx, area, &gl_transform, &gl_color);
+            Ok(())
+        } else {
+            Err("Invalid context type for OpenGL renderer".to_string())
+        }
+    }
+    
+    fn render_transition_frame(
+        &mut self,
+        context: &mut crate::render::pixel_renderer::RenderContext,
+        shader_idx: usize,
+        progress: f32,
+    ) -> Result<(), String> {
+        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
+            // Use existing OpenGL implementation
+            self.render_trans_frame(*gl, shader_idx, progress);
+            Ok(())
+        } else {
+            Err("Invalid context type for OpenGL renderer".to_string())
+        }
+    }
+    
+    fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
+        if rtidx < self.render_textures.len() {
+            self.render_textures[rtidx].is_hidden
+        } else {
+            true // Out of bounds textures are considered hidden
+        }
+    }
+    
+    fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
+        if rtidx < self.render_textures.len() {
+            self.render_textures[rtidx].is_hidden = hidden;
+        }
+    }
+    
+    fn render_symbols_to_texture(
+        &mut self,
+        context: &mut crate::render::pixel_renderer::RenderContext,
+        rbuf: &[crate::render::adapter::RenderCell],
+        rtidx: usize,
+        ratio_x: f32,
+        ratio_y: f32,
+    ) -> Result<(), String> {
+        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
+            // Bind the target render texture
+            self.bind_target(*gl, rtidx);
+            
+            // Clear the target
+            self.clear(*gl);
+            
+            // Render symbols to the bound target
+            self.render_rbuf(*gl, rbuf, ratio_x, ratio_y);
+            
+            Ok(())
+        } else {
+            Err("Invalid context type for OpenGL renderer".to_string())
+        }
+    }
+    
+    fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
+        let gl_color = color.to_gl_color();
+        self.set_clear_color(gl_color);
+    }
+    
+    fn clear(&mut self, context: &mut crate::render::pixel_renderer::RenderContext) {
+        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
+            self.clear(*gl);
+        }
+    }
+    
+    fn bind_render_target(&mut self, rtidx: Option<usize>) {
+        // This method would need to store the GL context to use later
+        // For now, we can't implement it without changing the GL context handling
+        // The existing bind_target and bind_screen methods require a GL context parameter
+    }
+    
+    fn as_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}

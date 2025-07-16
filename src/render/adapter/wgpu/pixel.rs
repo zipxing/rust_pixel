@@ -1133,3 +1133,125 @@ impl WgpuRender for WgpuPixelRender {
         // For now, no cleanup required
     }
 }
+
+// Implementation of the unified PixelRenderer trait for WGPU backend
+impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
+    fn get_canvas_size(&self) -> (u32, u32) {
+        (self.canvas_width, self.canvas_height)
+    }
+    
+    fn draw_general2d(
+        &mut self,
+        context: &mut crate::render::pixel_renderer::RenderContext,
+        rtidx: usize,
+        area: [f32; 4],
+        transform: &crate::render::pixel_renderer::UnifiedTransform,
+        color: &crate::render::pixel_renderer::UnifiedColor,
+    ) -> Result<(), String> {
+        if let crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view } = context {
+            // Convert unified types to WGPU-specific types
+            let wgpu_transform = transform.to_wgpu_transform();
+            let wgpu_color = color.to_wgpu_color();
+            
+            // Use existing WGPU implementation
+            self.draw_general2d(*device, *queue, *encoder, *view, rtidx, area, &wgpu_transform, &wgpu_color)
+        } else {
+            Err("Invalid context type for WGPU renderer".to_string())
+        }
+    }
+    
+    fn render_transition_frame(
+        &mut self,
+        context: &mut crate::render::pixel_renderer::RenderContext,
+        shader_idx: usize,
+        progress: f32,
+    ) -> Result<(), String> {
+        if let crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view } = context {
+            // Use existing WGPU implementation for rendering to texture first
+            // Note: This assumes we want to render to a render texture, not directly to screen
+            self.render_trans_frame_to_texture(*device, *queue, *encoder, 1, shader_idx, progress)?;
+            
+            // If we need to render the result to screen, we'd need another call
+            // For now, this renders to RT1 as the target
+            Ok(())
+        } else {
+            Err("Invalid context type for WGPU renderer".to_string())
+        }
+    }
+    
+    fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
+        if rtidx < self.render_textures.len() {
+            self.render_textures[rtidx].is_hidden
+        } else {
+            true // Out of bounds textures are considered hidden
+        }
+    }
+    
+    fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
+        if rtidx < self.render_textures.len() {
+            self.render_textures[rtidx].is_hidden = hidden;
+        }
+    }
+    
+    fn render_symbols_to_texture(
+        &mut self,
+        context: &mut crate::render::pixel_renderer::RenderContext,
+        rbuf: &[crate::render::adapter::RenderCell],
+        rtidx: usize,
+        ratio_x: f32,
+        ratio_y: f32,
+    ) -> Result<(), String> {
+        if let crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, .. } = context {
+            // Set ratios
+            self.set_ratio(ratio_x, ratio_y);
+            
+            // Bind the target render texture
+            self.bind_target(rtidx);
+            
+            // Set clear color to black (default)
+            self.set_clear_color(crate::render::adapter::wgpu::color::WgpuColor::new(0.0, 0.0, 0.0, 1.0));
+            
+            // Clear the target
+            self.clear();
+            
+            // Render symbols to the bound target
+            self.render_rbuf(*device, *queue, rbuf, ratio_x, ratio_y);
+            
+            // Create command encoder for render to texture
+            let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some(&format!("Render to RT{} Encoder", rtidx)),
+            });
+            
+            // Execute rendering to current target
+            self.render_to_current_target(&mut rt_encoder, None)?;
+            
+            // Submit render to texture commands
+            queue.submit(std::iter::once(rt_encoder.finish()));
+            
+            Ok(())
+        } else {
+            Err("Invalid context type for WGPU renderer".to_string())
+        }
+    }
+    
+    fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
+        let wgpu_color = color.to_wgpu_color();
+        self.set_clear_color(wgpu_color);
+    }
+    
+    fn clear(&mut self, _context: &mut crate::render::pixel_renderer::RenderContext) {
+        // WGPU clear doesn't need the context since it's handled in render passes
+        self.clear();
+    }
+    
+    fn bind_render_target(&mut self, rtidx: Option<usize>) {
+        match rtidx {
+            Some(idx) => self.bind_target(idx),
+            None => self.bind_screen(),
+        }
+    }
+    
+    fn as_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
