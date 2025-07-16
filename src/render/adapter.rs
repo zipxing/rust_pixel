@@ -156,7 +156,6 @@ use crate::{
     LOGO_FRAME,
 };
 
-
 use crate::render::pixel_renderer::{PixelRenderer, RenderContext, UnifiedColor, UnifiedTransform};
 
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
@@ -591,7 +590,7 @@ pub trait Adapter {
             if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 // Bind to screen framebuffer (0) for final output
                 pix.bind_screen(gl);
-                
+
                 // Create unified render context
                 let mut context = RenderContext::OpenGL { gl };
                 let unified_color = UnifiedColor::white();
@@ -601,7 +600,14 @@ pub trait Adapter {
                 if !pix.get_render_texture_hidden(2) {
                     let unified_transform = UnifiedTransform::new();
                     // Full-screen quad with identity transform
-                    if let Err(e) = PixelRenderer::draw_general2d(pix, &mut context, 2, [0.0, 0.0, 1.0, 1.0], &unified_transform, &unified_color) {
+                    if let Err(e) = PixelRenderer::draw_general2d(
+                        pix,
+                        &mut context,
+                        2,
+                        [0.0, 0.0, 1.0, 1.0],
+                        &unified_transform,
+                        &unified_color,
+                    ) {
                         eprintln!("OpenGL draw_general2d RT2 error: {}", e);
                     }
                 }

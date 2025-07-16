@@ -540,7 +540,7 @@ impl WinitAdapter {
             .to_rgba8();
         let texwidth = teximg.width();
         let texheight = teximg.height();
-        
+
         PIXEL_SYM_WIDTH
             .set(init_sym_width(texwidth))
             .expect("lazylock init");
@@ -559,7 +559,9 @@ impl WinitAdapter {
         self.set_size(w, h).set_title(title.clone());
         self.base.gr.set_ratiox(rx);
         self.base.gr.set_ratioy(ry);
-        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
+        self.base
+            .gr
+            .set_pixel_size(self.base.cell_w, self.base.cell_h);
 
         info!(
             "Window pixel size: {}x{}",
@@ -618,7 +620,7 @@ impl WinitAdapter {
     #[cfg(not(feature = "wgpu"))]
     fn create_glow_window_and_context(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let params = self.window_init_params.as_ref().unwrap().clone();
-        
+
         info!("Creating OpenGL window and context...");
 
         // 计算窗口大小（处理 Retina 显示器）
@@ -649,7 +651,7 @@ impl WinitAdapter {
 
         let window = Arc::new(window.unwrap());
         let physical_size = window.inner_size();
-        
+
         info!(
             "Window created - logical: {}x{}, physical: {}x{}",
             self.base.gr.pixel_w, self.base.gr.pixel_h, physical_size.width, physical_size.height
@@ -838,7 +840,9 @@ impl WinitAdapter {
         );
 
         // 初始化所有WGPU组件
-        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path) {
+        if let Err(e) =
+            wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path)
+        {
             panic!("Failed to load symbol texture: {}", e);
         }
 
@@ -885,7 +889,12 @@ impl WinitAdapter {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, None);
                 if let Some(window) = &self.window {
                     let physical_size = window.inner_size();
-                    gl.viewport(0, 0, physical_size.width as i32, physical_size.height as i32);
+                    gl.viewport(
+                        0,
+                        0,
+                        physical_size.width as i32,
+                        physical_size.height as i32,
+                    );
                 }
                 gl.clear_color(0.0, 0.0, 0.0, 1.0);
                 gl.clear(glow::COLOR_BUFFER_BIT);
@@ -902,11 +911,9 @@ impl WinitAdapter {
     /// 在设置光标前执行清屏，可能有助于解决光标透明度问题
     #[cfg(feature = "wgpu")]
     fn clear_screen_wgpu(&mut self) {
-        if let (Some(device), Some(queue), Some(surface)) = (
-            &self.wgpu_device,
-            &self.wgpu_queue,
-            &self.wgpu_surface,
-        ) {
+        if let (Some(device), Some(queue), Some(surface)) =
+            (&self.wgpu_device, &self.wgpu_queue, &self.wgpu_surface)
+        {
             if let Ok(output) = surface.get_current_texture() {
                 let view = output
                     .texture
@@ -969,7 +976,8 @@ impl WinitAdapter {
             }
 
             // Create CustomCursor source from image data
-            let cursor_source = CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0).unwrap();
+            let cursor_source =
+                CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0).unwrap();
 
             // Need to create the actual cursor from the source using event_loop
             if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
@@ -1070,22 +1078,26 @@ impl WinitAdapter {
             // 使用统一的WgpuPixelRender封装，匹配OpenGL版本的接口
             let rx = self.base.gr.ratio_x;
             let ry = self.base.gr.ratio_y;
-            
+
             // 绑定目标render texture
             pixel_renderer.bind_target(rtidx);
-            
+
             // 设置清除颜色
             if debug {
                 // 调试模式使用红色背景
-                pixel_renderer.set_clear_color(crate::render::adapter::wgpu::color::WgpuColor::new(1.0, 0.0, 0.0, 1.0));
+                pixel_renderer.set_clear_color(
+                    crate::render::adapter::wgpu::color::WgpuColor::new(1.0, 0.0, 0.0, 1.0),
+                );
             } else {
                 // 正常模式使用黑色背景
-                pixel_renderer.set_clear_color(crate::render::adapter::wgpu::color::WgpuColor::new(0.0, 0.0, 0.0, 1.0));
+                pixel_renderer.set_clear_color(
+                    crate::render::adapter::wgpu::color::WgpuColor::new(0.0, 0.0, 0.0, 1.0),
+                );
             }
-            
+
             // 清除目标
             pixel_renderer.clear();
-            
+
             // 渲染RenderCell数据到当前绑定的目标
             pixel_renderer.render_rbuf(device, queue, rbuf, rx, ry);
 
@@ -1165,7 +1177,12 @@ impl WinitAdapter {
             if !pixel_renderer.get_render_texture_hidden(2) {
                 let unified_transform = UnifiedTransform::new();
                 let unified_color = UnifiedColor::white();
-                let mut context = RenderContext::Wgpu { device, queue, encoder: &mut screen_encoder, view: &view };
+                let mut context = RenderContext::Wgpu {
+                    device,
+                    queue,
+                    encoder: &mut screen_encoder,
+                    view: &view,
+                };
 
                 PixelRenderer::draw_general2d(
                     pixel_renderer,
@@ -1191,12 +1208,17 @@ impl WinitAdapter {
                 let mut unified_transform = UnifiedTransform::new();
                 unified_transform.scale(pw / pcw, ph / pch);
                 let unified_color = UnifiedColor::white();
-                let mut context = RenderContext::Wgpu { device, queue, encoder: &mut screen_encoder, view: &view };
+                let mut context = RenderContext::Wgpu {
+                    device,
+                    queue,
+                    encoder: &mut screen_encoder,
+                    view: &view,
+                };
 
                 PixelRenderer::draw_general2d(
                     pixel_renderer,
                     &mut context,
-                    3,                                                 // render texture 3
+                    3,                                          // render texture 3
                     [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // 游戏区域，WGPU Y轴从顶部开始
                     &unified_transform,
                     &unified_color,
@@ -1214,34 +1236,41 @@ impl WinitAdapter {
     }
 
     /// 调试方法：保存render texture为PNG图片文件
-    /// 
+    ///
     /// 这个方法将指定的render texture保存为PNG文件，用于调试渲染问题
     #[cfg(feature = "wgpu")]
-    pub fn debug_save_render_texture_to_file(&mut self, rt_index: usize, filename: &str) -> Result<(), String> {
+    pub fn debug_save_render_texture_to_file(
+        &mut self,
+        rt_index: usize,
+        filename: &str,
+    ) -> Result<(), String> {
         if let (Some(device), Some(queue), Some(pixel_renderer)) = (
             &self.wgpu_device,
             &self.wgpu_queue,
             &mut self.wgpu_pixel_renderer,
         ) {
             info!("Saving render texture {} to {}", rt_index, filename);
-            
+
             // 获取render texture
-            let render_texture = pixel_renderer.get_render_texture(rt_index)
+            let render_texture = pixel_renderer
+                .get_render_texture(rt_index)
                 .ok_or_else(|| format!("Render texture {} not found", rt_index))?;
-            
+
             let texture_width = render_texture.width;
             let texture_height = render_texture.height;
             let bytes_per_pixel = 4; // RGBA
             let unpadded_bytes_per_row = texture_width * bytes_per_pixel;
-            
+
             // WGPU requires bytes_per_row to be a multiple of COPY_BYTES_PER_ROW_ALIGNMENT (256)
             let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
             let bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
             let buffer_size = (bytes_per_row * texture_height) as u64;
-            
-            info!("Texture copy info: {}x{}, unpadded: {}, aligned: {}, buffer_size: {}", 
-                  texture_width, texture_height, unpadded_bytes_per_row, bytes_per_row, buffer_size);
-            
+
+            info!(
+                "Texture copy info: {}x{}, unpadded: {}, aligned: {}, buffer_size: {}",
+                texture_width, texture_height, unpadded_bytes_per_row, bytes_per_row, buffer_size
+            );
+
             // 创建staging buffer用于读取texture数据
             let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Render Texture Staging Buffer"),
@@ -1249,12 +1278,12 @@ impl WinitAdapter {
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
-            
+
             // 创建命令编码器
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Texture Copy Encoder"),
             });
-            
+
             // 复制texture到buffer
             encoder.copy_texture_to_buffer(
                 wgpu::ImageCopyTexture {
@@ -1277,42 +1306,42 @@ impl WinitAdapter {
                     depth_or_array_layers: 1,
                 },
             );
-            
+
             // 提交命令
             queue.submit(std::iter::once(encoder.finish()));
-            
+
             // 映射buffer并读取数据（异步操作）
             let buffer_slice = staging_buffer.slice(..);
             let (sender, receiver) = std::sync::mpsc::channel();
-            
+
             buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
                 sender.send(result).unwrap();
             });
-            
+
             // 等待映射完成
             device.poll(wgpu::Maintain::Wait);
-            
+
             match receiver.recv() {
                 Ok(Ok(())) => {
                     // 读取数据
                     let data = buffer_slice.get_mapped_range();
                     let mut rgba_data = vec![0u8; (texture_width * texture_height * 4) as usize];
-                    
+
                     // 复制数据（处理padding）
                     for y in 0..texture_height {
                         let src_start = (y * bytes_per_row) as usize;
                         let dst_start = (y * texture_width * 4) as usize;
                         let row_size = (texture_width * 4) as usize;
-                        
+
                         // 只复制实际像素数据，跳过padding
                         rgba_data[dst_start..dst_start + row_size]
                             .copy_from_slice(&data[src_start..src_start + row_size]);
                     }
-                    
+
                     // 解除映射
                     drop(data);
                     staging_buffer.unmap();
-                    
+
                     // 保存为PNG文件
                     match image::save_buffer(
                         filename,
@@ -1322,20 +1351,17 @@ impl WinitAdapter {
                         image::ColorType::Rgba8,
                     ) {
                         Ok(()) => {
-                            info!("Successfully saved render texture {} to {}", rt_index, filename);
+                            info!(
+                                "Successfully saved render texture {} to {}",
+                                rt_index, filename
+                            );
                             Ok(())
                         }
-                        Err(e) => {
-                            Err(format!("Failed to save image: {}", e))
-                        }
+                        Err(e) => Err(format!("Failed to save image: {}", e)),
                     }
                 }
-                Ok(Err(e)) => {
-                    Err(format!("Failed to map buffer: {:?}", e))
-                }
-                Err(e) => {
-                    Err(format!("Failed to receive mapping result: {}", e))
-                }
+                Ok(Err(e)) => Err(format!("Failed to map buffer: {:?}", e)),
+                Err(e) => Err(format!("Failed to receive mapping result: {}", e)),
             }
         } else {
             Err("WGPU components not initialized".to_string())
@@ -1346,38 +1372,48 @@ impl WinitAdapter {
     #[cfg(feature = "wgpu")]
     pub fn debug_print_render_info(&self) {
         info!("=== WGPU渲染状态信息 ===");
-        
+
         // 基础参数
         info!("基础参数:");
         info!("  Cell数量: {}x{}", self.base.cell_w, self.base.cell_h);
-        info!("  窗口像素尺寸: {}x{}", self.base.gr.pixel_w, self.base.gr.pixel_h);
-        info!("  比例: {:.3}x{:.3}", self.base.gr.ratio_x, self.base.gr.ratio_y);
-        
+        info!(
+            "  窗口像素尺寸: {}x{}",
+            self.base.gr.pixel_w, self.base.gr.pixel_h
+        );
+        info!(
+            "  比例: {:.3}x{:.3}",
+            self.base.gr.ratio_x, self.base.gr.ratio_y
+        );
+
         // 符号尺寸
-        if let (Some(sym_w), Some(sym_h)) = (
-            PIXEL_SYM_WIDTH.get(), 
-            PIXEL_SYM_HEIGHT.get()
-        ) {
+        if let (Some(sym_w), Some(sym_h)) = (PIXEL_SYM_WIDTH.get(), PIXEL_SYM_HEIGHT.get()) {
             info!("  符号尺寸: {}x{}", sym_w, sym_h);
-            
+
             // 计算游戏区域
             let game_area_w = self.base.cell_w as f32 * sym_w / self.base.gr.ratio_x;
             let game_area_h = self.base.cell_h as f32 * sym_h / self.base.gr.ratio_y;
             info!("  游戏区域: {:.2}x{:.2}", game_area_w, game_area_h);
         }
-        
+
         // WGPU状态
         if let Some(pixel_renderer) = &self.wgpu_pixel_renderer {
             info!("WGPU状态:");
-            info!("  Canvas尺寸: {}x{}", pixel_renderer.canvas_width, pixel_renderer.canvas_height);
-            
+            info!(
+                "  Canvas尺寸: {}x{}",
+                pixel_renderer.canvas_width, pixel_renderer.canvas_height
+            );
+
             // Render texture状态
             for i in 0..4 {
                 let hidden = pixel_renderer.get_render_texture_hidden(i);
-                info!("  RenderTexture{}: {}", i, if hidden { "隐藏" } else { "显示" });
+                info!(
+                    "  RenderTexture{}: {}",
+                    i,
+                    if hidden { "隐藏" } else { "显示" }
+                );
             }
         }
-        
+
         info!("========================");
     }
 }
@@ -1623,7 +1659,14 @@ impl Adapter for WinitAdapter {
                 // draw render_texture 2 ( main buffer ) - 使用统一接口
                 if !pix.get_render_texture_hidden(2) {
                     let unified_transform = UnifiedTransform::new();
-                    if let Err(e) = PixelRenderer::draw_general2d(pix, &mut context, 2, [0.0, 0.0, 1.0, 1.0], &unified_transform, &unified_color) {
+                    if let Err(e) = PixelRenderer::draw_general2d(
+                        pix,
+                        &mut context,
+                        2,
+                        [0.0, 0.0, 1.0, 1.0],
+                        &unified_transform,
+                        &unified_color,
+                    ) {
                         eprintln!("OpenGL draw_general2d RT2 error: {}", e);
                     }
                 }
