@@ -529,7 +529,10 @@ fn getToColor(uv: vec2<f32>) -> vec4<f32> {
 
 fn inHeart(p: vec2<f32>, center: vec2<f32>, size: f32) -> f32 {
     if (size == 0.0) { return 0.0; }
-    let o = (p - center) / (1.6 * size);
+    // 翻转Y坐标以适配WGPU坐标系（Y轴向下）
+    let flipped_p = vec2<f32>(p.x, 1.0 - p.y);
+    let flipped_center = vec2<f32>(center.x, 1.0 - center.y);
+    let o = (flipped_p - flipped_center) / (1.6 * size);
     let a = o.x * o.x + o.y * o.y - 0.3;
     return step(a * a * a, o.x * o.x * o.y * o.y * o.y);
 }
@@ -538,7 +541,7 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     return mix(
         getFromColor(uv),
         getToColor(uv),
-        inHeart(uv, vec2<f32>(0.5, 0.6), uniforms.progress)  // Y轴翻转：0.4 -> 0.6
+        inHeart(uv, vec2<f32>(0.5, 0.4), uniforms.progress)  // 恢复原始值，翻转在inHeart内部处理
     );
 }
 
