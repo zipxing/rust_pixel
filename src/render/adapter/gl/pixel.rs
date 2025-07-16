@@ -184,16 +184,18 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
         transform: &crate::render::pixel_renderer::UnifiedTransform,
         color: &crate::render::pixel_renderer::UnifiedColor,
     ) -> Result<(), String> {
-        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
-            // Convert unified types to OpenGL-specific types
-            let gl_transform = transform.to_gl_transform();
-            let gl_color = color.to_gl_color();
-            
-            // Use existing OpenGL implementation
-            self.draw_general2d(*gl, rtidx, area, &gl_transform, &gl_color);
-            Ok(())
-        } else {
-            Err("Invalid context type for OpenGL renderer".to_string())
+        match context {
+            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
+                // Convert unified types to OpenGL-specific types
+                let gl_transform = transform.to_gl_transform();
+                let gl_color = color.to_gl_color();
+                
+                // Use existing OpenGL implementation
+                self.draw_general2d(*gl, rtidx, area, &gl_transform, &gl_color);
+                Ok(())
+            }
+            #[cfg(feature = "wgpu")]
+            _ => Err("Invalid context type for OpenGL renderer".to_string()),
         }
     }
     
