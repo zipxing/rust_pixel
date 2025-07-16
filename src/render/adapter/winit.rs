@@ -38,6 +38,7 @@ use crate::render::{
         PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
+    pixel_renderer::{PixelRenderer, RenderContext, UnifiedColor, UnifiedTransform},
     sprite::Sprites,
 };
 
@@ -1160,31 +1161,24 @@ impl WinitAdapter {
                 // clear_pass自动drop
             }
 
-            // 绘制render texture 2（主缓冲区）到屏幕
+            // 绘制render texture 2（主缓冲区）到屏幕 - 使用统一接口
             if !pixel_renderer.get_render_texture_hidden(2) {
-                use crate::render::adapter::wgpu::color::WgpuColor;
-                use crate::render::adapter::wgpu::transform::WgpuTransform;
+                let unified_transform = UnifiedTransform::new();
+                let unified_color = UnifiedColor::white();
+                let mut context = RenderContext::Wgpu { device, queue, encoder: &mut screen_encoder, view: &view };
 
-                let transform = WgpuTransform::new();
-                let color = WgpuColor::new(1.0, 1.0, 1.0, 1.0);
-
-                pixel_renderer.draw_general2d(
-                    device,
-                    queue,
-                    &mut screen_encoder,
-                    &view,
+                PixelRenderer::draw_general2d(
+                    pixel_renderer,
+                    &mut context,
                     2,                    // render texture 2
                     [0.0, 0.0, 1.0, 1.0], // 全屏区域
-                    &transform,
-                    &color,
+                    &unified_transform,
+                    &unified_color,
                 )?;
             }
 
-            // 绘制render texture 3（转场效果）到屏幕
+            // 绘制render texture 3（转场效果）到屏幕 - 使用统一接口
             if !pixel_renderer.get_render_texture_hidden(3) {
-                use crate::render::adapter::wgpu::color::WgpuColor;
-                use crate::render::adapter::wgpu::transform::WgpuTransform;
-
                 let pcw = pixel_renderer.canvas_width as f32;
                 let pch = pixel_renderer.canvas_height as f32;
                 let rx = self.base.gr.ratio_x;
@@ -1194,19 +1188,18 @@ impl WinitAdapter {
                 let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                 let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
-                let mut transform = WgpuTransform::new();
-                transform.scale(pw / pcw, ph / pch);
-                let color = WgpuColor::new(1.0, 1.0, 1.0, 1.0);
+                let mut unified_transform = UnifiedTransform::new();
+                unified_transform.scale(pw / pcw, ph / pch);
+                let unified_color = UnifiedColor::white();
+                let mut context = RenderContext::Wgpu { device, queue, encoder: &mut screen_encoder, view: &view };
 
-                pixel_renderer.draw_general2d(
-                    device,
-                    queue,
-                    &mut screen_encoder,
-                    &view,
+                PixelRenderer::draw_general2d(
+                    pixel_renderer,
+                    &mut context,
                     3,                                                 // render texture 3
                     [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // 游戏区域，WGPU Y轴从顶部开始
-                    &transform,
-                    &color,
+                    &unified_transform,
+                    &unified_color,
                 )?;
             }
 
@@ -1596,8 +1589,6 @@ impl Adapter for WinitAdapter {
         // OpenGL mode - original implementation
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
-            use crate::render::adapter::gl::color::GlColor;
-            use crate::render::adapter::gl::transform::GlTransform;
             use glow::HasContext;
 
             // Get window physical size first to avoid borrowing conflicts
@@ -1625,15 +1616,19 @@ impl Adapter for WinitAdapter {
                     }
                 }
 
-                let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+                // Create unified render context and color
+                let mut context = RenderContext::OpenGL { gl };
+                let unified_color = UnifiedColor::white();
 
-                // draw render_texture 2 ( main buffer )
+                // draw render_texture 2 ( main buffer ) - 使用统一接口
                 if !pix.get_render_texture_hidden(2) {
-                    let t = GlTransform::new();
-                    pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+                    let unified_transform = UnifiedTransform::new();
+                    if let Err(e) = PixelRenderer::draw_general2d(pix, &mut context, 2, [0.0, 0.0, 1.0, 1.0], &unified_transform, &unified_color) {
+                        eprintln!("OpenGL draw_general2d RT2 error: {}", e);
+                    }
                 }
 
-                // draw render_texture 3 ( gl transition )
+                // draw render_texture 3 ( gl transition ) - 使用统一接口
                 if !pix.get_render_texture_hidden(3) {
                     let pcw = pix.canvas_width as f32;
                     let pch = pix.canvas_height as f32;
@@ -1643,15 +1638,18 @@ impl Adapter for WinitAdapter {
                     let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                     let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
-                    let mut t2 = GlTransform::new();
-                    t2.scale(pw / pcw, ph / pch);
-                    pix.draw_general2d(
-                        gl,
+                    let mut unified_transform = UnifiedTransform::new();
+                    unified_transform.scale(pw / pcw, ph / pch);
+                    if let Err(e) = PixelRenderer::draw_general2d(
+                        pix,
+                        &mut context,
                         3,
                         [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                        &t2,
-                        &c,
-                    );
+                        &unified_transform,
+                        &unified_color,
+                    ) {
+                        eprintln!("OpenGL draw_general2d RT3 error: {}", e);
+                    }
                 }
             }
         }

@@ -156,8 +156,11 @@ use crate::{
     LOGO_FRAME,
 };
 
+
+use crate::render::pixel_renderer::{PixelRenderer, RenderContext, UnifiedColor, UnifiedTransform};
+
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-use crate::render::adapter::gl::{color::GlColor, transform::GlTransform};
+use crate::render::adapter::gl::color::GlColor;
 use std::any::Any;
 use std::time::Duration;
 // use log::info;
@@ -582,20 +585,25 @@ pub trait Adapter {
 
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
-            // OpenGL mode implementation
+            // OpenGL mode implementation using unified PixelRenderer interface
             let bs = self.get_base();
 
             if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 // Bind to screen framebuffer (0) for final output
                 pix.bind_screen(gl);
-                let c = GlColor::new(1.0, 1.0, 1.0, 1.0);
+                
+                // Create unified render context
+                let mut context = RenderContext::OpenGL { gl };
+                let unified_color = UnifiedColor::white();
 
                 // Layer 1: Draw render_texture 2 (main game content)
                 // Contains: characters, sprites, borders, logo
                 if !pix.get_render_texture_hidden(2) {
-                    let t = GlTransform::new();
+                    let unified_transform = UnifiedTransform::new();
                     // Full-screen quad with identity transform
-                    pix.draw_general2d(gl, 2, [0.0, 0.0, 1.0, 1.0], &t, &c);
+                    if let Err(e) = PixelRenderer::draw_general2d(pix, &mut context, 2, [0.0, 0.0, 1.0, 1.0], &unified_transform, &unified_color) {
+                        eprintln!("OpenGL draw_general2d RT2 error: {}", e);
+                    }
                 }
 
                 // Layer 2: Draw render_texture 3 (transition effects and overlays)
@@ -614,19 +622,22 @@ pub trait Adapter {
                     let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                     let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
-                    // Create transform with proper scaling
-                    let mut t2 = GlTransform::new();
-                    t2.scale(pw / pcw, ph / pch);
+                    // Create unified transform with proper scaling
+                    let mut unified_transform = UnifiedTransform::new();
+                    unified_transform.scale(pw / pcw, ph / pch);
 
                     // Draw transition layer with calculated viewport and transform
                     // Positioned at bottom-left with calculated dimensions
-                    pix.draw_general2d(
-                        gl,
+                    if let Err(e) = PixelRenderer::draw_general2d(
+                        pix,
+                        &mut context,
                         3,
                         [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                        &t2,
-                        &c,
-                    );
+                        &unified_transform,
+                        &unified_color,
+                    ) {
+                        eprintln!("OpenGL draw_general2d RT3 error: {}", e);
+                    }
                 }
             }
         }
