@@ -205,12 +205,14 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
         shader_idx: usize,
         progress: f32,
     ) -> Result<(), String> {
-        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
-            // Use existing OpenGL implementation
-            self.render_trans_frame(*gl, shader_idx, progress);
-            Ok(())
-        } else {
-            Err("Invalid context type for OpenGL renderer".to_string())
+        match context {
+            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
+                // Use existing OpenGL implementation
+                self.render_trans_frame(*gl, shader_idx, progress);
+                Ok(())
+            }
+            #[cfg(feature = "wgpu")]
+            _ => Err("Invalid context type for OpenGL renderer".to_string()),
         }
     }
     
@@ -236,19 +238,21 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
         ratio_x: f32,
         ratio_y: f32,
     ) -> Result<(), String> {
-        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
-            // Bind the target render texture
-            self.bind_target(*gl, rtidx);
-            
-            // Clear the target
-            self.clear(*gl);
-            
-            // Render symbols to the bound target
-            self.render_rbuf(*gl, rbuf, ratio_x, ratio_y);
-            
-            Ok(())
-        } else {
-            Err("Invalid context type for OpenGL renderer".to_string())
+        match context {
+            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
+                // Bind the target render texture
+                self.bind_target(*gl, rtidx);
+                
+                // Clear the target
+                self.clear(*gl);
+                
+                // Render symbols to the bound target
+                self.render_rbuf(*gl, rbuf, ratio_x, ratio_y);
+                
+                Ok(())
+            }
+            #[cfg(feature = "wgpu")]
+            _ => Err("Invalid context type for OpenGL renderer".to_string()),
         }
     }
     
@@ -258,8 +262,14 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
     }
     
     fn clear(&mut self, context: &mut crate::render::pixel_renderer::RenderContext) {
-        if let crate::render::pixel_renderer::RenderContext::OpenGL { gl } = context {
-            self.clear(*gl);
+        match context {
+            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
+                self.clear(*gl);
+            }
+            #[cfg(feature = "wgpu")]
+            _ => {
+                // Invalid context for OpenGL renderer, but don't error
+            }
         }
     }
     
