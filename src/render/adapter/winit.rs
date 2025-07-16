@@ -1191,10 +1191,8 @@ impl WinitAdapter {
                 let ry = self.base.gr.ratio_y;
 
                 // 使用实际的游戏区域尺寸（匹配OpenGL版本）
-                let pw =
-                    self.base.cell_w as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph =
-                    self.base.cell_h as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+                let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+                let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
                 let mut transform = WgpuTransform::new();
                 transform.scale(pw / pcw, ph / pch);
@@ -1206,7 +1204,7 @@ impl WinitAdapter {
                     &mut screen_encoder,
                     &view,
                     3,                                                 // render texture 3
-                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch], // 游戏区域
+                    [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // 游戏区域，WGPU Y轴从顶部开始
                     &transform,
                     &color,
                 )?;

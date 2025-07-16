@@ -331,9 +331,39 @@ impl Render for PetviewRender {
                                 &mut winit_adapter.wgpu_pixel_renderer
                             {
                                 wgpu_pixel_renderer.set_render_texture_hidden(3, true);
+                                
+                                // Apply the same distortion effects as OpenGL mode
+                                let p4 = self.panel.get_pixel_sprite("petimg4");
+                                let time = (ctx.rand.rand() % 300) as f32 / 100.0;
+                                
+                                // Apply ripple distortion
+                                let distortion_fn1 =
+                                    |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
+                                let mut tbuf = p4.content.clone();
+                                let clen = tbuf.content.len();
+                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
+                                
+                                // Apply wave distortion
+                                let distortion_fn2 =
+                                    |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
+                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
+
+                                // Add random noise symbols like OpenGL mode
+                                for _ in 0..model.transbuf_stage / 2 {
+                                    tbuf.content[ctx.rand.rand() as usize % clen]
+                                        .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
+                                        .set_fg(Color::Rgba(155, 155, 155, 155));
+                                }
+
+                                // Apply the distorted buffer to p3 sprite
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                                info!("WGPU: TransBuf stage - preparing transition");
+                                p3.content = tbuf.clone();
+                                p3.set_alpha(
+                                    ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
+                                );
+                                p3.set_hidden(false);
+                                
+                                info!("WGPU: TransBuf stage - applying distortion effects");
                             }
                         }
                     }
