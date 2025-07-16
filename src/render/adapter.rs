@@ -491,10 +491,9 @@ pub trait Adapter {
         previous_buffer: &Buffer,
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
-    ) {
+    ) where Self: Sized {
         // Pass 1: Convert game data (buffer + sprites) to GPU-ready format
-        let rbuf =
-            self.generate_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
+        let rbuf = self.generate_render_buffer(current_buffer, previous_buffer, pixel_sprites, stage);
 
         // Pass 2: Render to screen or buffer based on mode
         if self.get_base().gr.rflag {
@@ -508,6 +507,282 @@ pub trait Adapter {
             // Used by FFI interfaces and WASM exports to access raw render data
             self.get_base().gr.rbuf = rbuf;
         }
+    }
+
+    // draw buffer to render texture - unified for both OpenGL and WGPU
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) where Self: Sized {
+        #[cfg(feature = "wgpu")]
+        {
+            use crate::render::adapter::wgpu::WgpuRender;
+            use crate::render::adapter::winit::WinitAdapter;
+
+            // First, convert buffer to render buffer to avoid borrowing conflicts
+            let rbuf = self.buffer_to_render_buffer(buf);
+
+            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
+                if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
+                    &mut winit_adapter.wgpu_pixel_renderer,
+                    &winit_adapter.wgpu_device,
+                    &winit_adapter.wgpu_queue,
+                ) {
+                    // Prepare all render data first
+                    wgpu_pixel_renderer.prepare_draw(device, queue); // Upload base vertices, indices, uniforms
+                    wgpu_pixel_renderer.prepare_draw_with_render_cells(device, queue, &rbuf); // Upload instance data
+
+                    // Create command encoder for rendering to texture
+                    let mut encoder =
+                        device.create_command_encoder(&::wgpu::CommandEncoderDescriptor {
+                            label: Some("Buffer to Texture Encoder"),
+                        });
+
+                    // Render to the specified render texture
+                    {
+                        let render_pass_result =
+                            wgpu_pixel_renderer.begin_render_to_texture(&mut encoder, rtidx);
+                        if let Ok(mut render_pass) = render_pass_result {
+                            // begin_render_to_texture already sets up the pipeline, buffers, and bind groups
+                            // Just perform the instanced draw call
+                            render_pass.draw_indexed(
+                                0..6,
+                                0,
+                                0..wgpu_pixel_renderer.get_instance_count(),
+                            );
+                        }
+                        // render_pass is automatically dropped here
+                    }
+
+                    // Now we can safely finish the encoder
+                    queue.submit(std::iter::once(encoder.finish()));
+                    return;
+                }
+            }
+        }
+
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+        {
+            let rbuf = self.buffer_to_render_buffer(buf);
+            // For debug...
+            // self.draw_render_buffer(&rbuf, rtidx, true);
+            self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
+        }
+    }
+
+    /// Trait object compatible wrapper for draw_buffer_to_texture
+    /// 
+    /// This method can be called on trait objects and internally handles
+    /// the downcasting to call the sized implementation.
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn draw_buffer_to_texture_dyn(&mut self, buf: &Buffer, rtidx: usize) {
+        // Handle each adapter type explicitly
+        #[cfg(feature = "wgpu")]
+        {
+            use crate::render::adapter::winit::WinitAdapter;
+            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
+                winit_adapter.draw_buffer_to_texture(buf, rtidx);
+                return;
+            }
+        }
+
+        #[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
+        {
+            use crate::render::adapter::sdl::SdlAdapter;
+            if let Some(sdl_adapter) = self.as_any().downcast_mut::<SdlAdapter>() {
+                sdl_adapter.draw_buffer_to_texture(buf, rtidx);
+                return;
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::render::adapter::web::WebAdapter;
+            if let Some(web_adapter) = self.as_any().downcast_mut::<WebAdapter>() {
+                web_adapter.draw_buffer_to_texture(buf, rtidx);
+                return;
+            }
+        }
+
+        // Fallback: OpenGL implementation without sized methods
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+        {
+            // Convert buffer to render buffer
+            let mut rbuf = vec![];
+            let rx = self.get_base().gr.ratio_x;
+            let ry = self.get_base().gr.ratio_y;
+            let pz = PointI32 { x: 0, y: 0 };
+            let mut rfunc = |fc: &(u8, u8, u8, u8),
+                             bc: &Option<(u8, u8, u8, u8)>,
+                             _s0: ARect,
+                             _s1: ARect,
+                             s2: ARect,
+                             texidx: usize,
+                             symidx: usize| {
+                push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+            };
+            render_main_buffer(buf, buf.area.width, rx, ry, true, &mut rfunc);
+
+            // Draw render buffer to texture (OpenGL fallback)
+            let bs = self.get_base();
+            let rx = bs.gr.ratio_x;
+            let ry = bs.gr.ratio_y;
+            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
+                pix.bind_target(gl, rtidx);
+                pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
+                pix.clear(gl);
+                pix.render_rbuf(gl, &rbuf, rx, ry);
+            }
+        }
+    }
+
+    // draw render buffer to render texture - unified for both OpenGL and WGPU
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) where Self: Sized {
+        #[cfg(feature = "wgpu")]
+        {
+            use crate::render::adapter::winit::WinitAdapter;
+
+            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
+                if let Err(e) = winit_adapter.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug)
+                {
+                    eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
+                }
+                return;
+            }
+        }
+
+        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+        {
+            // OpenGL mode implementation
+            let bs = self.get_base();
+            let rx = bs.gr.ratio_x;
+            let ry = bs.gr.ratio_y;
+            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
+                pix.bind_target(gl, rtidx);
+                if debug {
+                    // set red background for debug...
+                    pix.set_clear_color(GlColor::new(1.0, 0.0, 0.0, 1.0));
+                } else {
+                    pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
+                }
+                pix.clear(gl);
+                pix.render_rbuf(gl, rbuf, rx, ry);
+            }
+        }
+    }
+
+    // buffer to render buffer - unified for both OpenGL and WGPU
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> where Self: Sized {
+        let mut rbuf = vec![];
+        let rx = self.get_base().gr.ratio_x;
+        let ry = self.get_base().gr.ratio_y;
+        let pz = PointI32 { x: 0, y: 0 };
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         _s0: ARect,
+                         _s1: ARect,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize| {
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+        };
+        render_main_buffer(cb, cb.area.width, rx, ry, true, &mut rfunc);
+        rbuf
+    }
+
+    // merge main buffer & pixel sprites to render buffer...
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn generate_render_buffer(
+        &mut self,
+        cb: &Buffer,
+        _pb: &Buffer,
+        ps: &mut Vec<Sprites>,
+        stage: u32,
+    ) -> Vec<RenderCell> where Self: Sized {
+        let mut rbuf = vec![];
+        let width = cb.area.width;
+        let pz = PointI32 { x: 0, y: 0 };
+
+        // render logo...
+        if stage <= LOGO_FRAME {
+            render_logo(
+                self.get_base().gr.ratio_x,
+                self.get_base().gr.ratio_y,
+                self.get_base().gr.pixel_w,
+                self.get_base().gr.pixel_h,
+                &mut self.get_base().rd,
+                stage,
+                |fc, _s1, s2, texidx, symidx| {
+                    push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
+                },
+            );
+            return rbuf;
+        }
+
+        let cw = self.get_base().cell_w;
+        let ch = self.get_base().cell_h;
+        let rx = self.get_base().gr.ratio_x;
+        let ry = self.get_base().gr.ratio_y;
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         _s0: ARect,
+                         _s1: ARect,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize| {
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+        };
+
+        // render windows border, for sdl, winit and wgpu mode
+        // #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
+        render_border(cw, ch, rx, ry, &mut rfunc);
+
+        // render main buffer...
+        if stage > LOGO_FRAME {
+            render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
+        }
+
+        // render pixel_sprites...
+        if stage > LOGO_FRAME {
+            for item in ps {
+                if item.is_pixel && !item.is_hidden {
+                    render_pixel_sprites(
+                        item,
+                        rx,
+                        ry,
+                        |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
+                            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
+                        },
+                    );
+                }
+            }
+        }
+        rbuf
     }
 
     #[cfg(any(
@@ -571,7 +846,7 @@ pub trait Adapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_render_textures_to_screen(&mut self) {
+    fn draw_render_textures_to_screen(&mut self) where Self: Sized {
         // First check if we're in WGPU mode and handle it accordingly
         #[cfg(feature = "wgpu")]
         {
@@ -581,7 +856,7 @@ pub trait Adapter {
                 // Check if WGPU components are available
                 if winit_adapter.wgpu_pixel_renderer.is_some() {
                     // WGPU mode - use unified implementation
-                    if let Err(e) = Self::draw_render_textures_to_screen_unified_wgpu(winit_adapter) {
+                    if let Err(e) = draw_render_textures_to_screen_unified_wgpu(winit_adapter) {
                         eprintln!("WGPU draw_render_textures_to_screen error: {}", e);
                     }
                     return;
@@ -592,412 +867,231 @@ pub trait Adapter {
         // OpenGL mode implementation using unified PixelRenderer interface
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
-            Self::draw_render_textures_to_screen_unified_opengl(self);
+            draw_render_textures_to_screen_unified_opengl(self);
         }
     }
 
-    /// Unified WGPU implementation for render texture to screen composition
-    #[cfg(feature = "wgpu")]
-    fn draw_render_textures_to_screen_unified_wgpu(
-        winit_adapter: &mut crate::render::adapter::winit::WinitAdapter,
-    ) -> Result<(), String> {
-        let (device, queue, surface, pixel_renderer) = {
-            let device = winit_adapter.wgpu_device.as_ref()
-                .ok_or("WGPU device not initialized")?;
-            let queue = winit_adapter.wgpu_queue.as_ref()
-                .ok_or("WGPU queue not initialized")?;
-            let surface = winit_adapter.wgpu_surface.as_ref()
-                .ok_or("WGPU surface not initialized")?;
-            let pixel_renderer = winit_adapter.wgpu_pixel_renderer.as_mut()
-                .ok_or("WGPU pixel renderer not initialized")?;
-            (device, queue, surface, pixel_renderer)
-        };
+    fn as_any(&mut self) -> &mut dyn Any;
+}
 
-        // Get current surface texture
-        let output = surface
-            .get_current_texture()
-            .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
+/// Unified WGPU implementation for render texture to screen composition
+#[cfg(feature = "wgpu")]
+fn draw_render_textures_to_screen_unified_wgpu(
+    winit_adapter: &mut crate::render::adapter::winit::WinitAdapter,
+) -> Result<(), String> {
+    use ::wgpu::{Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPassColorAttachment, 
+                 RenderPassDescriptor, StoreOp, TextureViewDescriptor};
 
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+    let (device, queue, surface, pixel_renderer) = {
+        let device = winit_adapter.wgpu_device.as_ref()
+            .ok_or("WGPU device not initialized")?;
+        let queue = winit_adapter.wgpu_queue.as_ref()
+            .ok_or("WGPU queue not initialized")?;
+        let surface = winit_adapter.wgpu_surface.as_ref()
+            .ok_or("WGPU surface not initialized")?;
+        let pixel_renderer = winit_adapter.wgpu_pixel_renderer.as_mut()
+            .ok_or("WGPU pixel renderer not initialized")?;
+        (device, queue, surface, pixel_renderer)
+    };
 
-        // Bind screen as render target
-        pixel_renderer.bind_screen();
+    // Get current surface texture
+    let output = surface
+        .get_current_texture()
+        .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
 
-        // Create command encoder for screen composition
-        let mut screen_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Screen Composition Encoder"),
-        });
+    let view = output
+        .texture
+        .create_view(&TextureViewDescriptor::default());
 
-        // Clear screen
-        {
-            let _clear_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Clear Screen Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-        }
+    // Bind screen as render target
+    pixel_renderer.bind_screen();
 
-        // Create unified render context
-        let mut context = RenderContext::Wgpu {
-            device,
-            queue,
-            encoder: &mut screen_encoder,
-            view: &view,
-        };
+    // Create command encoder for screen composition
+    let mut screen_encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+        label: Some("Screen Composition Encoder"),
+    });
 
-        // Call unified rendering logic
-        Self::draw_render_textures_unified(
-            pixel_renderer,
-            &mut context,
-            winit_adapter.base.gr.ratio_x,
-            winit_adapter.base.gr.ratio_y,
-        )?;
-
-        // Submit commands and present frame
-        queue.submit(std::iter::once(screen_encoder.finish()));
-        output.present();
-
-        Ok(())
-    }
-
-    /// Unified OpenGL implementation for render texture to screen composition
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    fn draw_render_textures_to_screen_unified_opengl(&mut self) {
-        let bs = self.get_base();
-
-        if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-            // Bind to screen framebuffer (0) for final output
-            pix.bind_screen(gl);
-
-            // Handle Retina displays for Winit adapter
-            #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
-            {
-                use crate::render::adapter::winit::WinitAdapter;
-                if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
-                    if let Some(window) = &winit_adapter.window {
-                        let physical_size = window.inner_size();
-                        unsafe {
-                            use glow::HasContext;
-                            gl.viewport(
-                                0,
-                                0,
-                                physical_size.width as i32,
-                                physical_size.height as i32,
-                            );
-                        }
-                    }
-                }
-            }
-
-            // Create unified render context
-            let mut context = RenderContext::OpenGL { gl };
-
-            // Call unified rendering logic
-            if let Err(e) = Self::draw_render_textures_unified(
-                pix,
-                &mut context,
-                bs.gr.ratio_x,
-                bs.gr.ratio_y,
-            ) {
-                eprintln!("OpenGL draw_render_textures_unified error: {}", e);
-            }
-        }
-    }
-
-    /// Unified rendering logic for both WGPU and OpenGL modes
-    ///
-    /// This method contains the core rendering logic that is shared between
-    /// WGPU and OpenGL implementations. It draws render textures to screen
-    /// using the unified PixelRenderer interface.
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit", 
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn draw_render_textures_unified<T>(
-        pixel_renderer: &mut T,
-        context: &mut RenderContext,
-        ratio_x: f32,
-        ratio_y: f32,
-    ) -> Result<(), String>
-    where
-        T: PixelRenderer,
+    // Clear screen
     {
-        let unified_color = UnifiedColor::white();
-
-                 // Layer 1: Draw render_texture 2 (main game content)
-         // Contains: characters, sprites, borders, logo
-         if !pixel_renderer.get_render_texture_hidden(2) {
-             let unified_transform = UnifiedTransform::new();
-             pixel_renderer.draw_general2d(
-                 context,
-                 2,
-                 [0.0, 0.0, 1.0, 1.0], // Full-screen quad
-                 &unified_transform,
-                 &unified_color,
-             )?;
-         }
-
-                 // Layer 2: Draw render_texture 3 (transition effects and overlays)
-         // Contains: transition effects, visual overlays, special effects
-         if !pixel_renderer.get_render_texture_hidden(3) {
-             // Calculate proper scaling for high-DPI displays
-             let (canvas_width, canvas_height) = pixel_renderer.get_canvas_size();
-             let pcw = canvas_width as f32; // Physical canvas width
-             let pch = canvas_height as f32; // Physical canvas height
-
-            // Calculate scaled dimensions for transition layer
-            // Use actual game area dimensions instead of hardcoded 40x25
-            let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
-
-            // Create unified transform with proper scaling
-            let mut unified_transform = UnifiedTransform::new();
-            unified_transform.scale(pw / pcw, ph / pch);
-
-            // Calculate viewport based on graphics API
-            let viewport = match context {
-                RenderContext::OpenGL { .. } => {
-                    // OpenGL Y-axis: bottom-left origin
-                    [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch]
-                }
-                #[cfg(feature = "wgpu")]
-                RenderContext::Wgpu { .. } => {
-                    // WGPU Y-axis: top-left origin
-                    [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch]
-                }
-            };
-
-                         pixel_renderer.draw_general2d(
-                 context,
-                 3,
-                 viewport,
-                 &unified_transform,
-                 &unified_color,
-             )?;
-        }
-
-        Ok(())
-    }
-
-    // draw buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
-        #[cfg(feature = "wgpu")]
-        {
-            use crate::render::adapter::wgpu::WgpuRender;
-            use crate::render::adapter::winit::WinitAdapter;
-
-            // First, convert buffer to render buffer to avoid borrowing conflicts
-            let rbuf = self.buffer_to_render_buffer(buf);
-
-            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
-                if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
-                    &mut winit_adapter.wgpu_pixel_renderer,
-                    &winit_adapter.wgpu_device,
-                    &winit_adapter.wgpu_queue,
-                ) {
-                    // Prepare all render data first
-                    wgpu_pixel_renderer.prepare_draw(device, queue); // Upload base vertices, indices, uniforms
-                    wgpu_pixel_renderer.prepare_draw_with_render_cells(device, queue, &rbuf); // Upload instance data
-
-                    // Create command encoder for rendering to texture
-                    let mut encoder =
-                        device.create_command_encoder(&::wgpu::CommandEncoderDescriptor {
-                            label: Some("Buffer to Texture Encoder"),
-                        });
-
-                    // Render to the specified render texture
-                    {
-                        let render_pass_result =
-                            wgpu_pixel_renderer.begin_render_to_texture(&mut encoder, rtidx);
-                        if let Ok(mut render_pass) = render_pass_result {
-                            // begin_render_to_texture already sets up the pipeline, buffers, and bind groups
-                            // Just perform the instanced draw call
-                            render_pass.draw_indexed(
-                                0..6,
-                                0,
-                                0..wgpu_pixel_renderer.get_instance_count(),
-                            );
-                        }
-                        // render_pass is automatically dropped here
-                    }
-
-                    // Now we can safely finish the encoder
-                    queue.submit(std::iter::once(encoder.finish()));
-                    return;
-                }
-            }
-        }
-
-        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-        {
-            let rbuf = self.buffer_to_render_buffer(buf);
-            // For debug...
-            // self.draw_render_buffer(&rbuf, rtidx, true);
-            self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
-        }
-    }
-
-    // draw render buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
-        #[cfg(feature = "wgpu")]
-        {
-            use crate::render::adapter::winit::WinitAdapter;
-
-            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
-                if let Err(e) = winit_adapter.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug)
-                {
-                    eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
-                }
-                return;
-            }
-        }
-
-        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-        {
-            // OpenGL mode implementation
-            let bs = self.get_base();
-            let rx = bs.gr.ratio_x;
-            let ry = bs.gr.ratio_y;
-            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-                pix.bind_target(gl, rtidx);
-                if debug {
-                    // set red background for debug...
-                    pix.set_clear_color(GlColor::new(1.0, 0.0, 0.0, 1.0));
-                } else {
-                    pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
-                }
-                pix.clear(gl);
-                pix.render_rbuf(gl, rbuf, rx, ry);
-            }
-        }
-    }
-
-    // buffer to render buffer - unified for both OpenGL and WGPU
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
-        let mut rbuf = vec![];
-        let rx = self.get_base().gr.ratio_x;
-        let ry = self.get_base().gr.ratio_y;
-        let pz = PointI32 { x: 0, y: 0 };
-        let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         bc: &Option<(u8, u8, u8, u8)>,
-                         _s0: ARect,
-                         _s1: ARect,
-                         s2: ARect,
-                         texidx: usize,
-                         symidx: usize| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
-        };
-        render_main_buffer(cb, cb.area.width, rx, ry, true, &mut rfunc);
-        rbuf
-    }
-
-    // merge main buffer & pixel sprites to render buffer...
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn generate_render_buffer(
-        &mut self,
-        cb: &Buffer,
-        _pb: &Buffer,
-        ps: &mut Vec<Sprites>,
-        stage: u32,
-    ) -> Vec<RenderCell> {
-        let mut rbuf = vec![];
-        let width = cb.area.width;
-        let pz = PointI32 { x: 0, y: 0 };
-
-        // render logo...
-        if stage <= LOGO_FRAME {
-            render_logo(
-                self.get_base().gr.ratio_x,
-                self.get_base().gr.ratio_y,
-                self.get_base().gr.pixel_w,
-                self.get_base().gr.pixel_h,
-                &mut self.get_base().rd,
-                stage,
-                |fc, _s1, s2, texidx, symidx| {
-                    push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
+        let _clear_pass = screen_encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Clear Screen Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::BLACK),
+                    store: StoreOp::Store,
                 },
-            );
-            return rbuf;
-        }
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+    }
 
-        let cw = self.get_base().cell_w;
-        let ch = self.get_base().cell_h;
-        let rx = self.get_base().gr.ratio_x;
-        let ry = self.get_base().gr.ratio_y;
-        let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         bc: &Option<(u8, u8, u8, u8)>,
-                         _s0: ARect,
-                         _s1: ARect,
-                         s2: ARect,
-                         texidx: usize,
-                         symidx: usize| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+    // Create unified render context
+    let mut context = RenderContext::Wgpu {
+        device,
+        queue,
+        encoder: &mut screen_encoder,
+        view: &view,
+    };
+
+    // Call unified rendering logic
+    draw_render_textures_unified(
+        pixel_renderer,
+        &mut context,
+        winit_adapter.base.gr.ratio_x,
+        winit_adapter.base.gr.ratio_y,
+    )?;
+
+    // Submit commands and present frame
+    queue.submit(std::iter::once(screen_encoder.finish()));
+    output.present();
+
+    Ok(())
+}
+
+/// Unified OpenGL implementation for render texture to screen composition
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+fn draw_render_textures_to_screen_unified_opengl(adapter: &mut dyn Adapter) {
+    let ratio_x;
+    let ratio_y;
+    let physical_size;
+    
+    // Get all needed data first to avoid borrowing conflicts
+    {
+        let bs = adapter.get_base();
+        ratio_x = bs.gr.ratio_x;
+        ratio_y = bs.gr.ratio_y;
+    }
+    
+    // Get physical size for retina displays if needed
+    #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
+    {
+        use crate::render::adapter::winit::WinitAdapter;
+        physical_size = if let Some(winit_adapter) = adapter.as_any().downcast_mut::<WinitAdapter>() {
+            winit_adapter.window.as_ref().map(|w| w.inner_size())
+        } else {
+            None
         };
+    }
+    #[cfg(not(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32"))))]
+    {
+        physical_size = None;
+    }
 
-        // render windows border, for sdl, winit and wgpu mode
-        // #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
-        render_border(cw, ch, rx, ry, &mut rfunc);
+    let bs = adapter.get_base();
+    if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
+        // Bind to screen framebuffer (0) for final output
+        pix.bind_screen(gl);
 
-        // render main buffer...
-        if stage > LOGO_FRAME {
-            render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
-        }
-
-        // render pixel_sprites...
-        if stage > LOGO_FRAME {
-            for item in ps {
-                if item.is_pixel && !item.is_hidden {
-                    render_pixel_sprites(
-                        item,
-                        rx,
-                        ry,
-                        |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
-                            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
-                        },
+        // Handle Retina displays for Winit adapter
+        #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
+        {
+            if let Some(size) = physical_size {
+                unsafe {
+                    use glow::HasContext;
+                    gl.viewport(
+                        0,
+                        0,
+                        size.width as i32,
+                        size.height as i32,
                     );
                 }
             }
         }
-        rbuf
+
+        // Create unified render context
+        let mut context = RenderContext::OpenGL { gl };
+
+        // Call unified rendering logic
+        if let Err(e) = draw_render_textures_unified(
+            pix,
+            &mut context,
+            ratio_x,
+            ratio_y,
+        ) {
+            eprintln!("OpenGL draw_render_textures_unified error: {}", e);
+        }
+    }
+}
+
+/// Unified rendering logic for both WGPU and OpenGL modes
+///
+/// This method contains the core rendering logic that is shared between
+/// WGPU and OpenGL implementations. It draws render textures to screen
+/// using the unified PixelRenderer interface.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit", 
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
+fn draw_render_textures_unified<T>(
+    pixel_renderer: &mut T,
+    context: &mut RenderContext,
+    ratio_x: f32,
+    ratio_y: f32,
+) -> Result<(), String>
+where
+    T: PixelRenderer,
+{
+    let unified_color = UnifiedColor::white();
+
+    // Layer 1: Draw render_texture 2 (main game content)
+    // Contains: characters, sprites, borders, logo
+    if !pixel_renderer.get_render_texture_hidden(2) {
+        let unified_transform = UnifiedTransform::new();
+        pixel_renderer.draw_general2d(
+            context,
+            2,
+            [0.0, 0.0, 1.0, 1.0], // Full-screen quad
+            &unified_transform,
+            &unified_color,
+        )?;
     }
 
-    fn as_any(&mut self) -> &mut dyn Any;
+    // Layer 2: Draw render_texture 3 (transition effects and overlays)
+    // Contains: transition effects, visual overlays, special effects
+    if !pixel_renderer.get_render_texture_hidden(3) {
+        // Calculate proper scaling for high-DPI displays
+        let (canvas_width, canvas_height) = pixel_renderer.get_canvas_size();
+        let pcw = canvas_width as f32; // Physical canvas width
+        let pch = canvas_height as f32; // Physical canvas height
+
+        // Calculate scaled dimensions for transition layer
+        // Use actual game area dimensions instead of hardcoded 40x25
+        let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+        let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+
+        // Create unified transform with proper scaling
+        let mut unified_transform = UnifiedTransform::new();
+        unified_transform.scale(pw / pcw, ph / pch);
+
+        // Calculate viewport based on graphics API
+        let viewport = match context {
+            RenderContext::OpenGL { .. } => {
+                // OpenGL Y-axis: bottom-left origin
+                [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch]
+            }
+            #[cfg(feature = "wgpu")]
+            RenderContext::Wgpu { .. } => {
+                // WGPU Y-axis: top-left origin
+                [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch]
+            }
+        };
+
+        pixel_renderer.draw_general2d(
+            context,
+            3,
+            viewport,
+            &unified_transform,
+            &unified_color,
+        )?;
+    }
+
+    Ok(())
 }
 
 // Re-export graph rendering functions and data structures

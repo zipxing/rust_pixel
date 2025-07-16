@@ -202,7 +202,7 @@ impl Render for PetviewRender {
 
             // Draw to texture for both modes
             if l1 {
-                ctx.adapter.draw_buffer_to_texture(&p1.content, 0);
+                ctx.adapter.draw_buffer_to_texture_dyn(&p1.content, 0);
             }
 
             let p2 = self.panel.get_pixel_sprite("petimg2");
@@ -215,7 +215,7 @@ impl Render for PetviewRender {
 
             // Draw to texture for both modes
             if l2 {
-                ctx.adapter.draw_buffer_to_texture(&p2.content, 1);
+                ctx.adapter.draw_buffer_to_texture_dyn(&p2.content, 1);
             }
 
             let p3 = self.panel.get_pixel_sprite("petimg3");
