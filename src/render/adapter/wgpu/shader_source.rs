@@ -538,7 +538,7 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     return mix(
         getFromColor(uv),
         getToColor(uv),
-        inHeart(uv, vec2<f32>(0.5, 0.4), uniforms.progress)
+        inHeart(uv, vec2<f32>(0.5, 0.6), uniforms.progress)  // Y轴翻转：0.4 -> 0.6
     );
 }
 
@@ -666,9 +666,9 @@ fn getToColor(uv: vec2<f32>) -> vec4<f32> {
 }
 
 fn transition(uv: vec2<f32>) -> vec4<f32> {
-    let phase = select(uniforms.progress * 2.0, (uniforms.progress - 0.5) * 2.0, uniforms.progress < 0.5);
-    let angleOffset = select(mix(0.0, 6.0 * 0.03927, phase), mix(-6.0 * 0.03927, 0.0, phase), uniforms.progress < 0.5);
-    let newScale = select(mix(1.0, 1.2, phase), mix(1.2, 1.0, phase), uniforms.progress < 0.5);
+    let phase = select((uniforms.progress - 0.5) * 2.0, uniforms.progress * 2.0, uniforms.progress < 0.5);
+    let angleOffset = select(mix(-6.0 * 0.03927, 0.0, phase), mix(0.0, 6.0 * 0.03927, phase), uniforms.progress < 0.5);
+    let newScale = select(mix(1.2, 1.0, phase), mix(1.0, 1.2, phase), uniforms.progress < 0.5);
     let center = vec2<f32>(0.0, 0.0);
     let assumedCenter = vec2<f32>(0.5, 0.5);
     var p = (uv - vec2<f32>(0.5, 0.5)) / newScale * vec2<f32>(1.2, 1.0);
@@ -676,8 +676,11 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     let dist = distance(center, p);
     p.x = cos(angle) * dist / 1.2 + 0.5;
     p.y = sin(angle) * dist + 0.5;
-    let c = select(getFromColor(p), getToColor(p), uniforms.progress < 0.5);
-    return c + select(mix(0.0, 1.0, phase), mix(1.0, 0.0, phase), uniforms.progress < 0.5);
+    let c = select(getToColor(p), getFromColor(p), uniforms.progress < 0.5);
+    
+    // 修复颜色值计算，避免超出[0,1]范围导致全白
+    let brightness_factor = select(mix(1.0, 0.0, phase), mix(0.0, 1.0, phase), uniforms.progress < 0.5);
+    return mix(c, vec4<f32>(1.0, 1.0, 1.0, 1.0), brightness_factor * 0.3); // 限制亮度增强的强度
 }
 
 @fragment
@@ -736,7 +739,7 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     let time = uniforms.progress;
     let stime = sin(time * 3.14159265 / 2.0);
     let phase = time * 3.14159265 * 3.0;
-    let y = abs(cos(phase)) * (1.0 - stime);
+    let y = 1.0 - abs(cos(phase)) * (1.0 - stime);  // Y轴翻转，适配WGPU坐标系
     let d = uv.y - y;
     let from_color = getFromColor(vec2<f32>(uv.x, uv.y + (1.0 - y)));
     let to_color = getToColor(uv);
