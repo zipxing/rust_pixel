@@ -8,6 +8,7 @@
 //! a base quad geometry with instance-specific transform and color data.
 
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
+use crate::render::pixel_renderer::UnifiedTransform;
 
 /// Symbol instance data for WGPU (matches OpenGL layout exactly)
 /// This corresponds to the per-instance attributes in OpenGL version
@@ -77,7 +78,7 @@ pub struct WgpuSymbolRenderer {
     canvas_height: f32,
     
     /// Transform stack (equivalent to OpenGL transform_stack)
-    transform_stack: WgpuTransformStack,
+    transform_stack: UnifiedTransform,
     
     /// Symbol frames (equivalent to OpenGL symbols)
     symbols: Vec<WgpuSymbolFrame>,
@@ -97,41 +98,16 @@ pub struct WgpuSymbolRenderer {
 }
 
 
-/// Transform stack equivalent to OpenGL GlTransform
-#[derive(Clone, Debug)]
-pub struct WgpuTransformStack {
-    pub m00: f32,
-    pub m10: f32,
-    pub m20: f32,
-    pub m01: f32,
-    pub m11: f32,
-    pub m21: f32,
-}
 
-impl WgpuTransformStack {
-    pub fn new() -> Self {
-        Self {
-            m00: 1.0,
-            m10: 0.0,
-            m20: 0.0,
-            m01: 0.0,
-            m11: 1.0,
-            m21: 0.0,
-        }
-    }
-    
-    pub fn new_with_values(m00: f32, m10: f32, m20: f32, m01: f32, m11: f32, m21: f32) -> Self {
-        Self { m00, m10, m20, m01, m11, m21 }
-    }
-}
 
 impl WgpuSymbolRenderer {
     pub fn new(canvas_width: u32, canvas_height: u32) -> Self {
-        // Initialize transform stack to match OpenGL version:
-        // GlTransform::new_with_values(1.0, 0.0, 0.0, 0.0, -1.0, canvas_height as f32)
-        let transform_stack = WgpuTransformStack::new_with_values(
-            1.0, 0.0, 0.0,           // [m00, m10, m20]
-            0.0, -1.0, canvas_height as f32  // [m01, m11, m21]
+        // Initialize transform stack to match OpenGL version exactly:
+        // UnifiedTransform::new_with_values(1.0, 0.0, 0.0, -1.0, 0.0, canvas_height as f32)
+        let transform_stack = UnifiedTransform::new_with_values(
+            1.0, 0.0,                    // m00, m01
+            0.0, -1.0,                   // m10, m11  
+            0.0, canvas_height as f32    // m20, m21
         );
         
         let max_instances = (canvas_width * canvas_height) as usize; // Conservative estimate
@@ -202,40 +178,21 @@ impl WgpuSymbolRenderer {
         self.instance_count = 0;
         
         for r in render_cells {
-            // Create transform starting from global transform_stack (like OpenGL version)
-            let mut transform = self.transform_stack.clone();
-            
-            let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
-            let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-            
-            // Apply the same transformation chain as OpenGL:
-            // 1. translate(r.x + r.cx - PIXEL_SYM_WIDTH, r.y + r.cy - PIXEL_SYM_HEIGHT)
-            transform.m20 += transform.m00 * (r.x + r.cx - sym_width) + transform.m10 * (r.y + r.cy - sym_height);
-            transform.m21 += transform.m01 * (r.x + r.cx - sym_width) + transform.m11 * (r.y + r.cy - sym_height);
-            
-            // 2. rotate(r.angle) if angle != 0
+            // Use the same transformation chain as OpenGL using UnifiedTransform methods
+            let mut transform = self.transform_stack;
+
+            transform.translate(
+                r.x + r.cx - PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+                r.y + r.cy - PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+            );
             if r.angle != 0.0 {
-                let cos = r.angle.cos();
-                let sin = r.angle.sin();
-                let m00 = transform.m00;
-                let m01 = transform.m01;
-                transform.m00 = m00 * cos - transform.m10 * sin;
-                transform.m10 = m00 * sin + transform.m10 * cos;
-                transform.m01 = m01 * cos - transform.m11 * sin;
-                transform.m11 = m01 * sin + transform.m11 * cos;
+                transform.rotate(r.angle);
             }
-            
-            // 3. translate(-r.cx + PIXEL_SYM_WIDTH / ratio_x, -r.cy + PIXEL_SYM_HEIGHT / ratio_y)
-            let tx = -r.cx + sym_width / ratio_x;
-            let ty = -r.cy + sym_height / ratio_y;
-            transform.m20 += transform.m00 * tx + transform.m10 * ty;
-            transform.m21 += transform.m01 * tx + transform.m11 * ty;
-            
-            // 4. scale(1.0 / ratio_x, 1.0 / ratio_y)
-            transform.m00 *= 1.0 / ratio_x;
-            transform.m10 *= 1.0 / ratio_y;
-            transform.m01 *= 1.0 / ratio_x;
-            transform.m11 *= 1.0 / ratio_y;
+            transform.translate(
+                -r.cx + PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x,
+                -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
+            );
+            transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
             
             // Draw background if it exists
             if let Some(b) = r.bcolor {
@@ -248,7 +205,7 @@ impl WgpuSymbolRenderer {
     }
     
     /// Add a symbol instance (equivalent to OpenGL draw_symbol)
-    fn draw_symbol_instance(&mut self, sym: usize, transform: &WgpuTransformStack, color: [f32; 4]) {
+    fn draw_symbol_instance(&mut self, sym: usize, transform: &UnifiedTransform, color: [f32; 4]) {
         if self.instance_count >= self.max_instances {
             // Instance limit reached (debug output removed for performance)
             return;
