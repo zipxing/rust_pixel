@@ -137,7 +137,7 @@ impl WgpuRender for WgpuGeneral2dRender {
         };
 
         // Create a NEW uniform buffer for each draw call to avoid state conflicts
-        // This ensures each draw_general2d call has independent uniform data
+        // This ensures each render_texture_to_screen call has independent uniform data
         self.uniform_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("General2D Uniform Buffer"),
             contents: bytemuck::cast_slice(&[uniforms]),
@@ -301,7 +301,7 @@ impl WgpuGeneral2dRender {
     /// Prepare draw with specific render texture references
     /// 
     /// This method creates the bind group with actual texture references.
-    /// Called from WgpuPixelRender.draw_general2d() to avoid reference issues.
+    /// Called from WgpuPixelRender.render_texture_to_screen_impl() to avoid reference issues.
     pub fn prepare_draw_with_texture(
         &mut self,
         device: &wgpu::Device,

@@ -345,9 +345,9 @@ impl WgpuPixelRender {
         Ok(render_pass)
     }
 
-    /// Draw a render texture to screen or another render target using General2D renderer
+    /// Render texture to screen or another render target using General2D renderer
     ///
-    /// This method provides the same interface as OpenGL GlPixel.draw_general2d(),
+    /// This method provides the same interface as OpenGL GlPixel.render_texture_to_screen_impl(),
     /// allowing WGPU mode to render render textures with transformations and color modulation.
     ///
     /// # Parameters
@@ -359,7 +359,7 @@ impl WgpuPixelRender {
     /// - `area`: Texture area [x, y, width, height] in texture coordinates (0.0-1.0)
     /// - `transform`: Transformation matrix
     /// - `color`: Color modulation
-    pub fn draw_general2d(
+    pub fn render_texture_to_screen_impl(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -1140,7 +1140,7 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
         (self.canvas_width, self.canvas_height)
     }
     
-    fn draw_general2d(
+    fn render_texture_to_screen(
         &mut self,
         context: &mut crate::render::pixel_renderer::RenderContext,
         rtidx: usize,
@@ -1156,7 +1156,7 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
                 
                 // Use existing WGPU implementation - view is required for general2d
                 if let Some(view) = view {
-                    self.draw_general2d(*device, *queue, *encoder, *view, rtidx, area, &wgpu_transform, &wgpu_color)
+                    self.render_texture_to_screen_impl(*device, *queue, *encoder, *view, rtidx, area, &wgpu_transform, &wgpu_color)
                 } else {
                     Err("View is required for general2d rendering".to_string())
                 }

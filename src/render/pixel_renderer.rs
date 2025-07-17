@@ -186,7 +186,7 @@ impl Default for UnifiedTransform {
 ///     if !renderer.get_render_texture_hidden(2) {
 ///         let transform = UnifiedTransform::new();
 ///         let color = UnifiedColor::white();
-///         renderer.draw_general2d(&context, 2, [0.0, 0.0, 1.0, 1.0], &transform, &color)?;
+///         renderer.render_texture_to_screen(&context, 2, [0.0, 0.0, 1.0, 1.0], &transform, &color)?;
 ///     }
 ///     
 ///     // RT3 - transition effects (scaled)
@@ -194,7 +194,7 @@ impl Default for UnifiedTransform {
 ///         let mut transform = UnifiedTransform::new();
 ///         transform.scale(pw / pcw, ph / pch);
 ///         let color = UnifiedColor::white();
-///         renderer.draw_general2d(&context, 3, area, &transform, &color)?;
+///         renderer.render_texture_to_screen(&context, 3, area, &transform, &color)?;
 ///     }
 /// }
 /// ```
@@ -202,7 +202,7 @@ pub trait PixelRenderer {
     /// Get canvas dimensions
     fn get_canvas_size(&self) -> (u32, u32);
     
-    /// Draw a render texture to screen using General2D pipeline
+    /// Render texture to screen using General2D pipeline
     ///
     /// This method renders a render texture to the current render target
     /// with specified area mapping, transformation, and color modulation.
@@ -216,7 +216,7 @@ pub trait PixelRenderer {
     ///
     /// # Returns
     /// Result indicating success or rendering error
-    fn draw_general2d(
+    fn render_texture_to_screen(
         &mut self,
         context: &mut RenderContext,
         rtidx: usize,

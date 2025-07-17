@@ -930,7 +930,7 @@ where
     // Contains: characters, sprites, borders, logo
     if !pixel_renderer.get_render_texture_hidden(2) {
         let unified_transform = UnifiedTransform::new();
-        pixel_renderer.draw_general2d(
+        pixel_renderer.render_texture_to_screen(
             context,
             2,
             [0.0, 0.0, 1.0, 1.0], // Full-screen quad
@@ -969,7 +969,7 @@ where
             }
         };
 
-        pixel_renderer.draw_general2d(context, 3, viewport, &unified_transform, &unified_color)?;
+        pixel_renderer.render_texture_to_screen(context, 3, viewport, &unified_transform, &unified_color)?;
     }
 
     Ok(())

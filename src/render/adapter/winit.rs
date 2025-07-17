@@ -1184,7 +1184,7 @@ impl WinitAdapter {
                     view: Some(&view),
                 };
 
-                PixelRenderer::draw_general2d(
+                PixelRenderer::render_texture_to_screen(
                     pixel_renderer,
                     &mut context,
                     2,                    // render texture 2
@@ -1215,7 +1215,7 @@ impl WinitAdapter {
                     view: Some(&view),
                 };
 
-                PixelRenderer::draw_general2d(
+                PixelRenderer::render_texture_to_screen(
                     pixel_renderer,
                     &mut context,
                     3,                                          // render texture 3
@@ -1658,7 +1658,7 @@ impl Adapter for WinitAdapter {
                 // draw render_texture 2 ( main buffer ) - 使用统一接口
                 if !pix.get_render_texture_hidden(2) {
                     let unified_transform = UnifiedTransform::new();
-                    if let Err(e) = PixelRenderer::draw_general2d(
+                    if let Err(e) = PixelRenderer::render_texture_to_screen(
                         pix,
                         &mut context,
                         2,
@@ -1666,7 +1666,7 @@ impl Adapter for WinitAdapter {
                         &unified_transform,
                         &unified_color,
                     ) {
-                        eprintln!("OpenGL draw_general2d RT2 error: {}", e);
+                        eprintln!("OpenGL render_texture_to_screen RT2 error: {}", e);
                     }
                 }
 
@@ -1682,7 +1682,7 @@ impl Adapter for WinitAdapter {
 
                     let mut unified_transform = UnifiedTransform::new();
                     unified_transform.scale(pw / pcw, ph / pch);
-                    if let Err(e) = PixelRenderer::draw_general2d(
+                    if let Err(e) = PixelRenderer::render_texture_to_screen(
                         pix,
                         &mut context,
                         3,
@@ -1690,7 +1690,7 @@ impl Adapter for WinitAdapter {
                         &unified_transform,
                         &unified_color,
                     ) {
-                        eprintln!("OpenGL draw_general2d RT3 error: {}", e);
+                        eprintln!("OpenGL render_texture_to_screen RT3 error: {}", e);
                     }
                 }
             }

@@ -127,7 +127,7 @@ impl GlPixel {
         self.render_textures[rtidx].is_hidden = h;
     }
 
-    pub fn draw_general2d(
+    pub fn render_texture_to_screen_impl(
         &mut self,
         gl: &glow::Context,
         rtidx: usize,
@@ -176,7 +176,7 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
         (self.canvas_width, self.canvas_height)
     }
     
-    fn draw_general2d(
+    fn render_texture_to_screen(
         &mut self,
         context: &mut crate::render::pixel_renderer::RenderContext,
         rtidx: usize,
@@ -191,7 +191,7 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
                 let gl_color = color.to_gl_color();
                 
                 // Use existing OpenGL implementation
-                self.draw_general2d(*gl, rtidx, area, &gl_transform, &gl_color);
+                self.render_texture_to_screen_impl(*gl, rtidx, area, &gl_transform, &gl_color);
                 Ok(())
             }
             #[cfg(feature = "wgpu")]
