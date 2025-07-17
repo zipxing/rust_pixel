@@ -33,11 +33,7 @@
 
 #![allow(unused_variables)]
 
-/// Color management and processing utilities for wgpu
-pub mod color;
 
-/// 2D transformation matrix utilities for wgpu
-pub mod transform;
 
 /// Texture loading and management system for wgpu
 pub mod texture;
