@@ -126,6 +126,7 @@ impl UnifiedTransform {
     
     /// Apply scaling transformation
     pub fn scale(&mut self, x: f32, y: f32) {
+        // Correct scaling (matches WGPU behavior)
         self.m00 *= x;
         self.m10 *= y;
         self.m01 *= x;
@@ -134,8 +135,9 @@ impl UnifiedTransform {
     
     /// Apply translation transformation
     pub fn translate(&mut self, x: f32, y: f32) {
-        self.m20 += x;
-        self.m21 += y;
+        // Correct matrix multiplication for translation (matches WGPU behavior)
+        self.m20 += self.m00 * x + self.m10 * y;
+        self.m21 += self.m01 * x + self.m11 * y;
     }
     
     /// Apply rotation (angle in radians)
@@ -145,11 +147,14 @@ impl UnifiedTransform {
         
         let m00 = self.m00;
         let m01 = self.m01;
+        let m10 = self.m10;
+        let m11 = self.m11;
         
-        self.m00 = m00 * cos_a - self.m10 * sin_a;
-        self.m10 = m00 * sin_a + self.m10 * cos_a;
-        self.m01 = m01 * cos_a - self.m11 * sin_a;
-        self.m11 = m01 * sin_a + self.m11 * cos_a;
+        // Match WGPU's working rotation calculation:
+        self.m00 = m00 * cos_a - m10 * sin_a;
+        self.m10 = m00 * sin_a + m10 * cos_a;
+        self.m01 = m01 * cos_a - m11 * sin_a;
+        self.m11 = m01 * sin_a + m11 * cos_a;
     }
     
     /// Reset to identity matrix

@@ -96,6 +96,7 @@ pub struct WgpuSymbolRenderer {
     pub ratio_y: f32,
 }
 
+
 /// Transform stack equivalent to OpenGL GlTransform
 #[derive(Clone, Debug)]
 pub struct WgpuTransformStack {

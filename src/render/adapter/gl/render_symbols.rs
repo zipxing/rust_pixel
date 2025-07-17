@@ -335,6 +335,10 @@ impl GlRenderSymbols {
                 -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
             );
             transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
+            
+            // Apply Y-axis flip for OpenGL to match WGPU behavior
+            // This corrects the coordinate system difference
+            // transform.scale(1.0, -1.0);
 
             if let Some(b) = r.bcolor {
                 let back_color = UnifiedColor::new(b.0, b.1, b.2, b.3);
