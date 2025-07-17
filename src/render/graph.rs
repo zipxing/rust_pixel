@@ -4,7 +4,7 @@
 //! 抽取自adapter.rs，专门处理像素级渲染、纹理管理、精灵渲染等功能。
 
 use crate::{
-    render::{buffer::Buffer, sprite::Sprites, style::Color},
+    render::{AdapterBase, buffer::Buffer, sprite::Sprites, style::Color},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -827,3 +827,74 @@ where
         }
     }
 }
+
+    // merge main buffer & pixel sprites to render buffer...
+pub fn generate_render_buffer(
+        cb: &Buffer,
+        _pb: &Buffer,
+        ps: &mut Vec<Sprites>,
+        stage: u32,
+        base: &mut AdapterBase,
+    ) -> Vec<RenderCell> {
+        let mut rbuf = vec![];
+        let width = cb.area.width;
+        let pz = PointI32 { x: 0, y: 0 };
+
+        // render logo...
+        if stage <= LOGO_FRAME {
+            render_logo(
+                base.gr.ratio_x,
+                base.gr.ratio_y,
+                base.gr.pixel_w,
+                base.gr.pixel_h,
+                &mut base.rd,
+                stage,
+                |fc, _s1, s2, texidx, symidx| {
+                    push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
+                },
+            );
+            return rbuf;
+        }
+
+        let cw = base.cell_w;
+        let ch = base.cell_h;
+        let rx = base.gr.ratio_x;
+        let ry = base.gr.ratio_y;
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         _s0: ARect,
+                         _s1: ARect,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize| {
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+        };
+
+        // render windows border, for sdl, winit and wgpu mode
+        // #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
+        render_border(cw, ch, rx, ry, &mut rfunc);
+
+        // render main buffer...
+        if stage > LOGO_FRAME {
+            render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
+        }
+
+        // render pixel_sprites...
+        if stage > LOGO_FRAME {
+            for item in ps {
+                if item.is_pixel && !item.is_hidden {
+                    render_pixel_sprites(
+                        item,
+                        rx,
+                        ry,
+                        |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
+                            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
+                        },
+                    );
+                }
+            }
+        }
+        rbuf
+    }
+
+

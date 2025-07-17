@@ -295,10 +295,14 @@ impl Adapter for SdlAdapter {
         );
 
         self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
+        self.post_draw();
 
+        Ok(())
+    }
+
+    fn post_draw(&mut self) {
         // swap window for display
         self.sdl_window.as_ref().unwrap().gl_swap_window();
-        Ok(())
     }
 
     fn hide_cursor(&mut self) -> Result<(), String> {

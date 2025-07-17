@@ -1526,7 +1526,11 @@ impl Adapter for WinitAdapter {
         );
 
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
+        self.post_draw();
+        Ok(())
+    }
 
+    fn post_draw(&mut self) {
         #[cfg(not(feature = "wgpu"))]
         {
             // OpenGL模式：交换缓冲区,Wgpu模式是不需要的
@@ -1536,14 +1540,9 @@ impl Adapter for WinitAdapter {
                 }
             }
         }
-
-        // WGPU调试模式已移除，提高性能
-
         if let Some(window) = &self.window {
             window.as_ref().request_redraw();
         }
-
-        Ok(())
     }
 
     /// 隐藏光标
