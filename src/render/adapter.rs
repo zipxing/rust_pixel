@@ -153,6 +153,7 @@ use crate::{
     util::{Rand, Rect},
 };
 
+#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
 use crate::render::pixel_renderer::{PixelRenderer, RenderContext, UnifiedColor, UnifiedTransform};
 
 #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]

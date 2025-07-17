@@ -192,6 +192,8 @@ impl Adapter for CrosstermAdapter {
         ))
     }
 
+    fn post_draw(&mut self) {}
+
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
