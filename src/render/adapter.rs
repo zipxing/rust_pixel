@@ -532,60 +532,11 @@ pub trait Adapter {
     where
         Self: Sized,
     {
-        #[cfg(feature = "wgpu")]
-        {
-            use crate::render::adapter::wgpu::WgpuRender;
-            use crate::render::adapter::winit::WinitAdapter;
-
-            // First, convert buffer to render buffer to avoid borrowing conflicts
-            let rbuf = self.buffer_to_render_buffer(buf);
-
-            if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
-                if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
-                    &mut winit_adapter.wgpu_pixel_renderer,
-                    &winit_adapter.wgpu_device,
-                    &winit_adapter.wgpu_queue,
-                ) {
-                    // Prepare all render data first
-                    wgpu_pixel_renderer.prepare_draw(device, queue); // Upload base vertices, indices, uniforms
-                    wgpu_pixel_renderer.prepare_draw_with_render_cells(device, queue, &rbuf); // Upload instance data
-
-                    // Create command encoder for rendering to texture
-                    let mut encoder =
-                        device.create_command_encoder(&::wgpu::CommandEncoderDescriptor {
-                            label: Some("Buffer to Texture Encoder"),
-                        });
-
-                    // Render to the specified render texture
-                    {
-                        let render_pass_result =
-                            wgpu_pixel_renderer.begin_render_to_texture(&mut encoder, rtidx);
-                        if let Ok(mut render_pass) = render_pass_result {
-                            // begin_render_to_texture already sets up the pipeline, buffers, and bind groups
-                            // Just perform the instanced draw call
-                            render_pass.draw_indexed(
-                                0..6,
-                                0,
-                                0..wgpu_pixel_renderer.get_instance_count(),
-                            );
-                        }
-                        // render_pass is automatically dropped here
-                    }
-
-                    // Now we can safely finish the encoder
-                    queue.submit(std::iter::once(encoder.finish()));
-                    return;
-                }
-            }
-        }
-
-        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-        {
-            let rbuf = self.buffer_to_render_buffer(buf);
-            // For debug...
-            // self.draw_render_buffer(&rbuf, rtidx, true);
-            self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
-        }
+        // Convert buffer to render buffer first
+        let rbuf = self.buffer_to_render_buffer(buf);
+        
+        // Then draw render buffer to texture
+        self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
     }
 
     /// Trait object compatible wrapper for draw_buffer_to_texture
@@ -670,36 +621,27 @@ pub trait Adapter {
     where
         Self: Sized,
     {
+        // First check if we're in WGPU mode and handle it accordingly
         #[cfg(feature = "wgpu")]
         {
             use crate::render::adapter::winit::WinitAdapter;
 
             if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
-                if let Err(e) = winit_adapter.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug)
-                {
-                    eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
+                // Check if WGPU components are available
+                if winit_adapter.wgpu_pixel_renderer.is_some() {
+                    // WGPU mode - use unified implementation
+                    if let Err(e) = draw_render_buffer_to_texture_unified_wgpu(winit_adapter, rbuf, rtidx, debug) {
+                        eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
+                    }
+                    return;
                 }
-                return;
             }
         }
 
+        // OpenGL mode implementation using unified PixelRenderer interface
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
-            // OpenGL mode implementation
-            let bs = self.get_base();
-            let rx = bs.gr.ratio_x;
-            let ry = bs.gr.ratio_y;
-            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-                pix.bind_target(gl, rtidx);
-                if debug {
-                    // set red background for debug...
-                    pix.set_clear_color(GlColor::new(1.0, 0.0, 0.0, 1.0));
-                } else {
-                    pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
-                }
-                pix.clear(gl);
-                pix.render_rbuf(gl, rbuf, rx, ry);
-            }
+            draw_render_buffer_to_texture_unified_opengl(self, rbuf, rtidx, debug);
         }
     }
 
@@ -1029,6 +971,165 @@ where
 
         pixel_renderer.draw_general2d(context, 3, viewport, &unified_transform, &unified_color)?;
     }
+
+    Ok(())
+}
+
+/// Unified WGPU implementation for render buffer to texture composition
+#[cfg(feature = "wgpu")]
+fn draw_render_buffer_to_texture_unified_wgpu(
+    winit_adapter: &mut crate::render::adapter::winit::WinitAdapter,
+    rbuf: &[RenderCell],
+    rtidx: usize,
+    debug: bool,
+) -> Result<(), String> {
+    use ::wgpu::CommandEncoderDescriptor;
+
+    let (device, queue, pixel_renderer) = {
+        let device = winit_adapter
+            .wgpu_device
+            .as_ref()
+            .ok_or("WGPU device not initialized")?;
+        let queue = winit_adapter
+            .wgpu_queue
+            .as_ref()
+            .ok_or("WGPU queue not initialized")?;
+        let pixel_renderer = winit_adapter
+            .wgpu_pixel_renderer
+            .as_mut()
+            .ok_or("WGPU pixel renderer not initialized")?;
+        (device, queue, pixel_renderer)
+    };
+
+    // Create command encoder for render to texture
+    let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+        label: Some(&format!("Render Buffer to RT{} Encoder", rtidx)),
+    });
+
+    // Create a mock texture view for the render context
+    // This is a temporary solution - ideally we'd get the actual render texture view
+    let temp_texture = device.create_texture(&::wgpu::TextureDescriptor {
+        label: Some("Temp View Texture"),
+        size: ::wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: ::wgpu::TextureDimension::D2,
+        format: ::wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: ::wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let temp_view = temp_texture.create_view(&::wgpu::TextureViewDescriptor::default());
+
+    // Create unified render context
+    let mut context = RenderContext::Wgpu {
+        device,
+        queue,
+        encoder: &mut encoder,
+        view: &temp_view,
+    };
+
+    // Get ratios for rendering
+    let ratio_x = winit_adapter.base.gr.ratio_x;
+    let ratio_y = winit_adapter.base.gr.ratio_y;
+
+    // Call unified rendering logic using PixelRenderer interface
+    draw_render_buffer_to_texture_unified(
+        pixel_renderer,
+        &mut context,
+        rbuf,
+        rtidx,
+        debug,
+        ratio_x,
+        ratio_y,
+    )?;
+
+    // Submit commands
+    queue.submit(std::iter::once(encoder.finish()));
+
+    Ok(())
+}
+
+/// Unified OpenGL implementation for render buffer to texture composition
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+fn draw_render_buffer_to_texture_unified_opengl(
+    adapter: &mut dyn Adapter,
+    rbuf: &[RenderCell],
+    rtidx: usize,
+    debug: bool,
+) {
+    let ratio_x;
+    let ratio_y;
+
+    // Get all needed data first to avoid borrowing conflicts
+    {
+        let bs = adapter.get_base();
+        ratio_x = bs.gr.ratio_x;
+        ratio_y = bs.gr.ratio_y;
+    }
+
+    let bs = adapter.get_base();
+    if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
+        // Create unified render context
+        let mut context = RenderContext::OpenGL { gl };
+
+        // Call unified rendering logic using PixelRenderer interface
+        if let Err(e) = draw_render_buffer_to_texture_unified(
+            pix, 
+            &mut context, 
+            rbuf, 
+            rtidx, 
+            debug,
+            ratio_x,
+            ratio_y,
+        ) {
+            eprintln!("OpenGL draw_render_buffer_to_texture_unified error: {}", e);
+        }
+    }
+}
+
+/// Unified rendering logic for render buffer to texture - both WGPU and OpenGL modes
+///
+/// This method contains the core rendering logic that is shared between
+/// WGPU and OpenGL implementations. It renders RenderCell data to a render texture
+/// using the unified PixelRenderer interface.
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
+fn draw_render_buffer_to_texture_unified<T>(
+    pixel_renderer: &mut T,
+    context: &mut RenderContext,
+    rbuf: &[RenderCell],
+    rtidx: usize,
+    debug: bool,
+    ratio_x: f32,
+    ratio_y: f32,
+) -> Result<(), String>
+where
+    T: PixelRenderer,
+{
+    // Set clear color using unified interface
+    let clear_color = if debug {
+        UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug
+    } else {
+        UnifiedColor::black() // Black for normal
+    };
+    pixel_renderer.set_clear_color(&clear_color);
+
+    // Note: We don't call bind_render_target here because:
+    // 1. GlPixel's bind_render_target is not properly implemented (it's empty)
+    // 2. render_symbols_to_texture already handles binding internally
+    // 3. This keeps the implementation consistent with existing working code
+
+    // Render symbols to texture using unified interface
+    // This method handles binding, clearing, and rendering internally
+    pixel_renderer.render_symbols_to_texture(context, rbuf, rtidx, ratio_x, ratio_y)?;
 
     Ok(())
 }
