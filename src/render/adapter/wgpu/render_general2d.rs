@@ -6,7 +6,8 @@
 //! Handles rendering textures to screen or other render targets with
 //! transformation and color modulation support. Similar to OpenGL GlRenderGeneral2d.
 
-use super::{transform::WgpuTransform, color::WgpuColor, shader_source};
+use super::shader_source;
+use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
 use super::{WgpuRender, WgpuRenderBase};
 use std::mem;
 use wgpu::util::DeviceExt;
@@ -43,10 +44,10 @@ pub struct WgpuGeneral2dRender {
     area: [f32; 4],
 
     /// Current transformation matrix
-    transform: WgpuTransform,
+    transform: UnifiedTransform,
 
     /// Current color modulation
-    color: WgpuColor,
+    color: UnifiedColor,
 
     /// Vertex buffer for quad geometry
     vertex_buffer: Option<wgpu::Buffer>,
@@ -75,8 +76,8 @@ impl WgpuRender for WgpuGeneral2dRender {
         Self {
             base: WgpuRenderBase::new(0, canvas_width, canvas_height),
             area: [0.0, 0.0, 1.0, 1.0],  // Default to full texture
-            transform: WgpuTransform::new(),
-            color: WgpuColor::white(),
+            transform: UnifiedTransform::new(),
+            color: UnifiedColor::white(),
             vertex_buffer: None,
             index_buffer: None,
             uniform_buffer: None,
@@ -362,7 +363,7 @@ impl WgpuGeneral2dRender {
     /// 
     /// # Parameters
     /// - `transform`: Transform to apply to the quad
-    pub fn set_transform(&mut self, transform: &WgpuTransform) -> &mut Self {
+    pub fn set_transform(&mut self, transform: &UnifiedTransform) -> &mut Self {
         self.transform = *transform;
         self
     }
@@ -371,7 +372,7 @@ impl WgpuGeneral2dRender {
     /// 
     /// # Parameters
     /// - `color`: Color to multiply with texture
-    pub fn set_color(&mut self, color: &WgpuColor) -> &mut Self {
+    pub fn set_color(&mut self, color: &UnifiedColor) -> &mut Self {
         self.color = *color;
         self
     }

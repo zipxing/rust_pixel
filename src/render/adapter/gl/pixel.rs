@@ -3,12 +3,13 @@
 
 use crate::render::adapter::{
     gl::{
-        color::GlColor, render_general2d::GlRenderGeneral2d, render_symbols::GlRenderSymbols,
-        render_transition::GlRenderTransition, texture::GlRenderTexture, transform::GlTransform,
+        render_general2d::GlRenderGeneral2d, render_symbols::GlRenderSymbols,
+        render_transition::GlRenderTransition, texture::GlRenderTexture,
         GlRender, 
     },
     RenderCell,
 };
+use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
 use glow::HasContext;
 use log::info;
 
@@ -23,7 +24,7 @@ pub struct GlPixel {
     pub canvas_width: u32,
     pub canvas_height: u32,
 
-    clear_color: GlColor,
+    clear_color: UnifiedColor,
 }
 
 impl GlPixel {
@@ -78,7 +79,7 @@ impl GlPixel {
             r_g2d,
             r_trans,
             render_textures,
-            clear_color: GlColor::new(0.0, 0.0, 0.0, 1.0),
+            clear_color: UnifiedColor::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 
@@ -103,7 +104,7 @@ impl GlPixel {
         }
     }
 
-    pub fn set_clear_color(&mut self, color: GlColor) {
+    pub fn set_clear_color(&mut self, color: UnifiedColor) {
         self.clear_color = color;
     }
 
@@ -132,8 +133,8 @@ impl GlPixel {
         gl: &glow::Context,
         rtidx: usize,
         area: [f32; 4],
-        transform: &GlTransform,
-        color: &GlColor,
+        transform: &UnifiedTransform,
+        color: &UnifiedColor,
     ) {
         self.r_g2d
             .set_texture(gl, self.render_textures[rtidx].texture)
@@ -186,12 +187,8 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
     ) -> Result<(), String> {
         match context {
             crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
-                // Convert unified types to OpenGL-specific types
-                let gl_transform = transform.to_gl_transform();
-                let gl_color = color.to_gl_color();
-                
-                // Use existing OpenGL implementation
-                self.render_texture_to_screen_impl(*gl, rtidx, area, &gl_transform, &gl_color);
+                // Use unified types directly
+                self.render_texture_to_screen_impl(*gl, rtidx, area, transform, color);
                 Ok(())
             }
             #[cfg(feature = "wgpu")]
@@ -257,8 +254,7 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
     }
     
     fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
-        let gl_color = color.to_gl_color();
-        self.set_clear_color(gl_color);
+        self.set_clear_color(*color);
     }
     
     fn clear(&mut self, context: &mut crate::render::pixel_renderer::RenderContext) {

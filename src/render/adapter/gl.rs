@@ -123,13 +123,7 @@
 /// 
 /// Provides color space conversions, blending operations, and GPU-friendly
 /// color format handling for the OpenGL pipeline.
-pub mod color;
 
-/// 2D transformation matrix utilities
-/// 
-/// Implements matrix operations for scaling, rotation, translation, and
-/// projection transformations used in 2D graphics rendering.
-pub mod transform;
 
 /// Texture loading and management system
 /// 

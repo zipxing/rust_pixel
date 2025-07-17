@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-use crate::render::adapter::gl::color::GlColor;
+use crate::render::pixel_renderer::UnifiedColor;
 use glow::HasContext;
 // use log::info;
 
@@ -100,7 +100,7 @@ pub struct GlTexture {
     pub texture: glow::Texture,
     pub width: u32,
     pub height: u32,
-    clear_color: GlColor,
+    clear_color: UnifiedColor,
     framebuffer: glow::Framebuffer,
 }
 
@@ -122,7 +122,7 @@ impl GlTexture {
         let texture = unsafe { gl.create_texture().map_err(|e| e.to_string())? };
         let framebuffer = unsafe { gl.create_framebuffer().map_err(|e| e.to_string())? };
 
-        let clear_color = GlColor::new(1.0, 1.0, 1.0, 1.0);
+        let clear_color = UnifiedColor::new(1.0, 1.0, 1.0, 1.0);
 
         unsafe {
             gl.active_texture(glow::TEXTURE0);
@@ -209,7 +209,7 @@ impl GlTexture {
         self.height
     }
 
-    pub fn set_clear_color(&mut self, color: GlColor) {
+    pub fn set_clear_color(&mut self, color: UnifiedColor) {
         self.clear_color = color;
     }
 }

@@ -1086,12 +1086,12 @@ impl WinitAdapter {
             if debug {
                 // 调试模式使用红色背景
                 pixel_renderer.set_clear_color(
-                    crate::render::adapter::wgpu::color::WgpuColor::new(1.0, 0.0, 0.0, 1.0),
+                    UnifiedColor::new(1.0, 0.0, 0.0, 1.0),
                 );
             } else {
                 // 正常模式使用黑色背景
                 pixel_renderer.set_clear_color(
-                    crate::render::adapter::wgpu::color::WgpuColor::new(0.0, 0.0, 0.0, 1.0),
+                    UnifiedColor::new(0.0, 0.0, 0.0, 1.0),
                 );
             }
 

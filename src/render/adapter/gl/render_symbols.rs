@@ -2,13 +2,12 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 use crate::render::adapter::gl::{
-    color::GlColor,
     shader::GlShader,
     shader_source::{FRAGMENT_SRC_SYMBOLS, VERTEX_SRC_SYMBOLS},
     texture::{GlCell, GlTexture},
-    transform::GlTransform,
     GlRender, GlRenderBase,
 };
+use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
 use log::info;
@@ -21,7 +20,7 @@ pub struct GlRenderSymbols {
     instance_count: usize,
     ubo_contents: [f32; 12],
     pub symbols: Vec<GlCell>,
-    pub transform_stack: GlTransform,
+    pub transform_stack: UnifiedTransform,
     pub transform_dirty: bool,
 }
 
@@ -52,13 +51,10 @@ impl GlRender for GlRenderSymbols {
             instance_count: 0,
             ubo_contents,
             symbols: vec![],
-            transform_stack: GlTransform::new_with_values(
-                1.0,
-                0.0,
-                0.0,
-                0.0,
-                -1.0,
-                canvas_height as f32,
+            transform_stack: UnifiedTransform::new_with_values(
+                1.0, 0.0, // m00, m01
+                0.0, -1.0, // m10, m11  
+                0.0, canvas_height as f32, // m20, m21
             ),
             transform_dirty: true,
         }
@@ -269,8 +265,8 @@ impl GlRenderSymbols {
         &mut self,
         gl: &glow::Context,
         sym: usize,
-        transform: &GlTransform,
-        color: &GlColor,
+        transform: &UnifiedTransform,
+        color: &UnifiedColor,
     ) {
         self.prepare_draw(gl);
         let frame = &self.symbols[sym];
@@ -325,7 +321,7 @@ impl GlRenderSymbols {
     ) {
         // info!("ratiox....{} ratioy....{}", ratio_x, ratio_y);
         for r in rbuf {
-            let mut transform = GlTransform::new();
+            let mut transform = UnifiedTransform::new();
 
             transform.translate(
                 r.x + r.cx - PIXEL_SYM_WIDTH.get().expect("lazylock init"),
@@ -341,12 +337,12 @@ impl GlRenderSymbols {
             transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
 
             if let Some(b) = r.bcolor {
-                let back_color = GlColor::new(b.0, b.1, b.2, b.3);
+                let back_color = UnifiedColor::new(b.0, b.1, b.2, b.3);
                 // fill instance buffer for opengl instance rendering
                 self.draw_symbol(gl, 1280, &transform, &back_color);
             }
 
-            let color = GlColor::new(r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3);
+            let color = UnifiedColor::new(r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3);
             // fill instance buffer for opengl instance rendering
             self.draw_symbol(gl, r.texsym, &transform, &color);
         }

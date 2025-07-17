@@ -156,8 +156,7 @@ use crate::{
 #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
 use crate::render::pixel_renderer::{PixelRenderer, RenderContext, UnifiedColor, UnifiedTransform};
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-use crate::render::adapter::gl::color::GlColor;
+
 
 
 
@@ -603,7 +602,7 @@ pub trait Adapter {
             let ry = bs.gr.ratio_y;
             if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
                 pix.bind_target(gl, rtidx);
-                pix.set_clear_color(GlColor::new(0.0, 0.0, 0.0, 1.0));
+                pix.set_clear_color(UnifiedColor::new(0.0, 0.0, 0.0, 1.0));
                 pix.clear(gl);
                 pix.render_rbuf(gl, &rbuf, rx, ry);
             }

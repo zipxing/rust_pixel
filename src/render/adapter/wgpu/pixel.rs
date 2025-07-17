@@ -7,7 +7,6 @@
 //! Handles texture-based character and symbol rendering with
 //! instanced drawing for high performance.
 
-use super::color::WgpuColor;
 use super::render_general2d::WgpuGeneral2dRender;
 use super::render_symbols::{
     WgpuQuadVertex, WgpuSymbolInstance, WgpuSymbolRenderer, WgpuTransformUniforms,
@@ -15,8 +14,8 @@ use super::render_symbols::{
 use super::render_transition::WgpuTransitionRender;
 use super::shader_source;
 use super::texture::WgpuRenderTexture;
-use super::transform::WgpuTransform;
 use super::*;
+use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
 
 /// Vertex data structure for WGPU rendering
 ///
@@ -138,7 +137,7 @@ pub struct WgpuPixelRender {
     current_render_target: Option<usize>,
 
     /// Clear color for render operations
-    clear_color: WgpuColor,
+    clear_color: UnifiedColor,
 }
 
 impl WgpuPixelRender {
@@ -166,7 +165,7 @@ impl WgpuPixelRender {
             canvas_width,
             canvas_height,
             current_render_target: None,
-            clear_color: WgpuColor::new(0.0, 0.0, 0.0, 1.0),
+            clear_color: UnifiedColor::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 
@@ -367,8 +366,8 @@ impl WgpuPixelRender {
         target_view: &wgpu::TextureView,
         rtidx: usize,
         area: [f32; 4],
-        transform: &WgpuTransform,
-        color: &WgpuColor,
+        transform: &UnifiedTransform,
+        color: &UnifiedColor,
     ) -> Result<(), String> {
         if rtidx >= self.render_textures.len() {
             return Err(format!("Render texture index {} out of bounds", rtidx));
@@ -750,7 +749,7 @@ impl WgpuPixelRender {
     ///
     /// # Parameters
     /// - `color`: Clear color to use for subsequent clear operations
-    pub fn set_clear_color(&mut self, color: WgpuColor) {
+    pub fn set_clear_color(&mut self, color: UnifiedColor) {
         self.clear_color = color;
     }
 
@@ -1150,13 +1149,9 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
     ) -> Result<(), String> {
         match context {
             crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view } => {
-                // Convert unified types to WGPU-specific types
-                let wgpu_transform = transform.to_wgpu_transform();
-                let wgpu_color = color.to_wgpu_color();
-                
-                // Use existing WGPU implementation - view is required for general2d
+                // Use unified types directly
                 if let Some(view) = view {
-                    self.render_texture_to_screen_impl(*device, *queue, *encoder, *view, rtidx, area, &wgpu_transform, &wgpu_color)
+                    self.render_texture_to_screen_impl(*device, *queue, *encoder, *view, rtidx, area, transform, color)
                 } else {
                     Err("View is required for general2d rendering".to_string())
                 }
@@ -1218,7 +1213,7 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
                 self.bind_target(rtidx);
                 
                 // Set clear color to black (default)
-                self.set_clear_color(crate::render::adapter::wgpu::color::WgpuColor::new(0.0, 0.0, 0.0, 1.0));
+                self.set_clear_color(UnifiedColor::new(0.0, 0.0, 0.0, 1.0));
                 
                 // Clear the target
                 self.clear();
@@ -1245,8 +1240,8 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
     }
     
     fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
-        let wgpu_color = color.to_wgpu_color();
-        self.set_clear_color(wgpu_color);
+        // Use unified color directly - no conversion needed
+        self.set_clear_color(*color);
     }
     
     fn clear(&mut self, _context: &mut crate::render::pixel_renderer::RenderContext) {
