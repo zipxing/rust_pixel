@@ -1181,7 +1181,7 @@ impl WinitAdapter {
                     device,
                     queue,
                     encoder: &mut screen_encoder,
-                    view: &view,
+                    view: Some(&view),
                 };
 
                 PixelRenderer::draw_general2d(
@@ -1212,7 +1212,7 @@ impl WinitAdapter {
                     device,
                     queue,
                     encoder: &mut screen_encoder,
-                    view: &view,
+                    view: Some(&view),
                 };
 
                 PixelRenderer::draw_general2d(

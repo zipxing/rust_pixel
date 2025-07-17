@@ -57,7 +57,7 @@ pub enum RenderContext<'a> {
         device: &'a wgpu::Device,
         queue: &'a wgpu::Queue,
         encoder: &'a mut wgpu::CommandEncoder,
-        view: &'a wgpu::TextureView,
+        view: Option<&'a wgpu::TextureView>,
     },
 }
 

@@ -1154,8 +1154,12 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
                 let wgpu_transform = transform.to_wgpu_transform();
                 let wgpu_color = color.to_wgpu_color();
                 
-                // Use existing WGPU implementation
-                self.draw_general2d(*device, *queue, *encoder, *view, rtidx, area, &wgpu_transform, &wgpu_color)
+                // Use existing WGPU implementation - view is required for general2d
+                if let Some(view) = view {
+                    self.draw_general2d(*device, *queue, *encoder, *view, rtidx, area, &wgpu_transform, &wgpu_color)
+                } else {
+                    Err("View is required for general2d rendering".to_string())
+                }
             }
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
             _ => Err("Invalid context type for WGPU renderer".to_string()),
@@ -1169,7 +1173,7 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
         progress: f32,
     ) -> Result<(), String> {
         match context {
-            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view } => {
+            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view: _ } => {
                 // Use existing WGPU implementation for rendering to texture first
                 // Note: This assumes we want to render to a render texture, not directly to screen
                 self.render_trans_frame_to_texture(*device, *queue, *encoder, 1, shader_idx, progress)?;
@@ -1206,7 +1210,7 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
         ratio_y: f32,
     ) -> Result<(), String> {
         match context {
-            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, .. } => {
+            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, view: _, .. } => {
                 // Set ratios
                 self.set_ratio(ratio_x, ratio_y);
                 

@@ -835,7 +835,7 @@ fn draw_render_textures_to_screen_unified_wgpu(
         device,
         queue,
         encoder: &mut screen_encoder,
-        view: &view,
+        view: Some(&view),
     };
 
     // Call unified rendering logic
@@ -1006,30 +1006,12 @@ fn draw_render_buffer_to_texture_unified_wgpu(
         label: Some(&format!("Render Buffer to RT{} Encoder", rtidx)),
     });
 
-    // Create a mock texture view for the render context
-    // This is a temporary solution - ideally we'd get the actual render texture view
-    let temp_texture = device.create_texture(&::wgpu::TextureDescriptor {
-        label: Some("Temp View Texture"),
-        size: ::wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: ::wgpu::TextureDimension::D2,
-        format: ::wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: ::wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    let temp_view = temp_texture.create_view(&::wgpu::TextureViewDescriptor::default());
-
-    // Create unified render context
+    // Create unified render context (no view needed for render to texture)
     let mut context = RenderContext::Wgpu {
         device,
         queue,
         encoder: &mut encoder,
-        view: &temp_view,
+        view: None,
     };
 
     // Get ratios for rendering
