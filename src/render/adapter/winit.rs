@@ -44,7 +44,7 @@ use crate::render::{
 
 // OpenGL backend imports (glow + glutin) - only when wgpu is disabled
 #[cfg(not(feature = "wgpu"))]
-use crate::render::adapter::gl::pixel::GlPixel;
+use crate::render::adapter::gl::pixel::GlPixelRenderer;
 
 #[cfg(not(feature = "wgpu"))]
 use glutin::{
@@ -697,7 +697,7 @@ impl WinitAdapter {
             })
         };
 
-        // 加载纹理并创建GlPixel
+        // 加载纹理并创建GlPixelRenderer
         let teximg = image::open(&params.texture_path)
             .map_err(|e| e.to_string())
             .unwrap()
@@ -705,18 +705,19 @@ impl WinitAdapter {
         let texwidth = teximg.width();
         let texheight = teximg.height();
 
-        self.base.gr.gl_pixel = Some(GlPixel::new(
-            &gl,
+        // 创建统一的像素渲染器，拥有OpenGL上下文
+        let gl_pixel_renderer = GlPixelRenderer::new(
+            gl,
             "#version 330 core",
             self.base.gr.pixel_w as i32,
             self.base.gr.pixel_h as i32,
             texwidth as i32,
             texheight as i32,
             &teximg,
-        ));
+        );
 
-        // 存储OpenGL对象
-        self.base.gr.gl = Some(gl);
+        // 存储统一渲染器和其他OpenGL对象
+        self.base.gr.pixel_renderer = Some(Box::new(gl_pixel_renderer));
         self.window = Some(window);
         self.gl_display = Some(gl_display);
         self.gl_context = Some(gl_context);
@@ -882,26 +883,24 @@ impl WinitAdapter {
     /// 这就是现代图形 API（Vulkan、Metal、D3D12）相比传统 OpenGL 的优势之一：更好的资源管理和更少的意外行为。
     #[cfg(not(feature = "wgpu"))]
     fn initial_clear_screen(&mut self) {
-        if let (Some(gl), Some(_gl_pixel)) = (&self.base.gr.gl, &mut self.base.gr.gl_pixel) {
-            use glow::HasContext;
+        if let Some(pixel_renderer) = &mut self.base.gr.pixel_renderer {
+            // Use GlPixelRenderer specific methods for OpenGL operations
+            use crate::render::adapter::gl::pixel::GlPixelRenderer;
+            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                let gl = gl_pixel_renderer.get_gl();
+                use glow::HasContext;
 
-            unsafe {
-                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-                if let Some(window) = &self.window {
-                    let physical_size = window.inner_size();
-                    gl.viewport(
-                        0,
-                        0,
-                        physical_size.width as i32,
-                        physical_size.height as i32,
-                    );
+                unsafe {
+                    gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                    gl.clear(glow::COLOR_BUFFER_BIT);
                 }
-                gl.clear_color(0.0, 0.0, 0.0, 1.0);
-                gl.clear(glow::COLOR_BUFFER_BIT);
-            }
 
-            if let (Some(surface), Some(context)) = (&self.gl_surface, &self.gl_context) {
-                surface.swap_buffers(context).unwrap();
+                if let Some(gl_surface) = &self.gl_surface {
+                    if let Err(e) = gl_surface.swap_buffers(&self.gl_context.as_ref().unwrap()) {
+                        eprintln!("Failed to swap buffers during initial clear: {:?}", e);
+                    }
+                }
             }
         }
     }
@@ -1621,7 +1620,7 @@ impl Adapter for WinitAdapter {
             }
         }
 
-        // OpenGL mode - original implementation
+        // OpenGL mode - fixed implementation to avoid binding conflicts
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
             use glow::HasContext;
@@ -1635,63 +1634,38 @@ impl Adapter for WinitAdapter {
 
             let bs = self.get_base();
 
-            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-                // First bind screen with GlPixel's logical viewport
-                pix.bind_screen(gl);
-
-                // Then manually set the correct viewport for Retina displays
-                if let Some(physical_size) = physical_size {
-                    unsafe {
-                        gl.viewport(
-                            0,
-                            0,
+            if let Some(pixel_renderer) = &mut bs.gr.pixel_renderer {
+                // Use GlPixelRenderer specific methods for OpenGL operations
+                use crate::render::adapter::gl::pixel::GlPixelRenderer;
+                if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                    // Step 1: Bind screen and set viewport for Retina displays
+                    if let Some(physical_size) = physical_size {
+                        gl_pixel_renderer.bind_screen_with_viewport(
                             physical_size.width as i32,
                             physical_size.height as i32,
                         );
+                    } else {
+                        // Fallback: use logical canvas size
+                        let (width, height) = gl_pixel_renderer.get_canvas_size();
+                        gl_pixel_renderer.bind_screen_with_viewport(width as i32, height as i32);
                     }
-                }
 
-                // Create unified render context and color
-                let mut context = RenderContext::OpenGL { gl };
-                let unified_color = UnifiedColor::white();
-
-                // draw render_texture 2 ( main buffer ) - 使用统一接口
-                if !pix.get_render_texture_hidden(2) {
-                    let unified_transform = UnifiedTransform::new();
-                    if let Err(e) = PixelRenderer::render_texture_to_screen(
-                        pix,
-                        &mut context,
-                        2,
-                        [0.0, 0.0, 1.0, 1.0],
-                        &unified_transform,
-                        &unified_color,
-                    ) {
-                        eprintln!("OpenGL render_texture_to_screen RT2 error: {}", e);
+                    // Step 2: Clear screen
+                    let gl = gl_pixel_renderer.get_gl();
+                    unsafe {
+                        gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                        gl.clear(glow::COLOR_BUFFER_BIT);
                     }
-                }
 
-                // draw render_texture 3 ( gl transition ) - 使用统一接口
-                if !pix.get_render_texture_hidden(3) {
-                    let pcw = pix.canvas_width as f32;
-                    let pch = pix.canvas_height as f32;
+                    // Step 3: Render textures without rebinding (avoid state conflicts)
                     let rx = bs.gr.ratio_x;
                     let ry = bs.gr.ratio_y;
-                    // Use actual game area dimensions instead of hardcoded 40x25
-                    let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                    let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
-
-                    let mut unified_transform = UnifiedTransform::new();
-                    unified_transform.scale(pw / pcw, ph / pch);
-                    if let Err(e) = PixelRenderer::render_texture_to_screen(
-                        pix,
-                        &mut context,
-                        3,
-                        [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch],
-                        &unified_transform,
-                        &unified_color,
-                    ) {
-                        eprintln!("OpenGL render_texture_to_screen RT3 error: {}", e);
+                    if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(rx, ry) {
+                        eprintln!("Failed to render textures to screen: {}", e);
                     }
+
+                    // Step 4: Swap buffers to display the result (done in post_draw)
+                    // Note: We don't swap buffers here to avoid double swapping
                 }
             }
         }

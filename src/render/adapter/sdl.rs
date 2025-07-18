@@ -9,8 +9,9 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixel, init_sym_height, init_sym_width, Adapter, AdapterBase,
-        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+        gl::pixel::GlPixelRenderer,
+        init_sym_height, init_sym_width, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+        PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -216,19 +217,20 @@ impl Adapter for SdlAdapter {
             })
         };
 
-        // Store the OpenGL context
-        self.base.gr.gl = Some(gl);
-        self.sdl_window = Some(window);
-
-        self.base.gr.gl_pixel = Some(GlPixel::new(
-            self.base.gr.gl.as_ref().unwrap(),
+        // Create unified pixel renderer with owned OpenGL context
+        let gl_pixel_renderer = GlPixelRenderer::new(
+            gl,
             "#version 330 core",
             self.base.gr.pixel_w as i32,
             self.base.gr.pixel_h as i32,
             texwidth as i32,
             texheight as i32,
             &teximg,
-        ));
+        );
+
+        // Store the unified renderer
+        self.base.gr.pixel_renderer = Some(Box::new(gl_pixel_renderer));
+        self.sdl_window = Some(window);
 
         info!("Window & gl init ok...");
 

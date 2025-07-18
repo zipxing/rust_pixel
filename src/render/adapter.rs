@@ -156,8 +156,9 @@ use crate::{
 #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
 use crate::render::pixel_renderer::{PixelRenderer, RenderContext, UnifiedColor, UnifiedTransform};
 
-
-
+// Import GlPixelRenderer only when OpenGL backends are available
+#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+use crate::render::adapter::gl::pixel::GlPixelRenderer;
 
 
 use std::any::Any;
@@ -549,8 +550,9 @@ pub trait Adapter {
         target_arch = "wasm32"
     ))]
     fn draw_buffer_to_texture_dyn(&mut self, buf: &Buffer, rtidx: usize) {
-        // Handle each adapter type explicitly
-        #[cfg(feature = "wgpu")]
+        // Handle each adapter type explicitly with proper feature detection
+        
+        #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
         {
             use crate::render::adapter::winit::WinitAdapter;
             if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
@@ -577,36 +579,8 @@ pub trait Adapter {
             }
         }
 
-        // Fallback: OpenGL implementation without sized methods
-        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-        {
-            // Convert buffer to render buffer
-            let mut rbuf = vec![];
-            let rx = self.get_base().gr.ratio_x;
-            let ry = self.get_base().gr.ratio_y;
-            let pz = PointI32 { x: 0, y: 0 };
-            let mut rfunc = |fc: &(u8, u8, u8, u8),
-                             bc: &Option<(u8, u8, u8, u8)>,
-                             _s0: ARect,
-                             _s1: ARect,
-                             s2: ARect,
-                             texidx: usize,
-                             symidx: usize| {
-                push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
-            };
-            render_main_buffer(buf, buf.area.width, rx, ry, true, &mut rfunc);
-
-            // Draw render buffer to texture (OpenGL fallback)
-            let bs = self.get_base();
-            let rx = bs.gr.ratio_x;
-            let ry = bs.gr.ratio_y;
-            if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-                pix.bind_target(gl, rtidx);
-                pix.set_clear_color(UnifiedColor::new(0.0, 0.0, 0.0, 1.0));
-                pix.clear(gl);
-                pix.render_rbuf(gl, &rbuf, rx, ry);
-            }
-        }
+        // If we reach here, none of the specific adapter types matched
+        eprintln!("Warning: draw_buffer_to_texture_dyn called on unknown adapter type");
     }
 
     // draw render buffer to render texture - unified for both OpenGL and WGPU
@@ -878,27 +852,31 @@ fn draw_render_textures_to_screen_unified_opengl(adapter: &mut dyn Adapter) {
     };
 
     let bs = adapter.get_base();
-    if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-        // Bind to screen framebuffer (0) for final output
-        pix.bind_screen(gl);
-
+    if let Some(pixel_renderer) = &mut bs.gr.pixel_renderer {
         // Handle Retina displays for Winit adapter
         #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
         {
             if let Some(size) = physical_size {
-                unsafe {
-                    use glow::HasContext;
-                    gl.viewport(0, 0, size.width as i32, size.height as i32);
+                // For GlPixelRenderer, we need to access the OpenGL context directly
+                if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                    unsafe {
+                        use glow::HasContext;
+                        let gl = gl_pixel_renderer.get_gl();
+                        gl.viewport(0, 0, size.width as i32, size.height as i32);
+                    }
                 }
             }
         }
 
-        // Create unified render context
-        let mut context = RenderContext::OpenGL { gl };
+        // Bind to screen framebuffer
+        pixel_renderer.bind_render_target(None);
 
-        // Call unified rendering logic
-        if let Err(e) = draw_render_textures_unified(pix, &mut context, ratio_x, ratio_y) {
-            eprintln!("OpenGL draw_render_textures_unified error: {}", e);
+        // Use GlPixelRenderer specific methods to avoid borrowing issues
+        if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+            // Call the self-contained method that doesn't need external context
+            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_self_contained(ratio_x, ratio_y) {
+                eprintln!("OpenGL draw_render_textures_unified error: {}", e);
+            }
         }
     }
 }
@@ -914,15 +892,12 @@ fn draw_render_textures_to_screen_unified_opengl(adapter: &mut dyn Adapter) {
     feature = "wgpu",
     target_arch = "wasm32"
 ))]
-fn draw_render_textures_unified<T>(
-    pixel_renderer: &mut T,
+fn draw_render_textures_unified(
+    pixel_renderer: &mut dyn PixelRenderer,
     context: &mut RenderContext,
     ratio_x: f32,
     ratio_y: f32,
-) -> Result<(), String>
-where
-    T: PixelRenderer,
-{
+) -> Result<(), String> {
     let unified_color = UnifiedColor::white();
 
     // Layer 1: Draw render_texture 2 (main game content)
@@ -1053,21 +1028,19 @@ fn draw_render_buffer_to_texture_unified_opengl(
     }
 
     let bs = adapter.get_base();
-    if let (Some(pix), Some(gl)) = (&mut bs.gr.gl_pixel, &mut bs.gr.gl) {
-        // Create unified render context
-        let mut context = RenderContext::OpenGL { gl };
-
-        // Call unified rendering logic using PixelRenderer interface
-        if let Err(e) = draw_render_buffer_to_texture_unified(
-            pix, 
-            &mut context, 
-            rbuf, 
-            rtidx, 
-            debug,
-            ratio_x,
-            ratio_y,
-        ) {
-            eprintln!("OpenGL draw_render_buffer_to_texture_unified error: {}", e);
+    if let Some(pixel_renderer) = &mut bs.gr.pixel_renderer {
+        // Use GlPixelRenderer specific methods to avoid borrowing issues
+        if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+            // Call the self-contained method that doesn't need external context
+            if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(
+                rbuf, 
+                rtidx, 
+                debug,
+                ratio_x,
+                ratio_y,
+            ) {
+                eprintln!("OpenGL draw_render_buffer_to_texture_unified error: {}", e);
+            }
         }
     }
 }
@@ -1083,18 +1056,15 @@ fn draw_render_buffer_to_texture_unified_opengl(
     feature = "wgpu",
     target_arch = "wasm32"
 ))]
-fn draw_render_buffer_to_texture_unified<T>(
-    pixel_renderer: &mut T,
+fn draw_render_buffer_to_texture_unified(
+    pixel_renderer: &mut dyn PixelRenderer,
     context: &mut RenderContext,
     rbuf: &[RenderCell],
     rtidx: usize,
     debug: bool,
     ratio_x: f32,
     ratio_y: f32,
-) -> Result<(), String>
-where
-    T: PixelRenderer,
-{
+) -> Result<(), String> {
     // Set clear color using unified interface
     let clear_color = if debug {
         UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug

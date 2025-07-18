@@ -179,8 +179,8 @@ impl Render for PetviewRender {
         if !model.tex_ready {
             // Set render texture 3 visible for both modes
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            if let Some(pix) = &mut ctx.adapter.get_base().gr.gl_pixel {
-                pix.set_render_texture_hidden(3, false);
+            if let Some(pixel_renderer) = &mut ctx.adapter.get_base().gr.pixel_renderer {
+                pixel_renderer.set_render_texture_hidden(3, false);
             }
 
             #[cfg(feature = "wgpu")]
@@ -247,12 +247,14 @@ impl Render for PetviewRender {
                     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
                     {
                         let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gr.gl_pixel, &mut sa.gr.gl) {
-                            pix.bind_target(gl, 3);
-                            pix.set_render_texture_hidden(3, false);
-                            let p3 = self.panel.get_pixel_sprite("petimg3");
-                            p3.set_hidden(true);
-                            pix.render_trans_frame(&gl, 0, 1.0);
+                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
+                            // Use GlPixelRenderer specific methods for OpenGL operations
+                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
+                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                                gl_pixel_renderer.render_normal_transition(3);
+                                let p3 = self.panel.get_pixel_sprite("petimg3");
+                                p3.set_hidden(true);
+                            }
                         }
                     }
 
@@ -289,32 +291,35 @@ impl Render for PetviewRender {
                     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
                     {
                         let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gr.gl_pixel, &mut sa.gr.gl) {
-                            pix.bind_target(gl, 3);
-                            pix.set_render_texture_hidden(3, true);
-                            let p4 = self.panel.get_pixel_sprite("petimg4");
-                            let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                            let distortion_fn1 =
-                                |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                            let mut tbuf = p4.content.clone();
-                            let clen = tbuf.content.len();
-                            apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                            let distortion_fn2 =
-                                |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                            apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
+                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
+                            // Use GlPixelRenderer specific methods for OpenGL operations
+                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
+                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                                gl_pixel_renderer.setup_transbuf_rendering(3);
+                                let p4 = self.panel.get_pixel_sprite("petimg4");
+                                let time = (ctx.rand.rand() % 300) as f32 / 100.0;
+                                let distortion_fn1 =
+                                    |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
+                                let mut tbuf = p4.content.clone();
+                                let clen = tbuf.content.len();
+                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
+                                let distortion_fn2 =
+                                    |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
+                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
 
-                            for _ in 0..model.transbuf_stage / 2 {
-                                tbuf.content[ctx.rand.rand() as usize % clen]
-                                    .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                    .set_fg(Color::Rgba(155, 155, 155, 155));
+                                for _ in 0..model.transbuf_stage / 2 {
+                                    tbuf.content[ctx.rand.rand() as usize % clen]
+                                        .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
+                                        .set_fg(Color::Rgba(155, 155, 155, 155));
+                                }
+
+                                let p3 = self.panel.get_pixel_sprite("petimg3");
+                                p3.content = tbuf.clone();
+                                p3.set_alpha(
+                                    ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
+                                );
+                                p3.set_hidden(false);
                             }
-
-                            let p3 = self.panel.get_pixel_sprite("petimg3");
-                            p3.content = tbuf.clone();
-                            p3.set_alpha(
-                                ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
-                            );
-                            p3.set_hidden(false);
                         }
                     }
 
@@ -373,12 +378,14 @@ impl Render for PetviewRender {
                     #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
                     {
                         let sa = ctx.adapter.get_base();
-                        if let (Some(pix), Some(gl)) = (&mut sa.gr.gl_pixel, &mut sa.gr.gl) {
-                            pix.bind_target(gl, 3);
-                            pix.set_render_texture_hidden(3, false);
-                            let p3 = self.panel.get_pixel_sprite("petimg3");
-                            p3.set_hidden(true);
-                            pix.render_trans_frame(&gl, model.trans_effect, model.progress);
+                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
+                            // Use GlPixelRenderer specific methods for OpenGL operations
+                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
+                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                                gl_pixel_renderer.render_gl_transition(3, model.trans_effect, model.progress);
+                                let p3 = self.panel.get_pixel_sprite("petimg3");
+                                p3.set_hidden(true);
+                            }
                         }
                     }
 

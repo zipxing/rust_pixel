@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixel, 
-        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
+        gl::pixel::GlPixelRenderer, Adapter, AdapterBase, 
+        init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -30,7 +30,7 @@ impl WebAdapter {
         }
     }
 
-    pub fn init_glpix(&mut self, texwidth: i32, texheight: i32, tex: &[u8]) {
+    pub fn init_pixels(&mut self, tex: &[u8], texwidth: i32, texheight: i32) {
         PIXEL_SYM_WIDTH
             .set(init_sym_width(texwidth as u32))
             .expect("lazylock init");
@@ -38,16 +38,14 @@ impl WebAdapter {
             .set(init_sym_height(texheight as u32))
             .expect("lazylock init");
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
-        self.base.gr.gl_pixel = Some(GlPixel::new(
-            self.base.gr.gl.as_ref().unwrap(),
-            "#version 300 es",
-            self.base.gr.pixel_w as i32,
-            self.base.gr.pixel_h as i32,
-            texwidth,
-            texheight,
-            tex,
-        ));
-        info!("web glpix init ok...");
+        
+        // Get the OpenGL context from pixel_renderer if it's a GlPixelRenderer
+        if let Some(pixel_renderer) = &mut self.base.gr.pixel_renderer {
+            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                // The texture data is already loaded during init, just log success
+                info!("web glpix init ok...");
+            }
+        }
     }
 }
 
@@ -74,8 +72,40 @@ impl Adapter for WebAdapter {
             .unwrap();
         let gl = glow::Context::from_webgl2_context(webgl2_context);
 
-        // Store the OpenGL context
-        self.base.gr.gl = Some(gl);
+        // Load texture immediately for web mode
+        let teximg = image::open(&format!(
+            "{}{}{}",
+            self.base.project_path,
+            std::path::MAIN_SEPARATOR,
+            PIXEL_TEXTURE_FILE
+        ))
+        .unwrap()
+        .to_rgba8();
+        let texwidth = teximg.width();
+        let texheight = teximg.height();
+
+        // Initialize symbols dimensions
+        PIXEL_SYM_WIDTH
+            .set(init_sym_width(texwidth))
+            .expect("lazylock init");
+        PIXEL_SYM_HEIGHT
+            .set(init_sym_height(texheight))
+            .expect("lazylock init");
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
+
+        // Create unified pixel renderer with owned OpenGL context
+        let gl_pixel_renderer = GlPixelRenderer::new(
+            gl,
+            "#version 300 es",
+            self.base.gr.pixel_w as i32,
+            self.base.gr.pixel_h as i32,
+            texwidth as i32,
+            texheight as i32,
+            &teximg,
+        );
+
+        // Store the unified renderer
+        self.base.gr.pixel_renderer = Some(Box::new(gl_pixel_renderer));
         info!("Window & gl init ok...");
     }
 

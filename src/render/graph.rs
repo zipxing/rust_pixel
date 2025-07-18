@@ -10,9 +10,6 @@ use crate::{
 };
 use std::sync::OnceLock;
 
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-use crate::render::adapter::gl::pixel::GlPixel;
-
 /// 符号纹理文件路径
 ///
 /// 符号纹理包含8x8块，每块包含16x16符号，总共128×128符号。
@@ -225,19 +222,18 @@ pub struct Graph {
     /// rendering data (e.g., Python FFI, WASM exports).
     pub rbuf: Vec<RenderCell>,
 
-    /// OpenGL context handle
+    /// Unified pixel renderer for all graphics backends
     ///
-    /// Provides access to OpenGL functions for rendering operations.
-    /// Uses the glow crate for cross-platform OpenGL abstraction.
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    pub gl: Option<glow::Context>,
-
-    /// OpenGL pixel renderer instance
-    ///
-    /// High-level OpenGL rendering interface that manages shaders,
-    /// textures, and render targets for the pixel-based rendering pipeline.
-    #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-    pub gl_pixel: Option<GlPixel>,
+    /// Stores the active pixel renderer implementation (OpenGL or WGPU)
+    /// through a trait object. This provides a unified interface while
+    /// allowing different backend implementations.
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    pub pixel_renderer: Option<Box<dyn crate::render::pixel_renderer::PixelRenderer>>,
 }
 
 impl Graph {
@@ -254,9 +250,7 @@ impl Graph {
             rflag: true,
             rbuf: Vec::new(),
             #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            gl: None,
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            gl_pixel: None,
+            pixel_renderer: None,
         }
     }
 
