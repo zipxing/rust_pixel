@@ -153,11 +153,7 @@ use crate::{
     util::{Rand, Rect},
 };
 
-#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
-use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
-
-
-
+// UnifiedColor and UnifiedTransform imports removed - each adapter now handles rendering directly
 
 use std::any::Any;
 use std::time::Duration;
@@ -613,36 +609,14 @@ pub trait Adapter {
     where
         Self: Sized,
     {
-        // Try the unified approach first - works for OpenGL cases
-        // Get ratios first to avoid borrowing conflicts
-        let ratio_x;
-        let ratio_y;
-        {
-            let base = self.get_base();
-            ratio_x = base.gr.ratio_x;
-            ratio_y = base.gr.ratio_y;
-        }
-        
-        // Use unified PixelRenderer interface - no more downcast needed!
-        if let Some(pixel_renderer) = self.get_base().gr.pixel_renderer.as_mut() {
-            // Set clear color for debug mode
-            let clear_color = if debug {
-                UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug
-            } else {
-                UnifiedColor::black() // Black for normal
-            };
-            pixel_renderer.set_clear_color(&clear_color);
-            
-            // Call unified rendering method - works for both OpenGL and WGPU
-            if let Err(e) = pixel_renderer.render_symbols_to_texture(rbuf, rtidx, ratio_x, ratio_y) {
-                eprintln!("PixelRenderer render_symbols_to_texture error: {}", e);
-            }
-            return;
-        }
-        
-        // WGPU mode is now handled by WinitWgpuAdapter directly in their own draw_render_buffer_to_texture implementation
-
-        // No OpenGL fallback needed - unified interface handles all cases above
+        // All adapters now implement their own direct rendering methods
+        // This default implementation should never be called since each adapter
+        // overrides this method with their own specialized implementation:
+        // - WinitGlowAdapter: Uses direct gl_pixel_renderer
+        // - WinitWgpuAdapter: Uses direct wgpu_pixel_renderer  
+        // - SdlAdapter: Uses direct gl_pixel_renderer
+        // - WebAdapter: Uses direct gl_pixel_renderer
+        eprintln!("Warning: draw_render_buffer_to_texture called on adapter that hasn't implemented direct rendering");
     }
 
     // buffer to render buffer - unified for both OpenGL and WGPU
@@ -738,13 +712,12 @@ pub trait Adapter {
     where
         Self: Sized,
     {
-                // WGPU mode is now handled by WinitWgpuAdapter directly in their own draw_render_textures_to_screen implementation
-
-        // OpenGL mode implementation using unified PixelRenderer interface
-        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-        {
-            draw_render_textures_to_screen_unified_opengl(self);
-        }
+        // All modes now handled by their respective specialized adapters:
+        // - WinitGlowAdapter: Direct OpenGL rendering
+        // - WinitWgpuAdapter: Direct WGPU rendering  
+        // - SdlAdapter: Direct OpenGL rendering
+        // - WebAdapter: Direct OpenGL rendering
+        // This unified approach is no longer needed
     }
 
     fn as_any(&mut self) -> &mut dyn Any;
@@ -754,62 +727,8 @@ pub trait Adapter {
 
 
 
-/// Unified OpenGL implementation for render texture to screen composition
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-fn draw_render_textures_to_screen_unified_opengl(adapter: &mut dyn Adapter) {
-    let ratio_x;
-    let ratio_y;
-
-    // Get all needed data first to avoid borrowing conflicts
-    {
-        let bs = adapter.get_base();
-        ratio_x = bs.gr.ratio_x;
-        ratio_y = bs.gr.ratio_y;
-    }
-
-    // Physical size handling is now done directly in each specialized adapter's draw_render_textures_to_screen method
-
-    let bs = adapter.get_base();
-    if let Some(pixel_renderer) = &mut bs.gr.pixel_renderer {
-        // Retina display handling is now done in each specialized adapter
-
-        // Bind to screen framebuffer
-        pixel_renderer.bind_render_target(None);
-
-        // Layer 1: Draw render_texture 2 (main game content)
-        if !pixel_renderer.get_render_texture_hidden(2) {
-            let transform = UnifiedTransform::new();
-            let color = UnifiedColor::white();
-            if let Err(e) = pixel_renderer.render_texture_to_screen(2, [0.0, 0.0, 1.0, 1.0], &transform, &color) {
-                eprintln!("Error rendering texture 2 to screen: {}", e);
-            }
-        }
-
-        // Layer 2: Draw render_texture 3 (transition effects and overlays)
-        if !pixel_renderer.get_render_texture_hidden(3) {
-            // Calculate proper scaling for high-DPI displays
-            let (canvas_width, canvas_height) = pixel_renderer.get_canvas_size();
-            let pcw = canvas_width as f32;
-            let pch = canvas_height as f32;
-
-            // Calculate scaled dimensions for transition layer
-            let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
-
-            // Create unified transform with proper scaling
-            let mut transform = UnifiedTransform::new();
-            transform.scale(pw / pcw, ph / pch);
-
-            // Calculate viewport based on graphics API (OpenGL bottom-left origin)
-            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
-
-            let color = UnifiedColor::white();
-            if let Err(e) = pixel_renderer.render_texture_to_screen(3, viewport, &transform, &color) {
-                eprintln!("Error rendering texture 3 to screen: {}", e);
-            }
-        }
-    }
-}
+// draw_render_textures_to_screen_unified_opengl function removed
+// All adapters now implement their own specialized draw_render_textures_to_screen methods
 
 
 

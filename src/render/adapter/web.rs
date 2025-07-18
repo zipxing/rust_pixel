@@ -21,12 +21,16 @@ use std::time::Duration;
 
 pub struct WebAdapter {
     pub base: AdapterBase,
+    
+    // Direct OpenGL pixel renderer - no more trait objects
+    pub gl_pixel_renderer: Option<GlPixelRenderer>,
 }
 
 impl WebAdapter {
     pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(gn, project_path),
+            gl_pixel_renderer: None,
         }
     }
 
@@ -93,7 +97,7 @@ impl Adapter for WebAdapter {
             .expect("lazylock init");
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
-        // Create unified pixel renderer with owned OpenGL context
+        // Create direct OpenGL pixel renderer
         let gl_pixel_renderer = GlPixelRenderer::new(
             gl,
             "#version 300 es",
@@ -104,8 +108,8 @@ impl Adapter for WebAdapter {
             &teximg,
         );
 
-        // Store the unified renderer
-        self.base.gr.pixel_renderer = Some(Box::new(gl_pixel_renderer));
+        // Store the direct renderer - no more trait objects!
+        self.gl_pixel_renderer = Some(gl_pixel_renderer);
         info!("Window & gl init ok...");
     }
 
@@ -144,6 +148,48 @@ impl Adapter for WebAdapter {
 
     fn get_cursor(&mut self) -> Result<(u16, u16), String> {
         Ok((0, 0))
+    }
+
+    /// Direct implementation of draw_render_buffer_to_texture for Web
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
+    where
+        Self: Sized,
+    {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let ratio_x = self.base.gr.ratio_x;
+            let ratio_y = self.base.gr.ratio_y;
+            
+            // Use direct method call - no more trait objects!
+            if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y) {
+                eprintln!("WebAdapter: render_buffer_to_texture error: {}", e);
+            }
+        } else {
+            eprintln!("WebAdapter: gl_pixel_renderer not initialized");
+        }
+    }
+
+    /// Direct implementation of draw_render_textures_to_screen for Web
+    fn draw_render_textures_to_screen(&mut self)
+    where
+        Self: Sized,
+    {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let ratio_x = self.base.gr.ratio_x;
+            let ratio_y = self.base.gr.ratio_y;
+            
+            // Bind to screen framebuffer and render textures
+            gl_pixel_renderer.bind_screen_with_viewport(
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+            );
+            
+            // Use direct method call - no more trait objects!
+            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
+                eprintln!("WebAdapter: render_textures_to_screen error: {}", e);
+            }
+        } else {
+            eprintln!("WebAdapter: gl_pixel_renderer not initialized for texture rendering");
+        }
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

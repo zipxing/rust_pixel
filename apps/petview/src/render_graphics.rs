@@ -192,14 +192,28 @@ impl Render for PetviewRender {
 
             // Set render texture 3 visible for SDL mode
             #[cfg(feature = "sdl")]
-            if let Some(pixel_renderer) = &mut ctx.adapter.get_base().gr.pixel_renderer {
-                pixel_renderer.set_render_texture_hidden(3, false);
+            {
+                use rust_pixel::render::adapter::sdl::SdlAdapter;
+                use std::any::Any;
+                
+                if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
+                    if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
+                        gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(3, false);
+                    }
+                }
             }
 
             // Set render texture 3 visible for Web mode
             #[cfg(target_arch = "wasm32")]
-            if let Some(pixel_renderer) = &mut ctx.adapter.get_base().gr.pixel_renderer {
-                pixel_renderer.set_render_texture_hidden(3, false);
+            {
+                use rust_pixel::render::adapter::web::WebAdapter;
+                use std::any::Any;
+                
+                if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
+                    if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
+                        gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(3, false);
+                    }
+                }
             }
 
             #[cfg(feature = "wgpu")]
@@ -276,13 +290,14 @@ impl Render for PetviewRender {
                         }
                     }
 
-                    // SDL mode (保持原有逻辑)
+                    // SDL mode - 直接访问SdlAdapter
                     #[cfg(feature = "sdl")]
                     {
-                        let sa = ctx.adapter.get_base();
-                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
-                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
-                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                        use rust_pixel::render::adapter::sdl::SdlAdapter;
+                        use std::any::Any;
+
+                        if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
+                            if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
                                 gl_pixel_renderer.render_normal_transition(3);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
@@ -290,13 +305,14 @@ impl Render for PetviewRender {
                         }
                     }
 
-                    // Web mode (保持原有逻辑)
+                    // Web mode - 直接访问WebAdapter
                     #[cfg(target_arch = "wasm32")]
                     {
-                        let sa = ctx.adapter.get_base();
-                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
-                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
-                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                        use rust_pixel::render::adapter::web::WebAdapter;
+                        use std::any::Any;
+
+                        if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
+                            if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
                                 gl_pixel_renderer.render_normal_transition(3);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
@@ -367,13 +383,14 @@ impl Render for PetviewRender {
                         }
                     }
 
-                    // SDL mode - complex distortion effects
+                    // SDL mode - complex distortion effects - 直接访问SdlAdapter
                     #[cfg(feature = "sdl")]
                     {
-                        let sa = ctx.adapter.get_base();
-                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
-                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
-                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                        use rust_pixel::render::adapter::sdl::SdlAdapter;
+                        use std::any::Any;
+
+                        if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
+                            if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
                                 gl_pixel_renderer.setup_transbuf_rendering(3);
                                 let p4 = self.panel.get_pixel_sprite("petimg4");
                                 let time = (ctx.rand.rand() % 300) as f32 / 100.0;
@@ -402,13 +419,14 @@ impl Render for PetviewRender {
                         }
                     }
 
-                    // Web mode (保持原有逻辑)
+                    // Web mode - complex distortion effects - 直接访问WebAdapter
                     #[cfg(target_arch = "wasm32")]
                     {
-                        let sa = ctx.adapter.get_base();
-                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
-                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
-                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                        use rust_pixel::render::adapter::web::WebAdapter;
+                        use std::any::Any;
+
+                        if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
+                            if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
                                 gl_pixel_renderer.setup_transbuf_rendering(3);
                                 let p4 = self.panel.get_pixel_sprite("petimg4");
                                 let time = (ctx.rand.rand() % 300) as f32 / 100.0;
@@ -503,13 +521,14 @@ impl Render for PetviewRender {
                         }
                     }
 
-                    // SDL mode
+                    // SDL mode - 直接访问SdlAdapter
                     #[cfg(feature = "sdl")]
                     {
-                        let sa = ctx.adapter.get_base();
-                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
-                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
-                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                        use rust_pixel::render::adapter::sdl::SdlAdapter;
+                        use std::any::Any;
+
+                        if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
+                            if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
                                 gl_pixel_renderer.render_gl_transition(3, model.trans_effect, model.progress);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);
@@ -517,13 +536,14 @@ impl Render for PetviewRender {
                         }
                     }
 
-                    // Web mode (保持原有逻辑)
+                    // Web mode - 直接访问WebAdapter
                     #[cfg(target_arch = "wasm32")]
                     {
-                        let sa = ctx.adapter.get_base();
-                        if let Some(pixel_renderer) = &mut sa.gr.pixel_renderer {
-                            use rust_pixel::render::adapter::gl::pixel::GlPixelRenderer;
-                            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                        use rust_pixel::render::adapter::web::WebAdapter;
+                        use std::any::Any;
+
+                        if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
+                            if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
                                 gl_pixel_renderer.render_gl_transition(3, model.trans_effect, model.progress);
                                 let p3 = self.panel.get_pixel_sprite("petimg3");
                                 p3.set_hidden(true);

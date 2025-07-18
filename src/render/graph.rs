@@ -222,18 +222,7 @@ pub struct Graph {
     /// rendering data (e.g., Python FFI, WASM exports).
     pub rbuf: Vec<RenderCell>,
 
-    /// Unified pixel renderer for all graphics backends
-    ///
-    /// Stores the active pixel renderer implementation (OpenGL or WGPU)
-    /// through a trait object. This provides a unified interface while
-    /// allowing different backend implementations.
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit", 
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    pub pixel_renderer: Option<Box<dyn crate::render::pixel_renderer::PixelRenderer>>,
+    // pixel_renderer field removed - all adapters now use direct renderers
 }
 
 impl Graph {
@@ -249,8 +238,7 @@ impl Graph {
             ratio_y: 1.0,
             rflag: true,
             rbuf: Vec::new(),
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            pixel_renderer: None,
+            // pixel_renderer field removed - all adapters now use direct renderers
         }
     }
 
