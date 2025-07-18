@@ -34,7 +34,7 @@
 use crate::event::Event;
 use crate::render::{
     adapter::{
-        generate_render_buffer, init_sym_height, init_sym_width, Adapter, AdapterBase,
+        init_sym_height, init_sym_width, Adapter, AdapterBase,
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
@@ -1270,46 +1270,15 @@ impl Adapter for WinitWgpuAdapter {
         stage: u32,
     ) -> Result<(), String> {
         // 处理窗口拖拽移动
-        if self.drag.need {
-            self.drag.need = false;
-            if let Some(window) = &self.window {
-                if let Ok(current_pos) = window.outer_position() {
-                    let new_pos = winit::dpi::PhysicalPosition::new(
-                        current_pos.x + self.drag.dx as i32,
-                        current_pos.y + self.drag.dy as i32,
-                    );
-                    let _ = window.set_outer_position(new_pos);
-                }
-            }
-        }
+        winit_move_win(
+            &mut self.drag.need,
+            self.window.as_ref().map(|v| &**v),
+            self.drag.dx,
+            self.drag.dy,
+        );
 
-        // 执行WGPU渲染 - 直接在这里实现渲染逻辑
-        if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
-            // Pass 1: Convert game data to render buffer
-            let rbuf = generate_render_buffer(
-                current_buffer,
-                previous_buffer,
-                pixel_sprites,
-                stage,
-                &mut self.base,
-            );
-
-            // Pass 2: Render to screen using WGPU
-            if self.base.gr.rflag {
-                // 1. 渲染到render texture 2 (主场景)
-                if let Err(e) = self.draw_render_buffer_to_texture_wgpu(&rbuf, 2, false) {
-                    eprintln!("Failed to render buffer to texture: {}", e);
-                }
-
-                // 2. 将render texture合成到屏幕
-                if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
-                    eprintln!("Failed to render textures to screen: {}", e);
-                }
-            } else {
-                // Buffered mode: Store render data for external access
-                self.base.gr.rbuf = rbuf;
-            }
-        }
+        // 使用统一的图形渲染流程 - 与SdlAdapter和WinitGlowAdapter保持一致
+        self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
 
         self.post_draw();
         Ok(())
