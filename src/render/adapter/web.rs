@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixelRenderer, Adapter, AdapterBase, 
-        init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+        gl::pixel::GlPixelRenderer, 
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -24,6 +24,9 @@ pub struct WebAdapter {
     
     // Direct OpenGL pixel renderer - no more trait objects
     pub gl_pixel_renderer: Option<GlPixelRenderer>,
+    
+    // OpenGL context for web (needed for init_glpix)
+    pub gl: Option<glow::Context>,
 }
 
 impl WebAdapter {
@@ -31,10 +34,11 @@ impl WebAdapter {
         Self {
             base: AdapterBase::new(gn, project_path),
             gl_pixel_renderer: None,
+            gl: None,
         }
     }
 
-    pub fn init_pixels(&mut self, tex: &[u8], texwidth: i32, texheight: i32) {
+    pub fn init_glpix(&mut self, texwidth: i32, texheight: i32, tex: &[u8]) {
         PIXEL_SYM_WIDTH
             .set(init_sym_width(texwidth as u32))
             .expect("lazylock init");
@@ -43,13 +47,21 @@ impl WebAdapter {
             .expect("lazylock init");
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
         
-        // Get the OpenGL context from pixel_renderer if it's a GlPixelRenderer
-        if let Some(pixel_renderer) = &mut self.base.gr.pixel_renderer {
-            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
-                // The texture data is already loaded during init, just log success
-                info!("web glpix init ok...");
-            }
+        // Create direct OpenGL pixel renderer - no more trait objects!
+        // We need to take ownership of the GL context
+        if let Some(gl) = self.gl.take() {
+            let gl_pixel_renderer = GlPixelRenderer::new(
+                gl,
+                "#version 300 es",
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+                texwidth,
+                texheight,
+                tex,
+            );
+            self.gl_pixel_renderer = Some(gl_pixel_renderer);
         }
+        info!("web glpix init ok...");
     }
 }
 
@@ -76,40 +88,8 @@ impl Adapter for WebAdapter {
             .unwrap();
         let gl = glow::Context::from_webgl2_context(webgl2_context);
 
-        // Load texture immediately for web mode
-        let teximg = image::open(&format!(
-            "{}{}{}",
-            self.base.project_path,
-            std::path::MAIN_SEPARATOR,
-            PIXEL_TEXTURE_FILE
-        ))
-        .unwrap()
-        .to_rgba8();
-        let texwidth = teximg.width();
-        let texheight = teximg.height();
-
-        // Initialize symbols dimensions
-        PIXEL_SYM_WIDTH
-            .set(init_sym_width(texwidth))
-            .expect("lazylock init");
-        PIXEL_SYM_HEIGHT
-            .set(init_sym_height(texheight))
-            .expect("lazylock init");
-        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
-
-        // Create direct OpenGL pixel renderer
-        let gl_pixel_renderer = GlPixelRenderer::new(
-            gl,
-            "#version 300 es",
-            self.base.gr.pixel_w as i32,
-            self.base.gr.pixel_h as i32,
-            texwidth as i32,
-            texheight as i32,
-            &teximg,
-        );
-
-        // Store the direct renderer - no more trait objects!
-        self.gl_pixel_renderer = Some(gl_pixel_renderer);
+        // Store the OpenGL context
+        self.gl = Some(gl);
         info!("Window & gl init ok...");
     }
 
@@ -122,6 +102,8 @@ impl Adapter for WebAdapter {
     fn poll_event(&mut self, _timeout: Duration, _es: &mut Vec<Event>) -> bool {
         false
     }
+
+
 
     fn draw_all(
         &mut self,
@@ -190,6 +172,11 @@ impl Adapter for WebAdapter {
         } else {
             eprintln!("WebAdapter: gl_pixel_renderer not initialized for texture rendering");
         }
+    }
+
+    fn post_draw(&mut self) {
+        // For WebGL, buffer swapping is handled automatically by the browser
+        // No explicit action needed here
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
