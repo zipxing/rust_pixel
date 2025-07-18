@@ -34,7 +34,7 @@
 use crate::event::Event;
 use crate::render::{
     adapter::{
-        generate_render_buffer, init_sym_height, init_sym_width, Adapter, AdapterBase,
+        init_sym_height, init_sym_width, Adapter, AdapterBase,
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
@@ -840,81 +840,15 @@ impl Adapter for WinitGlowAdapter {
         stage: u32,
     ) -> Result<(), String> {
         // 处理窗口拖拽移动
-        if self.drag.need {
-            self.drag.need = false;
-            if let Some(window) = &self.window {
-                if let Ok(current_pos) = window.outer_position() {
-                    let new_pos = winit::dpi::PhysicalPosition::new(
-                        current_pos.x + self.drag.dx as i32,
-                        current_pos.y + self.drag.dy as i32,
-                    );
-                    let _ = window.set_outer_position(new_pos);
-                }
-            }
-        }
+        winit_move_win(
+            &mut self.drag.need,
+            self.window.as_ref().map(|v| &**v),
+            self.drag.dx,
+            self.drag.dy,
+        );
 
-        // 执行OpenGL渲染 - 直接在这里实现渲染逻辑
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            // Pass 1: Convert game data to render buffer
-            let rbuf = generate_render_buffer(
-                current_buffer,
-                previous_buffer,
-                pixel_sprites,
-                stage,
-                &mut self.base,
-            );
-
-            // Pass 2: Render to screen using direct OpenGL calls
-            if self.base.gr.rflag {
-                // 1. 渲染到render texture 2 (主场景)
-                let ratio_x = self.base.gr.ratio_x;
-                let ratio_y = self.base.gr.ratio_y;
-                if let Err(e) = gl_pixel_renderer
-                    .render_buffer_to_texture_self_contained(&rbuf, 2, false, ratio_x, ratio_y)
-                {
-                    eprintln!("Failed to render buffer to texture: {}", e);
-                }
-
-                // 2. 将render texture合成到屏幕
-                let physical_size = if let Some(window) = &self.window {
-                    Some(window.inner_size())
-                } else {
-                    None
-                };
-
-                // 绑定屏幕并设置viewport (处理Retina显示)
-                if let Some(physical_size) = physical_size {
-                    gl_pixel_renderer.bind_screen_with_viewport(
-                        physical_size.width as i32,
-                        physical_size.height as i32,
-                    );
-                } else {
-                    // Fallback: bind screen normally
-                    gl_pixel_renderer
-                        .gl_pixel
-                        .bind_screen(&gl_pixel_renderer.gl);
-                }
-
-                // 清屏
-                use glow::HasContext;
-                let gl = gl_pixel_renderer.get_gl();
-                unsafe {
-                    gl.clear_color(0.0, 0.0, 0.0, 1.0);
-                    gl.clear(glow::COLOR_BUFFER_BIT);
-                }
-
-                // 渲染textures到屏幕
-                if let Err(e) =
-                    gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y)
-                {
-                    eprintln!("Failed to render textures to screen: {}", e);
-                }
-            } else {
-                // Buffered mode: Store render data for external access
-                self.base.gr.rbuf = rbuf;
-            }
-        }
-
+        // 使用统一的图形渲染流程 - 与SdlAdapter保持一致
+        self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
         self.post_draw();
         Ok(())
     }
