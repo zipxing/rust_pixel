@@ -248,9 +248,9 @@ pub trait PixelRenderer {
     ///
     /// This method renders a render texture to the current render target
     /// with specified area mapping, transformation, and color modulation.
+    /// Each implementation manages its own rendering context internally.
     ///
     /// # Parameters
-    /// - `context`: Backend-specific rendering context
     /// - `rtidx`: Render texture index (0-3)
     /// - `area`: Texture area mapping [x, y, width, height] in texture coordinates (0.0-1.0)
     /// - `transform`: 2D transformation matrix
@@ -260,7 +260,6 @@ pub trait PixelRenderer {
     /// Result indicating success or rendering error
     fn render_texture_to_screen(
         &mut self,
-        context: &mut RenderContext,
         rtidx: usize,
         area: [f32; 4],
         transform: &UnifiedTransform,
@@ -270,9 +269,9 @@ pub trait PixelRenderer {
     /// Render transition frame with effects
     ///
     /// Applies transition effects between render textures using specialized shaders.
+    /// Each implementation manages its own rendering context internally.
     ///
     /// # Parameters
-    /// - `context`: Backend-specific rendering context
     /// - `shader_idx`: Transition shader index (0-6 for different effects)
     /// - `progress`: Transition progress (0.0 = start, 1.0 = end)
     ///
@@ -280,7 +279,6 @@ pub trait PixelRenderer {
     /// Result indicating success or rendering error
     fn render_transition_frame(
         &mut self,
-        context: &mut RenderContext,
         shader_idx: usize,
         progress: f32,
     ) -> Result<(), String>;
@@ -307,10 +305,9 @@ pub trait PixelRenderer {
     /// Render symbol buffer to specified render texture
     ///
     /// This method renders RenderCell data to a specific render texture using
-    /// the symbols rendering pipeline.
+    /// the symbols rendering pipeline. Each implementation manages its own rendering context internally.
     ///
     /// # Parameters
-    /// - `context`: Backend-specific rendering context
     /// - `rbuf`: RenderCell data array
     /// - `rtidx`: Target render texture index
     /// - `ratio_x`: Horizontal scaling ratio
@@ -320,7 +317,6 @@ pub trait PixelRenderer {
     /// Result indicating success or rendering error
     fn render_symbols_to_texture(
         &mut self,
-        context: &mut RenderContext,
         rbuf: &[crate::render::graph::RenderCell],
         rtidx: usize,
         ratio_x: f32,
@@ -335,9 +331,8 @@ pub trait PixelRenderer {
     
     /// Clear current render target
     ///
-    /// # Parameters
-    /// - `context`: Backend-specific rendering context
-    fn clear(&mut self, context: &mut RenderContext);
+    /// Each implementation manages its own rendering context internally.
+    fn clear(&mut self);
     
     /// Bind render texture as current render target
     ///

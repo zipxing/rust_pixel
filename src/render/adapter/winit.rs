@@ -1172,20 +1172,16 @@ impl WinitAdapter {
                 // clear_pass自动drop
             }
 
-            // 绘制render texture 2（主缓冲区）到屏幕 - 使用统一接口
+            // 绘制render texture 2（主缓冲区）到屏幕 - 使用底层WGPU方法
             if !pixel_renderer.get_render_texture_hidden(2) {
                 let unified_transform = UnifiedTransform::new();
                 let unified_color = UnifiedColor::white();
-                let mut context = RenderContext::Wgpu {
+
+                pixel_renderer.render_texture_to_screen_impl(
                     device,
                     queue,
-                    encoder: &mut screen_encoder,
-                    view: Some(&view),
-                };
-
-                PixelRenderer::render_texture_to_screen(
-                    pixel_renderer,
-                    &mut context,
+                    &mut screen_encoder,
+                    &view,
                     2,                    // render texture 2
                     [0.0, 0.0, 1.0, 1.0], // 全屏区域
                     &unified_transform,
@@ -1207,16 +1203,12 @@ impl WinitAdapter {
                 let mut unified_transform = UnifiedTransform::new();
                 unified_transform.scale(pw / pcw, ph / pch);
                 let unified_color = UnifiedColor::white();
-                let mut context = RenderContext::Wgpu {
+
+                pixel_renderer.render_texture_to_screen_impl(
                     device,
                     queue,
-                    encoder: &mut screen_encoder,
-                    view: Some(&view),
-                };
-
-                PixelRenderer::render_texture_to_screen(
-                    pixel_renderer,
-                    &mut context,
+                    &mut screen_encoder,
+                    &view,
                     3,                                          // render texture 3
                     [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // 游戏区域，WGPU Y轴从顶部开始
                     &unified_transform,

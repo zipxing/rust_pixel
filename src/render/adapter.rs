@@ -604,24 +604,21 @@ pub trait Adapter {
             ratio_y = base.gr.ratio_y;
         }
         
-        // Check if we have a PixelRenderer that supports the unified interface
+        // Use unified PixelRenderer interface - no more downcast needed!
         if let Some(pixel_renderer) = self.get_base().gr.pixel_renderer.as_mut() {
-            use crate::render::adapter::gl::pixel::GlPixelRenderer;
+            // Set clear color for debug mode
+            let clear_color = if debug {
+                UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug
+            } else {
+                UnifiedColor::black() // Black for normal
+            };
+            pixel_renderer.set_clear_color(&clear_color);
             
-            // For GlPixelRenderer, we can use its self-contained method
-            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
-                // Use GlPixelRenderer's self-contained method that doesn't need external context
-                if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(
-                    rbuf, 
-                    rtidx, 
-                    debug,
-                    ratio_x,
-                    ratio_y,
-                ) {
-                    eprintln!("GlPixelRenderer render_buffer_to_texture_self_contained error: {}", e);
-                }
-                return;
+            // Call unified rendering method - works for both OpenGL and WGPU
+            if let Err(e) = pixel_renderer.render_symbols_to_texture(rbuf, rtidx, ratio_x, ratio_y) {
+                eprintln!("PixelRenderer render_symbols_to_texture error: {}", e);
             }
+            return;
         }
         
         // Fallback to old method for WGPU complex cases that need special CommandEncoder handling
@@ -641,11 +638,7 @@ pub trait Adapter {
             }
         }
 
-        // Final fallback for OpenGL
-        #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-        {
-            draw_render_buffer_to_texture_unified_opengl(self, rbuf, rtidx, debug);
-        }
+        // No OpenGL fallback needed - unified interface handles all cases above
     }
 
     // buffer to render buffer - unified for both OpenGL and WGPU
@@ -835,18 +828,13 @@ fn draw_render_textures_to_screen_unified_wgpu(
         });
     }
 
-    // Create unified render context
-    let mut context = RenderContext::Wgpu {
+    // Call WGPU-specific rendering logic
+    draw_render_textures_unified_wgpu(
+        pixel_renderer,
         device,
         queue,
-        encoder: &mut screen_encoder,
-        view: Some(&view),
-    };
-
-    // Call unified rendering logic
-    draw_render_textures_unified(
-        pixel_renderer,
-        &mut context,
+        &mut screen_encoder,
+        &view,
         winit_adapter.base.gr.ratio_x,
         winit_adapter.base.gr.ratio_y,
     )?;
@@ -903,41 +891,65 @@ fn draw_render_textures_to_screen_unified_opengl(adapter: &mut dyn Adapter) {
         // Bind to screen framebuffer
         pixel_renderer.bind_render_target(None);
 
-        // Use GlPixelRenderer specific methods to avoid borrowing issues
-        if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
-            // Call the self-contained method that doesn't need external context
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_self_contained(ratio_x, ratio_y) {
-                eprintln!("OpenGL draw_render_textures_unified error: {}", e);
+        // Layer 1: Draw render_texture 2 (main game content)
+        if !pixel_renderer.get_render_texture_hidden(2) {
+            let transform = UnifiedTransform::new();
+            let color = UnifiedColor::white();
+            if let Err(e) = pixel_renderer.render_texture_to_screen(2, [0.0, 0.0, 1.0, 1.0], &transform, &color) {
+                eprintln!("Error rendering texture 2 to screen: {}", e);
+            }
+        }
+
+        // Layer 2: Draw render_texture 3 (transition effects and overlays)
+        if !pixel_renderer.get_render_texture_hidden(3) {
+            // Calculate proper scaling for high-DPI displays
+            let (canvas_width, canvas_height) = pixel_renderer.get_canvas_size();
+            let pcw = canvas_width as f32;
+            let pch = canvas_height as f32;
+
+            // Calculate scaled dimensions for transition layer
+            let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+
+            // Create unified transform with proper scaling
+            let mut transform = UnifiedTransform::new();
+            transform.scale(pw / pcw, ph / pch);
+
+            // Calculate viewport based on graphics API (OpenGL bottom-left origin)
+            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
+
+            let color = UnifiedColor::white();
+            if let Err(e) = pixel_renderer.render_texture_to_screen(3, viewport, &transform, &color) {
+                eprintln!("Error rendering texture 3 to screen: {}", e);
             }
         }
     }
 }
 
-/// Unified rendering logic for both WGPU and OpenGL modes
+/// WGPU-specific rendering logic for screen composition
 ///
-/// This method contains the core rendering logic that is shared between
-/// WGPU and OpenGL implementations. It draws render textures to screen
-/// using the unified PixelRenderer interface.
-#[cfg(any(
-    feature = "sdl",
-    feature = "winit",
-    feature = "wgpu",
-    target_arch = "wasm32"
-))]
-fn draw_render_textures_unified(
-    pixel_renderer: &mut dyn PixelRenderer,
-    context: &mut RenderContext,
+/// This function handles WGPU screen composition using direct calls to WgpuPixelRender
+/// methods since WGPU requires external CommandEncoder management.
+#[cfg(feature = "wgpu")]
+fn draw_render_textures_unified_wgpu(
+    wgpu_pixel_renderer: &mut crate::render::adapter::wgpu::pixel::WgpuPixelRender,
+    device: &::wgpu::Device,
+    queue: &::wgpu::Queue,
+    encoder: &mut ::wgpu::CommandEncoder,
+    view: &::wgpu::TextureView,
     ratio_x: f32,
     ratio_y: f32,
 ) -> Result<(), String> {
     let unified_color = UnifiedColor::white();
 
     // Layer 1: Draw render_texture 2 (main game content)
-    // Contains: characters, sprites, borders, logo
-    if !pixel_renderer.get_render_texture_hidden(2) {
+    if !wgpu_pixel_renderer.get_render_texture_hidden(2) {
         let unified_transform = UnifiedTransform::new();
-        pixel_renderer.render_texture_to_screen(
-            context,
+        wgpu_pixel_renderer.render_texture_to_screen_impl(
+            device,
+            queue,
+            encoder,
+            view,
             2,
             [0.0, 0.0, 1.0, 1.0], // Full-screen quad
             &unified_transform,
@@ -946,15 +958,13 @@ fn draw_render_textures_unified(
     }
 
     // Layer 2: Draw render_texture 3 (transition effects and overlays)
-    // Contains: transition effects, visual overlays, special effects
-    if !pixel_renderer.get_render_texture_hidden(3) {
+    if !wgpu_pixel_renderer.get_render_texture_hidden(3) {
         // Calculate proper scaling for high-DPI displays
-        let (canvas_width, canvas_height) = pixel_renderer.get_canvas_size();
-        let pcw = canvas_width as f32; // Physical canvas width
-        let pch = canvas_height as f32; // Physical canvas height
+        let (canvas_width, canvas_height) = wgpu_pixel_renderer.get_canvas_size();
+        let pcw = canvas_width as f32;
+        let pch = canvas_height as f32;
 
         // Calculate scaled dimensions for transition layer
-        // Use actual game area dimensions instead of hardcoded 40x25
         let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
         let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
 
@@ -962,20 +972,19 @@ fn draw_render_textures_unified(
         let mut unified_transform = UnifiedTransform::new();
         unified_transform.scale(pw / pcw, ph / pch);
 
-        // Calculate viewport based on graphics API
-        let viewport = match context {
-            RenderContext::OpenGL { .. } => {
-                // OpenGL Y-axis: bottom-left origin
-                [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch]
-            }
-            #[cfg(feature = "wgpu")]
-            RenderContext::Wgpu { .. } => {
-                // WGPU Y-axis: top-left origin
-                [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch]
-            }
-        };
+        // WGPU Y-axis: top-left origin
+        let viewport = [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch];
 
-        pixel_renderer.render_texture_to_screen(context, 3, viewport, &unified_transform, &unified_color)?;
+        wgpu_pixel_renderer.render_texture_to_screen_impl(
+            device,
+            queue,
+            encoder,
+            view,
+            3,
+            viewport,
+            &unified_transform,
+            &unified_color,
+        )?;
     }
 
     Ok(())
@@ -1012,28 +1021,27 @@ fn draw_render_buffer_to_texture_unified_wgpu(
         label: Some(&format!("Render Buffer to RT{} Encoder", rtidx)),
     });
 
-    // Create unified render context (no view needed for render to texture)
-    let mut context = RenderContext::Wgpu {
-        device,
-        queue,
-        encoder: &mut encoder,
-        view: None,
-    };
-
     // Get ratios for rendering
     let ratio_x = winit_adapter.base.gr.ratio_x;
     let ratio_y = winit_adapter.base.gr.ratio_y;
 
-    // Call unified rendering logic using PixelRenderer interface
-    draw_render_buffer_to_texture_unified(
-        pixel_renderer,
-        &mut context,
-        rbuf,
-        rtidx,
-        debug,
-        ratio_x,
-        ratio_y,
-    )?;
+    // Use WGPU-specific methods directly instead of unified interface
+    // Set clear color for debug mode
+    let clear_color = if debug {
+        UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug
+    } else {
+        UnifiedColor::black() // Black for normal
+    };
+    pixel_renderer.set_clear_color(clear_color);
+
+    // Bind target render texture
+    pixel_renderer.bind_target(rtidx);
+
+    // Render RenderCell data to current target using WGPU-specific method
+    pixel_renderer.render_rbuf(device, queue, rbuf, ratio_x, ratio_y);
+
+    // Execute rendering to current target (render texture)
+    pixel_renderer.render_to_current_target(&mut encoder, None)?;
 
     // Submit commands
     queue.submit(std::iter::once(encoder.finish()));
@@ -1041,47 +1049,13 @@ fn draw_render_buffer_to_texture_unified_wgpu(
     Ok(())
 }
 
-/// Unified OpenGL implementation for render buffer to texture composition
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-fn draw_render_buffer_to_texture_unified_opengl(
-    adapter: &mut dyn Adapter,
-    rbuf: &[RenderCell],
-    rtidx: usize,
-    debug: bool,
-) {
-    let ratio_x;
-    let ratio_y;
-
-    // Get all needed data first to avoid borrowing conflicts
-    {
-        let bs = adapter.get_base();
-        ratio_x = bs.gr.ratio_x;
-        ratio_y = bs.gr.ratio_y;
-    }
-
-    let bs = adapter.get_base();
-    if let Some(pixel_renderer) = &mut bs.gr.pixel_renderer {
-        // Use GlPixelRenderer specific methods to avoid borrowing issues
-        if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
-            // Call the self-contained method that doesn't need external context
-            if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(
-                rbuf, 
-                rtidx, 
-                debug,
-                ratio_x,
-                ratio_y,
-            ) {
-                eprintln!("OpenGL draw_render_buffer_to_texture_unified error: {}", e);
-            }
-        }
-    }
-}
+// Removed draw_render_buffer_to_texture_unified_opengl - unified interface handles both OpenGL and WGPU
 
 /// Unified rendering logic for render buffer to texture - both WGPU and OpenGL modes
 ///
 /// This method contains the core rendering logic that is shared between
 /// WGPU and OpenGL implementations. It renders RenderCell data to a render texture
-/// using the unified PixelRenderer interface.
+/// using the unified PixelRenderer interface with simplified parameters.
 #[cfg(any(
     feature = "sdl",
     feature = "winit",
@@ -1090,7 +1064,6 @@ fn draw_render_buffer_to_texture_unified_opengl(
 ))]
 fn draw_render_buffer_to_texture_unified(
     pixel_renderer: &mut dyn PixelRenderer,
-    context: &mut RenderContext,
     rbuf: &[RenderCell],
     rtidx: usize,
     debug: bool,
@@ -1105,14 +1078,9 @@ fn draw_render_buffer_to_texture_unified(
     };
     pixel_renderer.set_clear_color(&clear_color);
 
-    // Note: We don't call bind_render_target here because:
-    // 1. GlPixel's bind_render_target is not properly implemented (it's empty)
-    // 2. render_symbols_to_texture already handles binding internally
-    // 3. This keeps the implementation consistent with existing working code
-
-    // Render symbols to texture using unified interface
-    // This method handles binding, clearing, and rendering internally
-    pixel_renderer.render_symbols_to_texture(context, rbuf, rtidx, ratio_x, ratio_y)?;
+    // Render symbols to texture using simplified unified interface
+    // Each implementation manages its own rendering context internally
+    pixel_renderer.render_symbols_to_texture(rbuf, rtidx, ratio_x, ratio_y)?;
 
     Ok(())
 }

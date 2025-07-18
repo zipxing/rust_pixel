@@ -238,38 +238,24 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
     
     fn render_texture_to_screen(
         &mut self,
-        context: &mut crate::render::pixel_renderer::RenderContext,
         rtidx: usize,
         area: [f32; 4],
         transform: &crate::render::pixel_renderer::UnifiedTransform,
         color: &crate::render::pixel_renderer::UnifiedColor,
     ) -> Result<(), String> {
-        match context {
-            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
-                // Use unified types directly
-                self.render_texture_to_screen_impl(*gl, rtidx, area, transform, color);
-                Ok(())
-            }
-            #[cfg(feature = "wgpu")]
-            _ => Err("Invalid context type for OpenGL renderer".to_string()),
-        }
+        // GlPixel doesn't own OpenGL context, so this should not be called directly
+        // Use GlPixelRenderer instead which owns the context
+        Err("GlPixel doesn't own OpenGL context - use GlPixelRenderer for rendering methods".to_string())
     }
     
     fn render_transition_frame(
         &mut self,
-        context: &mut crate::render::pixel_renderer::RenderContext,
         shader_idx: usize,
         progress: f32,
     ) -> Result<(), String> {
-        match context {
-            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
-                // Use existing OpenGL implementation
-                self.render_trans_frame(*gl, shader_idx, progress);
-                Ok(())
-            }
-            #[cfg(feature = "wgpu")]
-            _ => Err("Invalid context type for OpenGL renderer".to_string()),
-        }
+        // GlPixel doesn't own OpenGL context, so this should not be called directly
+        // Use GlPixelRenderer instead which owns the context
+        Err("GlPixel doesn't own OpenGL context - use GlPixelRenderer for rendering methods".to_string())
     }
     
     fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
@@ -288,44 +274,24 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
     
     fn render_symbols_to_texture(
         &mut self,
-        context: &mut crate::render::pixel_renderer::RenderContext,
         rbuf: &[crate::render::graph::RenderCell],
         rtidx: usize,
         ratio_x: f32,
         ratio_y: f32,
     ) -> Result<(), String> {
-        match context {
-            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
-                // Bind the target render texture
-                self.bind_target(*gl, rtidx);
-                
-                // Clear the target
-                self.clear(*gl);
-                
-                // Render symbols to the bound target
-                self.render_rbuf(*gl, rbuf, ratio_x, ratio_y);
-                
-                Ok(())
-            }
-            #[cfg(feature = "wgpu")]
-            _ => Err("Invalid context type for OpenGL renderer".to_string()),
-        }
+        // GlPixel doesn't own OpenGL context, so this should not be called directly
+        // Use GlPixelRenderer instead which owns the context
+        Err("GlPixel doesn't own OpenGL context - use GlPixelRenderer for rendering methods".to_string())
     }
     
     fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
         self.set_clear_color(*color);
     }
     
-    fn clear(&mut self, context: &mut crate::render::pixel_renderer::RenderContext) {
-        match context {
-            crate::render::pixel_renderer::RenderContext::OpenGL { gl } => {
-                self.clear(*gl);
-            }
-            #[cfg(feature = "wgpu")]
-            _ => {
-                // Invalid context for OpenGL renderer, but don't error
-            }
-        }
+    fn clear(&mut self) {
+        // GlPixel doesn't own OpenGL context, so this should not be called directly
+        // Use GlPixelRenderer instead which owns the context
+        panic!("GlPixel doesn't own OpenGL context - use GlPixelRenderer for clear method");
     }
     
     fn bind_render_target(&mut self, rtidx: Option<usize>) {
@@ -348,26 +314,24 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixelRenderer {
     
     fn render_texture_to_screen(
         &mut self,
-        _context: &mut crate::render::pixel_renderer::RenderContext,
         rtidx: usize,
         area: [f32; 4],
         transform: &crate::render::pixel_renderer::UnifiedTransform,
         color: &crate::render::pixel_renderer::UnifiedColor,
     ) -> Result<(), String> {
-        // For GlPixelRenderer, we ignore the context parameter and use our owned context
-        let mut gl_context = crate::render::pixel_renderer::RenderContext::OpenGL { gl: &self.gl };
-        self.gl_pixel.render_texture_to_screen(&mut gl_context, rtidx, area, transform, color)
+        // Use internal OpenGL context directly
+        self.gl_pixel.render_texture_to_screen_impl(&self.gl, rtidx, area, transform, color);
+        Ok(())
     }
     
     fn render_transition_frame(
         &mut self,
-        _context: &mut crate::render::pixel_renderer::RenderContext,
         shader_idx: usize,
         progress: f32,
     ) -> Result<(), String> {
-        // For GlPixelRenderer, we ignore the context parameter and use our owned context
-        let mut gl_context = crate::render::pixel_renderer::RenderContext::OpenGL { gl: &self.gl };
-        self.gl_pixel.render_transition_frame(&mut gl_context, shader_idx, progress)
+        // Use internal OpenGL context directly
+        self.gl_pixel.render_trans_frame(&self.gl, shader_idx, progress);
+        Ok(())
     }
     
     fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
@@ -380,23 +344,30 @@ impl crate::render::pixel_renderer::PixelRenderer for GlPixelRenderer {
     
     fn render_symbols_to_texture(
         &mut self,
-        _context: &mut crate::render::pixel_renderer::RenderContext,
         rbuf: &[crate::render::graph::RenderCell],
         rtidx: usize,
         ratio_x: f32,
         ratio_y: f32,
     ) -> Result<(), String> {
-        // For GlPixelRenderer, we ignore the context parameter and use our owned context  
-        let mut gl_context = crate::render::pixel_renderer::RenderContext::OpenGL { gl: &self.gl };
-        self.gl_pixel.render_symbols_to_texture(&mut gl_context, rbuf, rtidx, ratio_x, ratio_y)
+        // Use internal OpenGL context directly - implemented similar to self-contained method
+        // Bind the target render texture
+        self.gl_pixel.bind_target(&self.gl, rtidx);
+        
+        // Clear the target
+        self.gl_pixel.clear(&self.gl);
+        
+        // Render symbols to the bound target
+        self.gl_pixel.render_rbuf(&self.gl, rbuf, ratio_x, ratio_y);
+        
+        Ok(())
     }
     
     fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
         self.gl_pixel.set_clear_color(*color)
     }
     
-    fn clear(&mut self, _context: &mut crate::render::pixel_renderer::RenderContext) {
-        // For GlPixelRenderer, we ignore the context parameter and use our owned context
+    fn clear(&mut self) {
+        // Use internal OpenGL context directly
         self.gl_pixel.clear(&self.gl)
     }
     

@@ -1141,45 +1141,24 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
     
     fn render_texture_to_screen(
         &mut self,
-        context: &mut crate::render::pixel_renderer::RenderContext,
         rtidx: usize,
         area: [f32; 4],
         transform: &crate::render::pixel_renderer::UnifiedTransform,
         color: &crate::render::pixel_renderer::UnifiedColor,
     ) -> Result<(), String> {
-        match context {
-            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view } => {
-                // Use unified types directly
-                if let Some(view) = view {
-                    self.render_texture_to_screen_impl(*device, *queue, *encoder, *view, rtidx, area, transform, color)
-                } else {
-                    Err("View is required for general2d rendering".to_string())
-                }
-            }
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            _ => Err("Invalid context type for WGPU renderer".to_string()),
-        }
+        // WgpuPixelRender requires external WGPU resources managed by the adapter
+        // WGPU CommandEncoders are consumable and must be managed externally
+        Err("WgpuPixelRender requires external WGPU resources - call through adapter which manages CommandEncoders".to_string())
     }
     
     fn render_transition_frame(
         &mut self,
-        context: &mut crate::render::pixel_renderer::RenderContext,
         shader_idx: usize,
         progress: f32,
     ) -> Result<(), String> {
-        match context {
-            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, encoder, view: _ } => {
-                // Use existing WGPU implementation for rendering to texture first
-                // Note: This assumes we want to render to a render texture, not directly to screen
-                self.render_trans_frame_to_texture(*device, *queue, *encoder, 1, shader_idx, progress)?;
-                
-                // If we need to render the result to screen, we'd need another call
-                // For now, this renders to RT1 as the target
-                Ok(())
-            }
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            _ => Err("Invalid context type for WGPU renderer".to_string()),
-        }
+        // WgpuPixelRender requires external WGPU resources managed by the adapter
+        // WGPU CommandEncoders are consumable and must be managed externally
+        Err("WgpuPixelRender requires external WGPU resources - call through adapter which manages CommandEncoders".to_string())
     }
     
     fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
@@ -1198,45 +1177,14 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
     
     fn render_symbols_to_texture(
         &mut self,
-        context: &mut crate::render::pixel_renderer::RenderContext,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
         ratio_x: f32,
         ratio_y: f32,
     ) -> Result<(), String> {
-        match context {
-            crate::render::pixel_renderer::RenderContext::Wgpu { device, queue, view: _, .. } => {
-                // Set ratios
-                self.set_ratio(ratio_x, ratio_y);
-                
-                // Bind the target render texture
-                self.bind_target(rtidx);
-                
-                // Set clear color to black (default)
-                self.set_clear_color(UnifiedColor::new(0.0, 0.0, 0.0, 1.0));
-                
-                // Clear the target
-                self.clear();
-                
-                // Render symbols to the bound target
-                self.render_rbuf(*device, *queue, rbuf, ratio_x, ratio_y);
-                
-                // Create command encoder for render to texture
-                let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some(&format!("Render to RT{} Encoder", rtidx)),
-                });
-                
-                // Execute rendering to current target
-                self.render_to_current_target(&mut rt_encoder, None)?;
-                
-                // Submit render to texture commands
-                queue.submit(std::iter::once(rt_encoder.finish()));
-                
-                Ok(())
-            }
-            #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
-            _ => Err("Invalid context type for WGPU renderer".to_string()),
-        }
+        // WgpuPixelRender requires external WGPU resources managed by the adapter
+        // WGPU CommandEncoders are consumable and must be managed externally
+        Err("WgpuPixelRender requires external WGPU resources - call through adapter which manages CommandEncoders".to_string())
     }
     
     fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
@@ -1244,8 +1192,8 @@ impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
         self.set_clear_color(*color);
     }
     
-    fn clear(&mut self, _context: &mut crate::render::pixel_renderer::RenderContext) {
-        // WGPU clear doesn't need the context since it's handled in render passes
+    fn clear(&mut self) {
+        // WGPU clear is handled internally
         self.clear();
     }
     
