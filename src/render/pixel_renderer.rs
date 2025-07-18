@@ -207,145 +207,145 @@ impl Default for UnifiedTransform {
     }
 }
 
-/// Unified Pixel Renderer Interface
-///
-/// This trait provides a unified interface for all graphics mode pixel renderers,
-/// abstracting over OpenGL and WGPU backends while maintaining type safety and performance.
-///
-/// ## Design Principles
-/// - **Backend Agnostic**: Same interface works with OpenGL and WGPU
-/// - **Type Safe**: Use associated types for backend-specific data
-/// - **Performance**: Zero-cost abstractions where possible
-/// - **Extensible**: Easy to add new backends or rendering features
-///
-/// ## Typical Usage
-/// ```rust,ignore
-/// // Usage in adapter (pseudo-code)
-/// fn draw_render_textures_to_screen(&mut self) {
-///     let renderer = self.get_pixel_renderer();
-///     
-///     // RT2 - main buffer (full screen)
-///     if !renderer.get_render_texture_hidden(2) {
-///         let transform = UnifiedTransform::new();
-///         let color = UnifiedColor::white();
-///         renderer.render_texture_to_screen(&context, 2, [0.0, 0.0, 1.0, 1.0], &transform, &color)?;
-///     }
-///     
-///     // RT3 - transition effects (scaled)
-///     if !renderer.get_render_texture_hidden(3) {
-///         let mut transform = UnifiedTransform::new();
-///         transform.scale(pw / pcw, ph / pch);
-///         let color = UnifiedColor::white();
-///         renderer.render_texture_to_screen(&context, 3, area, &transform, &color)?;
-///     }
-/// }
-/// ```
-pub trait PixelRenderer {
-    /// Get canvas dimensions
-    fn get_canvas_size(&self) -> (u32, u32);
+// /// Unified Pixel Renderer Interface
+// ///
+// /// This trait provides a unified interface for all graphics mode pixel renderers,
+// /// abstracting over OpenGL and WGPU backends while maintaining type safety and performance.
+// ///
+// /// ## Design Principles
+// /// - **Backend Agnostic**: Same interface works with OpenGL and WGPU
+// /// - **Type Safe**: Use associated types for backend-specific data
+// /// - **Performance**: Zero-cost abstractions where possible
+// /// - **Extensible**: Easy to add new backends or rendering features
+// ///
+// /// ## Typical Usage
+// /// ```rust,ignore
+// /// // Usage in adapter (pseudo-code)
+// /// fn draw_render_textures_to_screen(&mut self) {
+// ///     let renderer = self.get_pixel_renderer();
+// ///     
+// ///     // RT2 - main buffer (full screen)
+// ///     if !renderer.get_render_texture_hidden(2) {
+// ///         let transform = UnifiedTransform::new();
+// ///         let color = UnifiedColor::white();
+// ///         renderer.render_texture_to_screen(&context, 2, [0.0, 0.0, 1.0, 1.0], &transform, &color)?;
+// ///     }
+// ///     
+// ///     // RT3 - transition effects (scaled)
+// ///     if !renderer.get_render_texture_hidden(3) {
+// ///         let mut transform = UnifiedTransform::new();
+// ///         transform.scale(pw / pcw, ph / pch);
+// ///         let color = UnifiedColor::white();
+// ///         renderer.render_texture_to_screen(&context, 3, area, &transform, &color)?;
+// ///     }
+// /// }
+// /// ```
+// pub trait PixelRenderer {
+//     /// Get canvas dimensions
+//     fn get_canvas_size(&self) -> (u32, u32);
     
-    /// Render texture to screen using General2D pipeline
-    ///
-    /// This method renders a render texture to the current render target
-    /// with specified area mapping, transformation, and color modulation.
-    /// Each implementation manages its own rendering context internally.
-    ///
-    /// # Parameters
-    /// - `rtidx`: Render texture index (0-3)
-    /// - `area`: Texture area mapping [x, y, width, height] in texture coordinates (0.0-1.0)
-    /// - `transform`: 2D transformation matrix
-    /// - `color`: Color modulation (1.0, 1.0, 1.0, 1.0 = no change)
-    ///
-    /// # Returns
-    /// Result indicating success or rendering error
-    fn render_texture_to_screen(
-        &mut self,
-        rtidx: usize,
-        area: [f32; 4],
-        transform: &UnifiedTransform,
-        color: &UnifiedColor,
-    ) -> Result<(), String>;
+//     /// Render texture to screen using General2D pipeline
+//     ///
+//     /// This method renders a render texture to the current render target
+//     /// with specified area mapping, transformation, and color modulation.
+//     /// Each implementation manages its own rendering context internally.
+//     ///
+//     /// # Parameters
+//     /// - `rtidx`: Render texture index (0-3)
+//     /// - `area`: Texture area mapping [x, y, width, height] in texture coordinates (0.0-1.0)
+//     /// - `transform`: 2D transformation matrix
+//     /// - `color`: Color modulation (1.0, 1.0, 1.0, 1.0 = no change)
+//     ///
+//     /// # Returns
+//     /// Result indicating success or rendering error
+//     fn render_texture_to_screen(
+//         &mut self,
+//         rtidx: usize,
+//         area: [f32; 4],
+//         transform: &UnifiedTransform,
+//         color: &UnifiedColor,
+//     ) -> Result<(), String>;
     
-    /// Render transition frame with effects
-    ///
-    /// Applies transition effects between render textures using specialized shaders.
-    /// Each implementation manages its own rendering context internally.
-    ///
-    /// # Parameters
-    /// - `shader_idx`: Transition shader index (0-6 for different effects)
-    /// - `progress`: Transition progress (0.0 = start, 1.0 = end)
-    ///
-    /// # Returns
-    /// Result indicating success or rendering error
-    fn render_transition_frame(
-        &mut self,
-        shader_idx: usize,
-        progress: f32,
-    ) -> Result<(), String>;
+//     /// Render transition frame with effects
+//     ///
+//     /// Applies transition effects between render textures using specialized shaders.
+//     /// Each implementation manages its own rendering context internally.
+//     ///
+//     /// # Parameters
+//     /// - `shader_idx`: Transition shader index (0-6 for different effects)
+//     /// - `progress`: Transition progress (0.0 = start, 1.0 = end)
+//     ///
+//     /// # Returns
+//     /// Result indicating success or rendering error
+//     fn render_transition_frame(
+//         &mut self,
+//         shader_idx: usize,
+//         progress: f32,
+//     ) -> Result<(), String>;
     
-    /// Get render texture hidden state
-    ///
-    /// # Parameters
-    /// - `rtidx`: Render texture index (0-3)
-    ///
-    /// # Returns
-    /// True if the render texture is hidden from final composition
-    fn get_render_texture_hidden(&self, rtidx: usize) -> bool;
+//     /// Get render texture hidden state
+//     ///
+//     /// # Parameters
+//     /// - `rtidx`: Render texture index (0-3)
+//     ///
+//     /// # Returns
+//     /// True if the render texture is hidden from final composition
+//     fn get_render_texture_hidden(&self, rtidx: usize) -> bool;
     
-    /// Set render texture hidden state
-    ///
-    /// Controls whether a render texture participates in final screen composition.
-    /// Hidden render textures are not drawn during screen composition.
-    ///
-    /// # Parameters
-    /// - `rtidx`: Render texture index (0-3)
-    /// - `hidden`: True to hide, false to show
-    fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool);
+//     /// Set render texture hidden state
+//     ///
+//     /// Controls whether a render texture participates in final screen composition.
+//     /// Hidden render textures are not drawn during screen composition.
+//     ///
+//     /// # Parameters
+//     /// - `rtidx`: Render texture index (0-3)
+//     /// - `hidden`: True to hide, false to show
+//     fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool);
     
-    /// Render symbol buffer to specified render texture
-    ///
-    /// This method renders RenderCell data to a specific render texture using
-    /// the symbols rendering pipeline. Each implementation manages its own rendering context internally.
-    ///
-    /// # Parameters
-    /// - `rbuf`: RenderCell data array
-    /// - `rtidx`: Target render texture index
-    /// - `ratio_x`: Horizontal scaling ratio
-    /// - `ratio_y`: Vertical scaling ratio
-    ///
-    /// # Returns
-    /// Result indicating success or rendering error
-    fn render_symbols_to_texture(
-        &mut self,
-        rbuf: &[crate::render::graph::RenderCell],
-        rtidx: usize,
-        ratio_x: f32,
-        ratio_y: f32,
-    ) -> Result<(), String>;
+//     /// Render symbol buffer to specified render texture
+//     ///
+//     /// This method renders RenderCell data to a specific render texture using
+//     /// the symbols rendering pipeline. Each implementation manages its own rendering context internally.
+//     ///
+//     /// # Parameters
+//     /// - `rbuf`: RenderCell data array
+//     /// - `rtidx`: Target render texture index
+//     /// - `ratio_x`: Horizontal scaling ratio
+//     /// - `ratio_y`: Vertical scaling ratio
+//     ///
+//     /// # Returns
+//     /// Result indicating success or rendering error
+//     fn render_symbols_to_texture(
+//         &mut self,
+//         rbuf: &[crate::render::graph::RenderCell],
+//         rtidx: usize,
+//         ratio_x: f32,
+//         ratio_y: f32,
+//     ) -> Result<(), String>;
     
-    /// Set clear color for render targets
-    ///
-    /// # Parameters
-    /// - `color`: Clear color
-    fn set_clear_color(&mut self, color: &UnifiedColor);
+//     /// Set clear color for render targets
+//     ///
+//     /// # Parameters
+//     /// - `color`: Clear color
+//     fn set_clear_color(&mut self, color: &UnifiedColor);
     
-    /// Clear current render target
-    ///
-    /// Each implementation manages its own rendering context internally.
-    fn clear(&mut self);
+//     /// Clear current render target
+//     ///
+//     /// Each implementation manages its own rendering context internally.
+//     fn clear(&mut self);
     
-    /// Bind render texture as current render target
-    ///
-    /// # Parameters
-    /// - `rtidx`: Render texture index (None for screen/default framebuffer)
-    fn bind_render_target(&mut self, rtidx: Option<usize>);
+//     /// Bind render texture as current render target
+//     ///
+//     /// # Parameters
+//     /// - `rtidx`: Render texture index (None for screen/default framebuffer)
+//     fn bind_render_target(&mut self, rtidx: Option<usize>);
     
-    /// Get type-erased reference for downcasting
-    ///
-    /// This allows adapter code to downcast to specific renderer types
-    /// when backend-specific functionality is needed.
-    fn as_any(&mut self) -> &mut dyn Any;
-}
+//     /// Get type-erased reference for downcasting
+//     ///
+//     /// This allows adapter code to downcast to specific renderer types
+//     /// when backend-specific functionality is needed.
+//     fn as_any(&mut self) -> &mut dyn Any;
+// }
 
-// Note: Type conversion methods are implemented in the respective backend files
-// (gl/pixel.rs and wgpu/pixel.rs) to avoid complex conditional compilation issues. 
+// // Note: Type conversion methods are implemented in the respective backend files
+// // (gl/pixel.rs and wgpu/pixel.rs) to avoid complex conditional compilation issues. 

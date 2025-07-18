@@ -9,10 +9,9 @@ use crate::render::adapter::{
     },
     RenderCell,
 };
-use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform, PixelRenderer};
+use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
 use glow::HasContext;
 use log::info;
-use std::any::Any;
 
 // open gl shader wrapper...
 pub struct GlPixel {
@@ -170,6 +169,10 @@ impl GlPixel {
         );
         self.r_trans.draw_trans(gl, sidx, progress);
     }
+
+    pub fn get_canvas_size(&self) -> (u32, u32) {
+        (self.canvas_width, self.canvas_height)
+    }
 }
 
 /// OpenGL Pixel Renderer with owned context
@@ -230,159 +233,9 @@ impl GlPixelRenderer {
     }
 }
 
-// Implementation of the unified PixelRenderer trait for original GlPixel (for backwards compatibility)
-impl crate::render::pixel_renderer::PixelRenderer for GlPixel {
-    fn get_canvas_size(&self) -> (u32, u32) {
-        (self.canvas_width, self.canvas_height)
-    }
-    
-    fn render_texture_to_screen(
-        &mut self,
-        rtidx: usize,
-        area: [f32; 4],
-        transform: &crate::render::pixel_renderer::UnifiedTransform,
-        color: &crate::render::pixel_renderer::UnifiedColor,
-    ) -> Result<(), String> {
-        // GlPixel doesn't own OpenGL context, so this should not be called directly
-        // Use GlPixelRenderer instead which owns the context
-        Err("GlPixel doesn't own OpenGL context - use GlPixelRenderer for rendering methods".to_string())
-    }
-    
-    fn render_transition_frame(
-        &mut self,
-        shader_idx: usize,
-        progress: f32,
-    ) -> Result<(), String> {
-        // GlPixel doesn't own OpenGL context, so this should not be called directly
-        // Use GlPixelRenderer instead which owns the context
-        Err("GlPixel doesn't own OpenGL context - use GlPixelRenderer for rendering methods".to_string())
-    }
-    
-    fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
-        if rtidx < self.render_textures.len() {
-            self.render_textures[rtidx].is_hidden
-        } else {
-            true // Out of bounds textures are considered hidden
-        }
-    }
-    
-    fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
-        if rtidx < self.render_textures.len() {
-            self.render_textures[rtidx].is_hidden = hidden;
-        }
-    }
-    
-    fn render_symbols_to_texture(
-        &mut self,
-        rbuf: &[crate::render::graph::RenderCell],
-        rtidx: usize,
-        ratio_x: f32,
-        ratio_y: f32,
-    ) -> Result<(), String> {
-        // GlPixel doesn't own OpenGL context, so this should not be called directly
-        // Use GlPixelRenderer instead which owns the context
-        Err("GlPixel doesn't own OpenGL context - use GlPixelRenderer for rendering methods".to_string())
-    }
-    
-    fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
-        self.set_clear_color(*color);
-    }
-    
-    fn clear(&mut self) {
-        // GlPixel doesn't own OpenGL context, so this should not be called directly
-        // Use GlPixelRenderer instead which owns the context
-        panic!("GlPixel doesn't own OpenGL context - use GlPixelRenderer for clear method");
-    }
-    
-    fn bind_render_target(&mut self, rtidx: Option<usize>) {
-        // This method would need to store the GL context to use later
-        // For now, we can't implement it without changing the GL context handling
-        // The existing bind_target and bind_screen methods require a GL context parameter
-        // We'll implement this properly in GlPixelRenderer
-    }
-    
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-}
 
-// Implementation of the unified PixelRenderer trait for OpenGL renderer with owned context
-impl crate::render::pixel_renderer::PixelRenderer for GlPixelRenderer {
-    fn get_canvas_size(&self) -> (u32, u32) {
-        self.gl_pixel.get_canvas_size()
-    }
-    
-    fn render_texture_to_screen(
-        &mut self,
-        rtidx: usize,
-        area: [f32; 4],
-        transform: &crate::render::pixel_renderer::UnifiedTransform,
-        color: &crate::render::pixel_renderer::UnifiedColor,
-    ) -> Result<(), String> {
-        // Use internal OpenGL context directly
-        self.gl_pixel.render_texture_to_screen_impl(&self.gl, rtidx, area, transform, color);
-        Ok(())
-    }
-    
-    fn render_transition_frame(
-        &mut self,
-        shader_idx: usize,
-        progress: f32,
-    ) -> Result<(), String> {
-        // Use internal OpenGL context directly
-        self.gl_pixel.render_trans_frame(&self.gl, shader_idx, progress);
-        Ok(())
-    }
-    
-    fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
-        self.gl_pixel.get_render_texture_hidden(rtidx)
-    }
-    
-    fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
-        self.gl_pixel.set_render_texture_hidden(rtidx, hidden)
-    }
-    
-    fn render_symbols_to_texture(
-        &mut self,
-        rbuf: &[crate::render::graph::RenderCell],
-        rtidx: usize,
-        ratio_x: f32,
-        ratio_y: f32,
-    ) -> Result<(), String> {
-        // Use internal OpenGL context directly - implemented similar to self-contained method
-        // Bind the target render texture
-        self.gl_pixel.bind_target(&self.gl, rtidx);
-        
-        // Clear the target
-        self.gl_pixel.clear(&self.gl);
-        
-        // Render symbols to the bound target
-        self.gl_pixel.render_rbuf(&self.gl, rbuf, ratio_x, ratio_y);
-        
-        Ok(())
-    }
-    
-    fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
-        self.gl_pixel.set_clear_color(*color)
-    }
-    
-    fn clear(&mut self) {
-        // Use internal OpenGL context directly
-        self.gl_pixel.clear(&self.gl)
-    }
-    
-    fn bind_render_target(&mut self, rtidx: Option<usize>) {
-        // For GlPixelRenderer, we can implement this properly since we own the GL context
-        match rtidx {
-            Some(idx) => self.gl_pixel.bind_target(&self.gl, idx),
-            None => self.gl_pixel.bind_screen(&self.gl),
-        }
-    }
-    
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-}
+
+
 
 // Separate impl block for GlPixelRenderer convenience methods
 impl GlPixelRenderer {
