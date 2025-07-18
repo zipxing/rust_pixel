@@ -1585,6 +1585,8 @@ impl Adapter for WinitAdapter {
         self
     }
 
+
+
     /// 重写渲染纹理到屏幕的方法以处理Retina缩放
     ///
     /// 这是专门为Winit适配器优化的渲染方法，解决了在Retina显示器上

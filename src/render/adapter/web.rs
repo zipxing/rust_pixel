@@ -149,6 +149,8 @@ impl Adapter for WebAdapter {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+
 }
 
 macro_rules! web_event {

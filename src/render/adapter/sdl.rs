@@ -326,6 +326,8 @@ impl Adapter for SdlAdapter {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+
 }
 
 pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {

@@ -197,6 +197,8 @@ impl Adapter for CrosstermAdapter {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+
 }
 
 /// Convert crossterm I/O events to RustPixel event, for the sake of unified event processing

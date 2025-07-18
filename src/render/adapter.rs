@@ -590,11 +590,41 @@ pub trait Adapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool)
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) 
     where
         Self: Sized,
     {
-        // First check if we're in WGPU mode and handle it accordingly
+        // Try the unified approach first - works for OpenGL cases
+        // Get ratios first to avoid borrowing conflicts
+        let ratio_x;
+        let ratio_y;
+        {
+            let base = self.get_base();
+            ratio_x = base.gr.ratio_x;
+            ratio_y = base.gr.ratio_y;
+        }
+        
+        // Check if we have a PixelRenderer that supports the unified interface
+        if let Some(pixel_renderer) = self.get_base().gr.pixel_renderer.as_mut() {
+            use crate::render::adapter::gl::pixel::GlPixelRenderer;
+            
+            // For GlPixelRenderer, we can use its self-contained method
+            if let Some(gl_pixel_renderer) = pixel_renderer.as_any().downcast_mut::<GlPixelRenderer>() {
+                // Use GlPixelRenderer's self-contained method that doesn't need external context
+                if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(
+                    rbuf, 
+                    rtidx, 
+                    debug,
+                    ratio_x,
+                    ratio_y,
+                ) {
+                    eprintln!("GlPixelRenderer render_buffer_to_texture_self_contained error: {}", e);
+                }
+                return;
+            }
+        }
+        
+        // Fallback to old method for WGPU complex cases that need special CommandEncoder handling
         #[cfg(feature = "wgpu")]
         {
             use crate::render::adapter::winit::WinitAdapter;
@@ -602,7 +632,7 @@ pub trait Adapter {
             if let Some(winit_adapter) = self.as_any().downcast_mut::<WinitAdapter>() {
                 // Check if WGPU components are available
                 if winit_adapter.wgpu_pixel_renderer.is_some() {
-                    // WGPU mode - use unified implementation
+                    // WGPU mode - use specialized implementation for CommandEncoder management
                     if let Err(e) = draw_render_buffer_to_texture_unified_wgpu(winit_adapter, rbuf, rtidx, debug) {
                         eprintln!("WGPU draw_render_buffer_to_texture error: {}", e);
                     }
@@ -611,7 +641,7 @@ pub trait Adapter {
             }
         }
 
-        // OpenGL mode implementation using unified PixelRenderer interface
+        // Final fallback for OpenGL
         #[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
         {
             draw_render_buffer_to_texture_unified_opengl(self, rbuf, rtidx, debug);
@@ -736,6 +766,8 @@ pub trait Adapter {
     }
 
     fn as_any(&mut self) -> &mut dyn Any;
+
+
 }
 
 /// Unified WGPU implementation for render texture to screen composition
