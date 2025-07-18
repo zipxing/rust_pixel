@@ -34,8 +34,8 @@
 use crate::event::Event;
 use crate::render::{
     adapter::{
-        init_sym_height, init_sym_width, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
-        PIXEL_TEXTURE_FILE, generate_render_buffer,
+        generate_render_buffer, init_sym_height, init_sym_width, Adapter, AdapterBase,
+        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -125,7 +125,7 @@ pub struct WindowInitParams {
 }
 
 /// Winit + Glow OpenGL适配器
-/// 
+///
 /// 专门处理基于winit窗口管理和OpenGL渲染的跨平台适配器。
 /// 与WinitWgpuAdapter分离，避免条件编译的复杂性。
 pub struct WinitGlowAdapter {
@@ -550,16 +550,6 @@ impl WinitGlowAdapter {
         // 窗口创建将在resumed事件中完成
     }
 
-    /// WGPU 后端初始化
-    ///
-    /// 使用统一的生命周期管理，窗口创建推迟到resumed事件中。
-    #[cfg(feature = "wgpu")]
-    fn init_wgpu(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
-        info!("Initializing Winit adapter with WGPU backend...");
-        let _texture_path = self.init_common(w, h, rx, ry, title);
-        // 窗口创建将在resumed事件中完成
-    }
-
     /// 在resumed事件中创建OpenGL窗口和上下文
     fn create_glow_window_and_context(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let params = self.window_init_params.as_ref().unwrap().clone();
@@ -620,16 +610,14 @@ impl WinitGlowAdapter {
                 std::num::NonZeroU32::new(physical_size.width).unwrap(),
                 std::num::NonZeroU32::new(physical_size.height).unwrap(),
             );
-            
+
             gl_config
                 .display()
                 .create_window_surface(&gl_config, &attrs)
                 .unwrap()
         };
 
-        let gl_context = not_current_gl_context
-            .make_current(&gl_surface)
-            .unwrap();
+        let gl_context = not_current_gl_context.make_current(&gl_surface).unwrap();
 
         // 创建OpenGL渲染器
         let gl = unsafe {
@@ -668,8 +656,6 @@ impl WinitGlowAdapter {
         info!("OpenGL window & context initialized successfully");
     }
 
-
-
     /// 执行初始清屏操作
     ///
     /// 防止窗口创建时的白屏闪烁，立即清空屏幕并显示黑色背景。
@@ -692,8 +678,6 @@ impl WinitGlowAdapter {
             }
         }
     }
-
-
 
     /// 设置自定义鼠标光标
     ///
@@ -764,14 +748,6 @@ impl WinitGlowAdapter {
         }
         WinitBorderArea::OTHER
     }
-
-
-
-
-
-
-
-
 }
 
 impl Adapter for WinitGlowAdapter {
@@ -893,10 +869,12 @@ impl Adapter for WinitGlowAdapter {
                 // 1. 渲染到render texture 2 (主场景)
                 let ratio_x = self.base.gr.ratio_x;
                 let ratio_y = self.base.gr.ratio_y;
-                if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(&rbuf, 2, false, ratio_x, ratio_y) {
+                if let Err(e) = gl_pixel_renderer
+                    .render_buffer_to_texture_self_contained(&rbuf, 2, false, ratio_x, ratio_y)
+                {
                     eprintln!("Failed to render buffer to texture: {}", e);
                 }
-                
+
                 // 2. 将render texture合成到屏幕
                 let physical_size = if let Some(window) = &self.window {
                     Some(window.inner_size())
@@ -912,7 +890,9 @@ impl Adapter for WinitGlowAdapter {
                     );
                 } else {
                     // Fallback: bind screen normally
-                    gl_pixel_renderer.gl_pixel.bind_screen(&gl_pixel_renderer.gl);
+                    gl_pixel_renderer
+                        .gl_pixel
+                        .bind_screen(&gl_pixel_renderer.gl);
                 }
 
                 // 清屏
@@ -924,7 +904,9 @@ impl Adapter for WinitGlowAdapter {
                 }
 
                 // 渲染textures到屏幕
-                if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
+                if let Err(e) =
+                    gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y)
+                {
                     eprintln!("Failed to render textures to screen: {}", e);
                 }
             } else {
@@ -937,8 +919,6 @@ impl Adapter for WinitGlowAdapter {
         Ok(())
     }
 
-
-
     fn post_draw(&mut self) {
         // OpenGL模式：交换缓冲区显示渲染结果
         if let (Some(gl_surface), Some(gl_context)) = (&self.gl_surface, &self.gl_context) {
@@ -946,7 +926,7 @@ impl Adapter for WinitGlowAdapter {
                 eprintln!("Failed to swap buffers: {:?}", e);
             }
         }
-        
+
         if let Some(window) = &self.window {
             window.as_ref().request_redraw();
         }
@@ -964,7 +944,7 @@ impl Adapter for WinitGlowAdapter {
     /// 显示光标
     fn show_cursor(&mut self) -> Result<(), String> {
         if let Some(window) = &self.window {
-            window.as_ref().set_cursor_visible(true);
+            window.set_cursor_visible(true);
         }
         Ok(())
     }
@@ -992,17 +972,26 @@ impl Adapter for WinitGlowAdapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
-    where
+    fn draw_render_buffer_to_texture(
+        &mut self,
+        rbuf: &[crate::render::adapter::RenderCell],
+        rtidx: usize,
+        debug: bool,
+    ) where
         Self: Sized,
     {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             let ratio_x = self.base.gr.ratio_x;
             let ratio_y = self.base.gr.ratio_y;
-            
+
             // 直接调用我们的GlPixelRenderer方法
-            if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y) {
-                eprintln!("WinitGlowAdapter: Failed to render buffer to texture {}: {}", rtidx, e);
+            if let Err(e) = gl_pixel_renderer
+                .render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y)
+            {
+                eprintln!(
+                    "WinitGlowAdapter: Failed to render buffer to texture {}: {}",
+                    rtidx, e
+                );
             }
         } else {
             eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized");
@@ -1025,7 +1014,7 @@ impl Adapter for WinitGlowAdapter {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             let ratio_x = self.base.gr.ratio_x;
             let ratio_y = self.base.gr.ratio_y;
-            
+
             // 获取物理窗口大小用于Retina显示支持
             let physical_size = if let Some(window) = &self.window {
                 Some(window.inner_size())
@@ -1041,7 +1030,9 @@ impl Adapter for WinitGlowAdapter {
                 );
             } else {
                 // Fallback: 使用标准绑定
-                gl_pixel_renderer.gl_pixel.bind_screen(&gl_pixel_renderer.gl);
+                gl_pixel_renderer
+                    .gl_pixel
+                    .bind_screen(&gl_pixel_renderer.gl);
             }
 
             // 清屏
@@ -1054,16 +1045,15 @@ impl Adapter for WinitGlowAdapter {
 
             // 直接调用我们的渲染方法，不需要绑定屏幕
             if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!("WinitGlowAdapter: Failed to render textures to screen: {}", e);
+                eprintln!(
+                    "WinitGlowAdapter: Failed to render textures to screen: {}",
+                    e
+                );
             }
         } else {
             eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized for texture rendering");
         }
     }
-
-
-
-
 }
 
 /// 将Winit输入事件转换为RustPixel事件

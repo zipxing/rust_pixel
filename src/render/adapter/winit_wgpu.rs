@@ -34,12 +34,12 @@
 use crate::event::Event;
 use crate::render::{
     adapter::{
-        init_sym_height, init_sym_width, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
-        PIXEL_TEXTURE_FILE, generate_render_buffer,
+        generate_render_buffer, init_sym_height, init_sym_width, Adapter, AdapterBase,
+        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
-    sprite::Sprites,
     pixel_renderer::{UnifiedColor, UnifiedTransform},
+    sprite::Sprites,
 };
 
 // WGPU backend imports
@@ -864,14 +864,10 @@ impl WinitWgpuAdapter {
             // 设置清除颜色
             if debug {
                 // 调试模式使用红色背景
-                pixel_renderer.set_clear_color(
-                    UnifiedColor::new(1.0, 0.0, 0.0, 1.0),
-                );
+                pixel_renderer.set_clear_color(UnifiedColor::new(1.0, 0.0, 0.0, 1.0));
             } else {
                 // 正常模式使用黑色背景
-                pixel_renderer.set_clear_color(
-                    UnifiedColor::new(0.0, 0.0, 0.0, 1.0),
-                );
+                pixel_renderer.set_clear_color(UnifiedColor::new(0.0, 0.0, 0.0, 1.0));
             }
 
             // 清除目标
@@ -1304,7 +1300,7 @@ impl Adapter for WinitWgpuAdapter {
                 if let Err(e) = self.draw_render_buffer_to_texture_wgpu(&rbuf, 2, false) {
                     eprintln!("Failed to render buffer to texture: {}", e);
                 }
-                
+
                 // 2. 将render texture合成到屏幕
                 if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
                     eprintln!("Failed to render textures to screen: {}", e);
@@ -1376,13 +1372,20 @@ impl Adapter for WinitWgpuAdapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
-    where
+    fn draw_render_buffer_to_texture(
+        &mut self,
+        rbuf: &[crate::render::adapter::RenderCell],
+        rtidx: usize,
+        debug: bool,
+    ) where
         Self: Sized,
     {
         // 直接调用我们的WGPU渲染方法
         if let Err(e) = self.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
-            eprintln!("WinitWgpuAdapter: Failed to render buffer to texture {}: {}", rtidx, e);
+            eprintln!(
+                "WinitWgpuAdapter: Failed to render buffer to texture {}: {}",
+                rtidx, e
+            );
         }
     }
 
@@ -1401,13 +1404,12 @@ impl Adapter for WinitWgpuAdapter {
     {
         // 直接调用我们的WGPU渲染方法
         if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
-            eprintln!("WinitWgpuAdapter: Failed to render textures to screen: {}", e);
+            eprintln!(
+                "WinitWgpuAdapter: Failed to render textures to screen: {}",
+                e
+            );
         }
     }
-
-
-
-
 }
 
 /// 将Winit输入事件转换为RustPixel事件
