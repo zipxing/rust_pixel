@@ -1367,6 +1367,44 @@ impl Adapter for WinitWgpuAdapter {
         self
     }
 
+    /// 重写渲染缓冲区到纹理的方法，直接使用我们的WGPU渲染器
+    ///
+    /// 这个方法专门为WinitWgpuAdapter实现，不依赖统一的pixel_renderer抽象
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
+    where
+        Self: Sized,
+    {
+        // 直接调用我们的WGPU渲染方法
+        if let Err(e) = self.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
+            eprintln!("WinitWgpuAdapter: Failed to render buffer to texture {}: {}", rtidx, e);
+        }
+    }
+
+    /// 重写渲染纹理到屏幕的方法，直接使用我们的WGPU渲染器
+    ///
+    /// 这个方法专门为WinitWgpuAdapter实现，处理转场效果的最终合成
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn draw_render_textures_to_screen(&mut self)
+    where
+        Self: Sized,
+    {
+        // 直接调用我们的WGPU渲染方法
+        if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
+            eprintln!("WinitWgpuAdapter: Failed to render textures to screen: {}", e);
+        }
+    }
+
 
 
 
