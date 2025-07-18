@@ -79,7 +79,7 @@ pub use winit::{
 /// 记录窗口拖拽的相关状态，支持通过鼠标拖拽移动窗口位置。
 /// 类似于SDL版本的实现，提供相同的用户体验。
 #[derive(Default)]
-struct Drag {
+pub struct Drag {
     /// 是否需要执行拖拽操作
     need: bool,
     /// 是否正在拖拽中
