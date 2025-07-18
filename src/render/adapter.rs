@@ -181,9 +181,17 @@ pub mod sdl;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
-/// Winit adapter module - Cross-platform window management with OpenGL/WGPU
+/// Legacy Winit adapter module - Mixed OpenGL/WGPU implementation (deprecated)
 #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
 pub mod winit;
+
+/// Winit + Glow adapter module - OpenGL backend with winit window management
+#[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]
+pub mod winit_glow;
+
+/// Winit + WGPU adapter module - Modern GPU backend with winit window management  
+#[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
+pub mod winit_wgpu;
 
 /// Crossterm adapter module - Terminal-based text mode rendering
 #[cfg(not(any(
@@ -552,6 +560,27 @@ pub trait Adapter {
     fn draw_buffer_to_texture_dyn(&mut self, buf: &Buffer, rtidx: usize) {
         // Handle each adapter type explicitly with proper feature detection
         
+        // Winit + Glow adapter (OpenGL backend)
+        #[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]
+        {
+            use crate::render::adapter::winit_glow::WinitGlowAdapter;
+            if let Some(winit_glow_adapter) = self.as_any().downcast_mut::<WinitGlowAdapter>() {
+                winit_glow_adapter.draw_buffer_to_texture(buf, rtidx);
+                return;
+            }
+        }
+
+        // Winit + WGPU adapter (modern GPU backend)
+        #[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
+        {
+            use crate::render::adapter::winit_wgpu::WinitWgpuAdapter;
+            if let Some(winit_wgpu_adapter) = self.as_any().downcast_mut::<WinitWgpuAdapter>() {
+                winit_wgpu_adapter.draw_buffer_to_texture(buf, rtidx);
+                return;
+            }
+        }
+
+        // Legacy Winit adapter (for backward compatibility)
         #[cfg(all(any(feature = "winit", feature = "wgpu"), not(target_arch = "wasm32")))]
         {
             use crate::render::adapter::winit::WinitAdapter;
@@ -561,6 +590,7 @@ pub trait Adapter {
             }
         }
 
+        // SDL adapter
         #[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
         {
             use crate::render::adapter::sdl::SdlAdapter;
@@ -570,6 +600,7 @@ pub trait Adapter {
             }
         }
 
+        // Web adapter
         #[cfg(target_arch = "wasm32")]
         {
             use crate::render::adapter::web::WebAdapter;
