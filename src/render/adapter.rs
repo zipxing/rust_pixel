@@ -169,11 +169,11 @@ pub mod wgpu;
 
 /// SDL adapter module - Desktop rendering backend based on SDL2
 #[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
-pub mod sdl;
+pub mod sdl_adapter;
 
 /// Web adapter module - WebGL-based browser rendering backend
 #[cfg(target_arch = "wasm32")]
-pub mod web;
+pub mod web_adapter;
 
 /// Winit common module - Shared code between winit_glow and winit_wgpu adapters
 #[cfg(any(
@@ -184,11 +184,11 @@ pub mod winit_common;
 
 /// Winit + Glow adapter module - OpenGL backend with winit window management
 #[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]
-pub mod winit_glow;
+pub mod winit_glow_adapter;
 
 /// Winit + WGPU adapter module - Modern GPU backend with winit window management  
 #[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
-pub mod winit_wgpu;
+pub mod winit_wgpu_adapter;
 
 /// Crossterm adapter module - Terminal-based text mode rendering
 #[cfg(not(any(
@@ -199,7 +199,7 @@ pub mod winit_wgpu;
     target_os = "ios",
     target_arch = "wasm32"
 )))]
-pub mod cross;
+pub mod cross_adapter;
 
 /// Path to the symbols texture file
 ///
@@ -560,7 +560,7 @@ pub trait Adapter {
         // Winit + Glow adapter (OpenGL backend)
         #[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]
         {
-            use crate::render::adapter::winit_glow::WinitGlowAdapter;
+            use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
             if let Some(winit_glow_adapter) = self.as_any().downcast_mut::<WinitGlowAdapter>() {
                 winit_glow_adapter.draw_buffer_to_texture(buf, rtidx);
                 return;
@@ -570,7 +570,7 @@ pub trait Adapter {
         // Winit + WGPU adapter (modern GPU backend)
         #[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
         {
-            use crate::render::adapter::winit_wgpu::WinitWgpuAdapter;
+            use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
             if let Some(winit_wgpu_adapter) = self.as_any().downcast_mut::<WinitWgpuAdapter>() {
                 winit_wgpu_adapter.draw_buffer_to_texture(buf, rtidx);
                 return;
@@ -582,7 +582,7 @@ pub trait Adapter {
         // SDL adapter
         #[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
         {
-            use crate::render::adapter::sdl::SdlAdapter;
+            use crate::render::adapter::sdl_adapter::SdlAdapter;
             if let Some(sdl_adapter) = self.as_any().downcast_mut::<SdlAdapter>() {
                 sdl_adapter.draw_buffer_to_texture(buf, rtidx);
                 return;
@@ -592,7 +592,7 @@ pub trait Adapter {
         // Web adapter
         #[cfg(target_arch = "wasm32")]
         {
-            use crate::render::adapter::web::WebAdapter;
+            use crate::render::adapter::web_adapter::WebAdapter;
             if let Some(web_adapter) = self.as_any().downcast_mut::<WebAdapter>() {
                 web_adapter.draw_buffer_to_texture(buf, rtidx);
                 return;

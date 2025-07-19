@@ -66,7 +66,7 @@ use crate::{model::BlockModel, render::BlockRender};
 use rust_pixel::game::Game;
 
 #[cfg(target_arch = "wasm32")]
-use rust_pixel::render::adapter::web::{input_events_from_web, WebAdapter};
+use rust_pixel::render::adapter::web_adapter::{input_events_from_web, WebAdapter};
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::js_sys;

@@ -17,19 +17,19 @@ use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::R
     not(feature = "winit"),
     not(feature = "wgpu")
 ))]
-use crate::render::adapter::cross::CrosstermAdapter;
+use crate::render::adapter::cross_adapter::CrosstermAdapter;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
-use crate::render::adapter::sdl::SdlAdapter;
+use crate::render::adapter::sdl_adapter::SdlAdapter;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "winit", not(feature = "wgpu")))]
-use crate::render::adapter::winit_glow::WinitGlowAdapter;
+use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "wgpu"))]
-use crate::render::adapter::winit_wgpu::WinitWgpuAdapter;
+use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
 
 #[cfg(target_arch = "wasm32")]
-use crate::render::adapter::web::WebAdapter;
+use crate::render::adapter::web_adapter::WebAdapter;
 
 pub struct Context {
     pub game_name: String,

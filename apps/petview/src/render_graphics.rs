@@ -180,7 +180,7 @@ impl Render for PetviewRender {
             // Set render texture 3 visible for Winit + Glow mode
             #[cfg(all(feature = "winit", not(feature = "wgpu")))]
             {
-                use rust_pixel::render::adapter::winit_glow::WinitGlowAdapter;
+                use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
                 use std::any::Any;
 
                 if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
@@ -193,7 +193,7 @@ impl Render for PetviewRender {
             // Set render texture 3 visible for SDL mode
             #[cfg(feature = "sdl")]
             {
-                use rust_pixel::render::adapter::sdl::SdlAdapter;
+                use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
                 use std::any::Any;
                 
                 if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
@@ -206,7 +206,7 @@ impl Render for PetviewRender {
             // Set render texture 3 visible for Web mode
             #[cfg(target_arch = "wasm32")]
             {
-                use rust_pixel::render::adapter::web::WebAdapter;
+                use rust_pixel::render::adapter::web_adapter::WebAdapter;
                 use std::any::Any;
                 
                 if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
@@ -218,7 +218,7 @@ impl Render for PetviewRender {
 
             #[cfg(feature = "wgpu")]
             {
-                use rust_pixel::render::adapter::winit_wgpu::WinitWgpuAdapter;
+                use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
                 use std::any::Any;
 
                 if let Some(winit_wgpu_adapter) = ctx.adapter.as_any().downcast_mut::<WinitWgpuAdapter>() {
@@ -278,7 +278,7 @@ impl Render for PetviewRender {
                     // OpenGL mode - 直接访问WinitGlowAdapter
                     #[cfg(all(feature = "winit", not(feature = "wgpu")))]
                     {
-                        use rust_pixel::render::adapter::winit_glow::WinitGlowAdapter;
+                        use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
                         use std::any::Any;
 
                         if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
@@ -293,7 +293,7 @@ impl Render for PetviewRender {
                     // SDL mode - 直接访问SdlAdapter
                     #[cfg(feature = "sdl")]
                     {
-                        use rust_pixel::render::adapter::sdl::SdlAdapter;
+                        use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
                         use std::any::Any;
 
                         if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
@@ -308,7 +308,7 @@ impl Render for PetviewRender {
                     // Web mode - 直接访问WebAdapter
                     #[cfg(target_arch = "wasm32")]
                     {
-                        use rust_pixel::render::adapter::web::WebAdapter;
+                        use rust_pixel::render::adapter::web_adapter::WebAdapter;
                         use std::any::Any;
 
                         if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
@@ -323,7 +323,7 @@ impl Render for PetviewRender {
                     // WGPU mode
                     #[cfg(feature = "wgpu")]
                     {
-                        use rust_pixel::render::adapter::winit_wgpu::WinitWgpuAdapter;
+                        use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
                         use std::any::Any;
 
                         if let Some(winit_wgpu_adapter) =
@@ -350,7 +350,7 @@ impl Render for PetviewRender {
                     // Winit + Glow mode - 直接访问WinitGlowAdapter
                     #[cfg(all(feature = "winit", not(feature = "wgpu")))]
                     {
-                        use rust_pixel::render::adapter::winit_glow::WinitGlowAdapter;
+                        use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
                         use std::any::Any;
 
                         if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
@@ -386,7 +386,7 @@ impl Render for PetviewRender {
                     // SDL mode - complex distortion effects - 直接访问SdlAdapter
                     #[cfg(feature = "sdl")]
                     {
-                        use rust_pixel::render::adapter::sdl::SdlAdapter;
+                        use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
                         use std::any::Any;
 
                         if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
@@ -422,7 +422,7 @@ impl Render for PetviewRender {
                     // Web mode - complex distortion effects - 直接访问WebAdapter
                     #[cfg(target_arch = "wasm32")]
                     {
-                        use rust_pixel::render::adapter::web::WebAdapter;
+                        use rust_pixel::render::adapter::web_adapter::WebAdapter;
                         use std::any::Any;
 
                         if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
@@ -458,7 +458,7 @@ impl Render for PetviewRender {
                     // WGPU mode - simplified preparation phase
                     #[cfg(feature = "wgpu")]
                     {
-                        use rust_pixel::render::adapter::winit_wgpu::WinitWgpuAdapter;
+                        use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
                         use std::any::Any;
 
                         if let Some(winit_wgpu_adapter) =
@@ -509,7 +509,7 @@ impl Render for PetviewRender {
                     // Winit + Glow mode - 直接访问WinitGlowAdapter
                     #[cfg(all(feature = "winit", not(feature = "wgpu")))]
                     {
-                        use rust_pixel::render::adapter::winit_glow::WinitGlowAdapter;
+                        use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
                         use std::any::Any;
 
                         if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
@@ -524,7 +524,7 @@ impl Render for PetviewRender {
                     // SDL mode - 直接访问SdlAdapter
                     #[cfg(feature = "sdl")]
                     {
-                        use rust_pixel::render::adapter::sdl::SdlAdapter;
+                        use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
                         use std::any::Any;
 
                         if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
@@ -539,7 +539,7 @@ impl Render for PetviewRender {
                     // Web mode - 直接访问WebAdapter
                     #[cfg(target_arch = "wasm32")]
                     {
-                        use rust_pixel::render::adapter::web::WebAdapter;
+                        use rust_pixel::render::adapter::web_adapter::WebAdapter;
                         use std::any::Any;
 
                         if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
@@ -554,7 +554,7 @@ impl Render for PetviewRender {
                     // WGPU mode - full transition effects
                     #[cfg(feature = "wgpu")]
                     {
-                        use rust_pixel::render::adapter::winit_wgpu::WinitWgpuAdapter;
+                        use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
                         use std::any::Any;
 
                         if let Some(winit_wgpu_adapter) =
