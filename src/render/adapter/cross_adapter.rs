@@ -198,6 +198,47 @@ impl Adapter for CrosstermAdapter {
         self
     }
 
+    /// Crossterm adapter - no graphics support for advanced rendering methods
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, _texture_index: usize, _visible: bool) {
+        // Text mode - no render textures
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, _target_texture: usize) {
+        // Text mode - no transition effects
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, _target_texture: usize, _effect_type: usize, _progress: f32) {
+        // Text mode - no transition effects
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, _target_texture: usize) {
+        // Text mode - no buffer transitions
+    }
+
 
 }
 

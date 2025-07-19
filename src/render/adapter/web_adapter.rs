@@ -183,6 +183,58 @@ impl Adapter for WebAdapter {
         self
     }
 
+    /// Web adapter implementation of render texture visibility control
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(texture_index, !visible);
+        }
+    }
+
+    /// Web adapter implementation of simple transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_normal_transition(target_texture);
+        }
+    }
+
+    /// Web adapter implementation of advanced transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
+        }
+    }
+
+    /// Web adapter implementation of buffer transition setup
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.setup_transbuf_rendering(target_texture);
+        }
+    }
+
 
 }
 

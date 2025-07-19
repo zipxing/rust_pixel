@@ -682,7 +682,102 @@ pub trait Adapter {
 
     fn as_any(&mut self) -> &mut dyn Any;
 
+    /// Advanced rendering methods for special effects (petview, transitions, etc.)
+    /// These methods provide unified high-level interfaces for graphics modes.
 
+    /// Set render texture visibility
+    ///
+    /// Controls whether a specific render texture is visible in the final composition.
+    /// This is used for advanced effects like transitions and overlays.
+    ///
+    /// # Parameters
+    /// - `texture_index`: Render texture index (0-3, typically 2=main, 3=effects)
+    /// - `visible`: Whether the texture should be visible
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+        // Default implementation for graphics modes
+        // Each adapter can override this with optimized implementations
+    }
+
+    /// Render a simple transition effect
+    ///
+    /// Performs a basic transition rendering to the specified render texture.
+    /// This is used for fade-in/fade-out effects and simple transitions.
+    ///
+    /// # Parameters
+    /// - `target_texture`: Target render texture index
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, target_texture: usize) {
+        // Default implementation - no effect
+        // Graphics adapters should override this
+    }
+
+    /// Render an advanced transition effect with parameters
+    ///
+    /// Performs complex transition rendering with customizable effects and progress.
+    /// Supports various shader-based transition effects like dissolve, wipe, etc.
+    ///
+    /// # Parameters
+    /// - `target_texture`: Target render texture index
+    /// - `effect_type`: Transition effect type (0=dissolve, 1=wipe, etc.)
+    /// - `progress`: Transition progress from 0.0 to 1.0
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+        // Default implementation - fallback to simple transition
+        self.render_simple_transition(target_texture);
+    }
+
+    /// Get canvas size for advanced rendering calculations
+    ///
+    /// Returns the actual canvas/viewport size for coordinate calculations.
+    /// Used by applications that need to perform custom rendering calculations.
+    ///
+    /// # Returns
+    /// (width, height) tuple in pixels
+    #[cfg(any(
+        feature = "sdl", 
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn get_canvas_size(&self) -> (u32, u32) {
+        let base = unsafe { &*(self as *const Self as *const AdapterBase) };
+        (base.gr.pixel_w as u32, base.gr.pixel_h as u32)
+    }
+
+    /// Setup buffer transition rendering
+    ///
+    /// Prepares the rendering pipeline for complex buffer transition effects.
+    /// This method handles adapter-specific setup for advanced image processing
+    /// like distortion effects, noise generation, and multi-pass rendering.
+    ///
+    /// # Parameters
+    /// - `target_texture`: Target render texture index for transition effects
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, target_texture: usize) {
+        // Default implementation - no special setup needed
+        // Graphics adapters can override this with optimized implementations
+    }
 }
 
 

@@ -1352,6 +1352,61 @@ impl Adapter for WinitWgpuAdapter {
             );
         }
     }
+
+    /// WinitWgpu adapter implementation of render texture visibility control
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+        if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
+            wgpu_pixel_renderer.set_render_texture_hidden(texture_index, !visible);
+        }
+    }
+
+    /// WinitWgpu adapter implementation of simple transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, target_texture: usize) {
+        // WGPU使用标准的转场渲染，参数为(target, shader=0, progress=1.0)
+        if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, 0, 1.0) {
+            eprintln!("WinitWgpuAdapter: Simple transition error: {}", e);
+        }
+    }
+
+    /// WinitWgpu adapter implementation of advanced transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+        // WGPU使用完整的转场渲染API
+        if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, effect_type, progress) {
+            eprintln!("WinitWgpuAdapter: Advanced transition error: {}", e);
+        }
+    }
+
+    /// WinitWgpu adapter implementation of buffer transition setup
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, target_texture: usize) {
+        if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
+            // WGPU uses texture visibility to setup buffer transitions
+            wgpu_pixel_renderer.set_render_texture_hidden(target_texture, true);
+        }
+    }
 }
 
 

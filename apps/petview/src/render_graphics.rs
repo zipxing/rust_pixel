@@ -86,6 +86,44 @@ fn apply_distortion(
     }
 }
 
+/// Unified buffer transition processing
+/// 
+/// This function encapsulates all the common image distortion logic
+/// that was previously duplicated across multiple adapter-specific blocks.
+/// It applies ripple and wave distortion effects, adds random noise,
+/// and configures the sprite for transition rendering.
+fn process_buffer_transition(
+    panel: &mut Panel,
+    ctx: &mut Context,
+    transbuf_stage: usize,
+) {
+    let p4 = panel.get_pixel_sprite("petimg4");
+    let time = (ctx.rand.rand() % 300) as f32 / 100.0;
+    
+    // Apply ripple distortion
+    let distortion_fn1 = |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
+    let mut tbuf = p4.content.clone();
+    let clen = tbuf.content.len();
+    apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
+    
+    // Apply wave distortion
+    let distortion_fn2 = |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
+    apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
+
+    // Add random noise symbols
+    for _ in 0..transbuf_stage / 2 {
+        tbuf.content[ctx.rand.rand() as usize % clen]
+            .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
+            .set_fg(Color::Rgba(155, 155, 155, 155));
+    }
+
+    // Apply the distorted buffer to p3 sprite
+    let p3 = panel.get_pixel_sprite("petimg3");
+    p3.content = tbuf.clone();
+    p3.set_alpha(((0.5 + transbuf_stage as f32 / 120.0) * 255.0) as u8);
+    p3.set_hidden(false);
+}
+
 pub struct PetviewRender {
     pub panel: Panel,
     pub init: bool,
@@ -177,56 +215,14 @@ impl Render for PetviewRender {
 
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         if !model.tex_ready {
-            // Set render texture 3 visible for Winit + Glow mode
-            #[cfg(all(feature = "winit", not(feature = "wgpu")))]
-            {
-                use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
-                use std::any::Any;
-
-                if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
-                    if let Some(gl_pixel_renderer) = &mut winit_glow_adapter.gl_pixel_renderer {
-                        gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(3, false);
-                    }
-                }
-            }
-
-            // Set render texture 3 visible for SDL mode
-            #[cfg(feature = "sdl")]
-            {
-                use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
-                use std::any::Any;
-                
-                if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
-                    if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
-                        gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(3, false);
-                    }
-                }
-            }
-
-            // Set render texture 3 visible for Web mode
-            #[cfg(target_arch = "wasm32")]
-            {
-                use rust_pixel::render::adapter::web_adapter::WebAdapter;
-                use std::any::Any;
-                
-                if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
-                    if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
-                        gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(3, false);
-                    }
-                }
-            }
-
-            #[cfg(feature = "wgpu")]
-            {
-                use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
-                use std::any::Any;
-
-                if let Some(winit_wgpu_adapter) = ctx.adapter.as_any().downcast_mut::<WinitWgpuAdapter>() {
-                    if let Some(wgpu_pixel_renderer) = &mut winit_wgpu_adapter.wgpu_pixel_renderer {
-                        wgpu_pixel_renderer.set_render_texture_hidden(3, false);
-                    }
-                }
-            }
+            // Set render texture 3 visible - unified interface replaces all downcast code
+            #[cfg(any(
+                feature = "sdl",
+                feature = "winit", 
+                feature = "wgpu",
+                target_arch = "wasm32"
+            ))]
+            ctx.adapter.set_render_texture_visible(3, true);
 
             let p1 = self.panel.get_pixel_sprite("petimg1");
             asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
@@ -275,313 +271,51 @@ impl Render for PetviewRender {
             // Common transition logic for both OpenGL and WGPU modes
             match PetviewState::from_usize(ctx.state as usize).unwrap() {
                 PetviewState::Normal => {
-                    // OpenGL mode - 直接访问WinitGlowAdapter
-                    #[cfg(all(feature = "winit", not(feature = "wgpu")))]
+                    // Simple transition - unified interface replaces all downcast code
+                    #[cfg(any(
+                        feature = "sdl",
+                        feature = "winit", 
+                        feature = "wgpu",
+                        target_arch = "wasm32"
+                    ))]
                     {
-                        use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
-                        use std::any::Any;
-
-                        if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut winit_glow_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.render_normal_transition(3);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                            }
-                        }
-                    }
-
-                    // SDL mode - 直接访问SdlAdapter
-                    #[cfg(feature = "sdl")]
-                    {
-                        use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
-                        use std::any::Any;
-
-                        if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.render_normal_transition(3);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                            }
-                        }
-                    }
-
-                    // Web mode - 直接访问WebAdapter
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        use rust_pixel::render::adapter::web_adapter::WebAdapter;
-                        use std::any::Any;
-
-                        if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.render_normal_transition(3);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                            }
-                        }
-                    }
-
-                    // WGPU mode
-                    #[cfg(feature = "wgpu")]
-                    {
-                        use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
-                        use std::any::Any;
-
-                        if let Some(winit_wgpu_adapter) =
-                            ctx.adapter.as_any().downcast_mut::<WinitWgpuAdapter>()
-                        {
-                            if let Some(wgpu_pixel_renderer) =
-                                &mut winit_wgpu_adapter.wgpu_pixel_renderer
-                            {
-                                wgpu_pixel_renderer.set_render_texture_hidden(3, false);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-
-                                // 直接调用WGPU转场渲染 - 使用简化的参数
-                                if let Err(e) = winit_wgpu_adapter.render_transition_to_texture_wgpu(3, 0, 1.0) {
-                                    eprintln!("WGPU transition error: {}", e);
-                                }
-
-                                info!("WGPU: Normal state - render texture 3 visible");
-                            }
-                        }
+                        ctx.adapter.render_simple_transition(3);
+                        let p3 = self.panel.get_pixel_sprite("petimg3");
+                        p3.set_hidden(true);
                     }
                 }
                 PetviewState::TransBuf => {
-                    // Winit + Glow mode - 直接访问WinitGlowAdapter
-                    #[cfg(all(feature = "winit", not(feature = "wgpu")))]
+                    // Buffer transition - unified interface replaces all downcast code
+                    #[cfg(any(
+                        feature = "sdl",
+                        feature = "winit", 
+                        feature = "wgpu",
+                        target_arch = "wasm32"
+                    ))]
                     {
-                        use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
-                        use std::any::Any;
-
-                        if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut winit_glow_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.setup_transbuf_rendering(3);
-                                let p4 = self.panel.get_pixel_sprite("petimg4");
-                                let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                                let distortion_fn1 =
-                                    |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                                let mut tbuf = p4.content.clone();
-                                let clen = tbuf.content.len();
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                                let distortion_fn2 =
-                                    |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-                                for _ in 0..model.transbuf_stage / 2 {
-                                    tbuf.content[ctx.rand.rand() as usize % clen]
-                                        .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                        .set_fg(Color::Rgba(155, 155, 155, 155));
-                                }
-
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.content = tbuf.clone();
-                                p3.set_alpha(
-                                    ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
-                                );
-                                p3.set_hidden(false);
-                            }
-                        }
-                    }
-
-                    // SDL mode - complex distortion effects - 直接访问SdlAdapter
-                    #[cfg(feature = "sdl")]
-                    {
-                        use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
-                        use std::any::Any;
-
-                        if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.setup_transbuf_rendering(3);
-                                let p4 = self.panel.get_pixel_sprite("petimg4");
-                                let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                                let distortion_fn1 =
-                                    |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                                let mut tbuf = p4.content.clone();
-                                let clen = tbuf.content.len();
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                                let distortion_fn2 =
-                                    |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-                                for _ in 0..model.transbuf_stage / 2 {
-                                    tbuf.content[ctx.rand.rand() as usize % clen]
-                                        .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                        .set_fg(Color::Rgba(155, 155, 155, 155));
-                                }
-
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.content = tbuf.clone();
-                                p3.set_alpha(
-                                    ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
-                                );
-                                p3.set_hidden(false);
-                            }
-                        }
-                    }
-
-                    // Web mode - complex distortion effects - 直接访问WebAdapter
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        use rust_pixel::render::adapter::web_adapter::WebAdapter;
-                        use std::any::Any;
-
-                        if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.setup_transbuf_rendering(3);
-                                let p4 = self.panel.get_pixel_sprite("petimg4");
-                                let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                                let distortion_fn1 =
-                                    |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                                let mut tbuf = p4.content.clone();
-                                let clen = tbuf.content.len();
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                                let distortion_fn2 =
-                                    |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-                                for _ in 0..model.transbuf_stage / 2 {
-                                    tbuf.content[ctx.rand.rand() as usize % clen]
-                                        .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                        .set_fg(Color::Rgba(155, 155, 155, 155));
-                                }
-
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.content = tbuf.clone();
-                                p3.set_alpha(
-                                    ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
-                                );
-                                p3.set_hidden(false);
-                            }
-                        }
-                    }
-
-                    // WGPU mode - simplified preparation phase
-                    #[cfg(feature = "wgpu")]
-                    {
-                        use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
-                        use std::any::Any;
-
-                        if let Some(winit_wgpu_adapter) =
-                            ctx.adapter.as_any().downcast_mut::<WinitWgpuAdapter>()
-                        {
-                            if let Some(wgpu_pixel_renderer) =
-                                &mut winit_wgpu_adapter.wgpu_pixel_renderer
-                            {
-                                wgpu_pixel_renderer.set_render_texture_hidden(3, true);
-                                
-                                // Apply the same distortion effects as OpenGL mode
-                                let p4 = self.panel.get_pixel_sprite("petimg4");
-                                let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                                
-                                // Apply ripple distortion
-                                let distortion_fn1 =
-                                    |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                                let mut tbuf = p4.content.clone();
-                                let clen = tbuf.content.len();
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                                
-                                // Apply wave distortion
-                                let distortion_fn2 =
-                                    |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                                apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-                                // Add random noise symbols like OpenGL mode
-                                for _ in 0..model.transbuf_stage / 2 {
-                                    tbuf.content[ctx.rand.rand() as usize % clen]
-                                        .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                        .set_fg(Color::Rgba(155, 155, 155, 155));
-                                }
-
-                                // Apply the distorted buffer to p3 sprite
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.content = tbuf.clone();
-                                p3.set_alpha(
-                                    ((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8,
-                                );
-                                p3.set_hidden(false);
-                                
-                                info!("WGPU: TransBuf stage - applying distortion effects");
-                            }
-                        }
+                        // Setup adapter-specific rendering pipeline
+                        ctx.adapter.setup_buffer_transition(3);
+                        
+                        // Apply unified image distortion processing
+                        process_buffer_transition(
+                            &mut self.panel,
+                            ctx,
+                            model.transbuf_stage as usize,
+                        );
                     }
                 }
                 PetviewState::TransGl => {
-                    // Winit + Glow mode - 直接访问WinitGlowAdapter
-                    #[cfg(all(feature = "winit", not(feature = "wgpu")))]
+                    // Advanced transition - unified interface replaces all downcast code
+                    #[cfg(any(
+                        feature = "sdl",
+                        feature = "winit", 
+                        feature = "wgpu",
+                        target_arch = "wasm32"
+                    ))]
                     {
-                        use rust_pixel::render::adapter::winit_glow_adapter::WinitGlowAdapter;
-                        use std::any::Any;
-
-                        if let Some(winit_glow_adapter) = ctx.adapter.as_any().downcast_mut::<WinitGlowAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut winit_glow_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.render_gl_transition(3, model.trans_effect, model.progress);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                            }
-                        }
-                    }
-
-                    // SDL mode - 直接访问SdlAdapter
-                    #[cfg(feature = "sdl")]
-                    {
-                        use rust_pixel::render::adapter::sdl_adapter::SdlAdapter;
-                        use std::any::Any;
-
-                        if let Some(sdl_adapter) = ctx.adapter.as_any().downcast_mut::<SdlAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut sdl_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.render_gl_transition(3, model.trans_effect, model.progress);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                            }
-                        }
-                    }
-
-                    // Web mode - 直接访问WebAdapter
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        use rust_pixel::render::adapter::web_adapter::WebAdapter;
-                        use std::any::Any;
-
-                        if let Some(web_adapter) = ctx.adapter.as_any().downcast_mut::<WebAdapter>() {
-                            if let Some(gl_pixel_renderer) = &mut web_adapter.gl_pixel_renderer {
-                                gl_pixel_renderer.render_gl_transition(3, model.trans_effect, model.progress);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-                            }
-                        }
-                    }
-
-                    // WGPU mode - full transition effects
-                    #[cfg(feature = "wgpu")]
-                    {
-                        use rust_pixel::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
-                        use std::any::Any;
-
-                        if let Some(winit_wgpu_adapter) =
-                            ctx.adapter.as_any().downcast_mut::<WinitWgpuAdapter>()
-                        {
-                            if let Some(wgpu_pixel_renderer) =
-                                &mut winit_wgpu_adapter.wgpu_pixel_renderer
-                            {
-                                wgpu_pixel_renderer.set_render_texture_hidden(3, false);
-                                let p3 = self.panel.get_pixel_sprite("petimg3");
-                                p3.set_hidden(true);
-
-                                // 直接调用WGPU转场渲染，使用实际的转场效果和进度
-                                if let Err(e) = winit_wgpu_adapter.render_transition_to_texture_wgpu(
-                                    3,
-                                    model.trans_effect,
-                                    model.progress,
-                                ) {
-                                    eprintln!("WGPU transition error: {}", e);
-                                }
-
-                                info!(
-                                    "WGPU: TransGl - effect: {}, progress: {:.2}",
-                                    model.trans_effect, model.progress
-                                );
-                            }
-                        }
+                        ctx.adapter.render_advanced_transition(3, model.trans_effect, model.progress);
+                        let p3 = self.panel.get_pixel_sprite("petimg3");
+                        p3.set_hidden(true);
                     }
                 }
             }
