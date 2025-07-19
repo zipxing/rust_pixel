@@ -18,8 +18,6 @@
 
 pub mod adapter;
 pub mod buffer;
-#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
-pub mod pixel_renderer;
 pub mod cell;
 #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
 pub mod graph;

@@ -9,7 +9,7 @@ use crate::render::adapter::{
     },
     RenderCell,
 };
-use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
+use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use glow::HasContext;
 use log::info;
 
@@ -257,8 +257,8 @@ impl GlPixelRenderer {
                 &self.gl,
                 2,
                 [0.0, 0.0, 1.0, 1.0], // Full-screen quad
-                &crate::render::pixel_renderer::UnifiedTransform::new(),
-                &crate::render::pixel_renderer::UnifiedColor::white(),
+                &crate::render::graph::UnifiedTransform::new(),
+                &crate::render::graph::UnifiedColor::white(),
             );
         }
 
@@ -274,7 +274,7 @@ impl GlPixelRenderer {
             let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
 
             // Create unified transform with proper scaling
-            let mut unified_transform = crate::render::pixel_renderer::UnifiedTransform::new();
+            let mut unified_transform = crate::render::graph::UnifiedTransform::new();
             unified_transform.scale(pw / pcw, ph / pch);
 
             // OpenGL Y-axis: bottom-left origin
@@ -285,7 +285,7 @@ impl GlPixelRenderer {
                 3,
                 viewport,
                 &unified_transform,
-                &crate::render::pixel_renderer::UnifiedColor::white(),
+                &crate::render::graph::UnifiedColor::white(),
             );
         }
 
@@ -306,9 +306,9 @@ impl GlPixelRenderer {
     ) -> Result<(), String> {
         // Set clear color
         let clear_color = if debug {
-            crate::render::pixel_renderer::UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug
+            crate::render::graph::UnifiedColor::new(1.0, 0.0, 0.0, 1.0) // Red for debug
         } else {
-            crate::render::pixel_renderer::UnifiedColor::black() // Black for normal
+            crate::render::graph::UnifiedColor::black() // Black for normal
         };
         self.gl_pixel.set_clear_color(clear_color);
 
@@ -367,7 +367,7 @@ impl GlPixelRenderer {
         // Don't bind screen - assume it's already bound with correct viewport
         
         // Inline unified rendering logic
-        let unified_color = crate::render::pixel_renderer::UnifiedColor::white();
+        let unified_color = crate::render::graph::UnifiedColor::white();
 
         // Layer 1: Draw render_texture 2 (main game content)
         if !self.gl_pixel.get_render_texture_hidden(2) {
@@ -375,7 +375,7 @@ impl GlPixelRenderer {
                 &self.gl,
                 2,
                 [0.0, 0.0, 1.0, 1.0], // Full-screen quad
-                &crate::render::pixel_renderer::UnifiedTransform::new(),
+                &crate::render::graph::UnifiedTransform::new(),
                 &unified_color,
             );
         }
@@ -392,7 +392,7 @@ impl GlPixelRenderer {
             let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
 
             // Create unified transform with proper scaling
-            let mut unified_transform = crate::render::pixel_renderer::UnifiedTransform::new();
+            let mut unified_transform = crate::render::graph::UnifiedTransform::new();
             unified_transform.scale(pw / pcw, ph / pch);
 
             // OpenGL Y-axis: bottom-left origin

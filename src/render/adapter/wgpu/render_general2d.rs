@@ -7,7 +7,7 @@
 //! transformation and color modulation support. Similar to OpenGL GlRenderGeneral2d.
 
 use super::shader_source;
-use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
+use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use super::{WgpuRender, WgpuRenderBase};
 use std::mem;
 use wgpu::util::DeviceExt;

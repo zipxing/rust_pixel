@@ -15,7 +15,7 @@ use super::render_transition::WgpuTransitionRender;
 use super::shader_source;
 use super::texture::WgpuRenderTexture;
 use super::*;
-use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
+use crate::render::graph::{UnifiedColor, UnifiedTransform};
 
 /// Vertex data structure for WGPU rendering
 ///

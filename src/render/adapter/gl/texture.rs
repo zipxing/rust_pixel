@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-use crate::render::pixel_renderer::UnifiedColor;
+use crate::render::graph::UnifiedColor;
 use glow::HasContext;
 // use log::info;
 

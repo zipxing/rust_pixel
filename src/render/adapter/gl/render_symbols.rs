@@ -7,7 +7,7 @@ use crate::render::adapter::gl::{
     texture::{GlCell, GlTexture},
     GlRender, GlRenderBase,
 };
-use crate::render::pixel_renderer::{UnifiedColor, UnifiedTransform};
+use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use glow::HasContext;
 use log::info;

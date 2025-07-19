@@ -8,7 +8,7 @@
 //! a base quad geometry with instance-specific transform and color data.
 
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
-use crate::render::pixel_renderer::UnifiedTransform;
+use crate::render::graph::UnifiedTransform;
 
 /// Symbol instance data for WGPU (matches OpenGL layout exactly)
 /// This corresponds to the per-instance attributes in OpenGL version

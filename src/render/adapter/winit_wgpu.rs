@@ -38,7 +38,7 @@ use crate::render::{
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
-    pixel_renderer::{UnifiedColor, UnifiedTransform},
+    graph::{UnifiedColor, UnifiedTransform},
     sprite::Sprites,
 };
 
