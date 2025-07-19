@@ -23,7 +23,7 @@ It is suitable for creating **2D pixel-style games** and developing **terminal a
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
 
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
-- Graphical Mode (WGPU & SDL2 & WEB): Built with **wgpu** & **glow** & **sdl2**, using **PETSCII & custom graphics symbols** for rendering.
+- Graphical Mode: Built with **wgpu** & **glow** & **sdl2**, using **PETSCII & custom graphics symbols** for rendering.
 
 [online demo]: https://zipxing.github.io/rust_pixel
 
