@@ -4,9 +4,9 @@ use rust_pixel::{context::Context, event::event_emit, game::Model, util::Rand};
 use texas_lib::*;
 
 pub const CARDW: usize = 7;
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
 pub const CARDH: usize = 7;
-#[cfg(not(any(feature = "sdl", feature = "winit", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
 pub const CARDH: usize = 5;
 
 // enum PokerState {
