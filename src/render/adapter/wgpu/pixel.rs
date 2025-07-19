@@ -248,6 +248,14 @@ impl WgpuPixelRender {
         }
     }
 
+    /// Get canvas size (matches OpenGL GlPixel interface)
+    ///
+    /// # Returns
+    /// Tuple of (width, height) in pixels
+    pub fn get_canvas_size(&self) -> (u32, u32) {
+        (self.canvas_width, self.canvas_height)
+    }
+
     /// Get render texture by index (for debugging and general access)
     ///
     /// This method provides access to render textures for debugging purposes,
@@ -1133,78 +1141,4 @@ impl WgpuRender for WgpuPixelRender {
     }
 }
 
-// Implementation of the unified PixelRenderer trait for WGPU backend
-impl crate::render::pixel_renderer::PixelRenderer for WgpuPixelRender {
-    fn get_canvas_size(&self) -> (u32, u32) {
-        (self.canvas_width, self.canvas_height)
-    }
-    
-    fn render_texture_to_screen(
-        &mut self,
-        rtidx: usize,
-        area: [f32; 4],
-        transform: &crate::render::pixel_renderer::UnifiedTransform,
-        color: &crate::render::pixel_renderer::UnifiedColor,
-    ) -> Result<(), String> {
-        // WgpuPixelRender requires external WGPU resources managed by the adapter
-        // WGPU CommandEncoders are consumable and must be managed externally
-        Err("WgpuPixelRender requires external WGPU resources - call through adapter which manages CommandEncoders".to_string())
-    }
-    
-    fn render_transition_frame(
-        &mut self,
-        shader_idx: usize,
-        progress: f32,
-    ) -> Result<(), String> {
-        // WgpuPixelRender requires external WGPU resources managed by the adapter
-        // WGPU CommandEncoders are consumable and must be managed externally
-        Err("WgpuPixelRender requires external WGPU resources - call through adapter which manages CommandEncoders".to_string())
-    }
-    
-    fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
-        if rtidx < self.render_textures.len() {
-            self.render_textures[rtidx].is_hidden
-        } else {
-            true // Out of bounds textures are considered hidden
-        }
-    }
-    
-    fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
-        if rtidx < self.render_textures.len() {
-            self.render_textures[rtidx].is_hidden = hidden;
-        }
-    }
-    
-    fn render_symbols_to_texture(
-        &mut self,
-        rbuf: &[crate::render::adapter::RenderCell],
-        rtidx: usize,
-        ratio_x: f32,
-        ratio_y: f32,
-    ) -> Result<(), String> {
-        // WgpuPixelRender requires external WGPU resources managed by the adapter
-        // WGPU CommandEncoders are consumable and must be managed externally
-        Err("WgpuPixelRender requires external WGPU resources - call through adapter which manages CommandEncoders".to_string())
-    }
-    
-    fn set_clear_color(&mut self, color: &crate::render::pixel_renderer::UnifiedColor) {
-        // Use unified color directly - no conversion needed
-        self.set_clear_color(*color);
-    }
-    
-    fn clear(&mut self) {
-        // WGPU clear is handled internally
-        self.clear();
-    }
-    
-    fn bind_render_target(&mut self, rtidx: Option<usize>) {
-        match rtidx {
-            Some(idx) => self.bind_target(idx),
-            None => self.bind_screen(),
-        }
-    }
-    
-    fn as_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
+
