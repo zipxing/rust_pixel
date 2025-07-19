@@ -43,6 +43,7 @@ pub fn check_pixel_env() -> PixelContext {
     println!("🍭 Current command line：{}", command_line);
     
     let mut pc: PixelContext = Default::default();
+    // compile into cargo-pixel binary file...
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     println!("🍭 Rust_pixel version：{}", current_version);
 

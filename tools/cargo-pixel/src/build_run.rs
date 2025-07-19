@@ -74,6 +74,26 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 .collect::<Vec<&str>>()
                 .join(" ")
         )),
+        "glow" | "g" => cmds.push(format!(
+            "cargo {} -p {} --features winit {} {}",
+            subcmd, // build or run
+            mod_name,
+            release,
+            args.values_of("other")
+                .unwrap_or_default()
+                .collect::<Vec<&str>>()
+                .join(" ")
+        )),
+        "wgpu" | "wg" => cmds.push(format!(
+            "cargo {} -p {} --features wgpu {} {}",
+            subcmd, // build or run
+            mod_name,
+            release,
+            args.values_of("other")
+                .unwrap_or_default()
+                .collect::<Vec<&str>>()
+                .join(" ")
+        )),
         "sdl" | "s" => cmds.push(format!(
             "cargo {} -p {} --features sdl {} {}",
             subcmd, // build or run
