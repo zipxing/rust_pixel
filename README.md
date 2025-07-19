@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/8e9e0837-43fd-4f18-a5ad-265a06ddb47e
 - Unified OpenGL drawing mode supports sdl and wasm (glow & sdl2) (adapter.rs, sdl_adapter.rs, web_adapter.rs)
 - Unified Wgpu drawing mode supports wgpu and wasm (winit & wgpu) (adapter.rs, winit_wgpu.rs)
 - 3 core OpenGl shaders for sdl2 & web graphics mode: (gl/) 
-- 3 core Wgpu shaders for wgpu graphics mode: (gl/) 
+- 3 core Wgpu shaders for wgpu graphics mode: (wgpu/) 
     - instance rendering shader for draw mainbuffer (render_symbols.rs) 
     - transition shader for transition effect (render_transition.rs)
     - general 2d shader for draw render texture (render_general2d.rs)

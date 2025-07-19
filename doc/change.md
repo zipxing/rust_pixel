@@ -1,3 +1,13 @@
+# 1.0.0
+- Added wgpu render backend
+```
+cargo pixel r petview wg -r   # winit + wgpu
+cargo pixel r petview g -r    # winit + glow
+cargo pixel r petview s -r    # sdl + glow
+cargo pixel r petview w -r    # wasm with glow
+```
+- Remove pixel_macro crate,move to lib.rs
+
 # 0.6.0 / 0.6.1
 - Bug fix
 - Rename c64.png to symbols.png 
