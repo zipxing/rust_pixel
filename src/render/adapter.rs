@@ -175,7 +175,12 @@ pub mod sdl;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
-
+/// Winit common module - Shared code between winit_glow and winit_wgpu adapters
+#[cfg(any(
+    all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")),
+    all(feature = "wgpu", not(target_arch = "wasm32"))
+))]
+pub mod winit_common;
 
 /// Winit + Glow adapter module - OpenGL backend with winit window management
 #[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]

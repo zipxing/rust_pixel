@@ -36,6 +36,7 @@ use crate::render::{
     adapter::{
         init_sym_height, init_sym_width, Adapter, AdapterBase,
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+        winit_common::{Drag, WindowInitParams, input_events_from_winit, winit_move_win},
     },
     buffer::Buffer,
     graph::{UnifiedColor, UnifiedTransform},
@@ -58,25 +59,7 @@ pub use winit::{
     window::{Cursor, CustomCursor, Window},
 };
 
-/// 窗口拖拽状态管理
-///
-/// 记录窗口拖拽的相关状态，支持通过鼠标拖拽移动窗口位置。
-/// 类似于SDL版本的实现，提供相同的用户体验。
-#[derive(Default)]
-struct Drag {
-    /// 是否需要执行拖拽操作
-    need: bool,
-    /// 是否正在拖拽中
-    draging: bool,
-    /// 拖拽起始鼠标X坐标
-    mouse_x: f64,
-    /// 拖拽起始鼠标Y坐标
-    mouse_y: f64,
-    /// X轴拖拽偏移量
-    dx: f64,
-    /// Y轴拖拽偏移量
-    dy: f64,
-}
+
 
 /// 边框区域枚举
 ///
@@ -97,16 +80,6 @@ pub enum WinitBorderArea {
 /// 封装了winit窗口管理和现代渲染后端的所有组件。
 /// 支持两种渲染后端：OpenGL (glow) 和现代GPU API (wgpu)。
 /// 实现了与SDL适配器相同的接口，可以无缝替换。
-/// 窗口初始化参数
-#[derive(Debug, Clone)]
-pub struct WindowInitParams {
-    pub width: u16,
-    pub height: u16,
-    pub ratio_x: f32,
-    pub ratio_y: f32,
-    pub title: String,
-    pub texture_path: String,
-}
 
 /// Winit + WGPU适配器主结构
 ///
@@ -1381,192 +1354,4 @@ impl Adapter for WinitWgpuAdapter {
     }
 }
 
-/// 将Winit输入事件转换为RustPixel事件
-///
-/// 为了统一事件处理，将winit的事件系统转换为RustPixel的事件格式。
-/// 这样可以确保游戏逻辑与具体的窗口库解耦。
-///
-/// # 参数
-/// - `event`: Winit原始事件
-/// - `adjx`: X轴坐标调整系数
-/// - `adjy`: Y轴坐标调整系数  
-/// - `cursor_pos`: 当前鼠标位置（可变引用）
-///
-/// # 支持的事件类型
-/// - 键盘输入：字母键、方向键
-/// - 鼠标输入：左键按下/释放
-/// - 鼠标移动：更新光标位置
-///
-/// # 返回值
-/// 如果事件可以转换则返回Some(Event)，否则返回None
-pub fn input_events_from_winit(
-    event: &WinitEvent<()>,
-    adjx: f32,
-    adjy: f32,
-    cursor_pos: &mut (f64, f64),
-) -> Option<Event> {
-    use crate::event::{
-        Event, KeyCode, KeyEvent, KeyModifiers, MouseButton::*, MouseEvent, MouseEventKind::*,
-    };
 
-    let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
-    let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-
-    match event {
-        WinitEvent::WindowEvent {
-            event: window_event,
-            ..
-        } => {
-            match window_event {
-                WindowEvent::KeyboardInput {
-                    event: key_event, ..
-                } => {
-                    if key_event.state == winit::event::ElementState::Pressed {
-                        if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key
-                        {
-                            let kc = match keycode {
-                                winit::keyboard::KeyCode::Space => ' ',
-                                winit::keyboard::KeyCode::KeyA => 'a',
-                                winit::keyboard::KeyCode::KeyB => 'b',
-                                winit::keyboard::KeyCode::KeyC => 'c',
-                                winit::keyboard::KeyCode::KeyD => 'd',
-                                winit::keyboard::KeyCode::KeyE => 'e',
-                                winit::keyboard::KeyCode::KeyF => 'f',
-                                winit::keyboard::KeyCode::KeyG => 'g',
-                                winit::keyboard::KeyCode::KeyH => 'h',
-                                winit::keyboard::KeyCode::KeyI => 'i',
-                                winit::keyboard::KeyCode::KeyJ => 'j',
-                                winit::keyboard::KeyCode::KeyK => 'k',
-                                winit::keyboard::KeyCode::KeyL => 'l',
-                                winit::keyboard::KeyCode::KeyM => 'm',
-                                winit::keyboard::KeyCode::KeyN => 'n',
-                                winit::keyboard::KeyCode::KeyO => 'o',
-                                winit::keyboard::KeyCode::KeyP => 'p',
-                                winit::keyboard::KeyCode::KeyQ => 'q',
-                                winit::keyboard::KeyCode::KeyR => 'r',
-                                winit::keyboard::KeyCode::KeyS => 's',
-                                winit::keyboard::KeyCode::KeyT => 't',
-                                winit::keyboard::KeyCode::KeyU => 'u',
-                                winit::keyboard::KeyCode::KeyV => 'v',
-                                winit::keyboard::KeyCode::KeyW => 'w',
-                                winit::keyboard::KeyCode::KeyX => 'x',
-                                winit::keyboard::KeyCode::KeyY => 'y',
-                                winit::keyboard::KeyCode::KeyZ => 'z',
-                                winit::keyboard::KeyCode::ArrowUp => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Up,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::ArrowDown => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Down,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::ArrowLeft => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Left,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::ArrowRight => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Right,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                _ => return None,
-                            };
-                            let cte = KeyEvent::new(KeyCode::Char(kc), KeyModifiers::NONE);
-                            return Some(Event::Key(cte));
-                        }
-                    }
-                }
-                WindowEvent::MouseInput { state, button, .. } => {
-                    let mouse_event = match (state, button) {
-                        (winit::event::ElementState::Pressed, winit::event::MouseButton::Left) => {
-                            Some(MouseEvent {
-                                kind: Down(Left),
-                                column: (cursor_pos.0 / (sym_width / adjx) as f64) as u16,
-                                row: (cursor_pos.1 / (sym_height / adjy) as f64) as u16,
-                                modifiers: KeyModifiers::NONE,
-                            })
-                        }
-                        (winit::event::ElementState::Released, winit::event::MouseButton::Left) => {
-                            Some(MouseEvent {
-                                kind: Up(Left),
-                                column: (cursor_pos.0 / (sym_width / adjx) as f64) as u16,
-                                row: (cursor_pos.1 / (sym_height / adjy) as f64) as u16,
-                                modifiers: KeyModifiers::NONE,
-                            })
-                        }
-                        _ => None,
-                    };
-
-                    if let Some(mut mc) = mouse_event {
-                        if mc.column >= 1 {
-                            mc.column -= 1;
-                        }
-                        if mc.row >= 1 {
-                            mc.row -= 1;
-                        }
-                        return Some(Event::Mouse(mc));
-                    }
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    // Update cursor position
-                    cursor_pos.0 = position.x;
-                    cursor_pos.1 = position.y;
-
-                    let mut mc = MouseEvent {
-                        kind: Moved,
-                        column: (position.x / (sym_width / adjx) as f64) as u16,
-                        row: (position.y / (sym_height / adjy) as f64) as u16,
-                        modifiers: KeyModifiers::NONE,
-                    };
-                    if mc.column >= 1 {
-                        mc.column -= 1;
-                    }
-                    if mc.row >= 1 {
-                        mc.row -= 1;
-                    }
-                    return Some(Event::Mouse(mc));
-                }
-                _ => {}
-            }
-        }
-        _ => {}
-    }
-    None
-}
-
-/// 移动Winit窗口位置
-///
-/// 根据拖拽偏移量移动窗口到新位置。这个函数实现了与SDL版本相同的
-/// 窗口拖拽功能。
-///
-/// # 参数
-/// - `drag_need`: 是否需要拖拽的标志（会被重置为false）
-/// - `window`: 窗口实例的可选引用
-/// - `dx`: X轴拖拽偏移量
-/// - `dy`: Y轴拖拽偏移量
-///
-/// # 实现细节
-/// - 获取当前窗口位置
-/// - 计算新位置（当前位置 + 偏移量）
-/// - 调用set_outer_position移动窗口
-/// - 重置拖拽标志
-pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy: f64) {
-    // dragging window, set the correct position of a window
-    if *drag_need {
-        if let Some(win) = window {
-            if let Ok(pos) = win.outer_position() {
-                let new_x = pos.x + dx as i32;
-                let new_y = pos.y + dy as i32;
-                let _ = win.set_outer_position(winit::dpi::PhysicalPosition::new(new_x, new_y));
-            }
-        }
-        *drag_need = false;
-    }
-}
