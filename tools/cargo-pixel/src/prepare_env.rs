@@ -24,23 +24,26 @@ use crate::PixelContext;
 use crate::PState;
 use crate::exec_cmd;
 
+fn is_pixel_root(dir_path: &str) -> bool {
+    if let Ok(ct) = fs::read_to_string(format!("{}/Cargo.toml", dir_path)) {
+        if let Ok(doc) = ct.parse::<toml::Value>() {
+            if let Some(package) = doc.get("package") {
+                if let Some(name) = package.get("name") {
+                    return &name.to_string() == "\"rust_pixel\"";
+                }
+            }
+        }
+    }
+    false
+}
+
 pub fn check_pixel_env() -> PixelContext {
     let args: Vec<String> = env::args().collect();
     let command_line = args.join(" ");
     println!("🍭 Current command line：{}", command_line);
     
     let mut pc: PixelContext = Default::default();
-
-    // match env::current_exe() {
-    //     Ok(exe_path) => {
-    //         pc.current_exe = exe_path.clone();
-    //         println!("🍭 current_exe：{}", exe_path.display());
-    //     }
-    //     Err(e) => {
-    //         println!("get current_exe error：{}", e);
-    //     }
-    // }
-
+    // compile into cargo-pixel binary file...
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     println!("🍭 Rust_pixel version：{}", current_version);
 
@@ -48,45 +51,51 @@ pub fn check_pixel_env() -> PixelContext {
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).expect("Failed to create config directory");
     }
-    // println!("🍭 Config_dir：{:?}", config_dir);
 
     let pixel_config = config_dir.join("rust_pixel.toml");
+    let cdir = env::current_dir().unwrap();
+    let cdir_s = cdir.to_str().unwrap().to_string();
+    
     if pixel_config.exists() {
         let config_content = fs::read_to_string(&pixel_config).expect("Failed to read config file");
-        let saved_pc: PixelContext =
-            toml::from_str(&config_content).expect("Failed to parse config file");
-        pc = saved_pc.clone();
+        pc = toml::from_str(&config_content).expect("Failed to parse config file");
         println!("🍭 Loaded configuration from {:?}", pixel_config);
     } else {
-        let home_dir = dirs_next::home_dir().expect("Could not find home directory");
-        let repo_dir = home_dir.join("rust_pixel_work");
-        if !repo_dir.exists() {
-            println!("  Cloning rust_pixel from GitHub...");
-            let status = Command::new("git")
-                .args(&[
-                    "clone",
-                    // "-b", "opt_crate",
-                    "https://github.com/zipxing/rust_pixel",
-                    repo_dir.to_str().unwrap(),
-                ])
-                .status()
-                .expect("Failed to execute git command");
-            if status.success() {
-                println!("  Repository cloned successfully.");
-            } else {
-                println!("🚫 Failed to clone rust_pixel repository");
-            }
+        // 检查当前目录是否是 PixelRoot
+        if is_pixel_root(&cdir_s) {
+            println!("🍭 Current directory is rust_pixel root, using it");
+            pc.rust_pixel_dir.push(cdir_s.clone());
+            pc.rust_pixel_idx = 0;
+            pc.cdir_state = PState::PixelRoot;
         } else {
-            println!("repo_dir exists!");
+            // 当前目录不是 PixelRoot，创建新的 rust_pixel_work
+            let home_dir = dirs_next::home_dir().expect("Could not find home directory");
+            let repo_dir = home_dir.join("rust_pixel_work");
+            if !repo_dir.exists() {
+                println!("  Cloning rust_pixel from GitHub...");
+                let status = Command::new("git")
+                    .args(&[
+                        "clone",
+                        "https://github.com/zipxing/rust_pixel",
+                        repo_dir.to_str().unwrap(),
+                    ])
+                    .status()
+                    .expect("Failed to execute git command");
+                if status.success() {
+                    println!("  Repository cloned successfully.");
+                } else {
+                    println!("🚫 Failed to clone rust_pixel repository");
+                }
+            } else {
+                println!("🍭 Using existing rust_pixel_work directory");
+            }
+            pc.rust_pixel_dir.push(repo_dir.to_str().unwrap().to_string());
+            pc.rust_pixel_idx = 0;
         }
-        pc.rust_pixel_dir
-            .push(repo_dir.to_str().unwrap().to_string());
         write_config(&pc, &pixel_config);
     }
 
-    // search current_dir
-    let cdir = env::current_dir().unwrap();
-    let cdir_s = cdir.to_str().unwrap().to_string();
+    // 检查当前目录状态
     pc.cdir_state = PState::NotPixel;
     if let Some(idx) = pc.rust_pixel_dir.iter().position(|x| x == &cdir_s) {
         pc.cdir_state = PState::PixelRoot;
@@ -98,26 +107,9 @@ pub fn check_pixel_env() -> PixelContext {
         }
     }
 
-    // match env::set_current_dir(&repo_dir) {
-    //     Ok(_) => {
-    //         println!("Successfully changed to directory: {}", repo_dir.display());
-    //         println!("Updating rust_pixel from GitHub...");
-    //         let status = Command::new("git")
-    //             .args(&["pull"])
-    //             .status()
-    //             .expect("Failed to execute git command");
-    //         if status.success() {
-    //             println!("Repository update successfully.");
-    //         } else {
-    //             println!("Failed to update rust_pixel repository");
-    //         }
-    //     }
-    //     Err(e) => println!("Error changing directory: {}", e),
-    // }
-
+    // 检查版本并更新
     if let Ok(ct) = fs::read_to_string("Cargo.toml") {
         let doc = ct.parse::<toml::Value>().unwrap();
-
         if let Some(package) = doc.get("package") {
             if let Some(name) = package.get("name") {
                 if &name.to_string() == "\"rust_pixel\"" {

@@ -82,7 +82,7 @@ where
         let ap = project_path.to_string();
         let ctx = Context::new(name, &ap);
         init_log(
-            log::LevelFilter::Trace,
+            log::LevelFilter::Info,
             &format!("log{}{}.log", std::path::MAIN_SEPARATOR, name),
         );
         info!("{}(rust_pixel) start...{:?}", name, &ap);
@@ -116,6 +116,7 @@ where
             }
 
             let et = last_tick.elapsed();
+            
             if et >= tick_rate {
                 let dt = et.as_secs() as f32 + et.subsec_nanos() as f32 / 1_000_000_000.0;
                 self.on_tick(dt);
@@ -142,7 +143,7 @@ where
 #[macro_export]
 macro_rules! only_terminal_mode {
     () => {
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
         {
             println!("Run in terminal only...");
             std::process::exit(0);
@@ -153,7 +154,7 @@ macro_rules! only_terminal_mode {
 #[macro_export]
 macro_rules! only_graphics_mode {
     () => {
-        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
         {
             println!("Run in graphics only...");
             std::process::exit(0);

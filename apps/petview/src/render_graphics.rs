@@ -86,6 +86,44 @@ fn apply_distortion(
     }
 }
 
+/// Unified buffer transition processing
+/// 
+/// This function encapsulates all the common image distortion logic
+/// that was previously duplicated across multiple adapter-specific blocks.
+/// It applies ripple and wave distortion effects, adds random noise,
+/// and configures the sprite for transition rendering.
+fn process_buffer_transition(
+    panel: &mut Panel,
+    ctx: &mut Context,
+    transbuf_stage: usize,
+) {
+    let p4 = panel.get_pixel_sprite("petimg4");
+    let time = (ctx.rand.rand() % 300) as f32 / 100.0;
+    
+    // Apply ripple distortion
+    let distortion_fn1 = |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
+    let mut tbuf = p4.content.clone();
+    let clen = tbuf.content.len();
+    apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
+    
+    // Apply wave distortion
+    let distortion_fn2 = |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
+    apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
+
+    // Add random noise symbols
+    for _ in 0..transbuf_stage / 2 {
+        tbuf.content[ctx.rand.rand() as usize % clen]
+            .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
+            .set_fg(Color::Rgba(155, 155, 155, 155));
+    }
+
+    // Apply the distorted buffer to p3 sprite
+    let p3 = panel.get_pixel_sprite("petimg3");
+    p3.content = tbuf.clone();
+    p3.set_alpha(((0.5 + transbuf_stage as f32 / 120.0) * 255.0) as u8);
+    p3.set_hidden(false);
+}
+
 pub struct PetviewRender {
     pub panel: Panel,
     pub init: bool,
@@ -126,13 +164,16 @@ impl PetviewRender {
         Self { panel, init: false }
     }
 
+    // 不能把这个初始化，直接放在init方法里，因为web模式下
+    // 资源是异步加载的，那个时候还没有加载到
+    // 所以需要每帧去轮询
     fn do_init(&mut self, ctx: &mut Context) {
         if self.init {
             return;
         }
 
-        let rx = ctx.adapter.get_base().ratio_x;
-        let ry = ctx.adapter.get_base().ratio_y;
+        let rx = ctx.adapter.get_base().gr.ratio_x;
+        let ry = ctx.adapter.get_base().gr.ratio_y;
         let p3 = self.panel.get_pixel_sprite("petimg3");
         p3.set_pos(
             (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
@@ -174,29 +215,51 @@ impl Render for PetviewRender {
 
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         if !model.tex_ready {
-            if let Some(pix) = &mut ctx.adapter.get_base().gl_pixel {
-                pix.set_render_texture_hidden(3, false);
-            }
+            // Set render texture 3 visible - unified interface replaces all downcast code
+            #[cfg(any(
+                feature = "sdl",
+                feature = "winit", 
+                feature = "wgpu",
+                target_arch = "wasm32"
+            ))]
+            ctx.adapter.set_render_texture_visible(3, true);
+
             let p1 = self.panel.get_pixel_sprite("petimg1");
             asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
             let l1 = p1.check_asset_request(&mut ctx.asset_manager);
+
+            // Draw to texture for both modes
             if l1 {
                 ctx.adapter.draw_buffer_to_texture(&p1.content, 0);
             }
 
             let p2 = self.panel.get_pixel_sprite("petimg2");
-            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            asset2sprite!(
+                p2,
+                ctx,
+                &format!("{}.pix", model.img_count - model.img_next)
+            );
             let l2 = p2.check_asset_request(&mut ctx.asset_manager);
+
+            // Draw to texture for both modes
             if l2 {
                 ctx.adapter.draw_buffer_to_texture(&p2.content, 1);
             }
 
             let p3 = self.panel.get_pixel_sprite("petimg3");
-            asset2sprite!(p3, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            asset2sprite!(
+                p3,
+                ctx,
+                &format!("{}.pix", model.img_count - model.img_next)
+            );
             p3.set_hidden(true);
 
             let p4 = self.panel.get_pixel_sprite("petimg4");
-            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_count - model.img_next));
+            asset2sprite!(
+                p4,
+                ctx,
+                &format!("{}.pix", model.img_count - model.img_next)
+            );
             p4.set_hidden(true);
 
             if l1 && l2 {
@@ -205,48 +268,58 @@ impl Render for PetviewRender {
             }
         }
         if event_check("PetView.Timer", "pet_timer") {
-            let sa = ctx.adapter.get_base();
-            if let (Some(pix), Some(gl)) = (&mut sa.gl_pixel, &mut sa.gl) {
-                pix.bind_target(gl, 3);
-                match PetviewState::from_usize(ctx.state as usize).unwrap() {
-                    PetviewState::Normal => {
-                        pix.set_render_texture_hidden(3, false);
+            // Common transition logic for both OpenGL and WGPU modes
+            match PetviewState::from_usize(ctx.state as usize).unwrap() {
+                PetviewState::Normal => {
+                    // Simple transition - unified interface replaces all downcast code
+                    #[cfg(any(
+                        feature = "sdl",
+                        feature = "winit", 
+                        feature = "wgpu",
+                        target_arch = "wasm32"
+                    ))]
+                    {
+                        ctx.adapter.render_simple_transition(3);
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         p3.set_hidden(true);
-                        pix.render_trans_frame(&gl, 0, 1.0);
                     }
-                    PetviewState::TransBuf => {
-                        pix.set_render_texture_hidden(3, true);
-                        let p4 = self.panel.get_pixel_sprite("petimg4");
-                        let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-                        let distortion_fn1 =
-                            |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
-                        let mut tbuf = p4.content.clone();
-                        let clen = tbuf.content.len();
-                        apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-                        let distortion_fn2 =
-                            |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-                        apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-                        for _ in 0..model.transbuf_stage / 2 {
-                            tbuf.content[ctx.rand.rand() as usize % clen]
-                                .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
-                                .set_fg(Color::Rgba(155, 155, 155, 155));
-                        }
-
-                        let p3 = self.panel.get_pixel_sprite("petimg3");
-                        p3.content = tbuf.clone();
-                        p3.set_alpha(((0.5 + model.transbuf_stage as f32 / 120.0) * 255.0) as u8);
-                        p3.set_hidden(false);
+                }
+                PetviewState::TransBuf => {
+                    // Buffer transition - unified interface replaces all downcast code
+                    #[cfg(any(
+                        feature = "sdl",
+                        feature = "winit", 
+                        feature = "wgpu",
+                        target_arch = "wasm32"
+                    ))]
+                    {
+                        // Setup adapter-specific rendering pipeline
+                        ctx.adapter.setup_buffer_transition(3);
+                        
+                        // Apply unified image distortion processing
+                        process_buffer_transition(
+                            &mut self.panel,
+                            ctx,
+                            model.transbuf_stage as usize,
+                        );
                     }
-                    PetviewState::TransGl => {
-                        pix.set_render_texture_hidden(3, false);
+                }
+                PetviewState::TransGl => {
+                    // Advanced transition - unified interface replaces all downcast code
+                    #[cfg(any(
+                        feature = "sdl",
+                        feature = "winit", 
+                        feature = "wgpu",
+                        target_arch = "wasm32"
+                    ))]
+                    {
+                        ctx.adapter.render_advanced_transition(3, model.trans_effect, model.progress);
                         let p3 = self.panel.get_pixel_sprite("petimg3");
                         p3.set_hidden(true);
-                        pix.render_trans_frame(&gl, model.trans_effect, model.progress);
                     }
                 }
             }
+
             timer_fire("PetView.Timer", 1);
         }
     }

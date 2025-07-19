@@ -2,20 +2,19 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 use crate::render::adapter::gl::{
-    color::GlColor,
     shader::GlShader,
     shader_source::{GENERAL2D_FRAGMENT_SRC, GENERAL2D_VERTEX_SRC},
-    transform::GlTransform,
     GlRender, GlRenderBase,
 };
+use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use glow::HasContext;
 // use log::info;
 
 pub struct GlRenderGeneral2d {
     pub base: GlRenderBase,
     pub area: [f32; 4],
-    pub transform: GlTransform,
-    pub color: GlColor,
+    pub transform: UnifiedTransform,
+    pub color: UnifiedColor,
 }
 
 impl GlRender for GlRenderGeneral2d {
@@ -35,8 +34,8 @@ impl GlRender for GlRenderGeneral2d {
         Self {
             base,
             area: [0.0, 0.0, 0.0, 0.0],
-            transform: GlTransform::new(),
-            color: GlColor::new(0.0, 0.0, 0.0, 1.0),
+            transform: UnifiedTransform::new(),
+            color: UnifiedColor::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 
@@ -171,12 +170,12 @@ impl GlRenderGeneral2d {
         self
     }
 
-    pub fn set_transform(&mut self, transform: &GlTransform) -> &mut Self {
+    pub fn set_transform(&mut self, transform: &UnifiedTransform) -> &mut Self {
         self.transform = *transform;
         self
     }
 
-    pub fn set_color(&mut self, color: &GlColor) -> &mut Self {
+    pub fn set_color(&mut self, color: &UnifiedColor) -> &mut Self {
         self.color = *color;
         self
     }

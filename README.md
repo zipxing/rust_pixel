@@ -23,7 +23,7 @@ It is suitable for creating **2D pixel-style games** and developing **terminal a
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
 
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
-- Graphical Mode (SDL2 & WEB): Built with **glow** & **sdl2**, using **PETSCII & custom graphics symbols** for rendering.
+- Graphical Mode: Built with **wgpu** & **glow** & **sdl2**, using **PETSCII & custom graphics symbols** for rendering.
 
 [online demo]: https://zipxing.github.io/rust_pixel
 
@@ -36,11 +36,13 @@ https://github.com/user-attachments/assets/8e9e0837-43fd-4f18-a5ad-265a06ddb47e
 - Game loops & Model/Render design pattern (game.rs)
 - Event/Timer messaging mechanism (event.rs)
 - Support text render mode (crossterm) (adapter.rs, cross.rs)
-- Unified OpenGL drawing mode supports sdl and wasm (glow & sdl2) (adapter.rs, sdl.rs, web.rs)
+- Unified OpenGL drawing mode supports sdl and wasm (glow & sdl2) (adapter.rs, sdl_adapter.rs, web_adapter.rs)
+- Unified Wgpu drawing mode supports wgpu and wasm (winit & wgpu) (adapter.rs, winit_wgpu.rs)
 - 3 core OpenGl shaders for sdl2 & web graphics mode: (gl/) 
-    - gl instance rendering shader for draw mainbuffer (render_symbols.rs) 
-    - gl transition shader for transition effect (render_transition.rs)
-    - gl general 2d shader for draw render texture (render_general2d.rs)
+- 3 core Wgpu shaders for wgpu graphics mode: (gl/) 
+    - instance rendering shader for draw mainbuffer (render_symbols.rs) 
+    - transition shader for transition effect (render_transition.rs)
+    - general 2d shader for draw render texture (render_general2d.rs)
 - Some common game algorithms (algorithm.rs, algorithm/, util.rs, util/)
 - audio & log support (audio.rs, log.rs)
 - Demo games: tetris, tower, poker... (games/)
@@ -92,6 +94,8 @@ cargo pixel r tetris s                #Run the Tetris game in SDL window mode
 cargo pixel r tower w                 #Run tower in web,visit http://localhost:8080/ in your browser
 cargo pixel r tower w --webport 8081  #Change web server port
 cargo pixel r tower w -r              #Run with release mode
+cargo pixel r petview g -r            #Run the petview game in winit+glow mode
+cargo pixel r petview wg -r           #Run the petview game in winit+wgpu mode
 ``` 
 
 You can also use cargo pixel to create your own game or app:

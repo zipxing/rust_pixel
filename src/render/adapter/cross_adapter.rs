@@ -13,7 +13,7 @@ use crate::{
     util::Rand,
     LOGO_FRAME,
 };
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -32,14 +32,14 @@ use std::io::{self, Write};
 use std::time::Duration;
 // use log::info;
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
 pub struct CrosstermAdapter {
     pub writer: Box<dyn Write>,
     pub base: AdapterBase,
     pub rd: Rand,
 }
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
 impl CrosstermAdapter {
     pub fn new(gn: &str, project_path: &str) -> Self {
         let stdout = io::stdout();
@@ -51,7 +51,7 @@ impl CrosstermAdapter {
     }
 }
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
 impl Adapter for CrosstermAdapter {
     fn init(&mut self, w: u16, h: u16, _rx: f32, _ry: f32, _s: String) {
         self.set_size(w, h);
@@ -79,14 +79,6 @@ impl Adapter for CrosstermAdapter {
         disable_raw_mode().unwrap();
         execute!(self.writer, LeaveAlternateScreen, DisableMouseCapture).unwrap();
         self.show_cursor().unwrap();
-    }
-
-    fn cell_width(&self) -> f32 {
-        0.0
-    }
-
-    fn cell_height(&self) -> f32 {
-        0.0
     }
 
     fn hide_cursor(&mut self) -> Result<(), String> {
@@ -122,7 +114,7 @@ impl Adapter for CrosstermAdapter {
         false
     }
 
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
@@ -200,14 +192,59 @@ impl Adapter for CrosstermAdapter {
         ))
     }
 
+    fn post_draw(&mut self) {}
+
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+    /// Crossterm adapter - no graphics support for advanced rendering methods
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, _texture_index: usize, _visible: bool) {
+        // Text mode - no render textures
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, _target_texture: usize) {
+        // Text mode - no transition effects
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, _target_texture: usize, _effect_type: usize, _progress: f32) {
+        // Text mode - no transition effects
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, _target_texture: usize) {
+        // Text mode - no buffer transitions
+    }
+
+
 }
 
 /// Convert crossterm I/O events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
 pub fn input_events_from_cross(e: &CEvent) -> Option<Event> {
     let mut mcte: Option<MouseEvent> = None;
     match e {
@@ -269,4 +306,4 @@ pub fn input_events_from_cross(e: &CEvent) -> Option<Event> {
         return Some(Event::Mouse(mc));
     }
     None
-}
+} 

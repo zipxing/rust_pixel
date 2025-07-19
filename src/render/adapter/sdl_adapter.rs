@@ -9,8 +9,9 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixel, init_sym_height, init_sym_width, Adapter, AdapterBase,
-        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+        gl::pixel::GlPixelRenderer,
+        init_sym_height, init_sym_width, Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+        PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -49,6 +50,9 @@ pub struct SdlAdapter {
 
     // gl object
     pub gl_context: Option<sdl2::video::GLContext>,
+    
+    // Direct OpenGL pixel renderer - no more trait objects
+    pub gl_pixel_renderer: Option<GlPixelRenderer>,
 
     // custom cursor
     pub cursor: Option<Cursor>,
@@ -73,6 +77,7 @@ impl SdlAdapter {
             cursor: None,
             sdl_window: None,
             gl_context: None,
+            gl_pixel_renderer: None,
             drag: Default::default(),
         }
     }
@@ -90,8 +95,8 @@ impl SdlAdapter {
     }
 
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
-        let w = self.cell_width();
-        let h = self.cell_height();
+        let w = self.base.gr.cell_width();
+        let h = self.base.gr.cell_height();
         let sw = self.base.cell_w + 2;
         if y >= 0 && y < h as i32 {
             if x >= 0 && x <= ((sw - 1) as f32 * w) as i32 {
@@ -179,14 +184,13 @@ impl Adapter for SdlAdapter {
             PIXEL_SYM_WIDTH.get().expect("lazylock init"),
             PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
         );
-        self.set_size(w, h)
-            .set_ratiox(rx)
-            .set_ratioy(ry)
-            .set_pixel_size()
-            .set_title(title);
+        self.set_size(w, h).set_title(title);
+        self.base.gr.set_ratiox(rx);
+        self.base.gr.set_ratioy(ry);
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
         info!(
             "pixel_w={} pixel_h={}",
-            self.base.pixel_w, self.base.pixel_h
+            self.base.gr.pixel_w, self.base.gr.pixel_h
         );
 
         // init video subsystem...
@@ -198,7 +202,7 @@ impl Adapter for SdlAdapter {
         gl_attr.set_context_version(3, 3);
 
         let window = video_subsystem
-            .window(&self.base.title, self.base.pixel_w, self.base.pixel_h)
+            .window(&self.base.title, self.base.gr.pixel_w, self.base.gr.pixel_h)
             .opengl()
             .position_centered()
             .borderless()
@@ -217,19 +221,20 @@ impl Adapter for SdlAdapter {
             })
         };
 
-        // Store the OpenGL context
-        self.base.gl = Some(gl);
-        self.sdl_window = Some(window);
-
-        self.base.gl_pixel = Some(GlPixel::new(
-            self.base.gl.as_ref().unwrap(),
+        // Create direct OpenGL pixel renderer
+        let gl_pixel_renderer = GlPixelRenderer::new(
+            gl,
             "#version 330 core",
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
+            self.base.gr.pixel_w as i32,
+            self.base.gr.pixel_h as i32,
             texwidth as i32,
             texheight as i32,
             &teximg,
-        ));
+        );
+
+        // Store the direct renderer - no more trait objects!
+        self.gl_pixel_renderer = Some(gl_pixel_renderer);
+        self.sdl_window = Some(window);
 
         info!("Window & gl init ok...");
 
@@ -254,14 +259,6 @@ impl Adapter for SdlAdapter {
 
     fn reset(&mut self) {}
 
-    fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
-    }
-
-    fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
-    }
-
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
         let mut ses: Vec<SEvent> = vec![];
         if let Some(ref mut ep) = self.event_pump {
@@ -269,7 +266,7 @@ impl Adapter for SdlAdapter {
                 ses.push(event.clone());
                 // convert sdl events to pixel events, providing a unified processing interfaces
                 if let Some(et) =
-                    input_events_from_sdl(&event, self.base.ratio_x, self.base.ratio_y)
+                    input_events_from_sdl(&event, self.base.gr.ratio_x, self.base.gr.ratio_y)
                 {
                     if !self.drag.draging {
                         es.push(et);
@@ -288,7 +285,7 @@ impl Adapter for SdlAdapter {
         false
     }
 
-    fn draw_all_to_screen(
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
@@ -304,10 +301,14 @@ impl Adapter for SdlAdapter {
         );
 
         self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
+        self.post_draw();
 
+        Ok(())
+    }
+
+    fn post_draw(&mut self) {
         // swap window for display
         self.sdl_window.as_ref().unwrap().gl_swap_window();
-        Ok(())
     }
 
     fn hide_cursor(&mut self) -> Result<(), String> {
@@ -326,9 +327,105 @@ impl Adapter for SdlAdapter {
         Ok((0, 0))
     }
 
+    /// Direct implementation of draw_render_buffer_to_texture for SDL
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
+    where
+        Self: Sized,
+    {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let ratio_x = self.base.gr.ratio_x;
+            let ratio_y = self.base.gr.ratio_y;
+            
+            // Use direct method call - no more trait objects!
+            if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y) {
+                eprintln!("SdlAdapter: render_buffer_to_texture error: {}", e);
+            }
+        } else {
+            eprintln!("SdlAdapter: gl_pixel_renderer not initialized");
+        }
+    }
+
+    /// Direct implementation of draw_render_textures_to_screen for SDL
+    fn draw_render_textures_to_screen(&mut self)
+    where
+        Self: Sized,
+    {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let ratio_x = self.base.gr.ratio_x;
+            let ratio_y = self.base.gr.ratio_y;
+            
+            // Bind to screen framebuffer and render textures
+            gl_pixel_renderer.bind_screen_with_viewport(
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+            );
+            
+            // Use direct method call - no more trait objects!
+            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
+                eprintln!("SdlAdapter: render_textures_to_screen error: {}", e);
+            }
+        } else {
+            eprintln!("SdlAdapter: gl_pixel_renderer not initialized for texture rendering");
+        }
+    }
+
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+    /// SDL adapter implementation of render texture visibility control
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(texture_index, !visible);
+        }
+    }
+
+    /// SDL adapter implementation of simple transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_normal_transition(target_texture);
+        }
+    }
+
+    /// SDL adapter implementation of advanced transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
+        }
+    }
+
+    /// SDL adapter implementation of buffer transition setup
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.setup_transbuf_rendering(target_texture);
+        }
+    }
+
+
 }
 
 pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {
@@ -424,4 +521,4 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> 
         return Some(Event::Mouse(mc));
     }
     None
-}
+} 

@@ -9,7 +9,7 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixel, 
+        gl::pixel::GlPixelRenderer, 
         Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
     },
     buffer::Buffer,
@@ -21,12 +21,20 @@ use std::time::Duration;
 
 pub struct WebAdapter {
     pub base: AdapterBase,
+    
+    // Direct OpenGL pixel renderer - no more trait objects
+    pub gl_pixel_renderer: Option<GlPixelRenderer>,
+    
+    // OpenGL context for web (needed for init_glpix)
+    pub gl: Option<glow::Context>,
 }
 
 impl WebAdapter {
     pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(gn, project_path),
+            gl_pixel_renderer: None,
+            gl: None,
         }
     }
 
@@ -37,26 +45,31 @@ impl WebAdapter {
         PIXEL_SYM_HEIGHT
             .set(init_sym_height(texheight as u32))
             .expect("lazylock init");
-        self.set_pixel_size();
-        self.base.gl_pixel = Some(GlPixel::new(
-            self.base.gl.as_ref().unwrap(),
-            "#version 300 es",
-            self.base.pixel_w as i32,
-            self.base.pixel_h as i32,
-            texwidth,
-            texheight,
-            tex,
-        ));
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
+        
+        // Create direct OpenGL pixel renderer - no more trait objects!
+        // We need to take ownership of the GL context
+        if let Some(gl) = self.gl.take() {
+            let gl_pixel_renderer = GlPixelRenderer::new(
+                gl,
+                "#version 300 es",
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+                texwidth,
+                texheight,
+                tex,
+            );
+            self.gl_pixel_renderer = Some(gl_pixel_renderer);
+        }
         info!("web glpix init ok...");
     }
 }
 
 impl Adapter for WebAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, s: String) {
-        self.set_size(w, h)
-            .set_ratiox(rx)
-            .set_ratioy(ry)
-            .set_title(s);
+        self.set_size(w, h).set_title(s);
+        self.base.gr.set_ratiox(rx);
+        self.base.gr.set_ratioy(ry);
 
         use wasm_bindgen::JsCast;
         let canvas = web_sys::window()
@@ -76,7 +89,7 @@ impl Adapter for WebAdapter {
         let gl = glow::Context::from_webgl2_context(webgl2_context);
 
         // Store the OpenGL context
-        self.base.gl = Some(gl);
+        self.gl = Some(gl);
         info!("Window & gl init ok...");
     }
 
@@ -86,19 +99,13 @@ impl Adapter for WebAdapter {
 
     fn reset(&mut self) {}
 
-    fn cell_width(&self) -> f32 {
-        PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.base.ratio_x
-    }
-
-    fn cell_height(&self) -> f32 {
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.base.ratio_y
-    }
-
     fn poll_event(&mut self, _timeout: Duration, _es: &mut Vec<Event>) -> bool {
         false
     }
 
-    fn draw_all_to_screen(
+
+
+    fn draw_all(
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
@@ -125,9 +132,110 @@ impl Adapter for WebAdapter {
         Ok((0, 0))
     }
 
+    /// Direct implementation of draw_render_buffer_to_texture for Web
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
+    where
+        Self: Sized,
+    {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let ratio_x = self.base.gr.ratio_x;
+            let ratio_y = self.base.gr.ratio_y;
+            
+            // Use direct method call - no more trait objects!
+            if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y) {
+                eprintln!("WebAdapter: render_buffer_to_texture error: {}", e);
+            }
+        } else {
+            eprintln!("WebAdapter: gl_pixel_renderer not initialized");
+        }
+    }
+
+    /// Direct implementation of draw_render_textures_to_screen for Web
+    fn draw_render_textures_to_screen(&mut self)
+    where
+        Self: Sized,
+    {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let ratio_x = self.base.gr.ratio_x;
+            let ratio_y = self.base.gr.ratio_y;
+            
+            // Bind to screen framebuffer and render textures
+            gl_pixel_renderer.bind_screen_with_viewport(
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+            );
+            
+            // Use direct method call - no more trait objects!
+            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
+                eprintln!("WebAdapter: render_textures_to_screen error: {}", e);
+            }
+        } else {
+            eprintln!("WebAdapter: gl_pixel_renderer not initialized for texture rendering");
+        }
+    }
+
+    fn post_draw(&mut self) {
+        // For WebGL, buffer swapping is handled automatically by the browser
+        // No explicit action needed here
+    }
+
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
+
+    /// Web adapter implementation of render texture visibility control
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit", 
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(texture_index, !visible);
+        }
+    }
+
+    /// Web adapter implementation of simple transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu", 
+        target_arch = "wasm32"
+    ))]
+    fn render_simple_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_normal_transition(target_texture);
+        }
+    }
+
+    /// Web adapter implementation of advanced transition rendering
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
+        }
+    }
+
+    /// Web adapter implementation of buffer transition setup
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn setup_buffer_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.setup_transbuf_rendering(target_texture);
+        }
+    }
+
+
 }
 
 macro_rules! web_event {
@@ -206,4 +314,4 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
         return Some(Event::Mouse(mc));
     }
     None
-}
+} 

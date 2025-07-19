@@ -127,8 +127,8 @@ impl Model for TowerModel {
                 m.id,
                 &mut self.grid,
                 &mut self.monster_map,
-                ctx.adapter.cell_width(),
-                ctx.adapter.cell_height(),
+                ctx.adapter.get_base().gr.cell_width(),
+                ctx.adapter.get_base().gr.cell_height(),
                 &mut ctx.rand,
             );
         });
@@ -148,8 +148,8 @@ impl Model for TowerModel {
                 let target_monster_pos = self.monsters.pool[*v].obj.pixel_pos;
                 let dst_pos = (target_monster_pos.x as u32, target_monster_pos.y as u32);
                 let cell_size = (
-                    ctx.adapter.cell_width() as u32,
-                    ctx.adapter.cell_height() as u32,
+                    ctx.adapter.get_base().gr.cell_width() as u32,
+                    ctx.adapter.get_base().gr.cell_height() as u32,
                 );
                 let mid = (*v as u32, 0u32);
                 // cell_size, tower_pos, monster_pos
@@ -188,8 +188,8 @@ impl Model for TowerModel {
 
     fn handle_timer(&mut self, ctx: &mut Context, _dt: f32) {
         let csp = (
-            ctx.adapter.cell_width() as u32,
-            ctx.adapter.cell_height() as u32,
+            ctx.adapter.get_base().gr.cell_width() as u32,
+            ctx.adapter.get_base().gr.cell_height() as u32,
         );
         for i in 0..8 {
             let tstr = format!("Tower.CreatMonster{}", i);

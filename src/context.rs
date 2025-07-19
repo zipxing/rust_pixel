@@ -11,14 +11,25 @@
 
 use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::Rand};
 
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
-use crate::render::adapter::cross::CrosstermAdapter;
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    not(feature = "sdl"),
+    not(feature = "winit"),
+    not(feature = "wgpu")
+))]
+use crate::render::adapter::cross_adapter::CrosstermAdapter;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
-use crate::render::adapter::sdl::SdlAdapter;
+use crate::render::adapter::sdl_adapter::SdlAdapter;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "winit", not(feature = "wgpu")))]
+use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "wgpu"))]
+use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
 
 #[cfg(target_arch = "wasm32")]
-use crate::render::adapter::web::WebAdapter;
+use crate::render::adapter::web_adapter::WebAdapter;
 
 pub struct Context {
     pub game_name: String,
@@ -45,12 +56,41 @@ impl Context {
             adapter: Box::new(WebAdapter::new(name, project_path)),
             #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
             adapter: Box::new(SdlAdapter::new(name, project_path)),
-            #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl")))]
+            #[cfg(all(not(target_arch = "wasm32"), feature = "winit", not(feature = "wgpu")))]
+            adapter: Box::new(WinitGlowAdapter::new(name, project_path)),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "wgpu"))]
+            adapter: Box::new(WinitWgpuAdapter::new(name, project_path)),
+            #[cfg(all(
+                not(target_arch = "wasm32"),
+                not(feature = "sdl"),
+                not(feature = "winit"),
+                not(feature = "wgpu")
+            ))]
             adapter: Box::new(CrosstermAdapter::new(name, project_path)),
         }
     }
 
     pub fn set_asset_path(&mut self, project_path: &str) {
         self.project_path = project_path.to_string();
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    pub fn cell_width(&mut self) -> f32 {
+        self.adapter.get_base().gr.cell_width()
+    }
+
+    #[cfg(any(
+        feature = "sdl",
+        feature = "winit",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    pub fn cell_height(&mut self) -> f32 {
+        self.adapter.get_base().gr.cell_height()
     }
 }

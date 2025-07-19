@@ -19,13 +19,13 @@ use log::info;
 use std::io::Error;
 
 /// helping method to convert error msg
-#[cfg(not(any(feature = "sdl", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 pub fn to_error(error: crossterm::Result<()>) -> Result<(), String> {
     error.map_err(|e| e.to_string())
 }
 
 /// helping method to convert error msg
-#[cfg(not(any(feature = "sdl", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 pub fn io_error(error: crossterm::Result<()>) -> std::io::Result<()> {
     error.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
 }

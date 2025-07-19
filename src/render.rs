@@ -1,29 +1,42 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! code for rendering
+//! # 渲染模块
+//!
+//! 支持两种渲染模式：文本模式和图形模式。
+//!
+//! ## 子模块
+//! - `adapter`: 渲染适配器接口（crossterm、sdl、web、winit）
+//! - `cell`: 基础绘制单元，即一个字符
+//! - `buffer`: 由cells组成的向量，管理屏幕缓冲区
+//! - `sprite`: 基础绘制组件，进一步封装buffer
+//! - `style`: 定义绘制属性，如前景色和背景色
+//! - `panel`: 绘制面板，兼容文本模式和图形模式
+//! - `graph`: 图形渲染相关的数据结构和函数
+//! - `image`: 图像处理功能
+//! - `symbols`: 符号和字符处理
 
-/// An adapter interface is defined here, to interface between different renders.
-/// Currently, web, SDL and crossterm renders are supported.
 pub mod adapter;
-
-/// symbols util
+pub mod buffer;
+pub mod cell;
+#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+pub mod graph;
+pub mod image;
+pub mod panel;
+pub mod sprite;
+pub mod style;
 pub mod symbols;
 
-/// draw a base unit cell
-pub mod cell;
-
-/// Buffer is used to manage a set of Cell
-pub mod buffer;
-
-/// image, to read or write image files in pix or esc format
-pub mod image;
-
-/// sprite, basic drawing unit
-pub mod sprite;
-
-/// defines attributes like fore- or back-ground colors
-pub mod style;
-
-/// draw panel, compatible with both text mode (crossterm) and graphics mode (SDL&wasm)
-pub mod panel;
+// 重新导出常用类型和函数
+pub use adapter::{Adapter, AdapterBase};
+pub use buffer::Buffer;
+pub use cell::Cell;
+#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+pub use graph::{
+    init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
+    render_main_buffer, render_pixel_sprites, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
+    PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+};
+pub use panel::Panel;
+pub use sprite::Sprites;
+pub use style::{Color, Style};

@@ -4,7 +4,7 @@
 //! Defines styles color
 
 use crate::render::style::ColorPro;
-#[cfg(not(any(feature = "sdl", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crossterm::style::Color as CColor;
 use serde::{Deserialize, Serialize};
 
@@ -63,7 +63,7 @@ impl Color {
     }
 }
 
-#[cfg(not(any(feature = "sdl", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 impl From<Color> for CColor {
     fn from(color: Color) -> Self {
         match color {

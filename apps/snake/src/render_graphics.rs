@@ -1,5 +1,5 @@
 use crate::model::{SnakeModel, SNAKEH, SNAKEW};
-#[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
 use rust_pixel::{asset::AssetType, asset2sprite};
 use rust_pixel::{
     context::Context,
@@ -38,7 +38,7 @@ impl SnakeRender {
         let mut t = Panel::new();
 
         // Test pixel sprite in graphic mode...
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
         {
             let mut pl = Sprite::new(4, 6, 1, 1);
             pl.set_graph_sym(0, 0, 1, 20, Color::Indexed(222));
@@ -56,9 +56,9 @@ impl SnakeRender {
             Color::Reset,
         );
         t.add_sprite(l, "SNAKE-BORDER");
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
         t.add_pixel_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
-        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
         t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
         t.add_sprite(
             Sprite::new(0, (SNAKEH + 3) as u16, SNAKEW as u16, 1u16),
@@ -88,9 +88,9 @@ impl SnakeRender {
     pub fn draw_grid(&mut self, context: &mut Context, d: &mut SnakeModel) {
         let ml = self.panel.get_sprite("SNAKE-MSG");
         ml.set_default_str("snake");
-        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
         let l = self.panel.get_sprite("SNAKE");
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
         let l = self.panel.get_pixel_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {
@@ -101,23 +101,23 @@ impl SnakeRender {
                         l.set_color_str(j as u16, i as u16, " ", Color::Reset, Color::Reset);
                     }
                     1 => {
-                        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
                         l.set_color_str(j as u16, i as u16, "▇", Color::LightGreen, Color::Reset);
-                        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
                         l.set_graph_sym(j as u16, i as u16, 1, 0, Color::LightGreen);
                     }
                     10000 => {
                         let c = COLORS[(context.stage / 5) as usize % COLORS.len()];
-                        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
                         l.set_color_str(j as u16, i as u16, "∙", c, Color::Reset);
-                        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
                         l.set_graph_sym(j as u16, i as u16, 1, 83, c);
                     }
                     _ => {
                         let c = COLORS[gv as usize % COLORS.len()];
-                        #[cfg(not(any(feature = "sdl", target_arch = "wasm32")))]
+                        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
                         l.set_color_str(j as u16, i as u16, "▒", c, Color::Reset);
-                        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+                        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
                         l.set_graph_sym(j as u16, i as u16, 1, 102, c);
                     }
                 }
@@ -163,7 +163,7 @@ impl Render for SnakeRender {
 
     #[allow(unused_variables)]
     fn draw(&mut self, context: &mut Context, model: &mut Self::Model, _dt: f32) {
-        #[cfg(any(feature = "sdl", target_arch = "wasm32"))]
+        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
         {
             let ss = &mut self.panel.get_sprite("SNAKE-BORDER");
             asset2sprite!(
