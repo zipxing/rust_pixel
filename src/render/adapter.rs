@@ -532,9 +532,7 @@ pub trait Adapter {
         previous_buffer: &Buffer,
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
-    ) where
-        Self: Sized,
-    {
+    ) {
         // Pass 1: Convert game data (buffer + sprites) to GPU-ready format
         let rbuf = generate_render_buffer(
             current_buffer,
@@ -565,10 +563,7 @@ pub trait Adapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize)
-    where
-        Self: Sized,
-    {
+    fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         // Convert buffer to render buffer first
         let rbuf = self.buffer_to_render_buffer(buf);
         
@@ -576,83 +571,24 @@ pub trait Adapter {
         self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
     }
 
-    /// Trait object compatible wrapper for draw_buffer_to_texture
+
+
+    /// Graphics mode render buffer to texture - abstract method
     ///
-    /// This method can be called on trait objects and internally handles
-    /// the downcasting to call the sized implementation.
+    /// Each graphics adapter must implement this method to render RenderCell data
+    /// to the specified render texture. This method is only available in graphics modes.
+    ///
+    /// # Parameters  
+    /// - `rbuf`: Array of RenderCell data (GPU-ready format)
+    /// - `rtidx`: Target render texture index (typically 2 for main scene, 3 for transitions)
+    /// - `debug`: Enable debug mode rendering (colored backgrounds for debugging)
     #[cfg(any(
         feature = "sdl",
         feature = "winit",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_buffer_to_texture_dyn(&mut self, buf: &Buffer, rtidx: usize) {
-        // Handle each adapter type explicitly with proper feature detection
-        
-        // Winit + Glow adapter (OpenGL backend)
-        #[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]
-        {
-            use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
-            if let Some(winit_glow_adapter) = self.as_any().downcast_mut::<WinitGlowAdapter>() {
-                winit_glow_adapter.draw_buffer_to_texture(buf, rtidx);
-                return;
-            }
-        }
-
-        // Winit + WGPU adapter (modern GPU backend)
-        #[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
-        {
-            use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
-            if let Some(winit_wgpu_adapter) = self.as_any().downcast_mut::<WinitWgpuAdapter>() {
-                winit_wgpu_adapter.draw_buffer_to_texture(buf, rtidx);
-                return;
-            }
-        }
-
-        // SDL adapter
-        #[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
-        {
-            use crate::render::adapter::sdl_adapter::SdlAdapter;
-            if let Some(sdl_adapter) = self.as_any().downcast_mut::<SdlAdapter>() {
-                sdl_adapter.draw_buffer_to_texture(buf, rtidx);
-                return;
-            }
-        }
-
-        // Web adapter
-        #[cfg(target_arch = "wasm32")]
-        {
-            use crate::render::adapter::web_adapter::WebAdapter;
-            if let Some(web_adapter) = self.as_any().downcast_mut::<WebAdapter>() {
-                web_adapter.draw_buffer_to_texture(buf, rtidx);
-                return;
-            }
-        }
-
-        // If we reach here, none of the specific adapter types matched
-        eprintln!("Warning: draw_buffer_to_texture_dyn called on unknown adapter type");
-    }
-
-    // draw render buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) 
-    where
-        Self: Sized,
-    {
-        // All adapters now implement their own direct rendering methods
-        // This default implementation should never be called since each adapter
-        // overrides this method with their own specialized implementation:
-        // - WinitGlowAdapter: Uses direct gl_pixel_renderer
-        // - WinitWgpuAdapter: Uses direct wgpu_pixel_renderer  
-        // - SdlAdapter: Uses direct gl_pixel_renderer
-        // - WebAdapter: Uses direct gl_pixel_renderer
-        eprintln!("Warning: draw_render_buffer_to_texture called on adapter that hasn't implemented direct rendering");
-    }
+    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool);
 
     // buffer to render buffer - unified for both OpenGL and WGPU
     #[cfg(any(
@@ -661,10 +597,7 @@ pub trait Adapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell>
-    where
-        Self: Sized,
-    {
+    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
         let rx = self.get_base().gr.ratio_x;
         let ry = self.get_base().gr.ratio_y;
@@ -678,7 +611,9 @@ pub trait Adapter {
                          symidx: usize| {
             push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
-        render_main_buffer(cb, cb.area.width, rx, ry, true, &mut rfunc);
+
+        render_main_buffer(cb, cb.area.width, rx, ry, false, &mut rfunc);
+
         rbuf
     }
 
@@ -743,17 +678,7 @@ pub trait Adapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        // All modes now handled by their respective specialized adapters:
-        // - WinitGlowAdapter: Direct OpenGL rendering
-        // - WinitWgpuAdapter: Direct WGPU rendering  
-        // - SdlAdapter: Direct OpenGL rendering
-        // - WebAdapter: Direct OpenGL rendering
-        // This unified approach is no longer needed
-    }
+    fn draw_render_textures_to_screen(&mut self);
 
     fn as_any(&mut self) -> &mut dyn Any;
 
