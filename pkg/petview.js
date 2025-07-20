@@ -1,4 +1,4 @@
-import { js_load_asset } from '/index.js';
+import { js_load_asset } from './index.js';
 
 let wasm;
 
