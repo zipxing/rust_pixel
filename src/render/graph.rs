@@ -1072,8 +1072,6 @@ pub fn generate_render_buffer(
             return rbuf;
         }
 
-        let cw = base.cell_w;
-        let ch = base.cell_h;
         let rx = base.gr.ratio_x;
         let ry = base.gr.ratio_y;
         let mut rfunc = |fc: &(u8, u8, u8, u8),
@@ -1087,8 +1085,8 @@ pub fn generate_render_buffer(
         };
 
         // render windows border, for sdl, winit and wgpu mode
-        // #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
-        render_border(cw, ch, rx, ry, &mut rfunc);
+        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
+        render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
         // render main buffer...
         if stage > LOGO_FRAME {
