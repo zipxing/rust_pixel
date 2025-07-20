@@ -34,9 +34,10 @@
 use crate::event::Event;
 use crate::render::{
     adapter::{
-        init_sym_height, init_sym_width, Adapter, AdapterBase,
-        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
-        winit_common::{Drag, WindowInitParams, input_events_from_winit, winit_move_win},
+        winit_common::{
+            input_events_from_winit, winit_init_common, winit_move_win, Drag, WindowInitParams,
+        },
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
     graph::{UnifiedColor, UnifiedTransform},
@@ -58,8 +59,6 @@ pub use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Cursor, CustomCursor, Window},
 };
-
-
 
 /// 边框区域枚举
 ///
@@ -434,64 +433,15 @@ impl WinitWgpuAdapter {
     /// # 返回值
     /// 返回纹理路径，用于后续的渲染器初始化
     fn init_common(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) -> String {
-        info!("Initializing Winit adapter common components...");
+        // 使用统一的winit共享初始化逻辑
+        let (event_loop, window_init_params, texture_path) =
+            winit_init_common(self, w, h, rx, ry, title);
 
-        // 1. 加载纹理文件和设置符号尺寸
-        let texture_path = format!(
-            "{}{}{}",
-            self.base.project_path,
-            std::path::MAIN_SEPARATOR,
-            PIXEL_TEXTURE_FILE
-        );
-        let teximg = image::open(&texture_path)
-            .map_err(|e| e.to_string())
-            .unwrap()
-            .to_rgba8();
-        let texwidth = teximg.width();
-        let texheight = teximg.height();
-
-        PIXEL_SYM_WIDTH
-            .set(init_sym_width(texwidth))
-            .expect("lazylock init");
-        PIXEL_SYM_HEIGHT
-            .set(init_sym_height(texheight))
-            .expect("lazylock init");
-
-        info!("Loaded texture: {}", texture_path);
-        info!(
-            "Symbol dimensions: {}x{}",
-            PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-            PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
-        );
-
-        // 2. 设置基础参数
-        self.set_size(w, h).set_title(title.clone());
-        self.base.gr.set_ratiox(rx);
-        self.base.gr.set_ratioy(ry);
-        self.base
-            .gr
-            .set_pixel_size(self.base.cell_w, self.base.cell_h);
-
-        info!(
-            "Window pixel size: {}x{}",
-            self.base.gr.pixel_w, self.base.gr.pixel_h
-        );
-
-        // 3. 创建事件循环
-        let event_loop = EventLoop::new().unwrap();
+        // 存储共享初始化结果
         self.event_loop = Some(event_loop);
+        self.window_init_params = Some(window_init_params);
 
-        // 4. 存储窗口初始化参数，用于在resumed中创建窗口
-        self.window_init_params = Some(WindowInitParams {
-            width: w,
-            height: h,
-            ratio_x: rx,
-            ratio_y: ry,
-            title,
-            texture_path: texture_path.clone(),
-        });
-
-        // 5. 设置应用处理器
+        // 设置WGPU特定的应用处理器
         self.app_handler = Some(WinitWgpuAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
@@ -501,7 +451,6 @@ impl WinitWgpuAdapter {
             adapter_ref: self as *mut WinitWgpuAdapter,
         });
 
-        info!("Common initialization completed, window will be created in resumed()");
         texture_path
     }
 
@@ -1356,7 +1305,7 @@ impl Adapter for WinitWgpuAdapter {
     /// WinitWgpu adapter implementation of render texture visibility control
     #[cfg(any(
         feature = "sdl",
-        feature = "winit", 
+        feature = "winit",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
@@ -1370,7 +1319,7 @@ impl Adapter for WinitWgpuAdapter {
     #[cfg(any(
         feature = "sdl",
         feature = "winit",
-        feature = "wgpu", 
+        feature = "wgpu",
         target_arch = "wasm32"
     ))]
     fn render_simple_transition(&mut self, target_texture: usize) {
@@ -1387,9 +1336,16 @@ impl Adapter for WinitWgpuAdapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+    fn render_advanced_transition(
+        &mut self,
+        target_texture: usize,
+        effect_type: usize,
+        progress: f32,
+    ) {
         // WGPU使用完整的转场渲染API
-        if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, effect_type, progress) {
+        if let Err(e) =
+            self.render_transition_to_texture_wgpu(target_texture, effect_type, progress)
+        {
             eprintln!("WinitWgpuAdapter: Advanced transition error: {}", e);
         }
     }
@@ -1408,5 +1364,3 @@ impl Adapter for WinitWgpuAdapter {
         }
     }
 }
-
-

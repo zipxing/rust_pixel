@@ -350,4 +350,118 @@ pub fn input_events_from_winit(
         _ => {}
     }
     None
+}
+
+/// 🔧 Winit适配器通用初始化函数
+///
+/// 这个函数提取了WinitGlowAdapter和WinitWgpuAdapter之间的所有共同初始化逻辑，
+/// 实现DRY原则并大大减少了代码重复。
+///
+/// ## 🎯 共享的初始化步骤
+/// 1. **纹理加载**: 加载PIXEL_TEXTURE_FILE并设置符号尺寸
+/// 2. **参数设置**: 配置窗口尺寸、缩放比例等基础参数
+/// 3. **事件循环**: 创建winit EventLoop实例
+/// 4. **参数存储**: 保存WindowInitParams供resumed事件使用
+///
+/// ## 🚀 性能优势
+/// - **编译时优化**: 内联消除函数调用开销
+/// - **代码复用**: 避免重复维护相同逻辑
+/// - **类型安全**: 强类型泛型确保正确的适配器使用
+///
+/// # 泛型参数
+/// - `T`: 适配器类型，必须实现基础的尺寸和标题设置接口
+///
+/// # 参数
+/// - `adapter`: 适配器的可变引用
+/// - `w`: 窗口宽度（单元格）
+/// - `h`: 窗口高度（单元格）
+/// - `rx`: X轴缩放比例
+/// - `ry`: Y轴缩放比例
+/// - `title`: 窗口标题
+///
+/// # 返回值
+/// - `(EventLoop<()>, WindowInitParams, String)`: 事件循环、初始化参数和纹理路径
+pub fn winit_init_common<T>(
+    adapter: &mut T,
+    w: u16,
+    h: u16,
+    rx: f32,
+    ry: f32,
+    title: String,
+) -> (winit::event_loop::EventLoop<()>, WindowInitParams, String)
+where
+    T: crate::render::adapter::Adapter,
+{
+    use crate::render::adapter::{
+        init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+    };
+    use log::info;
+    use winit::event_loop::EventLoop;
+
+    info!("Initializing Winit adapter common components...");
+
+    // 1. 加载纹理文件和设置符号尺寸
+    let project_path = adapter.get_base().project_path.clone();
+    let texture_path = format!(
+        "{}{}{}",
+        project_path,
+        std::path::MAIN_SEPARATOR,
+        PIXEL_TEXTURE_FILE
+    );
+    let teximg = image::open(&texture_path)
+        .map_err(|e| e.to_string())
+        .unwrap()
+        .to_rgba8();
+    let texwidth = teximg.width();
+    let texheight = teximg.height();
+
+    PIXEL_SYM_WIDTH
+        .set(init_sym_width(texwidth))
+        .expect("lazylock init");
+    PIXEL_SYM_HEIGHT
+        .set(init_sym_height(texheight))
+        .expect("lazylock init");
+
+    info!("Loaded texture: {}", texture_path);
+    info!(
+        "Symbol dimensions: {}x{}",
+        PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+        PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+    );
+
+    // 2. 设置基础参数
+    adapter.set_size(w, h);
+    adapter.set_title(title.clone());
+    
+    // 获取base引用一次，避免多次可变借用
+    let base = adapter.get_base();
+    base.gr.set_ratiox(rx);
+    base.gr.set_ratioy(ry);
+    
+    // 先获取需要的值，再调用方法
+    let cell_w = base.cell_w;
+    let cell_h = base.cell_h;
+    base.gr.set_pixel_size(cell_w, cell_h);
+
+    info!(
+        "Window pixel size: {}x{}",
+        base.gr.pixel_w, base.gr.pixel_h
+    );
+
+    // 3. 创建事件循环
+    let event_loop = EventLoop::new().unwrap();
+
+    // 4. 创建窗口初始化参数
+    let window_init_params = WindowInitParams {
+        width: w,
+        height: h,
+        ratio_x: rx,
+        ratio_y: ry,
+        title,
+        texture_path: texture_path.clone(),
+    };
+
+    info!("Common initialization completed, window will be created in resumed()");
+
+    (event_loop, window_init_params, texture_path)
 } 
