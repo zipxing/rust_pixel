@@ -24,10 +24,10 @@
 //! ┌─────────────────────────────────────────────┐
 //! │             WinitAdapter                    │
 //! ├─────────────────────────────────────────────┤
-//! │  Window Management  │  OpenGL Context      │
-//! │  - winit::Window    │  - glutin::Context   │
-//! │  - Event handling   │  - glutin::Surface   │
-//! │  - Cursor support   │  - glow::Context     │
+//! │  Window Management  │  OpenGL Context       │
+//! │  - winit::Window    │  - glutin::Context    │
+//! │  - Event handling   │  - glutin::Surface    │
+//! │  - Cursor support   │  - glow::Context      │
 //! └─────────────────────────────────────────────┘
 //! ```
 
@@ -822,12 +822,6 @@ impl Adapter for WinitGlowAdapter {
     /// 重写渲染缓冲区到纹理的方法，直接使用我们的OpenGL渲染器
     ///
     /// 这个方法专门为WinitGlowAdapter实现，不依赖统一的pixel_renderer抽象
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn draw_render_buffer_to_texture(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
@@ -857,12 +851,6 @@ impl Adapter for WinitGlowAdapter {
     /// 重写渲染纹理到屏幕的方法，直接使用我们的OpenGL渲染器
     ///
     /// 这个方法专门为WinitGlowAdapter实现，处理转场效果的最终合成
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn draw_render_textures_to_screen(&mut self)
     where
         Self: Sized,
@@ -912,12 +900,6 @@ impl Adapter for WinitGlowAdapter {
     }
 
     /// WinitGlow adapter implementation of render texture visibility control
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer
@@ -927,12 +909,6 @@ impl Adapter for WinitGlowAdapter {
     }
 
     /// WinitGlow adapter implementation of simple transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn render_simple_transition(&mut self, target_texture: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.render_normal_transition(target_texture);
@@ -940,12 +916,6 @@ impl Adapter for WinitGlowAdapter {
     }
 
     /// WinitGlow adapter implementation of advanced transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn render_advanced_transition(
         &mut self,
         target_texture: usize,
@@ -958,12 +928,6 @@ impl Adapter for WinitGlowAdapter {
     }
 
     /// WinitGlow adapter implementation of buffer transition setup
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn setup_buffer_transition(&mut self, target_texture: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.setup_transbuf_rendering(target_texture);

@@ -24,10 +24,10 @@
 //! ┌─────────────────────────────────────────────┐
 //! │            WinitWgpuAdapter                 │
 //! ├─────────────────────────────────────────────┤
-//! │  Window Management  │  WGPU Resources      │
-//! │  - winit::Window    │  - wgpu::Device      │
-//! │  - Event handling   │  - wgpu::Queue       │
-//! │  - Cursor support   │  - wgpu::Surface     │
+//! │  Window Management  │  WGPU Resources       │
+//! │  - winit::Window    │  - wgpu::Device       │
+//! │  - Event handling   │  - wgpu::Queue        │
+//! │  - Cursor support   │  - wgpu::Surface      │
 //! └─────────────────────────────────────────────┘
 //! ```
 
@@ -1257,12 +1257,6 @@ impl Adapter for WinitWgpuAdapter {
     /// 重写渲染缓冲区到纹理的方法，直接使用我们的WGPU渲染器
     ///
     /// 这个方法专门为WinitWgpuAdapter实现，不依赖统一的pixel_renderer抽象
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn draw_render_buffer_to_texture(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
@@ -1283,12 +1277,6 @@ impl Adapter for WinitWgpuAdapter {
     /// 重写渲染纹理到屏幕的方法，直接使用我们的WGPU渲染器
     ///
     /// 这个方法专门为WinitWgpuAdapter实现，处理转场效果的最终合成
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn draw_render_textures_to_screen(&mut self)
     where
         Self: Sized,
@@ -1303,12 +1291,6 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of render texture visibility control
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
             wgpu_pixel_renderer.set_render_texture_hidden(texture_index, !visible);
@@ -1316,12 +1298,6 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of simple transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn render_simple_transition(&mut self, target_texture: usize) {
         // WGPU使用标准的转场渲染，参数为(target, shader=0, progress=1.0)
         if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, 0, 1.0) {
@@ -1330,12 +1306,6 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of advanced transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn render_advanced_transition(
         &mut self,
         target_texture: usize,
@@ -1351,12 +1321,6 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of buffer transition setup
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     fn setup_buffer_transition(&mut self, target_texture: usize) {
         if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
             // WGPU uses texture visibility to setup buffer transitions

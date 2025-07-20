@@ -185,8 +185,6 @@ use crate::{
     util::{Rand, Rect},
 };
 
-// UnifiedColor and UnifiedTransform imports removed - each adapter now handles rendering directly
-
 use std::any::Any;
 use std::time::Duration;
 // use log::info;
@@ -232,6 +230,19 @@ pub mod winit_wgpu_adapter;
     target_arch = "wasm32"
 )))]
 pub mod cross_adapter;
+
+// Re-export graph rendering functions and data structures
+#[cfg(any(
+    feature = "sdl",
+    feature = "winit",
+    feature = "wgpu",
+    target_arch = "wasm32"
+))]
+pub use crate::render::graph::{
+    generate_render_buffer, init_sym_height, init_sym_width, push_render_buffer, render_border,
+    render_logo, render_main_buffer, render_pixel_sprites, Graph, RenderCell, PIXEL_LOGO,
+    PIXEL_LOGO_HEIGHT, PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+};
 
 /// Path to the symbols texture file
 ///
@@ -566,12 +577,10 @@ pub trait Adapter {
     fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         // Convert buffer to render buffer first
         let rbuf = self.buffer_to_render_buffer(buf);
-        
+
         // Then draw render buffer to texture
         self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
     }
-
-
 
     /// Graphics mode render buffer to texture - abstract method
     ///
@@ -695,7 +704,7 @@ pub trait Adapter {
     /// - `visible`: Whether the texture should be visible
     #[cfg(any(
         feature = "sdl",
-        feature = "winit", 
+        feature = "winit",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
@@ -714,7 +723,7 @@ pub trait Adapter {
     #[cfg(any(
         feature = "sdl",
         feature = "winit",
-        feature = "wgpu", 
+        feature = "wgpu",
         target_arch = "wasm32"
     ))]
     fn render_simple_transition(&mut self, target_texture: usize) {
@@ -737,7 +746,12 @@ pub trait Adapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+    fn render_advanced_transition(
+        &mut self,
+        target_texture: usize,
+        effect_type: usize,
+        progress: f32,
+    ) {
         // Default implementation - fallback to simple transition
         self.render_simple_transition(target_texture);
     }
@@ -750,7 +764,7 @@ pub trait Adapter {
     /// # Returns
     /// (width, height) tuple in pixels
     #[cfg(any(
-        feature = "sdl", 
+        feature = "sdl",
         feature = "winit",
         feature = "wgpu",
         target_arch = "wasm32"
@@ -779,21 +793,3 @@ pub trait Adapter {
         // Graphics adapters can override this with optimized implementations
     }
 }
-
-
-
-// draw_render_textures_to_screen_unified_opengl function removed
-// All adapters now implement their own specialized draw_render_textures_to_screen meth
-
-// Re-export graph rendering functions and data structures
-#[cfg(any(
-    feature = "sdl",
-    feature = "winit",
-    feature = "wgpu",
-    target_arch = "wasm32"
-))]
-pub use crate::render::graph::{
-    generate_render_buffer, init_sym_height, init_sym_width, push_render_buffer, render_border,
-    render_logo, render_main_buffer, render_pixel_sprites, Graph, RenderCell, PIXEL_LOGO,
-    PIXEL_LOGO_HEIGHT, PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
-};
