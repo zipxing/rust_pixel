@@ -168,7 +168,7 @@ impl Adapter for SdlAdapter {
         );
         let teximg = image::open(&texture_path)
             .map_err(|e| e.to_string())
-            .unwrap()
+            .expect(&format!("open file:{:?}", &texture_path))
             .to_rgba8();
         let texwidth = teximg.width();
         let texheight = teximg.height();
