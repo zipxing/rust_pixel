@@ -41,7 +41,7 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Install cargo-pixel
-        run: cargo install --path tools/cargo-pixel --root ~/.cargo
+        run: cargo install --path . --root ~/.cargo
 
       - name: Build petview wasm
         run: |
