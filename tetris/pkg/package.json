@@ -1,0 +1,15 @@
+{
+  "name": "tetris",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "tetris_bg.wasm",
+    "tetris.js",
+    "tetris.d.ts"
+  ],
+  "main": "tetris.js",
+  "types": "tetris.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

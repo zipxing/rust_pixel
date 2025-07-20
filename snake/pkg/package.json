@@ -1,0 +1,20 @@
+{
+  "name": "snake",
+  "type": "module",
+  "description": "snake game",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "files": [
+    "snake_bg.wasm",
+    "snake.js",
+    "snake.d.ts"
+  ],
+  "main": "snake.js",
+  "types": "snake.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

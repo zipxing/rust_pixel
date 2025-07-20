@@ -31,7 +31,40 @@ utils.loop = update => {
     requestAnimationFrame(loopFunction);
 };
 
-import init, {PetviewGame} from "./pkg/petview.js";
+// Canvas 自适应函数
+const resizeCanvas = () => {
+    const canvas = document.getElementById("canvas");
+    if (canvas) {
+        // WASM应用的实际尺寸
+        const actualWidth = 992;  // 52 * 8
+        const actualHeight = 560; // 32 * 8
+        
+        // 获取父容器尺寸
+        const parent = canvas.parentElement;
+        const rect = parent.getBoundingClientRect();
+        
+        // 计算缩放比例，保持宽高比
+        const scaleX = rect.width / actualWidth;
+        const scaleY = rect.height / actualHeight;
+        const scale = Math.min(scaleX, scaleY);
+        
+        // 计算居中显示的尺寸
+        const displayWidth = actualWidth * scale;
+        const displayHeight = actualHeight * scale;
+        
+        // 设置画布显示尺寸和位置（居中）
+        canvas.style.width = displayWidth + 'px';
+        canvas.style.height = displayHeight + 'px';
+        canvas.style.left = ((rect.width - displayWidth) / 2) + 'px';
+        canvas.style.top = ((rect.height - displayHeight) / 2) + 'px';
+        
+        // 设置实际渲染分辨率，匹配WASM应用
+        canvas.width = actualWidth;
+        canvas.height = actualHeight;
+    }
+};
+
+import init, {SnakeGame} from "./pkg/snake.js";
 const wasm = await init();
 
 const timg = new Image();
@@ -44,8 +77,14 @@ const ctx = canvas.getContext("2d");
 ctx.drawImage(timg, 0, 0);
 const imgdata = ctx.getImageData(0,0,timg.width,timg.height).data;
 
-const sg = PetviewGame.new();
+const sg = SnakeGame.new();
 sg.upload_imgdata(timg.width, timg.height, imgdata);
+
+// 初始化canvas尺寸
+resizeCanvas();
+
+// 监听窗口尺寸变化
+window.addEventListener('resize', resizeCanvas);
 
 // send event to rust...
 window.onkeypress = (e) => { sg.key_event(0, e); };

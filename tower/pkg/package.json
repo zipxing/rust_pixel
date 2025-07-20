@@ -1,0 +1,15 @@
+{
+  "name": "tower",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "tower_bg.wasm",
+    "tower.js",
+    "tower.d.ts"
+  ],
+  "main": "tower.js",
+  "types": "tower.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

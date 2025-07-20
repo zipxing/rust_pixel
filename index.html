@@ -1,14 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 
 <head>
   <meta charset="utf-8">
-  <title>RustPixelGame</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rust Pixel Online Demo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #374151;
+      margin-bottom: 30px;
+      text-shadow: none;
+      font-size: 2.5em;
+    }
+
+    .apps-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      height: 80vh;
+      min-height: 600px;
+    }
+
+    .app-cell {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+      position: relative;
+      transition: transform 0.3s ease;
+    }
+
+    .app-cell:hover {
+      transform: translateY(-5px);
+    }
+
+    .app-cell iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      overflow: hidden;
+      display: block;
+    }
+
+    .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #4b5563;
+      font-size: 1.2em;
+      text-align: center;
+      background: linear-gradient(45deg, #f9fafb, #f3f4f6);
+    }
+
+    .placeholder-icon {
+      font-size: 4em;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    .app-title {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 8px 15px;
+      font-weight: bold;
+      z-index: 10;
+      backdrop-filter: blur(5px);
+    }
+
+    .petview-title {
+      background: rgba(55, 65, 81, 0.9);
+    }
+
+    .snake-title {
+      background: rgba(55, 65, 81, 0.9);
+    }
+
+          @media (max-width: 768px) {
+        .apps-grid {
+          grid-template-columns: 1fr;
+          grid-template-rows: repeat(4, 1fr);
+          height: auto;
+          min-height: 800px;
+        }
+        
+        h1 {
+          font-size: 2em;
+          color: #374151;
+        }
+      }
+  </style>
 </head>
 
 <body>
-  <canvas id="canvas" height="800" width="1200" style="position: absolute; top: 10px; left: 10px;"></canvas>
-  <script src="./index.js" type="module"></script>
+  <div class="container">
+    <h1>🎮 Rust Pixel Online Demo</h1>
+    
+    <div class="apps-grid">
+      <!-- Petview App (第一行第一列) -->
+      <div class="app-cell">
+        <div class="app-title petview-title">PetView</div>
+        <iframe src="petview/index.html" title="PetView Application" style="margin-top: 1px; height: calc(100% - 1px);"></iframe>
+      </div>
+
+      <!-- Snake App (第一行第二列) -->
+      <div class="app-cell">
+        <div class="app-title snake-title">Snake</div>
+        <iframe src="snake/index.html" title="Snake Game Application" style="margin-top: 1px; height: calc(100% - 1px);"></iframe>
+      </div>
+
+      <!-- Tower App (第二行第一列) -->
+      <div class="app-cell">
+        <div class="app-title snake-title">Tower</div>
+        <iframe src="tower/index.html" title="Tower Game Application" style="margin-top: 1px; height: calc(100% - 1px);"></iframe>
+      </div>
+
+      <!-- Tetris App (第二行第一列) -->
+      <div class="app-cell">
+        <div class="app-title snake-title">Tetris</div>
+        <iframe src="tetris/index.html" title="Tetris Game Application" style="margin-top: 1px; height: calc(100% - 1px);"></iframe>
+      </div>
+
+    </div>
+  </div>
 </body>
 
-</html>
+</html> 
