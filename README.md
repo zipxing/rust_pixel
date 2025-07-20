@@ -29,7 +29,7 @@ It can be compiled into **FFI** for front-end and back-end use, and into **WASM*
 
 Here is a petscii art painting browser made with **rust_pixel**. Special thanks to x.com/PETSCIIWORLD for the character painting and the transition shader provided by **gltransition**. Click here for [online demo]。
 
-https://github.com/user-attachments/assets/8e9e0837-43fd-4f18-a5ad-265a06ddb47e
+https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
 
 ### Features
 
