@@ -45,9 +45,9 @@ https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
     - general 2d shader for draw render texture (render_general2d.rs)
 - Some common game algorithms (algorithm.rs, algorithm/, util.rs, util/)
 - audio & log support (audio.rs, log.rs)
-- Demo games: tetris, tower, poker... (games/)
+- Demo games: tetris, tower, poker... (apps/)
 - Demo terminal ui app: palette... (apps/)
-- Examples of wrapping core algorithms into FFI and WASM (games/poker/ffi, games/poker/wasm)
+- Examples of wrapping core algorithms into FFI and WASM (apps/poker/ffi, apps/poker/wasm)
 
 ### Installation Guide
 
@@ -199,12 +199,12 @@ cargo pixel r gin_rummy t -r
 
 The poker/ffi directory demo how to wrap Rust algorithms into CFFI for use with other languages, showcasing C++ and Python calling poker_ffi
 ```
-cd games/poker/ffi
+cd apps/poker/ffi
 make run
 ```
 The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calling
 ```
-cd games/poker/wasm
+cd apps/poker/wasm
 make run
 ```
 
