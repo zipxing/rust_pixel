@@ -51,7 +51,7 @@ pub enum BorderType {
 /// Used to simplify the call to set_content_by_asset method
 #[macro_export]
 macro_rules! asset2sprite {
-    ($spr:expr, $ctx:expr, $loc:expr $(, $arg:expr)* ) => {
+    ($spr:expr, $ctx:expr, $loc:expr $(, $arg:expr)* ) => {{
         let ll = $loc.to_lowercase();
         // determine asset type...
         let mut at = AssetType::ImgPix;
@@ -81,14 +81,17 @@ macro_rules! asset2sprite {
             },
             _ => {},
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        let nl = &format!("{}{}assets{}{}",
-            $ctx.project_path,
-            std::path::MAIN_SEPARATOR,
-            std::path::MAIN_SEPARATOR,
-            $loc);
-        #[cfg(target_arch = "wasm32")]
-        let nl = &format!("assets{}{}", std::path::MAIN_SEPARATOR, $loc);
+        
+        let nl = if cfg!(not(target_arch = "wasm32")) {
+            &format!("{}{}assets{}{}",
+                $ctx.project_path,
+                std::path::MAIN_SEPARATOR,
+                std::path::MAIN_SEPARATOR,
+                $loc)
+        } else {
+            &format!("assets{}{}", std::path::MAIN_SEPARATOR, $loc)
+        };
+        
         // call spr.set_content_by_asset...
         $spr.set_content_by_asset(
             &mut $ctx.asset_manager,
@@ -98,7 +101,56 @@ macro_rules! asset2sprite {
             x,
             y,
         );
-    };
+    }};
+}
+
+/// 新的宏，专门处理原始路径（不做任何路径处理）
+#[macro_export]
+macro_rules! asset2sprite_raw {
+    ($spr:expr, $ctx:expr, $loc:expr $(, $arg:expr)* ) => {{
+        let ll = $loc.to_lowercase();
+        // determine asset type...
+        let mut at = AssetType::ImgPix;
+        if ll.ends_with(".txt") {
+            at = AssetType::ImgEsc;
+        }
+        if ll.ends_with(".pix") {
+            at = AssetType::ImgPix;
+        }
+        if ll.ends_with(".ssf") {
+            at = AssetType::ImgSsf;
+        }
+        
+        // collect other args...
+        let mut va = Vec::new();
+        $( va.push($arg); )*
+        let mut frame_idx = 0;
+        let mut x = 0;
+        let mut y = 0;
+        match va.len() {
+            1 => {
+                frame_idx = va[0];
+            },
+            3 => {
+                frame_idx = va[0];
+                x = va[1] as u16;
+                y = va[2] as u16;
+            },
+            _ => {},
+        }
+        
+        // 直接使用原始路径，不做任何处理
+        let nl = $loc;
+        
+        $spr.set_content_by_asset(
+            &mut $ctx.asset_manager,
+            at,
+            nl,
+            frame_idx,
+            x,
+            y,
+        );
+    }};
 }
 
 pub trait Widget {

@@ -29,12 +29,7 @@ impl PixelSsfModel {
         let ssf_file = if args.len() >= 3 {
             // cargo-pixel模式: args[1]是项目路径, args[2]是SSF文件
             let path = args[2].clone();
-            // asset2sprite宏会自动添加"assets/"前缀，所以我们需要去除它
-            if path.starts_with("assets/") {
-                path.strip_prefix("assets/").unwrap().to_string()
-            } else {
-                path
-            }
+            path
         } else if args.len() == 2 {
             // 直接运行模式: args[1]是SSF文件路径
             let path = args[1].clone();

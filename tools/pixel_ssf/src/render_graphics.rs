@@ -1,7 +1,7 @@
 use crate::model::{PixelSsfModel, SSFPLAYERW, SSFPLAYERH};
 use rust_pixel::{
     asset::{AssetState, AssetType},
-    asset2sprite,
+    asset2sprite_raw,
     context::Context,
     event::{event_check, event_register},
     game::Render,
@@ -85,7 +85,7 @@ impl PixelSsfRender {
         let ssf_sprite = self.panel.get_sprite("ssf_animation");
         
         // 加载并显示当前帧
-        asset2sprite!(
+        asset2sprite_raw!(
             ssf_sprite,
             ctx,
             &model.ssf_file,
@@ -96,7 +96,7 @@ impl PixelSsfRender {
     fn check_ssf_ready(&mut self, ctx: &mut Context, model: &mut PixelSsfModel) {
         // 检查SSF资源是否已加载
         // asset2sprite宏使用完整路径作为key，所以我们也要用完整路径
-        let asset_key = format!("./assets/{}", &model.ssf_file);
+        let asset_key = format!("{}", &model.ssf_file);
         if let Some(asset) = ctx.asset_manager.get(&asset_key) {
             if asset.get_state() == AssetState::Ready {
                 let new_frame_count = asset.get_base().frame_count;
@@ -132,7 +132,7 @@ impl Render for PixelSsfRender {
 
         // 初始加载SSF文件
         let ssf_sprite = self.panel.get_sprite("ssf_animation");
-        asset2sprite!(ssf_sprite, ctx, &model.ssf_file, 0);
+        asset2sprite_raw!(ssf_sprite, ctx, &model.ssf_file, 0);
 
         info!("Graphics mode initialized");
     }
