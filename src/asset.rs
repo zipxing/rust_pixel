@@ -12,11 +12,11 @@ use crate::{
     render::image::{EscAsset, PixAsset, SeqFrameAsset},
     render::sprite::Sprite,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use log::info;
 use std::collections::HashMap;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
-use log::info;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum AssetState {
@@ -137,8 +137,8 @@ impl AssetManager {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let fpstr = get_abs_path(loc);
+                    let fdata = std::fs::read(&fpstr.clone()).expect(&format!("read file {} error", fpstr.clone()));
                     info!("asset load:{:?}", fpstr);
-                    let fdata = std::fs::read(fpstr).expect("read file error");
                     self.set_data(loc, &fdata[..]);
                 }
             }

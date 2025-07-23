@@ -67,7 +67,7 @@ macro_rules! pixel_game {
             pub fn init_game() -> [<$name Game>] {
                 let m = [<$name Model>]::new();
                 let r = [<$name Render>]::new();
-                let pp = ".";  // 总是使用当前目录作为项目路径
+                let pp = get_project_path();
                 println!("asset path : {:?}", pp);
                 let mut g = Game::new(m, r, stringify!([<$name:lower>]), &pp);
                 g.init();
