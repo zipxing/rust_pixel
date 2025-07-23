@@ -95,7 +95,9 @@ impl PixelSsfRender {
 
     fn check_ssf_ready(&mut self, ctx: &mut Context, model: &mut PixelSsfModel) {
         // 检查SSF资源是否已加载
-        if let Some(asset) = ctx.asset_manager.get(&model.ssf_file) {
+        // asset2sprite宏使用完整路径作为key，所以我们也要用完整路径
+        let asset_key = format!("./assets/{}", &model.ssf_file);
+        if let Some(asset) = ctx.asset_manager.get(&asset_key) {
             if asset.get_state() == AssetState::Ready {
                 let new_frame_count = asset.get_base().frame_count;
                 if model.frame_count != new_frame_count {

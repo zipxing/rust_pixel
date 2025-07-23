@@ -98,25 +98,16 @@ impl PixelSsfRender {
         // asset2sprite宏使用完整路径作为key，所以我们也要用完整路径
         let asset_key = format!("./assets/{}", &model.ssf_file);
         if let Some(asset) = ctx.asset_manager.get(&asset_key) {
-            let state = asset.get_state();
-            let state_str = match state {
-                AssetState::Loading => "Loading",
-                AssetState::Parsing => "Parsing", 
-                AssetState::Ready => "Ready",
-            };
-            println!("DEBUG: Asset state: {}", state_str);
-            if state == AssetState::Ready {
+            if asset.get_state() == AssetState::Ready {
                 let new_frame_count = asset.get_base().frame_count;
                 if model.frame_count != new_frame_count {
                     model.frame_count = new_frame_count;
-                    println!("SSF loaded: {} frames", model.frame_count);
+                    info!("SSF loaded: {} frames", model.frame_count);
                     if model.frame_idx >= model.frame_count {
                         model.frame_idx = 0;
                     }
                 }
             }
-        } else {
-            println!("DEBUG: Asset '{}' not found in asset_manager", &asset_key);
         }
     }
 }
@@ -141,12 +132,9 @@ impl Render for PixelSsfRender {
 
         // 初始加载SSF文件
         let ssf_sprite = self.panel.get_sprite("ssf_animation");
-        println!("DEBUG: About to load SSF file: {}", &model.ssf_file);
-        println!("DEBUG: Project path: {}", ctx.project_path);
         asset2sprite!(ssf_sprite, ctx, &model.ssf_file, 0);
-        println!("DEBUG: asset2sprite! called");
 
-        println!("Graphics mode initialized");
+        info!("Graphics mode initialized");
     }
 
     fn handle_event(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {

@@ -130,17 +130,6 @@ impl Model for PixelSsfModel {
                     }
                 }
             }
-        } else if self.frame_count == 0 {
-            // 调试信息：如果frame_count为0，每秒打印一次状态
-            static mut DEBUG_COUNTER: f32 = 0.0;
-            unsafe {
-                DEBUG_COUNTER += dt;
-                if DEBUG_COUNTER >= 1.0 {
-                    DEBUG_COUNTER = 0.0;
-                    info!("DEBUG: frame_count is 0, auto_play: {}, file: {}", 
-                          self.auto_play, self.ssf_file);
-                }
-            }
         }
     }
 
@@ -150,38 +139,32 @@ impl Model for PixelSsfModel {
         let es = context.input_events.clone();
         for e in &es {
             match e {
-                Event::Key(key) => {
-                    println!("DEBUG: Key pressed: {:?}", key.code);
-                    match key.code {
-                        KeyCode::Char(' ') => {
-                            println!("DEBUG: Space key pressed - toggling auto play");
-                            self.toggle_auto_play();
-                        }
-                        KeyCode::Left => {
-                            println!("DEBUG: Left arrow - previous frame");
-                            self.prev_frame();
-                        }
-                        KeyCode::Right => {
-                            println!("DEBUG: Right arrow - next frame");
-                            self.next_frame();
-                        }
-                        KeyCode::Char('r') | KeyCode::Char('R') => {
-                            self.reset_frame();
-                        }
-                        KeyCode::Char('l') | KeyCode::Char('L') => {
-                            self.toggle_loop_mode();
-                        }
-                        KeyCode::Char('+') | KeyCode::Char('=') => {
-                            self.set_play_speed(self.play_speed * 0.8);
-                        }
-                        KeyCode::Char('-') => {
-                            self.set_play_speed(self.play_speed * 1.2);
-                        }
-                        KeyCode::Char('q') | KeyCode::Char('Q') => {
-                            std::process::exit(0);
-                        }
-                        _ => {}
+                Event::Key(key) => match key.code {
+                    KeyCode::Char(' ') => {
+                        self.toggle_auto_play();
                     }
+                    KeyCode::Left => {
+                        self.prev_frame();
+                    }
+                    KeyCode::Right => {
+                        self.next_frame();
+                    }
+                    KeyCode::Char('r') | KeyCode::Char('R') => {
+                        self.reset_frame();
+                    }
+                    KeyCode::Char('l') | KeyCode::Char('L') => {
+                        self.toggle_loop_mode();
+                    }
+                    KeyCode::Char('+') | KeyCode::Char('=') => {
+                        self.set_play_speed(self.play_speed * 0.8);
+                    }
+                    KeyCode::Char('-') => {
+                        self.set_play_speed(self.play_speed * 1.2);
+                    }
+                    KeyCode::Char('q') | KeyCode::Char('Q') => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
                 },
                 _ => {}
             }
