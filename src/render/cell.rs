@@ -2,19 +2,19 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! Cell is the basic rendering data structure in RustPixel, represents a char
-//! Cell stores some key data such as symbol, tex(graph mode only), fg, bg. 
+//! Cell stores some key data such as symbol, tex(graph mode only), fg, bg.
 //! Many Cells form a buffer to manage rendering.
 //!
 //! A buffer comprises a cell vector with width * height elements
 //!
-//! Please refer to the code (cellsym, symidx, get_cell_info, CELL_SYM_MAP) for 
+//! Please refer to the code (cellsym, symidx, get_cell_info, CELL_SYM_MAP) for
 //! how to use cell.
 //!
 
 use crate::render::style::{Color, Modifier, Style};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use lazy_static::lazy_static;
 // use log::info;
 
 lazy_static! {
@@ -172,12 +172,24 @@ impl Cell {
         self.modifier = Modifier::empty();
     }
 
-    #[cfg(any(target_arch = "wasm32", feature = "sdl", feature ="wgpu", feature = "winit"))]
+    #[cfg(any(
+        target_arch = "wasm32",
+        feature = "sdl",
+        feature = "wgpu",
+        feature = "winit"
+    ))]
     pub fn is_blank(&self) -> bool {
-        (self.symbol == " " || self.symbol == cellsym(32)) && (self.tex == 0 || self.tex == 1)
+        (self.symbol == " " || self.symbol == cellsym(32))
+            && (self.tex == 0 || self.tex == 1)
+            && self.bg == Color::Reset
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), not(feature = "sdl"), not(feature ="wgpu"), not(feature = "winit")))]
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        not(feature = "sdl"),
+        not(feature = "wgpu"),
+        not(feature = "winit")
+    ))]
     pub fn is_blank(&self) -> bool {
         self.symbol == " " && self.fg == Color::Reset && self.bg == Color::Reset
     }
