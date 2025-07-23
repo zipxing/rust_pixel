@@ -1,6 +1,6 @@
 use rust_pixel::event::{Event, KeyCode, MouseButton, MouseEventKind::*};
 //use log::info;
-#[cfg(feature = "sdl")]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
 use crate::render::{SYMBOL_SDL, SYMBOL_SDL_LOW};
 use rust_pixel::{context::Context, event::event_emit, game::Model};
 
@@ -8,9 +8,9 @@ pub const COLORW: u16 = 18;
 pub const COLORH: u16 = 15;
 pub const SYMW: u16 = 18;
 pub const SYMH: u16 = 18;
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
 pub const EDITW: u16 = 80;
-#[cfg(feature = "sdl")]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
 pub const EDITW: u16 = 48;
 pub const EDITH: u16 = 35;
 
@@ -43,9 +43,9 @@ pub struct TeditModel {
 
 impl TeditModel {
     pub fn new() -> Self {
-        #[cfg(not(feature = "sdl"))]
+        #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
         let stc = 3;
-        #[cfg(feature = "sdl")]
+        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
         let stc = 4u8;
 
         Self {
@@ -113,11 +113,11 @@ impl Model for TeditModel {
                         }
                         Some(TeditArea::SYMBOL(idx)) => {
                             if mou.kind == Up(MouseButton::Left) {
-                                #[cfg(not(feature = "sdl"))]
+                                #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
                                 {
                                     self.curpen = TeditPen::SYMBOL(idx);
                                 }
-                                #[cfg(feature = "sdl")]
+                                #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
                                 {
                                     let sym;
                                     if self.sym_tab_idx == 0 {
@@ -157,7 +157,7 @@ impl Model for TeditModel {
                         }
                         Some(TeditArea::ButtonNextColor) =>
                         {
-                            #[cfg(not(feature = "sdl"))]
+                            #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu")))]
                             if mou.kind == Up(MouseButton::Left) {
                                 if self.color_tab_idx == 0 {
                                     self.color_tab_idx = 1;

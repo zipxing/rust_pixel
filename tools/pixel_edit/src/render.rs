@@ -1,6 +1,6 @@
 use crate::model::{TeditModel, TeditPen, COLORH, COLORW, EDITH, EDITW, SYMH, SYMW};
 use log::info;
-#[cfg(feature = "sdl")]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 use rust_pixel::render::cell::cellsym;
 use rust_pixel::{
     asset::{AssetState, AssetType},
@@ -13,10 +13,10 @@ use rust_pixel::{
     render::style::{Color, Style},
 };
 use std::fs;
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
 use unicode_segmentation::UnicodeSegmentation;
 
-#[cfg(feature = "sdl")]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 pub const SYMBOL_SDL: [u8; 18 * 16] = [
     32,
     032,
@@ -307,7 +307,7 @@ pub const SYMBOL_SDL: [u8; 18 * 16] = [
     096 + 128,
     32,
 ];
-#[cfg(feature = "sdl")]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 pub const SYMBOL_SDL_LOW: [u8; 18 * 16] = [
     32,
     032,
@@ -599,7 +599,7 @@ pub const SYMBOL_SDL_LOW: [u8; 18 * 16] = [
     32,
 ];
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
 pub const SYMBOL_ASCII: [[&str; 16]; 3] = [
     [
         " !#$%&()*+,-./0123",
@@ -657,7 +657,7 @@ pub const SYMBOL_ASCII: [[&str; 16]; 3] = [
     ],
 ];
 
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
 fn get_nosdl_sym(sym_tab_idx: u8, idx: u16) -> &'static str {
     let codey = (idx / SYMW) as usize;
     let mut codex = (idx % SYMW) as usize;
@@ -688,9 +688,9 @@ pub const COLOR_PATTERN: [u16; 270] = [
 
 pub const TITLE_COLOR: Color = Color::Indexed(222);
 pub const MENUFG_COLOR: Color = Color::Indexed(253);
-#[cfg(not(feature = "sdl"))]
+#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
 pub const MENUBG_COLOR: Color = Color::Indexed(236);
-#[cfg(feature = "sdl")]
+#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
 pub const MENUBG_COLOR: Color = Color::Indexed(0);
 pub const MSG_COLOR: Color = Color::Indexed(251);
 
@@ -718,11 +718,11 @@ impl TeditRender {
         );
         for i in 0..270 {
             let mut blk;
-            #[cfg(not(feature = "sdl"))]
+            #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
             {
                 blk = "█";
             }
-            #[cfg(feature = "sdl")]
+            #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
             {
                 blk = cellsym(160);
             }
@@ -737,7 +737,7 @@ impl TeditRender {
             l.content
                 .set_str(i % COLORW + 1, i / COLORW + 1, blk, Style::default().fg(tc));
         }
-        #[cfg(not(feature = "sdl"))]
+        #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
         l.content.set_str(
             14,
             COLORH,
@@ -759,7 +759,7 @@ impl TeditRender {
             "Symbols",
             Style::default().fg(TITLE_COLOR).bg(Color::Indexed(0)),
         );
-        #[cfg(not(feature = "sdl"))]
+        #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
         for i in 0..SYMH - 3 {
             cl.content.set_str(
                 1,
@@ -768,7 +768,7 @@ impl TeditRender {
                 Style::default(),
             );
         }
-        #[cfg(feature = "sdl")]
+        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
         for i in 0..SYMH as usize - 2 {
             for j in 0..SYMW as usize {
                 let sidx = SYMBOL_SDL_LOW[i * SYMW as usize + j];
@@ -902,7 +902,7 @@ impl TeditRender {
         }
 
         let sb = self.panel.get_sprite("SYMBOL");
-        #[cfg(not(feature = "sdl"))]
+        #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
         for i in 0..SYMH - 3 {
             sb.content.set_str(
                 1,
@@ -911,7 +911,7 @@ impl TeditRender {
                 Style::default(),
             );
         }
-        #[cfg(feature = "sdl")]
+        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
         for i in 0..SYMH as usize - 2 {
             for j in 0..SYMW as usize {
                 let (sidx, fc) = if d.sym_tab_idx == 0 {
@@ -944,7 +944,7 @@ impl TeditRender {
         let m1: &mut Sprite = self.panel.get_sprite("MSG1");
         match d.curpen {
             TeditPen::SYMBOL(idx) => {
-                #[cfg(not(feature = "sdl"))]
+                #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
                 {
                     let s = get_nosdl_sym(d.sym_tab_idx, idx);
                     m1.content.set_str(
@@ -954,7 +954,7 @@ impl TeditRender {
                         Style::default().fg(MSG_COLOR),
                     );
                 }
-                #[cfg(feature = "sdl")]
+                #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
                 {
                     m1.content.set_str(
                         5,
@@ -1003,12 +1003,12 @@ impl TeditRender {
         let elb: &mut Sprite = self.panel.get_sprite("EDIT");
         match d.curpen {
             TeditPen::SYMBOL(idx) => {
-                #[cfg(not(feature = "sdl"))]
+                #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
                 {
                     let s = get_nosdl_sym(d.sym_tab_idx, idx);
                     elb.content.content[si as usize].set_symbol(s);
                 }
-                #[cfg(feature = "sdl")]
+                #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
                 {
                     elb.content.content[si as usize].set_symbol(cellsym(idx as u8));
                     elb.content.content[si as usize].set_fg(Color::White);
@@ -1055,9 +1055,9 @@ impl Render for TeditRender {
         let l = self.panel.get_sprite("EDIT");
         l.set_content_by_asset(
             &mut context.asset_manager,
-            #[cfg(not(feature = "sdl"))]
+            #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
             AssetType::ImgEsc,
-            #[cfg(feature = "sdl")]
+            #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
             AssetType::ImgPix,
             &self.escfile,
             0,
