@@ -1,9 +1,9 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Utils of random rect PointU16...
+//! Utilities for random, rect, PointU16...
 //! and a simple object pool: objpool.rs
-//! some primitive algorithm: shape.rs
+//! Some primitive algorithms: shape.rs
 
 use serde::{Deserialize, Serialize};
 use std::{

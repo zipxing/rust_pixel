@@ -2,10 +2,10 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! Context encapsulates several public variables
-//! including stage，state，input events, etc.
-//! For simplicity, state is set to u8 type，you can create your own states using enums in your games.
-//! Context also integrates an RNG for user's convenience
-//! An render adapter is also provided
+//! including stage, state, input events, etc.
+//! For simplicity, state is set to u8 type, you can create your own states using enums in your games.
+//! Context also integrates an RNG for user's convenience.
+//! A render adapter is also provided
 //! to make it compatible with web, SDL, or terminal modes.
 //! Finally, an asset_manager is included as well.
 

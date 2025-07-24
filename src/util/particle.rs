@@ -1,3 +1,8 @@
+//! Particle system for visual effects in RustPixel.
+//!
+//! This module provides a particle system that can be used for various visual effects
+//! such as explosions, fire, smoke, and other dynamic visual elements.
+
 use crate::util::{
     objpool::{GObj, GameObjPool},
     Rand,

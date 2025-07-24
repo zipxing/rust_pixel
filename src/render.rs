@@ -1,20 +1,20 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! # 渲染模块
+//! # Render Module
 //!
-//! 支持两种渲染模式：文本模式和图形模式。
+//! Supports two rendering modes: text mode and graphics mode.
 //!
-//! ## 子模块
-//! - `adapter`: 渲染适配器接口（crossterm、sdl、web、winit）
-//! - `cell`: 基础绘制单元，即一个字符
-//! - `buffer`: 由cells组成的向量，管理屏幕缓冲区
-//! - `sprite`: 基础绘制组件，进一步封装buffer
-//! - `style`: 定义绘制属性，如前景色和背景色
-//! - `panel`: 绘制面板，兼容文本模式和图形模式
-//! - `graph`: 图形渲染相关的数据结构和函数
-//! - `image`: 图像处理功能
-//! - `symbols`: 符号和字符处理
+//! ## Sub-modules
+//! - `adapter`: Render adapter interfaces (crossterm, SDL, web, winit)
+//! - `cell`: Basic rendering unit, i.e., a character
+//! - `buffer`: Vector composed of cells, manages screen buffer
+//! - `sprite`: Basic rendering component, further encapsulates buffer
+//! - `style`: Defines rendering attributes such as foreground and background colors
+//! - `panel`: Rendering panel, compatible with text mode and graphics mode
+//! - `graph`: Graphics rendering related data structures and functions
+//! - `image`: Image processing functionality
+//! - `symbols`: Symbol and character processing
 
 pub mod adapter;
 pub mod buffer;

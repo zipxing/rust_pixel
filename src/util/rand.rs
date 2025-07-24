@@ -1,6 +1,11 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+//! Random number generation utilities for RustPixel.
+//!
+//! This module provides a custom random number generator based on Xoshiro256StarStar
+//! algorithm, optimized for game development needs.
+
 use rand::seq::SliceRandom;
 use rand_xoshiro::{
     rand_core::{RngCore, SeedableRng},
@@ -9,7 +14,7 @@ use rand_xoshiro::{
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// RCG
+/// Random number generator (RNG) wrapper.
 pub struct Rand {
     rng: Xoshiro256StarStar,
 }

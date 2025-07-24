@@ -1,6 +1,12 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+//! Audio module provides sound playback functionality for RustPixel games.
+//! 
+//! This module offers cross-platform audio support through different backends:
+//! - **Native**: Direct audio file playback
+//! - **Web**: Browser-based audio through JavaScript interop
+
 
 //! audio provides playing music and sound effect, reference
 //! https://docs.rs/rodio

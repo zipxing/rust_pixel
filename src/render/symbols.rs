@@ -1,10 +1,10 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//!
-//! A symbol comprises a point vector with width * height elements
-//!
-//!
+//! Symbol processing utilities for RustPixel.
+//! 
+//! A symbol comprises a point vector with width * height elements.
+//! This module provides functions for symbol manipulation and color processing.
 
 use crate::render::style::ANSI_COLOR_RGB;
 use deltae::*;
