@@ -1,5 +1,5 @@
 [package]
-name = "pixel_ssf"
+name = "ssf"
 version = "0.1.0"
 edition = "2021"
 description = "SSF sequence frame player tool for RustPixel"

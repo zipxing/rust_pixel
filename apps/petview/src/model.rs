@@ -38,7 +38,7 @@ impl PetviewModel {
             transbuf_stage: 0,
             img_cur: 0,
             img_next: 1,
-            img_count: 30,
+            img_count: 31,
             trans_effect: 0,
             tex_ready: false,
             progress: 0.0,
