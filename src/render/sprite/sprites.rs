@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! sprites.rs implements a set of Sprites. Those Sprites are stored in a vector
 //! Sprite can be accessed via offset in the vector or by tag in the hashmap

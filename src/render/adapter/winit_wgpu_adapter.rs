@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! # Winit + WGPU 适配器实现
 //!

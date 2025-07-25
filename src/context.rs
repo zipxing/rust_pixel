@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! Context encapsulates several public variables
 //! including stage, state, input events, etc.

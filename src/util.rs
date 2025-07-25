@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! Utilities for random, rect, PointU16...
 //! and a simple object pool: objpool.rs

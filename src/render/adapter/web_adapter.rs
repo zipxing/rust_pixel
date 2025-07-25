@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! Implements an Adapter trait. Moreover, all SDL related processing is handled here.
 //! Includes resizing of height and width, init settings.

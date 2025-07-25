@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! Game encapsulates Model and Render classes and implements the main loop.
 //! Be aware that all the Game, Model and Render instances have the same lifetime.

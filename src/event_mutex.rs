@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! Mutex + lazy_static implementation for comparison
 //! This is the original implementation using Mutex

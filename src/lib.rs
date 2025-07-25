@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022~2024
+// copyright zipxing@hotmail.com 2022～2025
 
 //! RustPixel is a 2D game engine & rapid prototyping tools supporting both text and graphics rendering modes.
 //! It is suitable for creating 2D pixel-style games and developing terminal applications.
