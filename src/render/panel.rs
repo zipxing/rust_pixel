@@ -1,23 +1,23 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Panel supports rendering in both text and graphics modes
-//! The core of it is to draw whatever in the buffer on the screen
+//! Panel supports rendering in both text and graphics modes.
+//! The core of it is to draw whatever in the buffer on the screen.
 //!
-//! terminal mode relies on the crossterm modules, and it has builtin double buffering
+//! Terminal mode relies on the crossterm modules, and it has builtin double buffering.
 //!
-//! SDL is built on rustsdl2 module.To support opacity of sprites, buffer stores the char and color
+//! SDL is built on rustsdl2 module. To support opacity of sprites, buffer stores the char and color
 //! of each cell in every framework in SDL mode.
 //! During rendering, cell is rendered according to its opacity order first to render_texture,
 //! and later render_text displays on the canvas.
-//! To further enhance our functionality, a set of special sprites：pixel_sprites are provided in SDL mode.
+//! To further enhance our functionality, a set of special sprites: pixel_sprites are provided in SDL mode.
 //! They can be set per pixel, and are managed in the same way as cell.
-//! During rendering, they can be rendered by its pixel position or can be rotated about its centre.
+//! During rendering, they can be rendered by its pixel position or can be rotated about its center.
 //! Please refer to the flush method or the tower defense game in games/tower where pixel_sprite is
 //! massively applied.
 //!
 //! WEB mode is similar to SDL mode, both are graphics modes. However,
-//! in WEB mode, RustPixel renders buffer to a shared memory block and shared it
+//! in WEB mode, RustPixel renders buffer to a shared memory block and shares it
 //! with JavaScript in WEB, then JS calls webgl in the browser to render this memory block.
 //! Refer to the implementation in pixel.js
 

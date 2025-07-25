@@ -2,7 +2,7 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 
-//! log provides various log functions, reference
+//! Log module provides various log functions, reference
 //! https://docs.rs/log4rs
 
 

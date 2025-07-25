@@ -1,8 +1,8 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Game encapsulate Model and Render classes and implements the main loop
-//! Be aware that all the Game, Model and Render instances have the same lifetime
+//! Game encapsulates Model and Render classes and implements the main loop.
+//! Be aware that all the Game, Model and Render instances have the same lifetime.
 //!
 //! # Example
 //!

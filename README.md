@@ -144,6 +144,7 @@ cargo pixel r pixel_edit s . assets/lion.pix
 4. Script to automatically **convert gif images into PETSCII animations (.ssf)**
 ```
 cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25 
+cargo pixel r pixel_ssf wg -r . assets/sdq/fire.ssf       # preview ssf 
 ```
 
 ### Demo games

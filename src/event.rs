@@ -2,12 +2,12 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 
-//! this event module provides a global event centre and a global timer centre.
+//! This event module provides a global event center and a global timer center.
 //! For comparison testing: thread_local! + Rc<RefCell<T>> vs Mutex + lazy_static
 //!
-//! one event in this class namely Event, describing I/Os from keyboard and mouse
-//! Input events triggered by renders such as web, sdl or cross are converted here to
-//! unified Event
+//! One event in this class namely Event, describing I/Os from keyboard and mouse.
+//! Input events triggered by renders such as web, SDL or cross are converted here to
+//! unified Event.
 
 
 use crate::GAME_FRAME;

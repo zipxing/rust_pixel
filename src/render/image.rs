@@ -1,16 +1,16 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Implements save/load of .pix and .esc files
+//! Implements save/load of .pix and .esc files.
 //!
-//! esc file stores the ascii art images in terminal mode, 
-//! saving esc terminal sequences
-//! and UTF8 text. Run this CMD to check:
+//! ESC file stores the ASCII art images in terminal mode, 
+//! saving ESC terminal sequences
+//! and UTF-8 text. Run this command to check:
 //!
 //! $ cat assets/tetris/back.txt
 //!
-//! pix file stores the art images in GRAPH mode, saving the cell sequence row by row
-//! cell: char sym index, fore- and background colors (background color is used to mark texture in graphics mode)
+//! PIX file stores the art images in graphics mode, saving the cell sequence row by row.
+//! Cell: char sym index, fore- and background colors (background color is used to mark texture in graphics mode).
 //!
 //! $ cat assets/snake/back.pix
 

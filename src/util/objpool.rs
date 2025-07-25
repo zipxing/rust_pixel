@@ -1,25 +1,25 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! This module implements a simple object pool
-//! It is designed for recycling of objects, reducing costs for creating objects
+//! This module implements a simple object pool.
+//! It is designed for object recycling, reducing costs for creating objects.
 //!
 //! render::panel provides create_sprites, draw_objs methods to create
-//! render sprite and render objects and can be used jointly
+//! render sprite and render objects and can be used jointly.
 
 use std::collections::HashMap;
 // use log::info;
 
-/// game object interface, requires to implement new and reset method
+/// Game object interface, requires to implement new and reset method.
 pub trait GObj {
     fn new() -> Self;
     fn reset(&mut self, t: u8, ps: &[u32]);
 }
 
-/// game object, id is the index offset in the objpool
-/// and to identify and get access to the object
-/// active is to label whether an object is active,
-/// to recycling an object, simply set the active flag to false
+/// Game object, id is the index offset in the objpool
+/// and to identify and get access to the object.
+/// Active is to label whether an object is active,
+/// to recycle an object, simply set the active flag to false.
 pub struct GameObject<T>
 where
     T: GObj,

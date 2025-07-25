@@ -1,6 +1,11 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+//! Bezier curve algorithms for smooth animations and paths.
+//!
+//! This module provides functions to calculate and draw Bezier curves,
+//! commonly used for smooth movement animations in games.
+
 use crate::util::PointF32;
 
 fn bezier_interpolation_func(t: f32, points: &[PointF32], count: usize) -> PointF32 {

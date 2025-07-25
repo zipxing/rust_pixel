@@ -1,11 +1,11 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Implements some shape drawing algorithms
+//! Implements some shape drawing algorithms.
 //!
-//! lightning implements drawing of lightnings
-//! line implements drawing of lines
-//! circle implements drawing of circles
+//! Lightning implements drawing of lightnings.
+//! Line implements drawing of lines.
+//! Circle implements drawing of circles.
 
 use rand;
 

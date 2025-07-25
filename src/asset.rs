@@ -1,8 +1,8 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! asset provides the resource manager.
-//! It supports async load. It calls JavaScript methods to load resources asynchronously when runs in wasm mode.
+//! Asset module provides the resource manager.
+//! It supports async loading. It calls JavaScript methods to load resources asynchronously when running in WASM mode.
 //! https://www.reddit.com/r/rust/comments/8ymzwg/common_data_and_behavior/
 
 #[cfg(not(target_arch = "wasm32"))]

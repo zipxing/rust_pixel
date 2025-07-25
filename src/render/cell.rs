@@ -1,6 +1,10 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
+//! Cell is the basic unit for rendering in RustPixel.
+//! Each cell stores a character/symbol, foreground color, background color,
+//! and texture information for graphics mode.
+
 //! Cell is the basic rendering data structure in RustPixel, represents a char
 //! Cell stores some key data such as symbol, tex(graph mode only), fg, bg.
 //! Many Cells form a buffer to manage rendering.

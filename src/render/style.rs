@@ -2,7 +2,7 @@
 // copyright zipxing@hotmail.com 2022~2024
 
 //! Defines styles such as color, bold or italics.
-//! Only foreground color is supported in Graph mode, as background color is used for texture.
+//! Only foreground color is supported in Graphics mode, as background color is used for texture.
 
 #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crate::render::image::io_error;

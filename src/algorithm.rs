@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! here integrates some common algorithms e.g. disjoint-set data structure, astar
+//! Here integrates some common algorithms e.g. disjoint-set data structure, A*.
 pub mod union_find;
 pub mod astar;
 mod bezier;

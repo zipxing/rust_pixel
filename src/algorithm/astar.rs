@@ -1,7 +1,7 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! astar shortest path algorithm
+//! A* (A-star) shortest path algorithm.
 
 //! # Example
 //!

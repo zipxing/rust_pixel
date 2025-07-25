@@ -1,10 +1,10 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! Sprite further encapsulates Buffer
-//! It is also the most common component in RustPixel
-//! It provides drawing methods such as set_border，draw_line, draw_circle
-//! Refer to util/shape.rs for an example of how to draw a line
+//! Sprite further encapsulates Buffer.
+//! It is also the most common component in RustPixel.
+//! It provides drawing methods such as set_border, draw_line, draw_circle.
+//! Refer to util/shape.rs for an example of how to draw a line.
 
 use crate::{
     asset::{AssetManager, AssetState, AssetType},

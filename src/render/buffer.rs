@@ -1,20 +1,20 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022~2024
 
-//! buffer is a basic rendering unit in RustPixel, represents a rectangle area
-//! A buffer comprises a cell vector with width * height elements
-//! A cell stores key data such as symbol, fg, bg
+//! Buffer is a basic rendering unit in RustPixel, represents a rectangle area.
+//! A buffer comprises a cell vector with width * height elements.
+//! A cell stores key data such as symbol, fg, bg.
 //!
 //! Almost all Unicode chars can be drawn in text mode, depending on the terminal apps
-//! (use of iterm2 in macOS is recommended). For example:
+//! (use of iTerm2 in macOS is recommended). For example:
 //! ```
 //! my_buffer.set_str(0, 0, "Hello world 😃.",
 //!     Style::default().fg(Color::Red).bg(Color::Reset))
 //! ```
 //!
-//! Beware of the display width and height of unicode chars
-//! Display width is a bit tricky, very much relying on the terminal apps(currently the development
-//! work uses iterm2 in macOS). Moreover, bold and italics fonts are also supported in text mode.
+//! Beware of the display width and height of Unicode chars.
+//! Display width is a bit tricky, very much relying on the terminal apps (currently the development
+//! work uses iTerm2 in macOS). Moreover, bold and italics fonts are also supported in text mode.
 //!
 //! In graphics mode,
 //! 256 unicode chars mark the index of a symbol in a SDL texture
@@ -43,7 +43,7 @@
 //! my_buffer.set_str_tex(0, 0, "Hello world.",
 //!     Style::default().fg(Color::Red), 0)
 //! ```
-//! Warning！tex here must be set to 0，because the offset in SDL_SYM_MAP is preset based on
+//! Warning! tex here must be set to 0, because the offset in SDL_SYM_MAP is preset based on
 //! texture0(assets/c64l.png). May have display issues if set to another texture.
 //!
 #[allow(unused_imports)]
