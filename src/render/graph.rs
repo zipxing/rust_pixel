@@ -1,58 +1,59 @@
-//! # 图形渲染核心模块 (Graphics Rendering Core)
+//! # Graphics Rendering Core Module
 //!
-//! 这个模块包含了RustPixel图形渲染系统的核心数据结构、常量和函数。
-//! 在WGPU重构后，本模块承担了更重要的角色，提供跨后端的统一数据结构。
+//! This module contains the core data structures, constants and functions for
+//! RustPixel's graphics rendering system. After the WGPU refactoring, this module
+//! plays a more important role by providing unified data structures across backends.
 //!
-//! ## 🏗️ 模块职责 (Module Responsibilities)
+//! ## 🏗️ Module Responsibilities
 //!
-//! ### 核心数据结构 (Core Data Structures)
-//! - **UnifiedColor**: 跨后端颜色表示，支持RGBA浮点数格式
-//! - **UnifiedTransform**: 统一的2D变换矩阵，用于精灵和纹理变换
-//! - **RenderCell**: GPU就绪的渲染单元数据
+//! ### Core Data Structures
+//! - **UnifiedColor**: Cross-backend color representation supporting RGBA float format
+//! - **UnifiedTransform**: Unified 2D transformation matrix for sprite and texture transforms
+//! - **RenderCell**: GPU-ready rendering unit data
 //!
-//! ### 纹理和符号管理 (Texture & Symbol Management)  
-//! - **PIXEL_TEXTURE_FILE**: 符号纹理文件路径常量
-//! - **PIXEL_SYM_WIDTH/HEIGHT**: 符号尺寸的全局配置
-//! - 纹理坐标计算和符号索引转换
+//! ### Texture and Symbol Management
+//! - **PIXEL_TEXTURE_FILE**: Symbol texture file path constant
+//! - **PIXEL_SYM_WIDTH/HEIGHT**: Global configuration for symbol dimensions
+//! - Texture coordinate calculation and symbol index conversion
 //!
-//! ### 渲染管线抽象 (Rendering Pipeline Abstraction)
-//! - **draw_all_graph()**: 统一的图形渲染入口点
-//! - 缓冲区到RenderCell的转换逻辑
-//! - 精灵渲染和Logo动画支持
+//! ### Rendering Pipeline Abstraction
+//! - **draw_all_graph()**: Unified graphics rendering entry point
+//! - Buffer to RenderCell conversion logic
+//! - Sprite rendering and Logo animation support
 //!
-//! ## 🚀 设计优势 (Design Benefits)
+//! ## 🚀 Design Benefits
 //!
-//! ### 跨后端兼容性 (Cross-Backend Compatibility)
+//! ### Cross-Backend Compatibility
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                    graph.rs (This Module)                   │
-//! │  ┌─────────────────────────────────────────────────────────┐ │
-//! │  │           Unified Data Structures                       │ │
-//! │  │  ┌─────────────┬─────────────┬─────────────────────────┐ │ │
-//! │  │  │UnifiedColor │UnifiedTrans-│      RenderCell         │ │ │
-//! │  │  │(RGBA)       │form (2D)    │   (GPU-ready)           │ │ │
-//! │  │  └─────────────┴─────────────┴─────────────────────────┘ │ │
-//! │  └─────────────────────────────────────────────────────────┘ │
-//! │                           │                                  │
-//! │                           ▼                                  │
-//! │  ┌─────────────────────────────────────────────────────────┐ │
-//! │  │              Backend Adapters                           │ │
-//! │  │  ┌─────────┬─────────┬─────────┬─────────┬─────────────┐ │ │
-//! │  │  │   SDL   │  Winit  │  Winit  │   Web   │  Crossterm  │ │ │
-//! │  │  │   +GL   │   +GL   │  +WGPU  │  +WebGL │    (Text)   │ │ │
-//! │  │  └─────────┴─────────┴─────────┴─────────┴─────────────┘ │ │
-//! │  └─────────────────────────────────────────────────────────┘ │
+//! │  ┌────────────────────────────────────────────────────────┐ │
+//! │  │           Unified Data Structures                      │ │
+//! │  │  ┌─────────────┬─────────────┬───────────────────────┐ │ │
+//! │  │  │UnifiedColor │UnifiedTrans-│      RenderCell       │ │ │
+//! │  │  │(RGBA)       │form (2D)    │   (GPU-ready)         │ │ │
+//! │  │  └─────────────┴─────────────┴───────────────────────┘ │ │
+//! │  └────────────────────────────────────────────────────────┘ │
+//! │                           │                                 │
+//! │                           ▼                                 │
+//! │  ┌────────────────────────────────────────────────────────┐ │
+//! │  │              Backend Adapters                          │ │
+//! │  │  ┌────────┬─────────┬─────────┬─────────┬────────────┐ │ │
+//! │  │  │  SDL   │  Winit  │  Winit  │   Web   │  Crossterm │ │ │
+//! │  │  │  +GL   │   +GL   │  +WGPU  │  +WebGL │    (Text)  │ │ │
+//! │  │  └────────┴─────────┴─────────┴─────────┴────────────┘ │ │
+//! │  └────────────────────────────────────────────────────────┘ │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! ### 零成本抽象 (Zero-Cost Abstractions)
-//! - **编译时特化**: 每个后端都能优化到最佳性能
-//! - **直接内存映射**: RenderCell直接对应GPU缓冲区格式
-//! - **无虚函数开销**: 移除trait object后的性能提升
+//! ### Zero-Cost Abstractions
+//! - **Compile-time specialization**: Each backend can optimize to best performance
+//! - **Direct memory mapping**: RenderCell directly corresponds to GPU buffer format
+//! - **No virtual function overhead**: Performance improvements after removing trait objects
 //!
-//! ## 📊 符号纹理系统 (Symbol Texture System)
+//! ## 📊 Symbol Texture System
 //!
-//! RustPixel使用统一的符号纹理来渲染字符和图形元素：
+//! RustPixel uses a unified symbol texture to render characters and graphic elements:
 
 use crate::{
     render::{AdapterBase, buffer::Buffer, sprite::Sprites, style::Color},
@@ -61,74 +62,75 @@ use crate::{
 };
 use std::sync::OnceLock;
 
-/// 符号纹理文件路径
+/// Symbol texture file path
 ///
-/// 符号纹理包含8x8块，每块包含16x16符号，总共128×128符号。
-/// 这个纹理作为渲染文本和符号的字符图集。
+/// The symbol texture contains 8x8 blocks, each block containing 16x16 symbols,
+/// totaling 128×128 symbols. This texture serves as the character atlas for
+/// rendering text and symbols.
 ///
-/// 布局:
+/// Layout:
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
 /// │                   Symbols Texture Layout                    │
 /// │                                                             │
-/// │  ┌─────────┬─────────┬─────────┬─────────┬─────────┐       │
-/// │  │Block 0,0│Block 1,0│Block 2,0│Block 3,0│Block 4,0│ ...   │
-/// │  │16x16    │16x16    │16x16    │16x16    │16x16    │       │
-/// │  │Symbols  │Symbols  │Symbols  │Symbols  │Symbols  │       │
-/// │  ├─────────┼─────────┼─────────┼─────────┼─────────┤       │
-/// │  │Block 0,1│Block 1,1│Block 2,1│Block 3,1│Block 4,1│ ...   │
-/// │  │16x16    │16x16    │16x16    │16x16    │16x16    │       │
-/// │  │Symbols  │Symbols  │Symbols  │Symbols  │Symbols  │       │
-/// │  └─────────┴─────────┴─────────┴─────────┴─────────┘       │
+/// │  ┌─────────┬─────────┬─────────┬─────────┬─────────┐        │
+/// │  │Block 0,0│Block 1,0│Block 2,0│Block 3,0│Block 4,0│ ...    │
+/// │  │16x16    │16x16    │16x16    │16x16    │16x16    │        │
+/// │  │Symbols  │Symbols  │Symbols  │Symbols  │Symbols  │        │
+/// │  ├─────────┼─────────┼─────────┼─────────┼─────────┤        │
+/// │  │Block 0,1│Block 1,1│Block 2,1│Block 3,1│Block 4,1│ ...    │
+/// │  │16x16    │16x16    │16x16    │16x16    │16x16    │        │
+/// │  │Symbols  │Symbols  │Symbols  │Symbols  │Symbols  │        │
+/// │  └─────────┴─────────┴─────────┴─────────┴─────────┘        │
 /// │                           ...                               │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
-/// 符号宽度静态变量（懒初始化）
+/// Symbol width static variable (lazy initialization)
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
-/// 符号高度静态变量（懒初始化）
+/// Symbol height static variable (lazy initialization)
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
-/// 根据纹理宽度计算符号宽度
+/// Calculate symbol width based on texture width
 ///
-/// # 参数
-/// - `width`: 纹理总宽度
+/// # Parameters
+/// - `width`: Total texture width
 ///
-/// # 返回值
-/// 单个符号的宽度
+/// # Returns
+/// Width of a single symbol
 pub fn init_sym_width(width: u32) -> f32 {
     width as f32 / (16.0 * 8.0)
 }
 
-/// 根据纹理高度计算符号高度
+/// Calculate symbol height based on texture height
 ///
-/// # 参数
-/// - `height`: 纹理总高度
+/// # Parameters
+/// - `height`: Total texture height
 ///
-/// # 返回值
-/// 单个符号的高度
+/// # Returns
+/// Height of a single symbol
 pub fn init_sym_height(height: u32) -> f32 {
     height as f32 / (16.0 * 8.0)
 }
 
-/// Logo显示宽度（字符数）
+/// Logo display width (in characters)
 pub const PIXEL_LOGO_WIDTH: usize = 27;
 
-/// Logo显示高度（字符数）
+/// Logo display height (in characters)
 ///
-/// Logo在启动时显示，用于展示项目标识。
-/// 使用RGB格式存储，每个像素3个字节。
+/// The logo is displayed during startup to show the project identity.
+/// Uses RGB format storage with 3 bytes per pixel.
 pub const PIXEL_LOGO_HEIGHT: usize = 12;
 
-/// RustPixel Logo数据
+/// RustPixel Logo data
 ///
-/// 预定义的Logo图像数据，RGB格式，每个像素3字节。
-/// 在游戏启动阶段显示，提供品牌识别。
+/// Predefined logo image data in RGB format, 3 bytes per pixel.
+/// Displayed during game startup stage to provide brand identification.
 ///
-/// 数据格式：[R, G, B, R, G, B, ...]
-/// 尺寸：27 × 12 像素
+/// Data format: [R, G, B, R, G, B, ...]
+/// Dimensions: 27 × 12 pixels
 pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
     32, 15, 1, 32, 202, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 239, 1, 32, 15, 1, 100, 239, 1, 32,
     239, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0,
@@ -173,12 +175,13 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
     15, 1, 32, 15, 1, 32, 15, 1,
 ];
 
-/// 🎨 统一颜色表示 (Unified Color Representation)
+/// 🎨 Unified Color Representation
 ///
-/// 这个结构体提供了跨后端的颜色抽象，是WGPU重构后的核心数据结构之一。
-/// 支持所有图形后端（OpenGL、WGPU、WebGL）的颜色表示和转换。
+/// This struct provides cross-backend color abstraction, one of the core data structures
+/// after the WGPU refactoring. Supports color representation and conversion for all
+/// graphics backends (OpenGL, WGPU, WebGL).
 ///
-/// ## 🔄 跨后端兼容性 (Cross-Backend Compatibility)
+/// ## 🔄 Cross-Backend Compatibility
 /// 
 /// ```text
 /// UnifiedColor (RGBA f32)
@@ -189,10 +192,10 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 ///      └─→ Crossterm: Color::Rgb { r: u8, g: u8, b: u8 }
 /// ```
 ///
-/// ## 🚀 性能特性 (Performance Features)
-/// - **编译时优化**: 零成本抽象，编译器可完全内联
-/// - **缓存友好**: 紧凑的内存布局 (16 bytes)
-/// - **SIMD兼容**: 4个f32对齐，便于向量化运算
+/// ## 🚀 Performance Features
+/// - **Compile-time optimization**: Zero-cost abstraction, fully inlinable by compiler
+/// - **Cache-friendly**: Compact memory layout (16 bytes)
+/// - **SIMD compatible**: 4 f32 aligned, suitable for vectorization
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UnifiedColor {
     pub r: f32,
@@ -223,12 +226,13 @@ impl UnifiedColor {
     }
 }
 
-/// 🔄 统一2D变换矩阵 (Unified 2D Transformation Matrix)
+/// 🔄 Unified 2D Transformation Matrix
 ///
-/// 这个结构体提供了跨后端的2D变换抽象，支持平移、缩放、旋转等操作。
-/// 在WGPU重构后，成为所有图形后端统一的变换表示。
+/// This struct provides cross-backend 2D transformation abstraction, supporting
+/// translation, scaling, rotation and other operations. After the WGPU refactoring,
+/// it became the unified transformation representation for all graphics backends.
 ///
-/// ## 📐 矩阵布局 (Matrix Layout)
+/// ## 📐 Matrix Layout
 /// 
 /// ```text
 /// │m00  m01  m20│   │sx   0   tx│   Translation: (tx, ty)
@@ -236,7 +240,7 @@ impl UnifiedColor {
 /// │ 0    0    1 │   │0    0    1│   Rotation:    cos/sin in m00,m01,m10,m11
 /// ```
 ///
-/// ## 🔄 后端转换 (Backend Conversion)
+/// ## 🔄 Backend Conversion
 /// 
 /// ```text
 /// UnifiedTransform (2D Matrix)
@@ -247,11 +251,11 @@ impl UnifiedColor {
 ///      └─→ Sprites: Apply to position/scale directly
 /// ```
 ///
-/// ## ⚡ 使用场景 (Use Cases)
-/// - **精灵变换**: 位置、缩放、旋转动画
-/// - **UI布局**: 面板和控件的相对定位
-/// - **特效渲染**: 粒子系统和过渡效果
-/// - **摄像机**: 视图变换和投影矩阵
+/// ## ⚡ Use Cases
+/// - **Sprite transformation**: Position, scaling, rotation animations
+/// - **UI layout**: Relative positioning of panels and controls
+/// - **Effect rendering**: Particle systems and transition effects
+/// - **Camera**: View transformation and projection matrices
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UnifiedTransform {
     pub m00: f32, pub m01: f32,
@@ -356,18 +360,18 @@ impl Default for UnifiedTransform {
     }
 }
 
-/// GPU渲染单元结构
+/// GPU rendering unit structure
 ///
-/// RenderCell作为游戏缓冲区和GPU渲染管线之间的中间数据格式。
-/// 这种设计提供了以下优势：
+/// RenderCell serves as the intermediate data format between game buffers and
+/// the GPU rendering pipeline. This design provides the following advantages:
 ///
-/// ## 设计优点
-/// - **GPU优化**: 数据预格式化以便高效上传到GPU
-/// - **批处理**: 多个单元可以在单次绘制调用中渲染
-/// - **灵活渲染**: 支持旋转、缩放和复杂效果
-/// - **内存高效**: 大型场景的紧凑表示
+/// ## Design Benefits
+/// - **GPU optimization**: Data pre-formatted for efficient GPU upload
+/// - **Batch processing**: Multiple units can be rendered in single draw calls
+/// - **Flexible rendering**: Supports rotation, scaling and complex effects
+/// - **Memory efficient**: Compact representation for large scenes
 ///
-/// ## 渲染管线集成
+/// ## Rendering Pipeline Integration
 /// ```text
 /// ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 /// │   Buffer    │───►│ RenderCell  │───►│ OpenGL/GPU  │
@@ -375,52 +379,53 @@ impl Default for UnifiedTransform {
 /// └─────────────┘    └─────────────┘    └─────────────┘
 /// ```
 ///
-/// 每个RenderCell包含渲染一个字符或精灵所需的所有信息，
-/// 包括颜色、位置、旋转和纹理坐标。
+/// Each RenderCell contains all information needed to render a character or sprite,
+/// including color, position, rotation and texture coordinates.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct RenderCell {
-    /// 前景色RGBA分量（0.0-1.0范围）
+    /// Foreground color RGBA components (0.0-1.0 range)
     ///
-    /// 用于字符/符号渲染。Alpha分量控制透明度和混合操作。
+    /// Used for character/symbol rendering. Alpha component controls
+    /// transparency and blending operations.
     pub fcolor: (f32, f32, f32, f32),
 
-    /// 可选背景色RGBA分量
+    /// Optional background color RGBA components
     ///
-    /// 存在时，在符号后面渲染彩色背景。
-    /// 如果为None，背景透明。
+    /// When present, renders a colored background behind the symbol.
+    /// If None, background is transparent.
     pub bcolor: Option<(f32, f32, f32, f32)>,
 
-    /// 纹理和符号索引打包值
+    /// Packed texture and symbol index value
     ///
-    /// - 高位：纹理索引（使用哪个纹理）
-    /// - 低位：符号索引（纹理中的哪个字符/符号）
+    /// - High bits: Texture index (which texture to use)
+    /// - Low bits: Symbol index (which character/symbol in texture)
     pub texsym: usize,
 
-    /// 屏幕坐标X位置
+    /// Screen coordinate X position
     pub x: f32,
 
-    /// 屏幕坐标Y位置
+    /// Screen coordinate Y position
     pub y: f32,
 
-    /// 像素宽度
+    /// Pixel width
     pub w: u32,
 
-    /// 像素高度
+    /// Pixel height
     pub h: u32,
 
-    /// 旋转角度（弧度）
+    /// Rotation angle (radians)
     ///
-    /// 用于精灵旋转效果。0.0表示无旋转。
+    /// Used for sprite rotation effects. 0.0 means no rotation.
     pub angle: f32,
 
-    /// 旋转中心X坐标
+    /// Rotation center X coordinate
     ///
-    /// 定义旋转发生的轴心点。
+    /// Defines the pivot point for rotation.
     pub cx: f32,
 
-    /// 旋转中心Y坐标
+    /// Rotation center Y coordinate
     ///
-    /// 定义旋转发生的轴心点。
+    /// Defines the pivot point for rotation.
     pub cy: f32,
 }
 
@@ -460,10 +465,10 @@ pub struct Graph {
 }
 
 impl Graph {
-    /// 创建新的图形渲染上下文
+    /// Create new graphics rendering context
     ///
-    /// 初始化所有图形模式相关的数据结构和渲染状态。
-    /// 渲染标志默认为true（直接渲染到屏幕）。
+    /// Initializes all graphics mode related data structures and rendering state.
+    /// Render flag defaults to true (direct rendering to screen).
     pub fn new() -> Self {
         Self {
             pixel_w: 0,
@@ -476,43 +481,43 @@ impl Graph {
         }
     }
 
-    /// 设置X轴缩放比例
+    /// Set X-axis scaling ratio
     ///
-    /// 用于处理不同DPI显示器的缩放适配。
-    /// 该值会影响像素宽度计算和渲染坐标转换。
+    /// Used for handling scaling adaptation for different DPI displays.
+    /// This value affects pixel width calculation and rendering coordinate conversion.
     ///
-    /// # 参数
-    /// - `rx`: X轴缩放比例（1.0为标准比例）
+    /// # Parameters
+    /// - `rx`: X-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratiox(&mut self, rx: f32) {
         self.ratio_x = rx;
     }
 
-    /// 设置Y轴缩放比例
+    /// Set Y-axis scaling ratio
     ///
-    /// 用于处理不同DPI显示器的缩放适配。
-    /// 该值会影响像素高度计算和渲染坐标转换。
+    /// Used for handling scaling adaptation for different DPI displays.
+    /// This value affects pixel height calculation and rendering coordinate conversion.
     ///
-    /// # 参数
-    /// - `ry`: Y轴缩放比例（1.0为标准比例）
+    /// # Parameters
+    /// - `ry`: Y-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratioy(&mut self, ry: f32) {
         self.ratio_y = ry;
     }
 
-    /// 根据当前设置计算并设置像素尺寸
+    /// Calculate and set pixel dimensions based on current settings
     ///
-    /// 基于单元格数量、符号尺寸和缩放比例计算实际的像素宽度和高度。
-    /// 这是图形模式窗口大小计算的核心方法。
+    /// Calculates actual pixel width and height based on cell count, symbol dimensions
+    /// and scaling ratios. This is the core method for graphics mode window size calculation.
     ///
-    /// # 参数
-    /// - `cell_w`: 游戏区域宽度（字符单元格数）
-    /// - `cell_h`: 游戏区域高度（字符单元格数）
+    /// # Parameters
+    /// - `cell_w`: Game area width (character cell count)
+    /// - `cell_h`: Game area height (character cell count)
     ///
-    /// # 计算公式
+    /// # Calculation Formula
     /// ```text
     /// pixel_w = (cell_w + 2) * symbol_width / ratio_x
     /// pixel_h = (cell_h + 2) * symbol_height / ratio_y
     /// ```
-    /// 其中 +2 是为了边框预留空间
+    /// Where +2 reserves space for borders
     pub fn set_pixel_size(&mut self, cell_w: u16, cell_h: u16) {
         self.pixel_w = ((cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
             / self.ratio_x) as u32;
@@ -520,24 +525,26 @@ impl Graph {
             / self.ratio_y) as u32;
     }
 
-    /// 获取单个字符单元格的宽度（像素）
+    /// Get single character cell width (pixels)
     ///
-    /// 基于符号纹理尺寸和当前X轴缩放比例计算单个字符单元格的实际像素宽度。
-    /// 这个值用于精确的位置计算和渲染布局。
+    /// Calculates actual pixel width of a single character cell based on symbol
+    /// texture dimensions and current X-axis scaling ratio. This value is used
+    /// for precise position calculation and rendering layout.
     ///
-    /// # 返回值
-    /// 单个字符单元格的像素宽度
+    /// # Returns
+    /// Pixel width of a single character cell
     pub fn cell_width(&self) -> f32 {
         PIXEL_SYM_WIDTH.get().expect("lazylock init") / self.ratio_x
     }
 
-    /// 获取单个字符单元格的高度（像素）
+    /// Get single character cell height (pixels)
     ///
-    /// 基于符号纹理尺寸和当前Y轴缩放比例计算单个字符单元格的实际像素高度。
-    /// 这个值用于精确的位置计算和渲染布局。
+    /// Calculates actual pixel height of a single character cell based on symbol
+    /// texture dimensions and current Y-axis scaling ratio. This value is used
+    /// for precise position calculation and rendering layout.
     ///
-    /// # 返回值
-    /// 单个字符单元格的像素高度
+    /// # Returns
+    /// Pixel height of a single character cell
     pub fn cell_height(&self) -> f32 {
         PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.ratio_y
     }
@@ -688,34 +695,34 @@ pub fn render_helper(
 ///
 /// ## Sprite Rendering Pipeline
 /// ```text
-/// ┌─────────────────────────────────────────────────────────────┐
-/// │                   Sprite Processing                         │
-/// │                                                             │
-/// │  ┌─────────────┐                                            │
-/// │  │   Sprite    │                                            │
-/// │  │   Object    │                                            │
+/// ┌────────────────────────────────────────────────────────────┐
+/// │                   Sprite Processing                        │
+/// │                                                            │
+/// │  ┌─────────────┐                                           │
+/// │  │   Sprite    │                                           │
+/// │  │   Object    │                                           │
 /// │  │  ┌───────┐  │  ┌─────────────────────────────────────┐  │
 /// │  │  │Pixels │  │  │        Transformation               │  │
-/// │  │  │Array  │  │  │  ┌─────────────────────────────────┐ │  │
-/// │  │  └───────┘  │  │  │  1. Position calculation        │ │  │
-/// │  │     │       │  │  │  2. Rotation matrix applied     │ │  │
+/// │  │  │Array  │  │  │  ┌────────────────────────────────┐ │  │
+/// │  │  └───────┘  │  │  │  1. Position calculation       │ │  │
+/// │  │     │       │  │  │  2. Rotation matrix applied    │ │  │
 /// │  │     ▼       │  │  │  3. Scaling based on rx/ry     │ │  │
 /// │  │  ┌───────┐  │  │  │  4. Color & texture mapping    │ │  │
-/// │  │  │Colors │  │  │  └─────────────────────────────────┘ │  │
+/// │  │  │Colors │  │  │  └────────────────────────────────┘ │  │
 /// │  │  │&Flags │  │  └─────────────────────────────────────┘  │
 /// │  │  └───────┘  │                     │                     │
 /// │  └─────────────┘                     ▼                     │
-/// │                        ┌─────────────────────┐              │
-/// │                        │  Callback Function  │              │
-/// │                        │ (push_render_buffer) │              │
-/// │                        └─────────────────────┘              │
-/// │                                 │                           │
-/// │                                 ▼                           │
-/// │                        ┌─────────────────────┐              │
-/// │                        │    RenderCell       │              │
-/// │                        │      Array          │              │
-/// │                        └─────────────────────┘              │
-/// └─────────────────────────────────────────────────────────────┘
+/// │                        ┌─────────────────────┐             │
+/// │                        │  Callback Function  │             │
+/// │                        │ (push_render_buffer)│             │
+/// │                        └─────────────────────┘             │
+/// │                                 │                          │
+/// │                                 ▼                          │
+/// │                        ┌─────────────────────┐             │
+/// │                        │    RenderCell       │             │
+/// │                        │      Array          │             │
+/// │                        └─────────────────────┘             │
+/// └────────────────────────────────────────────────────────────┘
 /// ```
 ///
 /// ## Features Supported
@@ -799,18 +806,18 @@ where
 ///
 /// ## Buffer Rendering Process
 /// ```text
-/// ┌─────────────────────────────────────────────────────────────┐
-/// │                   Main Buffer Processing                    │
-/// │                                                             │
+/// ┌────────────────────────────────────────────────────────────┐
+/// │                   Main Buffer Processing                   │
+/// │                                                            │
 /// │  ┌─────────────────────┐                                   │
 /// │  │      Buffer         │                                   │
 /// │  │   ┌─────────────┐   │                                   │
 /// │  │   │ Character   │   │    ┌─────────────────────────────┐│
-/// │  │   │   Grid      │   │    │   Per-Character Process    ││
+/// │  │   │   Grid      │   │    │   Per-Character Process     ││
 /// │  │   │             │   │    │                             ││
 /// │  │   │ ┌─┬─┬─┬─┐   │   │    │ 1. Read character data      ││
 /// │  │   │ │A│B│C│D│   │   │    │ 2. Extract colors & symbol  ││
-/// │  │   │ ├─┼─┼─┼─┤   │───────► │ 3. Calculate screen pos     ││
+/// │  │   │ ├─┼─┼─┼─┤   │───────► │ 3. Calculate screen pos    ││
 /// │  │   │ │E│F│G│H│   │   │    │ 4. Map to texture coords    ││
 /// │  │   │ ├─┼─┼─┼─┤   │   │    │ 5. Call render callback     ││
 /// │  │   │ │I│J│K│L│   │   │    │                             ││
@@ -821,7 +828,7 @@ where
 /// │                                │   RenderCell Array  │     │
 /// │                                │   (GPU-ready data)  │     │
 /// │                                └─────────────────────┘     │
-/// └─────────────────────────────────────────────────────────────┘
+/// └────────────────────────────────────────────────────────────┘
 /// ```
 ///
 /// ## Character Data Structure
@@ -1044,7 +1051,7 @@ where
     }
 }
 
-    // merge main buffer & pixel sprites to render buffer...
+// merge main buffer & pixel sprites to render buffer...
 pub fn generate_render_buffer(
         cb: &Buffer,
         _pb: &Buffer,
