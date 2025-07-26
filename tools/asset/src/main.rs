@@ -335,7 +335,7 @@ fn print_usage_and_exit() -> ! {
     eprintln!("RustPixel Asset Packer");
     eprintln!();
     eprintln!("USAGE:");
-    eprintln!("    asset <INPUT_FOLDER> <OUTPUT_FOLDER>");
+    eprintln!("    cargo pixel r asset t -r <INPUT_FOLDER> <OUTPUT_FOLDER>");
     eprintln!();
     eprintln!("ARGS:");
     eprintln!("    <INPUT_FOLDER>     Folder containing images to pack");
