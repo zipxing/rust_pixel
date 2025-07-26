@@ -23,7 +23,7 @@ It is suitable for creating **2D pixel-style games** and developing **terminal a
 It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
 
 - Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
-- Graphical Mode: Built with **wgpu** & **glow** & **sdl2**, using **PETSCII & custom graphics symbols** for rendering.
+- Graphical Mode: Built with **wgpu** & **glow** & **sdl2**, using **PETSCII/ASCII & custom graphics symbols** for rendering.
 
 [online demo]: https://zipxing.github.io/rust_pixel
 
@@ -35,10 +35,11 @@ https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
 
 - Game loops & Model/Render design pattern (game.rs)
 - Event/Timer messaging mechanism (event.rs)
-- Support text render mode (crossterm) (adapter.rs, cross.rs)
-- Unified OpenGL drawing mode supports sdl and wasm (glow & sdl2) (adapter.rs, sdl_adapter.rs, web_adapter.rs)
-- Unified Wgpu drawing mode supports wgpu and wasm (winit & wgpu) (adapter.rs, winit_wgpu.rs)
-- 3 core OpenGl shaders for sdl2 & web graphics mode: (gl/) 
+- Unified render adapter trait for text & graphics mode( adapter.rs ) 
+- Support text render mode (crossterm) (cross_adapter.rs)
+- OpenGL mode supports sdl and wasm (glow & sdl2 | winit) (sdl_adapter.rs, winit_glow_adapter.rs, web_adapter.rs)
+- Wgpu drawing mode (winit & wgpu) (winit_wgpu_adapter.rs)
+- 3 core OpenGl shaders for gl & web graphics mode: (gl/) 
 - 3 core Wgpu shaders for wgpu graphics mode: (wgpu/) 
     - instance rendering shader for draw mainbuffer (render_symbols.rs) 
     - transition shader for transition effect (render_transition.rs)
@@ -48,11 +49,12 @@ https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
 - Demo games: tetris, tower, poker... (apps/)
 - Demo terminal ui app: palette... (apps/)
 - Examples of wrapping core algorithms into FFI and WASM (apps/poker/ffi, apps/poker/wasm)
+- Cargo style cli tool: cargo-pixel
 
 ### Installation Guide
 
 The main steps of the installation process are as follows:
-- Install [DroidSansMono Nerd Font] & setup terminal
+- Install [DroidSansMono Nerd Font] & setup terminal (for text render mode)
 - Install dependent libraries and softwares
 - Install **Rust** and **Wasm-pack**
 
