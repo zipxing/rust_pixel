@@ -539,6 +539,11 @@ fn generate_pix_files(image_rects: &[ImageRect], output_dir: &str) -> Result<(),
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    // Check for help argument
+    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
+        print_usage_and_exit();
+    }
+
     // Parse command line arguments
     let (input_folder, output_folder) = match args.len() {
         3 => (&args[1], &args[2]),

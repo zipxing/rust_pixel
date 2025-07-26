@@ -19,6 +19,48 @@ struct RGB {
     b: u8,
 }
 
+fn print_petii_usage() {
+    eprintln!("RustPixel PETSCII Converter");
+    eprintln!();
+    eprintln!("USAGE:");
+    eprintln!("    petii <IMAGE_FILE> [WIDTH] [HEIGHT] [IS_PETSCII] [CROP_PARAMS...]");
+    eprintln!("    cargo pixel petii <IMAGE_FILE> [WIDTH] [HEIGHT] [IS_PETSCII] [CROP_PARAMS...]");
+    eprintln!("    cargo pixel p <IMAGE_FILE> [WIDTH] [HEIGHT] [IS_PETSCII] [CROP_PARAMS...]");
+    eprintln!();
+    eprintln!("ARGS:");
+    eprintln!("    <IMAGE_FILE>   Input image file path");
+    eprintln!("    [WIDTH]        Output width in characters (default: 40)");
+    eprintln!("    [HEIGHT]       Output height in characters (default: 25)");
+    eprintln!("    [IS_PETSCII]   Use PETSCII characters: true/false (default: false)");
+    eprintln!("    [CROP_X]       Crop start X coordinate (requires all crop params)");
+    eprintln!("    [CROP_Y]       Crop start Y coordinate");
+    eprintln!("    [CROP_WIDTH]   Crop width");
+    eprintln!("    [CROP_HEIGHT]  Crop height");
+    eprintln!();
+    eprintln!("DESCRIPTION:");
+    eprintln!("    Converts images to PETSCII character art. Supports optional cropping");
+    eprintln!("    and customizable output dimensions and character sets.");
+    eprintln!();
+    eprintln!("OUTPUT:");
+    eprintln!("    Character art displayed in console/terminal");
+    eprintln!("    Uses ASCII or PETSCII character set based on settings");
+    eprintln!();
+    eprintln!("EXAMPLES:");
+    eprintln!("    petii image.png                              # Basic conversion");
+    eprintln!("    petii image.png 80 50                        # Custom size 80x50");
+    eprintln!("    petii image.png 40 25 true                   # Use PETSCII chars");
+    eprintln!("    petii image.png 40 25 false 10 10 100 100    # With cropping");
+    eprintln!();
+    eprintln!("FEATURES:");
+    eprintln!("    - Automatic image resizing and color mapping");
+    eprintln!("    - Support for both ASCII and PETSCII character sets");
+    eprintln!("    - Optional image cropping before conversion");
+    eprintln!("    - Color similarity analysis using Delta E");
+    eprintln!();
+    eprintln!("NOTE:");
+    eprintln!("    When used via cargo-pixel, equivalent to: cargo pixel r petii t -r <ARGS...>");
+}
+
 fn main() {
     let input_image_path;
     let mut width: u32 = 40;
@@ -27,10 +69,16 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
+    // Check for help argument
+    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
+        print_petii_usage();
+        return;
+    }
+
     match args.len() {
         2 | 4 | 5 | 9 => {}
         _ => {
-            println!("Usage: pixel_petii <image file path> [<width>] [<height>] [<is_petscii>]");
+            print_petii_usage();
             return;
         }
     }

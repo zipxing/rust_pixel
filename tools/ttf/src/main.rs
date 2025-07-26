@@ -1,7 +1,62 @@
 use fontdue::Font;
 use fontdue::FontSettings;
+use std::env;
+
+fn print_ttf_usage() {
+    eprintln!("RustPixel TTF Font Processor");
+    eprintln!();
+    eprintln!("USAGE:");
+    eprintln!("    ttf");
+    eprintln!("    cargo pixel ttf");
+    eprintln!("    cargo pixel tf");
+    eprintln!();
+    eprintln!("DESCRIPTION:");
+    eprintln!("    Processes TTF font files to generate bitmap character data suitable");
+    eprintln!("    for pixel art applications. Converts each character glyph into an 8x8");
+    eprintln!("    pixel bitmap representation for use in terminal or retro-style graphics.");
+    eprintln!();
+    eprintln!("INPUT:");
+    eprintln!("    assets/pixel8.ttf  - TTF font file (must exist)");
+    eprintln!();
+    eprintln!("OUTPUT:");
+    eprintln!("    - Character bitmap data printed to console");
+    eprintln!("    - Each character displayed as 8x8 pixel grid");
+    eprintln!("    - Covers codepoints 0x00 to 0xFF");
+    eprintln!("    - Uses █ and space characters for visualization");
+    eprintln!();
+    eprintln!("PROCESSING:");
+    eprintln!("    - Loads TTF font from assets/pixel8.ttf");
+    eprintln!("    - Rasterizes each character at 8pt size");
+    eprintln!("    - Converts to binary 8x8 bitmap");
+    eprintln!("    - Displays character with its bitmap pattern");
+    eprintln!();
+    eprintln!("FEATURES:");
+    eprintln!("    - Automatic glyph detection");
+    eprintln!("    - Fixed 8x8 output format");
+    eprintln!("    - ASCII/Extended ASCII character set");
+    eprintln!("    - Terminal-friendly output format");
+    eprintln!();
+    eprintln!("EXAMPLES:");
+    eprintln!("    ttf                              # Process default font");
+    eprintln!("    ttf > font_data.txt             # Save output to file");
+    eprintln!();
+    eprintln!("REQUIREMENTS:");
+    eprintln!("    - TTF font file must exist at: assets/pixel8.ttf");
+    eprintln!("    - Font should be monospace for best results");
+    eprintln!();
+    eprintln!("NOTE:");
+    eprintln!("    When used via cargo-pixel, equivalent to: cargo pixel r ttf t -r");
+}
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    
+    // Check for help argument
+    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
+        print_ttf_usage();
+        return;
+    }
+    
     // font image size
     let n = 8; 
 

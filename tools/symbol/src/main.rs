@@ -12,6 +12,54 @@ struct RGB {
     b: u8,
 }
 
+fn print_symbol_usage() {
+    eprintln!("RustPixel Symbol Extractor");
+    eprintln!();
+    eprintln!("USAGE:");
+    eprintln!("    symbol <IMAGE_FILE> <SYMSIZE> [START_X START_Y WIDTH HEIGHT]");
+    eprintln!("    cargo pixel symbol <IMAGE_FILE> <SYMSIZE> [START_X START_Y WIDTH HEIGHT]");
+    eprintln!("    cargo pixel sy <IMAGE_FILE> <SYMSIZE> [START_X START_Y WIDTH HEIGHT]");
+    eprintln!();
+    eprintln!("ARGS:");
+    eprintln!("    <IMAGE_FILE>  Input image file path");
+    eprintln!("    <SYMSIZE>     Symbol size in pixels (e.g., 8 for 8x8 symbols)");
+    eprintln!("    [START_X]     Start X coordinate for processing area");
+    eprintln!("    [START_Y]     Start Y coordinate for processing area");
+    eprintln!("    [WIDTH]       Width of processing area");
+    eprintln!("    [HEIGHT]      Height of processing area");
+    eprintln!();
+    eprintln!("DESCRIPTION:");
+    eprintln!("    Extracts symbols/characters from images for use in creating symbol fonts");
+    eprintln!("    or character sets. Analyzes image blocks and generates unique symbol");
+    eprintln!("    patterns with color mappings for optimal representation.");
+    eprintln!();
+    eprintln!("PROCESSING:");
+    eprintln!("    - Divides image into blocks of specified symbol size");
+    eprintln!("    - Analyzes each block for unique patterns");
+    eprintln!("    - Maps colors to ANSI color palette");
+    eprintln!("    - Generates symbol map and color associations");
+    eprintln!();
+    eprintln!("OUTPUT:");
+    eprintln!("    - Symbol patterns displayed in terminal");
+    eprintln!("    - Color mappings for foreground/background");
+    eprintln!("    - Statistics about unique symbols found");
+    eprintln!();
+    eprintln!("EXAMPLES:");
+    eprintln!("    symbol font.png 8                          # Extract 8x8 symbols from entire image");
+    eprintln!("    symbol charset.png 16                      # Extract 16x16 symbols");
+    eprintln!("    symbol image.png 8 0 0 128 64              # Extract from 128x64 area at (0,0)");
+    eprintln!("    symbol tiles.png 16 32 32 256 256          # Extract from specific region");
+    eprintln!();
+    eprintln!("FEATURES:");
+    eprintln!("    - Color similarity analysis using Delta E");
+    eprintln!("    - ANSI color palette mapping");
+    eprintln!("    - Binary pattern recognition");
+    eprintln!("    - Selective area processing");
+    eprintln!();
+    eprintln!("NOTE:");
+    eprintln!("    When used via cargo-pixel, equivalent to: cargo pixel r symbol t -r <ARGS...>");
+}
+
 fn main() {
     let input_image_path;
     let symsize: u32;
@@ -26,11 +74,16 @@ fn main() {
 
     // parse command line...
     let args: Vec<String> = env::args().collect();
+    
+    // Check for help argument
+    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
+        print_symbol_usage();
+        return;
+    }
+    
     let arglen = args.len();
     if arglen != 3 && arglen != 7 {
-        println!(
-            "Usage: pixel_symbol image_file_path symsize <start_x> <start_y> <width> <height>"
-        );
+        print_symbol_usage();
         return;
     }
     input_image_path = Path::new(&args[1]);

@@ -6,6 +6,59 @@ use rust_pixel::{
     game::Model,
 };
 
+fn print_ssf_usage() {
+    eprintln!("RustPixel SSF Sequence Frame Player");
+    eprintln!();
+    eprintln!("USAGE:");
+    eprintln!("    ssf [SSF_FILE]");
+    eprintln!("    cargo pixel ssf <MODE> <WORK_DIR> [SSF_FILE]");
+    eprintln!("    cargo pixel sf <MODE> <WORK_DIR> [SSF_FILE]");
+    eprintln!();
+    eprintln!("ARGS:");
+    eprintln!("    [SSF_FILE]   SSF sequence frame file path (optional, uses default if not specified)");
+    eprintln!();
+    eprintln!("MODES (when used via cargo-pixel):");
+    eprintln!("    t, term    Terminal mode");
+    eprintln!("    s, sdl     SDL2 mode (graphics with OpenGL)");
+    eprintln!("    w, web     Web mode (browser)");
+    eprintln!("    g, winit   Winit mode (native window with OpenGL)");
+    eprintln!("    wg, wgpu   WGPU mode (native window with modern GPU API)");
+    eprintln!();
+    eprintln!("DESCRIPTION:");
+    eprintln!("    Plays SSF (Sequence Frame) animation files. Supports various rendering");
+    eprintln!("    modes and interactive playback controls. SSF files contain frame-by-frame");
+    eprintln!("    animation data for creating smooth animated sequences.");
+    eprintln!();
+    eprintln!("PLAYBACK CONTROLS:");
+    eprintln!("    Space      Toggle auto play on/off");
+    eprintln!("    Left       Previous frame");
+    eprintln!("    Right      Next frame");
+    eprintln!("    R          Reset to first frame");
+    eprintln!("    L          Toggle loop mode");
+    eprintln!("    +/=        Increase playback speed");
+    eprintln!("    -          Decrease playback speed");
+    eprintln!("    Q          Quit player");
+    eprintln!();
+    eprintln!("FEATURES:");
+    eprintln!("    - Auto-play with configurable speed");
+    eprintln!("    - Manual frame-by-frame control");
+    eprintln!("    - Loop mode support");
+    eprintln!("    - Multiple rendering backends");
+    eprintln!("    - Real-time speed adjustment");
+    eprintln!();
+    eprintln!("EXAMPLES:");
+    eprintln!("    ssf                                        # Play default animation");
+    eprintln!("    ssf assets/sdq/dance.ssf                  # Play specific SSF file");
+    eprintln!("    cargo pixel ssf t . dance.ssf             # Terminal mode via cargo-pixel");
+    eprintln!("    cargo pixel ssf wg .                      # WGPU mode with default file");
+    eprintln!();
+    eprintln!("DEFAULT SSF FILE:");
+    eprintln!("    If no file is specified, plays: sdq/dance.ssf");
+    eprintln!();
+    eprintln!("NOTE:");
+    eprintln!("    When used via cargo-pixel, equivalent to: cargo pixel r ssf <MODE> -r <WORK_DIR> [SSF_FILE]");
+}
+
 pub const SSFPLAYERW: u16 = 80;
 pub const SSFPLAYERH: u16 = 40;
 
@@ -23,6 +76,12 @@ impl PixelSsfModel {
     pub fn new() -> Self {
         // 从命令行参数获取SSF文件路径
         let args: Vec<String> = env::args().collect();
+        
+        // Check for help argument
+        if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
+            print_ssf_usage();
+            std::process::exit(0);
+        }
         
         // cargo-pixel传递参数格式: program_name project_path ssf_file_path
         // 或者直接运行: program_name [ssf_file_path]
