@@ -160,6 +160,8 @@ impl Timers {
     pub fn set_time(&mut self, name: &str, time: f32) {
         if let Some(timer) = self.timers.get_mut(name) {
             timer.count = (time * GAME_FRAME as f32) as u32;
+            // may cause count equals 0 and therefore can not be triggered if time is too small
+            // to prevent this, reset the count to 1
             if timer.count == 0 {
                 timer.count += 1;
             }
@@ -215,37 +217,37 @@ mod tests {
 
     #[test]
     fn test_mutex_implementation() {
-        // 测试事件注册和触发
+        // Test event registration and triggering
         event_register("test_event_mutex", "test_callback");
         
-        // 测试事件检查（初始应该为false）
+        // Test event check (should be false initially)
         assert!(!event_check("test_event_mutex", "test_callback"));
         
-        // 触发事件
+        // Trigger event
         event_emit("test_event_mutex");
         
-        // 现在应该为true
+        // Should be true now
         assert!(event_check("test_event_mutex", "test_callback"));
         
-        // 再次检查应该为false（因为已经被消费）
+        // Check again should be false (because it has been consumed)
         assert!(!event_check("test_event_mutex", "test_callback"));
     }
     
     #[test]
     fn test_timer_mutex_implementation() {
-        // 测试计时器注册
+        // Test timer registration
         timer_register("test_timer_mutex", 1.0, "timer_callback");
         
-        // 测试初始状态
+        // Test initial state
         assert_eq!(timer_stage("test_timer_mutex"), 0);
         assert_eq!(timer_rstage("test_timer_mutex"), 60); // 1.0 * GAME_FRAME
         assert_eq!(timer_percent("test_timer_mutex"), 0.0);
         
-        // 测试设置时间
+        // Test setting time
         timer_set_time("test_timer_mutex", 2.0);
         assert_eq!(timer_rstage("test_timer_mutex"), 120); // 2.0 * GAME_FRAME
         
-        // 测试数据存储
+        // Test data storage
         timer_fire("test_timer_mutex", "test_data");
         let exdata = timer_exdata("test_timer_mutex");
         assert!(exdata.is_some());
@@ -255,7 +257,7 @@ mod tests {
     fn benchmark_mutex_performance() {
         let iterations = 10000;
         
-        // 事件操作基准测试
+        // Event operation benchmark test
         let start = Instant::now();
         for i in 0..iterations {
             let event_name = format!("bench_event_mutex_{}", i % 10);
@@ -267,7 +269,7 @@ mod tests {
         }
         let event_time = start.elapsed();
         
-        // 计时器操作基准测试
+        // Timer operation benchmark test
         let start = Instant::now();
         for i in 0..iterations {
             let timer_name = format!("bench_timer_mutex_{}", i % 10);
@@ -279,10 +281,10 @@ mod tests {
         }
         let timer_time = start.elapsed();
         
-        println!("Mutex版本:");
-        println!("  事件操作 {} 次耗时: {:?}", iterations, event_time);
-        println!("  计时器操作 {} 次耗时: {:?}", iterations, timer_time);
-        println!("  平均每次事件操作: {:?}", event_time / iterations);
-        println!("  平均每次计时器操作: {:?}", timer_time / iterations);
+        println!("Mutex version:");
+        println!("  Event operations {} times took: {:?}", iterations, event_time);
+        println!("  Timer operations {} times took: {:?}", iterations, timer_time);
+        println!("  Average time per event operation: {:?}", event_time / iterations);
+        println!("  Average time per timer operation: {:?}", timer_time / iterations);
     }
 } 

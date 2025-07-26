@@ -27,7 +27,7 @@ pub mod sprite;
 pub mod style;
 pub mod symbols;
 
-// 重新导出常用类型和函数
+// re-export
 pub use adapter::{Adapter, AdapterBase};
 pub use buffer::Buffer;
 pub use cell::Cell;
