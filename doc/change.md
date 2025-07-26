@@ -1,3 +1,10 @@
+# 1.0.1
+- Merge tools to cargo-pixel
+```
+cargo install --path . --force
+cargo pixel 
+```
+
 # 1.0.0
 - Added wgpu render backend
 ```
