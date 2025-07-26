@@ -541,7 +541,7 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     return mix(
         getFromColor(uv),
         getToColor(uv),
-        inHeart(uv, vec2<f32>(0.5, 0.4), uniforms.progress)  // 恢复原始值，翻转在inHeart内部处理
+        inHeart(uv, vec2<f32>(0.5, 0.4), uniforms.progress)  // Restore original value, flip handled internally in inHeart
     );
 }
 
@@ -681,9 +681,9 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     p.y = sin(angle) * dist + 0.5;
     let c = select(getToColor(p), getFromColor(p), uniforms.progress < 0.5);
     
-    // 修复颜色值计算，避免超出[0,1]范围导致全白
+    // Fix color value calculation to avoid exceeding [0,1] range causing all white
     let brightness_factor = select(mix(1.0, 0.0, phase), mix(0.0, 1.0, phase), uniforms.progress < 0.5);
-    return mix(c, vec4<f32>(1.0, 1.0, 1.0, 1.0), brightness_factor * 0.3); // 限制亮度增强的强度
+    return mix(c, vec4<f32>(1.0, 1.0, 1.0, 1.0), brightness_factor * 0.3); // Limit brightness enhancement intensity
 }
 
 @fragment

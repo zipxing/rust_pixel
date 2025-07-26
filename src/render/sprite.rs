@@ -104,7 +104,7 @@ macro_rules! asset2sprite {
     }};
 }
 
-/// 新的宏，专门处理原始路径（不做任何路径处理）
+/// New macro specifically for handling raw paths (no path processing)
 #[macro_export]
 macro_rules! asset2sprite_raw {
     ($spr:expr, $ctx:expr, $loc:expr $(, $arg:expr)* ) => {{
@@ -139,7 +139,7 @@ macro_rules! asset2sprite_raw {
             _ => {},
         }
         
-        // 直接使用原始路径，不做任何处理
+        // Use raw path directly without any processing
         let nl = $loc;
         
         $spr.set_content_by_asset(

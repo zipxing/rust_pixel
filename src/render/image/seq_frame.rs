@@ -48,29 +48,17 @@ impl Asset for SeqFrameAsset {
         &mut self.base
     }
 
-    /// texture_id == 257 表示ESC格式的序列帧,
-    /// 每行数据为esc序列(参考fn escstr_to_buffer)
-    ///
     /// texture_id == 257 means seq frame in ESC format,
     /// each row represents an ESC seq(refer to fn escstr_to_buffer)
     ///
-    /// texture_id == 256 表示utf8文本模式的序列帧,
-    /// 每个cell的数据为不定长: fg bg utf8_bytes
-    ///
     /// texture_id == 256 means seq frame in UTF8 text format,
     /// each cell may have different lengths: fg bg utf8_bytes
-    ///
-    /// texture_id == 255 表示Sdl格式的帧数据,每个cell的纹理可以不同，
-    /// cell的数据长度为3字节: fg bg(bg即cell_texture_id) cellsym
-    /// 当前系统中ssf文件基本上是这种格式
     ///
     /// texture_id == 255 means seq frame in SDL format, each cell may have
     /// different textures, the length of each cell data is 3 bytes
     /// fg bg(bg i.e. cell_texture_id) cellsym
     /// ssf files in modern OSs are usually found in this format
     ///
-    /// texture_id < 255 表示Sdl格式的帧数据，每个cell的纹理都是texture_id,
-    /// cell的数据长度为2字节: fg cellsym
     /// texture_id < 255 means SDL frame data，each cell's texture is texture_id,
     /// the length of each cell data is 2 bytes : fg cellsym
     fn parse(&mut self) {

@@ -1,23 +1,24 @@
-//! # 🔗 Winit 共享代码模块 (Winit Common Module)
+//! # 🔗 Winit Common Module
 //!
-//! 这个模块是WGPU重构的重要成果之一，提取了 `WinitGlowAdapter` 和 `WinitWgpuAdapter` 
-//! 之间的共同代码，实现了DRY原则并提高了代码维护性。
+//! This module is one of the important achievements of the WGPU refactoring, extracting
+//! common code between `WinitGlowAdapter` and `WinitWgpuAdapter`, implementing DRY principle
+//! and improving code maintainability.
 //!
-//! ## 🎯 设计目标 (Design Goals)
+//! ## 🎯 Design Goals
 //!
-//! ### 代码复用 (Code Reuse)
-//! - **消除重复**: 两个winit适配器之间有大量相同的代码
-//! - **统一接口**: 提供一致的事件处理和窗口管理接口  
-//! - **维护性**: 修改共享逻辑只需更新一个地方
+//! ### Code Reuse
+//! - **Eliminate duplication**: Large amount of identical code between two winit adapters
+//! - **Unified interface**: Provide consistent event handling and window management interface
+//! - **Maintainability**: Modifying shared logic only requires updating one place
 //!
-//! ### 性能优化 (Performance Optimization)
-//! - **零成本抽象**: 共享代码通过内联完全消除运行时开销
-//! - **编译时特化**: 每个后端都能获得最优的机器码
-//! - **内存效率**: 避免重复的数据结构定义
+//! ### Performance Optimization
+//! - **Zero-cost abstraction**: Shared code completely eliminates runtime overhead through inlining
+//! - **Compile-time specialization**: Each backend can obtain optimal machine code
+//! - **Memory efficiency**: Avoid duplicate data structure definitions
 //!
-//! ## 📦 提供的功能 (Provided Features)
+//! ## 📦 Provided Features
 //!
-//! ### 窗口管理 (Window Management)
+//! ### Window Management
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                   Window Management                         │
@@ -32,7 +33,7 @@
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! ### 事件处理 (Event Handling)
+//! ### Event Handling
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                    Event Translation                        │
@@ -47,17 +48,17 @@
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! ## 🚀 重构价值 (Refactoring Value)
+//! ## 🚀 Refactoring Value
 //!
-//! ### 代码减少 (Code Reduction)
-//! - **~200行重复代码** 提取到共享模块
-//! - **4个重复函数** 合并为统一实现
-//! - **维护负担减半** - 只需维护一份逻辑
+//! ### Code Reduction
+//! - **~200 lines of duplicate code** extracted to shared module
+//! - **4 duplicate functions** merged into unified implementation
+//! - **Maintenance burden halved** - only need to maintain one copy of logic
 //!
-//! ### 一致性保证 (Consistency Guarantee)  
-//! - **相同的拖拽行为** 在所有winit后端
-//! - **统一的事件处理** 逻辑和响应
-//! - **一致的错误处理** 和边界情况
+//! ### Consistency Guarantee
+//! - **Same drag behavior** across all winit backends
+//! - **Unified event handling** logic and response
+//! - **Consistent error handling** and edge cases
 
 use crate::event::Event;
 use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
@@ -66,27 +67,27 @@ use winit::{
     window::Window,
 };
 
-/// 窗口拖拽状态管理
+/// Window drag state management
 ///
-/// 记录窗口拖拽的相关状态，支持通过鼠标拖拽移动窗口位置。
-/// 类似于SDL版本的实现，提供相同的用户体验。
+/// Records window drag related states, supporting window position movement through mouse dragging.
+/// Similar to SDL version implementation, providing the same user experience.
 #[derive(Default)]
 pub struct Drag {
-    /// 是否需要执行拖拽操作
+    /// Whether drag operation needs to be executed
     pub need: bool,
-    /// 是否正在拖拽中
+    /// Whether currently dragging
     pub draging: bool,
-    /// 拖拽起始鼠标X坐标
+    /// Drag start mouse X coordinate
     pub mouse_x: f64,
-    /// 拖拽起始鼠标Y坐标
+    /// Drag start mouse Y coordinate
     pub mouse_y: f64,
-    /// X轴拖拽偏移量
+    /// X-axis drag offset
     pub dx: f64,
-    /// Y轴拖拽偏移量
+    /// Y-axis drag offset
     pub dy: f64,
 }
 
-/// 窗口初始化参数
+/// Window initialization parameters
 #[derive(Debug, Clone)]
 pub struct WindowInitParams {
     pub width: u16,
@@ -97,19 +98,19 @@ pub struct WindowInitParams {
     pub texture_path: String,
 }
 
-/// 窗口移动函数
+/// Window move function
 ///
-/// 执行实际的窗口拖拽移动操作。处理拖拽状态的更新和窗口位置设置。
+/// Executes actual window drag movement operation. Handles drag state updates and window position setting.
 ///
-/// # 参数
-/// - `drag_need`: 是否需要拖拽的可变引用
-/// - `window`: 可选的窗口引用
-/// - `dx`: X轴偏移量
-/// - `dy`: Y轴偏移量
+/// # Parameters
+/// - `drag_need`: Mutable reference to whether drag is needed
+/// - `window`: Optional window reference
+/// - `dx`: X-axis offset
+/// - `dy`: Y-axis offset
 ///
-/// # 行为
-/// - 根据拖拽偏移量移动窗口位置
-/// - 重置拖拽标志
+/// # Behavior
+/// - Moves window position based on drag offset
+/// - Resets drag flag
 pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy: f64) {
     // dragging window, set the correct position of a window
     if *drag_need {
@@ -124,19 +125,19 @@ pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy
     }
 }
 
-/// 从Winit事件转换为RustPixel事件
+/// Convert Winit events to RustPixel events
 ///
-/// 将winit的原生事件转换为RustPixel内部事件格式，便于统一处理。
-/// 支持键盘输入、鼠标操作等多种事件类型。
+/// Converts winit native events to RustPixel internal event format for unified processing.
+/// Supports multiple event types including keyboard input and mouse operations.
 ///
-/// # 参数
-/// - `event`: Winit事件引用
-/// - `adjx`: X轴调整系数（用于高DPI显示）
-/// - `adjy`: Y轴调整系数（用于高DPI显示）
-/// - `cursor_pos`: 当前光标位置的可变引用
+/// # Parameters
+/// - `event`: Winit event reference
+/// - `adjx`: X-axis adjustment factor (for high DPI displays)
+/// - `adjy`: Y-axis adjustment factor (for high DPI displays)
+/// - `cursor_pos`: Mutable reference to current cursor position
 ///
-/// # 返回值
-/// 如果事件可以转换则返回Some(Event)，否则返回None
+/// # Returns
+/// Returns Some(Event) if event can be converted, otherwise returns None
 pub fn input_events_from_winit(
     event: &WinitEvent<()>,
     adjx: f32,
@@ -352,35 +353,35 @@ pub fn input_events_from_winit(
     None
 }
 
-/// 🔧 Winit适配器通用初始化函数
+/// 🔧 Winit Adapter Common Initialization Function
 ///
-/// 这个函数提取了WinitGlowAdapter和WinitWgpuAdapter之间的所有共同初始化逻辑，
-/// 实现DRY原则并大大减少了代码重复。
+/// This function extracts all common initialization logic between WinitGlowAdapter and WinitWgpuAdapter,
+/// implementing DRY principle and greatly reducing code duplication.
 ///
-/// ## 🎯 共享的初始化步骤
-/// 1. **纹理加载**: 加载PIXEL_TEXTURE_FILE并设置符号尺寸
-/// 2. **参数设置**: 配置窗口尺寸、缩放比例等基础参数
-/// 3. **事件循环**: 创建winit EventLoop实例
-/// 4. **参数存储**: 保存WindowInitParams供resumed事件使用
+/// ## 🎯 Shared Initialization Steps
+/// 1. **Texture Loading**: Load PIXEL_TEXTURE_FILE and set symbol dimensions
+/// 2. **Parameter Setting**: Configure window size, scaling ratios and other basic parameters
+/// 3. **Event Loop**: Create winit EventLoop instance
+/// 4. **Parameter Storage**: Save WindowInitParams for resumed event use
 ///
-/// ## 🚀 性能优势
-/// - **编译时优化**: 内联消除函数调用开销
-/// - **代码复用**: 避免重复维护相同逻辑
-/// - **类型安全**: 强类型泛型确保正确的适配器使用
+/// ## 🚀 Performance Advantages
+/// - **Compile-time optimization**: Inlining eliminates function call overhead
+/// - **Code reuse**: Avoid maintaining duplicate logic
+/// - **Type safety**: Strong typed generics ensure correct adapter usage
 ///
-/// # 泛型参数
-/// - `T`: 适配器类型，必须实现基础的尺寸和标题设置接口
+/// # Generic Parameters
+/// - `T`: Adapter type that must implement basic size and title setting interface
 ///
-/// # 参数
-/// - `adapter`: 适配器的可变引用
-/// - `w`: 窗口宽度（单元格）
-/// - `h`: 窗口高度（单元格）
-/// - `rx`: X轴缩放比例
-/// - `ry`: Y轴缩放比例
-/// - `title`: 窗口标题
+/// # Parameters
+/// - `adapter`: Mutable reference to adapter
+/// - `w`: Window width (in cells)
+/// - `h`: Window height (in cells)
+/// - `rx`: X-axis scaling ratio
+/// - `ry`: Y-axis scaling ratio
+/// - `title`: Window title
 ///
-/// # 返回值
-/// - `(EventLoop<()>, WindowInitParams, String)`: 事件循环、初始化参数和纹理路径
+/// # Returns
+/// - `(EventLoop<()>, WindowInitParams, String)`: Event loop, initialization parameters and texture path
 pub fn winit_init_common<T>(
     adapter: &mut T,
     w: u16,
@@ -400,7 +401,7 @@ where
 
     info!("Initializing Winit adapter common components...");
 
-    // 1. 加载纹理文件和设置符号尺寸
+    // 1. Load texture file and set symbol dimensions
     let project_path = adapter.get_base().project_path.clone();
     let texture_path = format!(
         "{}{}{}",
@@ -429,16 +430,16 @@ where
         PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
     );
 
-    // 2. 设置基础参数
+    // 2. Set basic parameters
     adapter.set_size(w, h);
     adapter.set_title(title.clone());
     
-    // 获取base引用一次，避免多次可变借用
+    // Get base reference once to avoid multiple mutable borrows
     let base = adapter.get_base();
     base.gr.set_ratiox(rx);
     base.gr.set_ratioy(ry);
     
-    // 先获取需要的值，再调用方法
+    // Get needed values first, then call methods
     let cell_w = base.cell_w;
     let cell_h = base.cell_h;
     base.gr.set_pixel_size(cell_w, cell_h);
@@ -448,10 +449,10 @@ where
         base.gr.pixel_w, base.gr.pixel_h
     );
 
-    // 3. 创建事件循环
+    // 3. Create event loop
     let event_loop = EventLoop::new().unwrap();
 
-    // 4. 创建窗口初始化参数
+    // 4. Create window initialization parameters
     let window_init_params = WindowInitParams {
         width: w,
         height: h,

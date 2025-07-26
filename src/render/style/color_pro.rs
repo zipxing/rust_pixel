@@ -102,7 +102,7 @@ pub enum ColorSpace {
     XYZA,
 }
 
-// 使用 ColorSpace 枚举的最后一个元素 + 1 计算颜色空间的数量
+// Calculate the number of color spaces using the last ColorSpace enum element + 1
 pub const COLOR_SPACE_COUNT: usize = ColorSpace::XYZA as usize + 1;
 
 impl fmt::Display for ColorSpace {

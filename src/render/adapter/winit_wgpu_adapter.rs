@@ -1,24 +1,24 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022～2025
 
-//! # Winit + WGPU 适配器实现
+//! # Winit + WGPU Adapter Implementation
 //!
-//! 基于winit + wgpu技术栈的现代跨平台渲染适配器。
+//! Modern cross-platform rendering adapter based on winit + wgpu technology stack.
 //!
-//! ## 技术栈
-//! - **winit**: 跨平台窗口管理和事件处理
-//! - **wgpu**: 现代GPU API抽象层（基于Vulkan、Metal、D3D12、WebGPU）
+//! ## Technology Stack
+//! - **winit**: Cross-platform window management and event handling
+//! - **wgpu**: Modern GPU API abstraction layer (based on Vulkan, Metal, D3D12, WebGPU)
 //!
-//! ## 功能特性
-//! - 跨平台窗口管理（Windows、macOS、Linux）
-//! - 高DPI/Retina显示支持
-//! - 自定义鼠标光标
-//! - 窗口拖拽功能
-//! - 键盘和鼠标事件处理
-//! - 现代GPU硬件加速渲染
-//! - 命令缓冲区和异步渲染
+//! ## Features
+//! - Cross-platform window management (Windows, macOS, Linux)
+//! - High DPI/Retina display support
+//! - Custom mouse cursor
+//! - Window drag functionality
+//! - Keyboard and mouse event handling
+//! - Modern GPU hardware-accelerated rendering
+//! - Command buffer and asynchronous rendering
 //!
-//! ## 架构设计
+//! ## Architecture Design
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────┐
@@ -60,40 +60,40 @@ pub use winit::{
     window::{Cursor, CustomCursor, Window},
 };
 
-/// 边框区域枚举
+/// Border area enumeration
 ///
-/// 定义鼠标点击区域的类型，用于确定是否应该触发拖拽操作。
+/// Defines the type of mouse click area to determine if a drag operation should be triggered.
 pub enum WinitBorderArea {
-    /// 无效区域
+    /// Invalid area
     NOPE,
-    /// 关闭按钮区域
+    /// Close button area
     CLOSE,
-    /// 顶部标题栏区域（可拖拽）
+    /// Top title bar area (draggable)
     TOPBAR,
-    /// 其他边框区域（可拖拽）
+    /// Other border areas (draggable)
     OTHER,
 }
 
-/// Winit适配器主结构
+/// Winit adapter main structure
 ///
-/// 封装了winit窗口管理和现代渲染后端的所有组件。
-/// 支持两种渲染后端：OpenGL (glow) 和现代GPU API (wgpu)。
-/// 实现了与SDL适配器相同的接口，可以无缝替换。
+/// Encapsulates all components of winit window management and modern rendering backend.
+/// Supports two rendering backends: OpenGL (glow) and modern GPU API (wgpu).
+/// Implements the same interface as the SDL adapter, allowing seamless replacement.
 
-/// Winit + WGPU适配器主结构
+/// Winit + WGPU adapter main structure
 ///
-/// 封装了winit窗口管理和WGPU现代渲染后端的所有组件。
-/// 专门针对WGPU API设计，与WinitGlowAdapter分离。
+/// Encapsulates all components of winit window management and the WGPU modern rendering backend.
+/// Specifically designed for the WGPU API, separated from WinitGlowAdapter.
 pub struct WinitWgpuAdapter {
-    /// 基础适配器数据
+    /// Base adapter data
     pub base: AdapterBase,
 
-    // Winit相关对象
-    /// 窗口实例
+    // Winit related objects
+    /// Window instance
     pub window: Option<Arc<Window>>,
-    /// 事件循环
+    /// Event loop
     pub event_loop: Option<EventLoop<()>>,
-    /// 窗口初始化参数（用于在resumed中创建窗口）
+    /// Window initialization parameters (for creating window in resumed)
     pub window_init_params: Option<WindowInitParams>,
 
     // WGPU backend objects
@@ -110,60 +110,61 @@ pub struct WinitWgpuAdapter {
     /// Main pixel renderer
     pub wgpu_pixel_renderer: Option<WgpuPixelRender>,
 
-    /// 是否应该退出程序
+    /// Whether the program should exit
     pub should_exit: bool,
 
-    /// 事件处理器（用于pump events模式）
+    /// Event handler (for pump_events mode)
     pub app_handler: Option<WinitWgpuAppHandler>,
 
-    /// 自定义鼠标光标
+    /// Custom mouse cursor
     pub custom_cursor: Option<CustomCursor>,
 
-    /// 光标是否已经设置（延迟设置标志）
+    /// Whether cursor has been set (delayed set flag)
     pub cursor_set: bool,
 
-    /// 窗口拖拽数据
+    /// Window drag data
     drag: Drag,
 }
 
-/// Winit + WGPU应用程序事件处理器
+/// Winit + WGPU application event handler
 ///
-/// 实现winit的ApplicationHandler trait，处理窗口事件和用户输入。
-/// 专门针对WGPU适配器设计。
+/// Implements the winit ApplicationHandler trait, handling window events and user input.
+/// Specifically designed for the WGPU adapter.
 pub struct WinitWgpuAppHandler {
-    /// 待处理的像素事件队列
+    /// Pending pixel event queue
     pub pending_events: Vec<Event>,
-    /// 当前鼠标位置
+    /// Current mouse position
     pub cursor_position: (f64, f64),
-    /// X轴比例调整系数
+    /// X-axis scaling coefficient
     pub ratio_x: f32,
-    /// Y轴比例调整系数
+    /// Y-axis scaling coefficient
     pub ratio_y: f32,
-    /// 是否应该退出
+    /// Whether to exit
     pub should_exit: bool,
 
-    /// 适配器引用（用于拖拽处理）
+    /// Adapter reference (for drag handling)
     ///
-    /// 注意：这里使用原始指针是为了避免借用检查器的限制，
-    /// 在事件处理期间需要修改适配器状态。使用时必须确保安全性。
+    /// Note: This uses a raw pointer to avoid borrow checker limitations,
+    /// and the adapter state needs to be modified during event processing.
+    /// It must be ensured that the safety is maintained when used.
     pub adapter_ref: *mut WinitWgpuAdapter,
 }
 
 impl ApplicationHandler for WinitWgpuAppHandler {
-    /// 应用程序恢复时的回调
+    /// Callback when the application resumes
     ///
-    /// 在resumed事件中创建窗口和渲染资源。
-    /// 这是统一的生命周期管理方式，适用于两种渲染后端。
+    /// Creates a window and rendering resources in the resumed event.
+    /// This is a unified lifecycle management approach, applicable to both rendering backends.
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        // 在这里创建窗口和渲染上下文
+        // Create window and rendering context here
         if let Some(adapter) = unsafe { self.adapter_ref.as_mut() } {
             if adapter.window.is_none() {
                 adapter.create_wgpu_window_and_resources(event_loop);
             }
 
-            // 延迟设置光标 - 在窗口完全初始化后进行
+            // Delay cursor setting - after window is fully initialized
             if !adapter.cursor_set {
-                // 在设置光标前先清屏 - 可能有助于解决透明度问题
+                // Clear screen before setting cursor - may help with transparency issues
                 adapter.clear_screen_wgpu();
 
                 adapter.set_mouse_cursor();
@@ -172,13 +173,13 @@ impl ApplicationHandler for WinitWgpuAppHandler {
         }
     }
 
-    /// 处理窗口事件
+    /// Handle window events
     ///
-    /// 这是事件处理的核心方法，处理所有的窗口事件包括：
-    /// - 窗口关闭请求
-    /// - 键盘输入（支持Q键退出）
-    /// - 鼠标移动和点击
-    /// - 窗口拖拽逻辑
+    /// This is the core method for event handling, processing all window events including:
+    /// - Window close request
+    /// - Keyboard input (supports Q key exit)
+    /// - Mouse movement and clicks
+    /// - Window drag logic
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -193,7 +194,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
-                // 处理Q键退出（与SDL版本保持一致）
+                // Handle Q key exit (consistent with SDL version)
                 if key_event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
                         if keycode == winit::keyboard::KeyCode::KeyQ {
@@ -204,7 +205,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                     }
                 }
 
-                // 将键盘事件转换为像素事件
+                // Convert keyboard events to RustPixel events
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event: WindowEvent::KeyboardInput {
@@ -223,7 +224,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // 为Retina显示器转换物理坐标到逻辑坐标
+                // Convert physical coordinates to logical coordinates for Retina displays
                 unsafe {
                     let adapter = &*self.adapter_ref;
                     if let Some(window) = &adapter.window {
@@ -235,7 +236,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                     }
                 }
 
-                // 处理窗口拖拽
+                // Handle window drag
                 unsafe {
                     let adapter = &mut *self.adapter_ref;
                     if adapter.drag.draging {
@@ -245,8 +246,8 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                     }
                 }
 
-                // 只有在非拖拽状态时才转换为像素事件
-                // 使用逻辑位置确保坐标系统一致
+                // Only convert to pixel events when not dragging
+                // Use logical position to ensure consistent coordinate system
                 let logical_position = winit::dpi::PhysicalPosition::new(
                     self.cursor_position.0,
                     self.cursor_position.1,
@@ -282,18 +283,18 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                                 adapter.in_border(self.cursor_position.0, self.cursor_position.1);
                             match bs {
                                 WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
-                                    // 在边框区域按下左键时开始拖拽
+                                    // Start dragging when left button is pressed in border area
                                     adapter.drag.draging = true;
                                     adapter.drag.mouse_x = self.cursor_position.0;
                                     adapter.drag.mouse_y = self.cursor_position.1;
                                 }
                                 WinitBorderArea::CLOSE => {
-                                    // 点击关闭按钮区域时退出程序
+                                    // Exit program when clicking close button area
                                     self.should_exit = true;
                                     event_loop.exit();
                                 }
                                 _ => {
-                                    // 非拖拽区域，将事件传递给游戏逻辑
+                                    // Non-dragging area, pass event to game logic
                                     let winit_event = WinitEvent::WindowEvent {
                                         window_id: _window_id,
                                         event: WindowEvent::MouseInput {
@@ -320,7 +321,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                             let was_dragging = adapter.drag.draging;
                             adapter.drag.draging = false;
 
-                            // 只有在非拖拽状态时才将鼠标释放事件传递给游戏
+                            // Only pass mouse release event to game when not dragging
                             if !was_dragging {
                                 let winit_event = WinitEvent::WindowEvent {
                                     window_id: _window_id,
@@ -342,7 +343,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                         }
                     }
                     _ => {
-                        // 转换其他鼠标输入事件
+                        // Convert other mouse input events
                         let winit_event = WinitEvent::WindowEvent {
                             window_id: _window_id,
                             event: WindowEvent::MouseInput {
@@ -363,7 +364,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                 }
             }
             _ => {
-                // 将其他winit事件转换为RustPixel事件
+                // Convert other winit events to RustPixel events
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event,
@@ -382,15 +383,15 @@ impl ApplicationHandler for WinitWgpuAppHandler {
 }
 
 impl WinitWgpuAdapter {
-    /// 创建新的Winit适配器实例
+    /// Create a new Winit adapter instance
     ///
-    /// # 参数
-    /// - `gn`: 游戏名称
-    /// - `project_path`: 项目路径（用于资源加载）
+    /// # Parameters
+    /// - `gn`: Game name
+    /// - `project_path`: Project path (for resource loading)
     ///
-    /// # 返回值
-    /// 返回初始化的WinitAdapter实例，所有OpenGL相关组件都为None，
-    /// 需要在调用init()方法后才能正常使用。
+    /// # Returns
+    /// Returns the initialized WinitAdapter instance, all OpenGL components are None,
+    /// and need to be used normally after calling the init() method.
     pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(gn, project_path),
@@ -414,34 +415,34 @@ impl WinitWgpuAdapter {
         }
     }
 
-    /// 通用初始化方法 - 处理所有公共逻辑
+    /// Common initialization method - handles all public logic
     ///
-    /// 这个方法处理两种渲染后端都需要的初始化步骤：
-    /// 1. 加载纹理文件和设置符号尺寸
-    /// 2. 设置基础参数（尺寸、比例、像素大小）
-    /// 3. 创建事件循环
-    /// 4. 设置应用处理器
-    /// 5. 存储窗口初始化参数
+    /// This method handles initialization steps required by both rendering backends:
+    /// 1. Load texture files and set symbol dimensions
+    /// 2. Set base parameters (size, ratio, pixel size)
+    /// 3. Create event loop
+    /// 4. Set application handler
+    /// 5. Store window initialization parameters
     ///
-    /// # 参数
-    /// - `w`: 逻辑宽度（字符数）
-    /// - `h`: 逻辑高度（字符数）
-    /// - `rx`: X轴缩放比例
-    /// - `ry`: Y轴缩放比例
-    /// - `title`: 窗口标题
+    /// # Parameters
+    /// - `w`: Logical width (characters)
+    /// - `h`: Logical height (characters)
+    /// - `rx`: X-axis scaling ratio
+    /// - `ry`: Y-axis scaling ratio
+    /// - `title`: Window title
     ///
-    /// # 返回值
-    /// 返回纹理路径，用于后续的渲染器初始化
+    /// # Returns
+    /// Returns the texture path for subsequent renderer initialization
     fn init_common(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) -> String {
-        // 使用统一的winit共享初始化逻辑
+        // Use unified winit shared initialization logic
         let (event_loop, window_init_params, texture_path) =
             winit_init_common(self, w, h, rx, ry, title);
 
-        // 存储共享初始化结果
+        // Store shared initialization results
         self.event_loop = Some(event_loop);
         self.window_init_params = Some(window_init_params);
 
-        // 设置WGPU特定的应用处理器
+        // Set WGPU specific application handler
         self.app_handler = Some(WinitWgpuAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
@@ -454,16 +455,16 @@ impl WinitWgpuAdapter {
         texture_path
     }
 
-    /// WGPU 后端初始化
+    /// WGPU backend initialization
     ///
-    /// 使用统一的生命周期管理，窗口创建推迟到resumed事件中。
+    /// Uses unified lifecycle management, window creation deferred to resumed event.
     fn init_wgpu(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing Winit adapter with WGPU backend...");
         let _texture_path = self.init_common(w, h, rx, ry, title);
-        // 窗口创建将在resumed事件中完成
+        // Window creation will be completed in the resumed event
     }
 
-    /// 在resumed事件中创建WGPU窗口和相关资源
+    /// Create WGPU window and related resources in the resumed event
     fn create_wgpu_window_and_resources(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -472,13 +473,13 @@ impl WinitWgpuAdapter {
 
         info!("Creating WGPU window and resources...");
 
-        // 计算窗口大小（处理 Retina 显示器）
+        // Calculate window size (handle Retina displays)
         let window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
 
         let window_attributes = winit::window::Window::default_attributes()
             .with_title(&params.title)
             .with_inner_size(window_size)
-            .with_decorations(false) // 无边框，与 SDL 版本一致
+            .with_decorations(false) // No border, consistent with SDL version
             .with_resizable(false);
 
         let window = Arc::new(
@@ -493,7 +494,7 @@ impl WinitWgpuAdapter {
             self.base.gr.pixel_w, self.base.gr.pixel_h, physical_size.width, physical_size.height
         );
 
-        // 初始化 WGPU 核心组件
+        // Initialize WGPU core components
         let wgpu_instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -501,7 +502,7 @@ impl WinitWgpuAdapter {
 
         self.window = Some(window.clone());
 
-        // 创建窗口表面
+        // Create window surface
         let wgpu_surface = unsafe {
             wgpu_instance
                 .create_surface_unsafe(
@@ -511,7 +512,7 @@ impl WinitWgpuAdapter {
                 .expect("Failed to create surface")
         };
 
-        // 异步获取适配器和设备
+        // Asynchronously get adapter and device
         let (wgpu_device, wgpu_queue, wgpu_surface_config) = pollster::block_on(async {
             let adapter = wgpu_instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
@@ -565,14 +566,14 @@ impl WinitWgpuAdapter {
             (device, queue, surface_config)
         });
 
-        // 创建并初始化 WGPU 像素渲染器
+        // Create and initialize WGPU pixel renderer
         let mut wgpu_pixel_renderer = WgpuPixelRender::new_with_format(
             self.base.gr.pixel_w,
             self.base.gr.pixel_h,
             wgpu_surface_config.format,
         );
 
-        // 初始化所有WGPU组件
+        // Initialize all WGPU components
         if let Err(e) =
             wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path)
         {
@@ -591,7 +592,7 @@ impl WinitWgpuAdapter {
         wgpu_pixel_renderer.init_transition_renderer(&wgpu_device);
         wgpu_pixel_renderer.set_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
 
-        // 存储所有 WGPU 对象
+        // Store all WGPU objects
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_device = Some(wgpu_device);
         self.wgpu_queue = Some(wgpu_queue);
@@ -602,17 +603,17 @@ impl WinitWgpuAdapter {
         info!("WGPU window & context initialized successfully");
     }
 
-    /// 执行初始清屏操作
+    /// Execute initial clear screen operation
     ///
-    /// 防止窗口创建时的白屏闪烁，立即清空屏幕并显示黑色背景。
+    /// Prevents white screen flicker when creating a window, immediately clears the screen and displays a black background.
     ///
-    /// WGPU 模式不需要 initial_clear_screen，原因如下：
-    /// - 更好的资源管理：WGPU 的 Surface 配置机制确保了良好的初始状态
-    /// - 延迟渲染：命令缓冲区模式让我们可以在 present 前准备好所有内容
-    /// - 默认 Clear 行为：RenderPass 默认就有 clear 操作
-    /// - 原子性操作：整个渲染过程是原子的，要么全部完成要么不显示
+    /// WGPU mode does not require initial_clear_screen because:
+    /// - Better resource management: WGPU's Surface configuration mechanism ensures a good initial state
+    /// - Deferred rendering: Command buffer mode allows us to prepare everything before present
+    /// - Default Clear behavior: RenderPass has a clear operation by default
+    /// - Atomic operations: The entire rendering process is atomic, either fully completed or not displayed
     ///
-    /// 这就是现代图形 API（Vulkan、Metal、D3D12）相比传统 OpenGL 的优势之一：更好的资源管理和更少的意外行为。
+    /// This is one of the advantages of modern graphics APIs (Vulkan, Metal, D3D12) compared to traditional OpenGL: better resource management and fewer unexpected behaviors.
     fn clear_screen_wgpu(&mut self) {
         if let (Some(device), Some(queue), Some(surface)) =
             (&self.wgpu_device, &self.wgpu_queue, &self.wgpu_surface)
@@ -641,7 +642,7 @@ impl WinitWgpuAdapter {
                         occlusion_query_set: None,
                         timestamp_writes: None,
                     });
-                    // clear_pass自动drop
+                    // clear_pass automatically drops
                 }
 
                 queue.submit(std::iter::once(encoder.finish()));
@@ -650,14 +651,14 @@ impl WinitWgpuAdapter {
         }
     }
 
-    /// 设置自定义鼠标光标
+    /// Set custom mouse cursor
     ///
-    /// 从assets/pix/cursor.png加载光标图像，并设置为窗口的自定义光标。
-    /// - 自动转换为RGBA8格式
-    /// - 热点位置设置为(0, 0)
-    /// - 处理透明度和预乘alpha
+    /// Loads the cursor image from assets/pix/cursor.png and sets it as the window's custom cursor.
+    /// - Automatically converted to RGBA8 format
+    /// - Hotspot position set to (0, 0)
+    /// - Handles transparency and pre-multiplied alpha
     fn set_mouse_cursor(&mut self) {
-        // 构建光标图像文件路径
+        // Build cursor image file path
         let cursor_path = format!(
             "{}{}{}",
             self.base.project_path,
@@ -670,7 +671,7 @@ impl WinitWgpuAdapter {
             let (width, height) = cursor_rgba.dimensions();
             let mut cursor_data = cursor_rgba.into_raw();
 
-            // 预乘alpha处理 - 这是解决光标透明度问题的常见方法
+            // Pre-multiply alpha - this is a common method to solve cursor transparency issues
             for chunk in cursor_data.chunks_exact_mut(4) {
                 let alpha = chunk[3] as f32 / 255.0;
                 chunk[0] = (chunk[0] as f32 * alpha) as u8; // R * alpha
@@ -693,16 +694,16 @@ impl WinitWgpuAdapter {
         }
     }
 
-    /// 检查鼠标位置是否在边框区域
+    /// Check if mouse position is in border area
     ///
-    /// 用于确定鼠标点击位置的区域类型，决定是否触发拖拽操作。
+    /// Used to determine the type of border area for the mouse click position, deciding whether to trigger a drag operation.
     ///
-    /// # 参数
-    /// - `x`: 鼠标X坐标
-    /// - `y`: 鼠标Y坐标
+    /// # Parameters
+    /// - `x`: Mouse X coordinate
+    /// - `y`: Mouse Y coordinate
     ///
-    /// # 返回值
-    /// 返回对应的边框区域类型
+    /// # Returns
+    /// Returns the corresponding border area type
     fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
         let w = self.base.gr.cell_width();
         let h = self.base.gr.cell_height();
@@ -720,7 +721,7 @@ impl WinitWgpuAdapter {
         WinitBorderArea::OTHER
     }
 
-    /// WGPU版本的转场渲染到纹理（为petview等应用提供高级API）
+    /// WGPU version of transition rendering to texture (provides advanced API for petview etc.)
     pub fn render_transition_to_texture_wgpu(
         &mut self,
         target_texture_idx: usize,
@@ -732,12 +733,12 @@ impl WinitWgpuAdapter {
             &self.wgpu_queue,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 创建命令编码器
+            // Create command encoder
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Transition Render Encoder"),
             });
 
-            // 使用新的render_trans_frame_to_texture方法，避免借用冲突
+            // Use the new render_trans_frame_to_texture method to avoid borrowing conflicts
             pixel_renderer.render_trans_frame_to_texture(
                 device,
                 queue,
@@ -747,7 +748,7 @@ impl WinitWgpuAdapter {
                 progress,
             )?;
 
-            // 提交命令
+            // Submit commands
             queue.submit(std::iter::once(encoder.finish()));
         } else {
             return Err("WGPU components not initialized".to_string());
@@ -756,15 +757,15 @@ impl WinitWgpuAdapter {
         Ok(())
     }
 
-    /// WGPU版本的render buffer到纹理渲染方法
+    /// WGPU version of render buffer to texture rendering method
     ///
-    /// 这个方法实现了与OpenGL版本相同的接口，将RenderCell数据渲染到指定的render texture中。
-    /// 用于统一两种渲染后端的接口。
+    /// This method implements the same interface as the OpenGL version, rendering RenderCell data to the specified render texture.
+    /// Used to unify the interfaces of the two rendering backends.
     ///
-    /// # 参数
-    /// - `rbuf`: RenderCell数据数组
-    /// - `rtidx`: 目标render texture索引
-    /// - `debug`: 是否启用调试模式
+    /// # Parameters
+    /// - `rbuf`: RenderCell data array
+    /// - `rtidx`: Target render texture index
+    /// - `debug`: Whether to enable debug mode
     pub fn draw_render_buffer_to_texture_wgpu(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
@@ -776,37 +777,37 @@ impl WinitWgpuAdapter {
             &self.wgpu_queue,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 使用统一的WgpuPixelRender封装，匹配OpenGL版本的接口
+            // Use unified WgpuPixelRender wrapper to match OpenGL version interface
             let rx = self.base.gr.ratio_x;
             let ry = self.base.gr.ratio_y;
 
-            // 绑定目标render texture
+            // Bind target render texture
             pixel_renderer.bind_target(rtidx);
 
-            // 设置清除颜色
+            // Set clear color
             if debug {
-                // 调试模式使用红色背景
+                // Debug mode uses red background
                 pixel_renderer.set_clear_color(UnifiedColor::new(1.0, 0.0, 0.0, 1.0));
             } else {
-                // 正常模式使用黑色背景
+                // Normal mode uses black background
                 pixel_renderer.set_clear_color(UnifiedColor::new(0.0, 0.0, 0.0, 1.0));
             }
 
-            // 清除目标
+            // Clear target
             pixel_renderer.clear();
 
-            // 渲染RenderCell数据到当前绑定的目标
+            // Render RenderCell data to the currently bound target
             pixel_renderer.render_rbuf(device, queue, rbuf, rx, ry);
 
-            // 创建命令编码器用于渲染到纹理
+            // Create command encoder for rendering to texture
             let mut rt_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some(&format!("Render to RT{} Encoder", rtidx)),
             });
 
-            // 执行渲染到当前绑定的目标
+            // Execute rendering to the currently bound target
             pixel_renderer.render_to_current_target(&mut rt_encoder, None)?;
 
-            // 提交渲染到纹理的命令
+            // Submit rendering to texture commands
             queue.submit(std::iter::once(rt_encoder.finish()));
         } else {
             return Err("WGPU components not initialized".to_string());
@@ -815,15 +816,15 @@ impl WinitWgpuAdapter {
         Ok(())
     }
 
-    /// WGPU版本的render texture到屏幕渲染（内部实现）
+    /// WGPU version of render texture to screen rendering (internal implementation)
     ///
-    /// 这是WGPU版本的draw_render_textures_to_screen方法的内部实现，与OpenGL版本对应。
-    /// 负责将render texture中的内容最终合成到屏幕上，支持转场效果。
+    /// This is the internal implementation of the WGPU version of draw_render_textures_to_screen, corresponding to the OpenGL version.
+    /// Responsible for final composition of content from render textures onto the screen, supporting transition effects.
     ///
-    /// 正确的WGPU渲染流程：
-    /// 1. 将RenderCell数据渲染到render texture 2（主缓冲区）
-    /// 2. 将render texture 2合成到屏幕（如果不隐藏）
-    /// 3. 将render texture 3合成到屏幕（如果不隐藏，用于转场效果）
+    /// Correct WGPU rendering process:
+    /// 1. Render RenderCell data to render texture 2 (main buffer)
+    /// 2. Synthesize render texture 2 onto the screen (if not hidden)
+    /// 3. Synthesize render texture 3 onto the screen (if not hidden, for transition effects)
     pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
             &self.wgpu_device,
@@ -831,7 +832,7 @@ impl WinitWgpuAdapter {
             &self.wgpu_surface,
             &mut self.wgpu_pixel_renderer,
         ) {
-            // 获取当前表面纹理
+            // Get current surface texture
             let output = surface
                 .get_current_texture()
                 .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
@@ -840,17 +841,17 @@ impl WinitWgpuAdapter {
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-            // 使用统一的WgpuPixelRender封装，匹配OpenGL版本的接口
-            // 绑定屏幕作为渲染目标
+            // Use unified WgpuPixelRender wrapper to match OpenGL version interface
+            // Bind screen as render target
             pixel_renderer.bind_screen();
 
-            // 创建命令编码器用于屏幕合成
+            // Create command encoder for screen composition
             let mut screen_encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Screen Composition Encoder"),
                 });
 
-            // 清空屏幕
+            // Clear screen
             {
                 let _clear_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Clear Screen Pass"),
@@ -866,10 +867,10 @@ impl WinitWgpuAdapter {
                     occlusion_query_set: None,
                     timestamp_writes: None,
                 });
-                // clear_pass自动drop
+                // clear_pass automatically drops
             }
 
-            // 绘制render texture 2（主缓冲区）到屏幕 - 使用底层WGPU方法
+            // Draw render texture 2 (main buffer) to screen - using low-level WGPU method
             if !pixel_renderer.get_render_texture_hidden(2) {
                 let unified_transform = UnifiedTransform::new();
                 let unified_color = UnifiedColor::white();
@@ -880,20 +881,20 @@ impl WinitWgpuAdapter {
                     &mut screen_encoder,
                     &view,
                     2,                    // render texture 2
-                    [0.0, 0.0, 1.0, 1.0], // 全屏区域
+                    [0.0, 0.0, 1.0, 1.0], // Full screen area
                     &unified_transform,
                     &unified_color,
                 )?;
             }
 
-            // 绘制render texture 3（转场效果）到屏幕 - 使用统一接口
+            // Draw render texture 3 (transition effect) to screen - using unified interface
             if !pixel_renderer.get_render_texture_hidden(3) {
                 let pcw = pixel_renderer.canvas_width as f32;
                 let pch = pixel_renderer.canvas_height as f32;
                 let rx = self.base.gr.ratio_x;
                 let ry = self.base.gr.ratio_y;
 
-                // 使用实际的游戏区域尺寸（匹配OpenGL版本）
+                // Use actual game area dimensions (matching OpenGL version)
                 let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
                 let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
@@ -907,13 +908,13 @@ impl WinitWgpuAdapter {
                     &mut screen_encoder,
                     &view,
                     3,                                          // render texture 3
-                    [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // 游戏区域，WGPU Y轴从顶部开始
+                    [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // Game area, WGPU Y-axis starts from top
                     &unified_transform,
                     &unified_color,
                 )?;
             }
 
-            // 提交屏幕合成命令并呈现帧
+            // Submit screen composition commands and present frame
             queue.submit(std::iter::once(screen_encoder.finish()));
             output.present();
         } else {
@@ -923,9 +924,9 @@ impl WinitWgpuAdapter {
         Ok(())
     }
 
-    /// 调试方法：保存render texture为PNG图片文件
+    /// Debug method: save render texture as PNG image file
     ///
-    /// 这个方法将指定的render texture保存为PNG文件，用于调试渲染问题
+    /// This method saves the specified render texture as a PNG file for debugging rendering issues
     pub fn debug_save_render_texture_to_file(
         &mut self,
         rt_index: usize,
@@ -938,7 +939,7 @@ impl WinitWgpuAdapter {
         ) {
             info!("Saving render texture {} to {}", rt_index, filename);
 
-            // 获取render texture
+            // Get render texture
             let render_texture = pixel_renderer
                 .get_render_texture(rt_index)
                 .ok_or_else(|| format!("Render texture {} not found", rt_index))?;
@@ -958,7 +959,7 @@ impl WinitWgpuAdapter {
                 texture_width, texture_height, unpadded_bytes_per_row, bytes_per_row, buffer_size
             );
 
-            // 创建staging buffer用于读取texture数据
+            // Create staging buffer for reading texture data
             let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Render Texture Staging Buffer"),
                 size: buffer_size,
@@ -966,12 +967,12 @@ impl WinitWgpuAdapter {
                 mapped_at_creation: false,
             });
 
-            // 创建命令编码器
+            // Create command encoder
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Texture Copy Encoder"),
             });
 
-            // 复制texture到buffer
+            // Copy texture to buffer
             encoder.copy_texture_to_buffer(
                 wgpu::ImageCopyTexture {
                     texture: &render_texture.texture,
@@ -994,10 +995,10 @@ impl WinitWgpuAdapter {
                 },
             );
 
-            // 提交命令
+            // Submit commands
             queue.submit(std::iter::once(encoder.finish()));
 
-            // 映射buffer并读取数据（异步操作）
+            // Map buffer and read data (asynchronous operation)
             let buffer_slice = staging_buffer.slice(..);
             let (sender, receiver) = std::sync::mpsc::channel();
 
@@ -1005,31 +1006,31 @@ impl WinitWgpuAdapter {
                 sender.send(result).unwrap();
             });
 
-            // 等待映射完成
+            // Wait for mapping to complete
             device.poll(wgpu::Maintain::Wait);
 
             match receiver.recv() {
                 Ok(Ok(())) => {
-                    // 读取数据
+                    // Read data
                     let data = buffer_slice.get_mapped_range();
                     let mut rgba_data = vec![0u8; (texture_width * texture_height * 4) as usize];
 
-                    // 复制数据（处理padding）
+                    // Copy data (handling padding)
                     for y in 0..texture_height {
                         let src_start = (y * bytes_per_row) as usize;
                         let dst_start = (y * texture_width * 4) as usize;
                         let row_size = (texture_width * 4) as usize;
 
-                        // 只复制实际像素数据，跳过padding
+                        // Only copy actual pixel data, skipping padding
                         rgba_data[dst_start..dst_start + row_size]
                             .copy_from_slice(&data[src_start..src_start + row_size]);
                     }
 
-                    // 解除映射
+                    // Unmap
                     drop(data);
                     staging_buffer.unmap();
 
-                    // 保存为PNG文件
+                    // Save as PNG file
                     match image::save_buffer(
                         filename,
                         &rgba_data,
@@ -1055,66 +1056,66 @@ impl WinitWgpuAdapter {
         }
     }
 
-    /// 调试方法：打印当前渲染状态信息
+    /// Debug method: print current render state information
     pub fn debug_print_render_info(&self) {
-        info!("=== WGPU渲染状态信息 ===");
+        info!("=== WGPU Render State Information ===");
 
-        // 基础参数
-        info!("基础参数:");
-        info!("  Cell数量: {}x{}", self.base.cell_w, self.base.cell_h);
+        // Base parameters
+        info!("Base Parameters:");
+        info!("  Cell count: {}x{}", self.base.cell_w, self.base.cell_h);
         info!(
-            "  窗口像素尺寸: {}x{}",
+            "  Window pixel size: {}x{}",
             self.base.gr.pixel_w, self.base.gr.pixel_h
         );
         info!(
-            "  比例: {:.3}x{:.3}",
+            "  Ratio: {:.3}x{:.3}",
             self.base.gr.ratio_x, self.base.gr.ratio_y
         );
 
-        // 符号尺寸
+        // Symbol dimensions
         if let (Some(sym_w), Some(sym_h)) = (PIXEL_SYM_WIDTH.get(), PIXEL_SYM_HEIGHT.get()) {
-            info!("  符号尺寸: {}x{}", sym_w, sym_h);
+            info!("  Symbol dimensions: {}x{}", sym_w, sym_h);
 
-            // 计算游戏区域
+            // Calculate game area
             let game_area_w = self.base.cell_w as f32 * sym_w / self.base.gr.ratio_x;
             let game_area_h = self.base.cell_h as f32 * sym_h / self.base.gr.ratio_y;
-            info!("  游戏区域: {:.2}x{:.2}", game_area_w, game_area_h);
+            info!("  Game area: {:.2}x{:.2}", game_area_w, game_area_h);
         }
 
-        // WGPU状态
+        // WGPU state
         if let Some(pixel_renderer) = &self.wgpu_pixel_renderer {
-            info!("WGPU状态:");
+            info!("WGPU State:");
             info!(
-                "  Canvas尺寸: {}x{}",
+                "  Canvas size: {}x{}",
                 pixel_renderer.canvas_width, pixel_renderer.canvas_height
             );
 
-            // Render texture状态
+            // Render texture state
             for i in 0..4 {
                 let hidden = pixel_renderer.get_render_texture_hidden(i);
                 info!(
                     "  RenderTexture{}: {}",
                     i,
-                    if hidden { "隐藏" } else { "显示" }
+                    if hidden { "Hidden" } else { "Visible" }
                 );
             }
         }
 
-        info!("========================");
+        info!("================================");
     }
 }
 
 impl Adapter for WinitWgpuAdapter {
-    /// 初始化Winit + WGPU适配器
+    /// Initialize Winit + WGPU adapter
     ///
-    /// 这是适配器的主要初始化方法，专门使用WGPU现代渲染管线。
+    /// This is the main initialization method for the adapter, specifically using the WGPU modern rendering pipeline.
     ///
-    /// # 参数
-    /// - `w`: 逻辑宽度（字符数）
-    /// - `h`: 逻辑高度（字符数）
-    /// - `rx`: X轴缩放比例
-    /// - `ry`: Y轴缩放比例
-    /// - `title`: 窗口标题
+    /// # Parameters
+    /// - `w`: Logical width (characters)
+    /// - `h`: Logical height (characters)
+    /// - `rx`: X-axis scaling ratio
+    /// - `ry`: Y-axis scaling ratio
+    /// - `title`: Window title
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing WinitWgpu adapter with WGPU backend...");
         self.init_wgpu(w, h, rx, ry, title);
@@ -1126,22 +1127,22 @@ impl Adapter for WinitWgpuAdapter {
 
     fn reset(&mut self) {}
 
-    /// 轮询事件
+    /// Poll events
     ///
-    /// 处理窗口事件并将其转换为RustPixel事件。使用pump_events模式
-    /// 避免阻塞主线程，确保渲染性能。
+    /// Handles window events and converts them to RustPixel events. Uses pump_events mode
+    /// to avoid blocking the main thread and ensure rendering performance.
     ///
-    /// # 参数
-    /// - `timeout`: 事件轮询超时时间（未使用）
-    /// - `es`: 输出事件向量
+    /// # Parameters
+    /// - `timeout`: Event polling timeout (unused)
+    /// - `es`: Output event vector
     ///
-    /// # 返回值
-    /// 如果应该退出程序则返回true
+    /// # Returns
+    /// Returns true if the program should exit
     ///
-    /// # 特殊处理
-    /// - 窗口拖拽：检测并执行窗口移动
-    /// - Q键退出：与SDL版本保持一致
-    /// - Retina显示：正确处理高DPI坐标转换
+    /// # Special handling
+    /// - Window drag: Detect and execute window movement
+    /// - Q key exit: Consistent with SDL version
+    /// - Retina display: Correctly handle high DPI coordinate conversion
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
         // Poll event logic - debug output removed
 
@@ -1175,15 +1176,15 @@ impl Adapter for WinitWgpuAdapter {
         self.should_exit
     }
 
-    /// 渲染一帧到屏幕
+    /// Draw a frame to the screen
     ///
-    /// 使用WGPU现代渲染管线绘制当前帧。
+    /// Draws the current frame using the WGPU modern rendering pipeline.
     ///
-    /// # 参数
-    /// - `current_buffer`: 当前帧缓冲区
-    /// - `previous_buffer`: 前一帧缓冲区
-    /// - `pixel_sprites`: 像素精灵列表
-    /// - `stage`: 渲染阶段
+    /// # Parameters
+    /// - `current_buffer`: Current frame buffer
+    /// - `previous_buffer`: Previous frame buffer
+    /// - `pixel_sprites`: List of pixel sprites
+    /// - `stage`: Render stage
     fn draw_all(
         &mut self,
         current_buffer: &Buffer,
@@ -1191,7 +1192,7 @@ impl Adapter for WinitWgpuAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // 处理窗口拖拽移动
+        // Handle window drag movement
         winit_move_win(
             &mut self.drag.need,
             self.window.as_ref().map(|v| &**v),
@@ -1199,7 +1200,7 @@ impl Adapter for WinitWgpuAdapter {
             self.drag.dy,
         );
 
-        // 使用统一的图形渲染流程 - 与SdlAdapter和WinitGlowAdapter保持一致
+        // Use unified graphics rendering process - consistent with SdlAdapter and WinitGlowAdapter
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
 
         self.post_draw();
@@ -1207,28 +1208,28 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     fn post_draw(&mut self) {
-        // WGPU模式不需要显式的缓冲区交换，在draw_render_textures_to_screen_wgpu中已经调用了present()
+        // WGPU mode does not require explicit buffer swap, draw_render_textures_to_screen_wgpu already called present()
         if let Some(window) = &self.window {
             window.as_ref().request_redraw();
         }
     }
 
-    /// 隐藏光标
+    /// Hide cursor
     ///
-    /// 在图形应用程序中，我们不希望隐藏鼠标光标。
-    /// 这与SDL版本的行为相似 - 让鼠标光标保持可见。
+    /// In a graphical application, we do not want to hide the mouse cursor.
+    /// This is similar to the SDL version - keep the mouse cursor visible.
     ///
-    /// # 设计考虑
-    /// 保持与SDL适配器的一致性，实际上不执行隐藏操作。
+    /// # Design considerations
+    /// Maintain consistency with SDL adapter, in fact, no hiding operation is performed.
     fn hide_cursor(&mut self) -> Result<(), String> {
-        // 对于GUI应用程序，我们不希望隐藏鼠标光标
-        // 这与SDL行为相似 - 让鼠标光标保持可见
+        // For GUI applications, we do not want to hide the mouse cursor
+        // This is similar to SDL behavior - keep the mouse cursor visible
         Ok(())
     }
 
-    /// 显示光标
+    /// Show cursor
     ///
-    /// 确保鼠标光标可见。如果窗口存在，则显式设置光标可见性。
+    /// Ensure the mouse cursor is visible. If the window exists, explicitly set cursor visibility.
     fn show_cursor(&mut self) -> Result<(), String> {
         if let Some(window) = &self.window {
             window.set_cursor_visible(true);
@@ -1236,16 +1237,16 @@ impl Adapter for WinitWgpuAdapter {
         Ok(())
     }
 
-    /// 设置光标位置
+    /// Set cursor position
     ///
-    /// 在Winit中，光标位置通常由系统管理，此方法为兼容性而保留。
+    /// In Winit, cursor position is usually managed by the system, this method is kept for compatibility.
     fn set_cursor(&mut self, _x: u16, _y: u16) -> Result<(), String> {
         Ok(())
     }
 
-    /// 获取光标位置
+    /// Get cursor position
     ///
-    /// 返回当前光标位置。在Winit实现中，返回固定值以保持接口兼容性。
+    /// Returns the current cursor position. In the Winit implementation, a fixed value is returned for compatibility.
     fn get_cursor(&mut self) -> Result<(u16, u16), String> {
         Ok((0, 0))
     }
@@ -1254,9 +1255,9 @@ impl Adapter for WinitWgpuAdapter {
         self
     }
 
-    /// 重写渲染缓冲区到纹理的方法，直接使用我们的WGPU渲染器
+    /// Override render buffer to texture method, directly use our WGPU renderer
     ///
-    /// 这个方法专门为WinitWgpuAdapter实现，不依赖统一的pixel_renderer抽象
+    /// This method is specifically implemented for WinitWgpuAdapter, does not rely on the unified pixel_renderer abstraction
     fn draw_render_buffer_to_texture(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
@@ -1265,7 +1266,7 @@ impl Adapter for WinitWgpuAdapter {
     ) where
         Self: Sized,
     {
-        // 直接调用我们的WGPU渲染方法
+        // Directly call our WGPU rendering method
         if let Err(e) = self.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
             eprintln!(
                 "WinitWgpuAdapter: Failed to render buffer to texture {}: {}",
@@ -1274,14 +1275,14 @@ impl Adapter for WinitWgpuAdapter {
         }
     }
 
-    /// 重写渲染纹理到屏幕的方法，直接使用我们的WGPU渲染器
+    /// Override render texture to screen method, directly use our WGPU renderer
     ///
-    /// 这个方法专门为WinitWgpuAdapter实现，处理转场效果的最终合成
+    /// This method is specifically implemented for WinitWgpuAdapter, handles the final composition of transition effects
     fn draw_render_textures_to_screen(&mut self)
     where
         Self: Sized,
     {
-        // 直接调用我们的WGPU渲染方法
+        // Directly call our WGPU rendering method
         if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
             eprintln!(
                 "WinitWgpuAdapter: Failed to render textures to screen: {}",
@@ -1299,7 +1300,7 @@ impl Adapter for WinitWgpuAdapter {
 
     /// WinitWgpu adapter implementation of simple transition rendering
     fn render_simple_transition(&mut self, target_texture: usize) {
-        // WGPU使用标准的转场渲染，参数为(target, shader=0, progress=1.0)
+        // WGPU uses standard transition rendering, parameters are (target, shader=0, progress=1.0)
         if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, 0, 1.0) {
             eprintln!("WinitWgpuAdapter: Simple transition error: {}", e);
         }
@@ -1312,7 +1313,7 @@ impl Adapter for WinitWgpuAdapter {
         effect_type: usize,
         progress: f32,
     ) {
-        // WGPU使用完整的转场渲染API
+        // WGPU uses full transition rendering API
         if let Err(e) =
             self.render_transition_to_texture_wgpu(target_texture, effect_type, progress)
         {

@@ -1,24 +1,24 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022～2025
 
-//! # Winit适配器实现
+//! # Winit Adapter Implementation
 //!
-//! 基于winit + glutin + glow技术栈的跨平台渲染适配器。
+//! Cross-platform rendering adapter based on winit + glutin + glow technology stack.
 //!
-//! ## 技术栈
-//! - **winit**: 跨平台窗口管理和事件处理
-//! - **glutin**: OpenGL上下文管理
-//! - **glow**: 现代OpenGL绑定
+//! ## Technology Stack
+//! - **winit**: Cross-platform window management and event handling
+//! - **glutin**: OpenGL context management
+//! - **glow**: Modern OpenGL bindings
 //!
-//! ## 功能特性
-//! - 跨平台窗口管理（Windows、macOS、Linux）
-//! - 高DPI/Retina显示支持
-//! - 自定义鼠标光标
-//! - 窗口拖拽功能
-//! - 键盘和鼠标事件处理
-//! - OpenGL硬件加速渲染
+//! ## Features
+//! - Cross-platform window management (Windows, macOS, Linux)
+//! - High DPI/Retina display support
+//! - Custom mouse cursor
+//! - Window drag functionality
+//! - Keyboard and mouse event handling
+//! - OpenGL hardware-accelerated rendering
 //!
-//! ## 架构设计
+//! ## Architecture Design
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────┐
@@ -76,106 +76,107 @@ pub use winit::{
     window::{Cursor, CustomCursor, Window},
 };
 
-/// 边框区域枚举
+/// Border area enumeration
 ///
-/// 定义鼠标点击区域的类型，用于确定是否应该触发拖拽操作。
+/// Defines mouse click area types for determining whether drag operation should be triggered.
 pub enum WinitBorderArea {
-    /// 无效区域
+    /// Invalid area
     NOPE,
-    /// 关闭按钮区域
+    /// Close button area
     CLOSE,
-    /// 顶部标题栏区域（可拖拽）
+    /// Top title bar area (draggable)
     TOPBAR,
-    /// 其他边框区域（可拖拽）
+    /// Other border areas (draggable)
     OTHER,
 }
 
-/// Winit适配器主结构
+/// Winit adapter main structure
 ///
-/// 封装了winit窗口管理和现代渲染后端的所有组件。
-/// 支持两种渲染后端：OpenGL (glow) 和现代GPU API (wgpu)。
-/// 实现了与SDL适配器相同的接口，可以无缝替换。
+/// Encapsulates all components of winit window management and modern rendering backends.
+/// Supports two rendering backends: OpenGL (glow) and modern GPU API (wgpu).
+/// Implements the same interface as SDL adapter for seamless replacement.
 
-/// Winit + Glow OpenGL适配器
+/// Winit + Glow OpenGL adapter
 ///
-/// 专门处理基于winit窗口管理和OpenGL渲染的跨平台适配器。
-/// 与WinitWgpuAdapter分离，避免条件编译的复杂性。
+/// Specifically handles cross-platform adaptation for winit window management and OpenGL rendering.
+/// Separated from WinitWgpuAdapter to avoid complex conditional compilation.
 pub struct WinitGlowAdapter {
-    /// 基础适配器数据
+    /// Base adapter data
     pub base: AdapterBase,
 
-    /// 窗口实例
+    /// Window instance
     pub window: Option<Arc<Window>>,
 
-    /// 事件循环（用于pump events模式）
+    /// Event loop (for pump events mode)
     pub event_loop: Option<EventLoop<()>>,
 
-    /// 拖拽状态管理
+    /// Drag state management
     pub drag: Drag,
 
-    /// 是否已设置光标
+    /// Whether cursor has been set
     pub cursor_set: bool,
 
-    /// 窗口初始化参数
+    /// Window initialization parameters
     pub window_init_params: Option<WindowInitParams>,
 
     // OpenGL backend objects
-    /// OpenGL显示上下文
+    /// OpenGL display context
     pub gl_display: Option<glutin::display::Display>,
-    /// OpenGL渲染上下文
+    /// OpenGL rendering context
     pub gl_context: Option<glutin::context::PossiblyCurrentContext>,
-    /// OpenGL渲染表面
+    /// OpenGL rendering surface
     pub gl_surface: Option<Surface<WindowSurface>>,
-    /// 直接的OpenGL像素渲染器
+    /// Direct OpenGL pixel renderer
     pub gl_pixel_renderer: Option<GlPixelRenderer>,
 
-    /// 是否应该退出程序
+    /// Whether to exit the program
     pub should_exit: bool,
 
-    /// 事件处理器（用于pump events模式）
+    /// Event handler (for pump events mode)
     pub app_handler: Option<WinitGlowAppHandler>,
 
-    /// 自定义鼠标光标
+    /// Custom mouse cursor
     pub custom_cursor: Option<CustomCursor>,
 }
 
-/// Winit + Glow应用程序事件处理器
+/// Winit + Glow application event handler
 ///
-/// 实现winit的ApplicationHandler trait，处理窗口事件和用户输入。
-/// 专门针对OpenGL适配器设计。
+/// Implements winit's ApplicationHandler trait to handle window events and user input.
+/// Specifically designed for OpenGL adapter.
 pub struct WinitGlowAppHandler {
-    /// 待处理的像素事件队列
+    /// Pending pixel event queue
     pub pending_events: Vec<Event>,
-    /// 当前鼠标位置
+    /// Current mouse position
     pub cursor_position: (f64, f64),
-    /// X轴比例调整系数
+    /// X-axis scaling coefficient
     pub ratio_x: f32,
-    /// Y轴比例调整系数
+    /// Y-axis scaling coefficient
     pub ratio_y: f32,
-    /// 是否应该退出
+    /// Whether to exit
     pub should_exit: bool,
 
-    /// 适配器引用（用于拖拽处理）
+    /// Adapter reference (for drag handling)
     ///
-    /// 注意：这里使用原始指针是为了避免借用检查器的限制，
-    /// 在事件处理期间需要修改适配器状态。使用时必须确保安全性。
+    /// Note: This uses a raw pointer to avoid borrow checker limitations,
+    /// and the adapter state needs to be modified during event processing.
+    /// It must be ensured that it is safe to use.
     pub adapter_ref: *mut WinitGlowAdapter,
 }
 
 impl ApplicationHandler for WinitGlowAppHandler {
-    /// 应用程序恢复时的回调
+    /// Callback when application resumes
     ///
-    /// 在resumed事件中创建OpenGL窗口和渲染资源。
+    /// Creates OpenGL window and rendering resources in resumed event.
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        // 在这里创建窗口和渲染上下文
+        // Create window and rendering context here
         if let Some(adapter) = unsafe { self.adapter_ref.as_mut() } {
             if adapter.window.is_none() {
                 adapter.create_glow_window_and_context(event_loop);
             }
 
-            // 延迟设置光标 - 在窗口完全初始化后进行
+            // Delay cursor setting - after window is fully initialized
             if !adapter.cursor_set {
-                // 在设置光标前先清屏 - 可能有助于解决透明度问题
+                // Clear screen before setting cursor - may help with transparency issues
                 adapter.initial_clear_screen();
                 adapter.set_mouse_cursor();
                 adapter.cursor_set = true;
@@ -183,13 +184,13 @@ impl ApplicationHandler for WinitGlowAppHandler {
         }
     }
 
-    /// 处理窗口事件
+    /// Handle window events
     ///
-    /// 这是事件处理的核心方法，处理所有的窗口事件包括：
-    /// - 窗口关闭请求
-    /// - 键盘输入（支持Q键退出）
-    /// - 鼠标移动和点击
-    /// - 窗口拖拽逻辑
+    /// This is the core method for event handling, processing all window events including:
+    /// - Window close request
+    /// - Keyboard input (supports Q key exit)
+    /// - Mouse movement and clicks
+    /// - Window drag logic
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -204,7 +205,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
-                // 处理Q键退出（与SDL版本保持一致）
+                // Handle Q key exit (consistent with SDL version)
                 if key_event.state == winit::event::ElementState::Pressed {
                     if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
                         if keycode == winit::keyboard::KeyCode::KeyQ {
@@ -215,7 +216,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                     }
                 }
 
-                // 将键盘事件转换为像素事件
+                // Convert keyboard events to pixel events
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event: WindowEvent::KeyboardInput {
@@ -234,7 +235,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // 为Retina显示器转换物理坐标到逻辑坐标
+                // Convert physical coordinates to logical coordinates for Retina displays
                 unsafe {
                     let adapter = &*self.adapter_ref;
                     if let Some(window) = &adapter.window {
@@ -246,7 +247,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                     }
                 }
 
-                // 处理窗口拖拽
+                // Handle window drag
                 unsafe {
                     let adapter = &mut *self.adapter_ref;
                     if adapter.drag.draging {
@@ -256,8 +257,8 @@ impl ApplicationHandler for WinitGlowAppHandler {
                     }
                 }
 
-                // 只有在非拖拽状态时才转换为像素事件
-                // 使用逻辑位置确保坐标系统一致
+                // Only convert to pixel events when not dragging
+                // Use logical position to ensure consistent coordinate system
                 let logical_position = winit::dpi::PhysicalPosition::new(
                     self.cursor_position.0,
                     self.cursor_position.1,
@@ -293,18 +294,18 @@ impl ApplicationHandler for WinitGlowAppHandler {
                                 adapter.in_border(self.cursor_position.0, self.cursor_position.1);
                             match bs {
                                 WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
-                                    // 在边框区域按下左键时开始拖拽
+                                    // Start dragging when left mouse button is pressed in border area
                                     adapter.drag.draging = true;
                                     adapter.drag.mouse_x = self.cursor_position.0;
                                     adapter.drag.mouse_y = self.cursor_position.1;
                                 }
                                 WinitBorderArea::CLOSE => {
-                                    // 点击关闭按钮区域时退出程序
+                                    // Exit program when clicking close button area
                                     self.should_exit = true;
                                     event_loop.exit();
                                 }
                                 _ => {
-                                    // 非拖拽区域，将事件传递给游戏逻辑
+                                    // Non-dragging area, pass event to game logic
                                     let winit_event = WinitEvent::WindowEvent {
                                         window_id: _window_id,
                                         event: WindowEvent::MouseInput {
@@ -331,7 +332,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                             let was_dragging = adapter.drag.draging;
                             adapter.drag.draging = false;
 
-                            // 只有在非拖拽状态时才将鼠标释放事件传递给游戏
+                            // Only pass mouse release event to game when not dragging
                             if !was_dragging {
                                 let winit_event = WinitEvent::WindowEvent {
                                     window_id: _window_id,
@@ -353,7 +354,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                         }
                     }
                     _ => {
-                        // 转换其他鼠标输入事件
+                        // Convert other mouse input events
                         let winit_event = WinitEvent::WindowEvent {
                             window_id: _window_id,
                             event: WindowEvent::MouseInput {
@@ -374,7 +375,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                 }
             }
             _ => {
-                // 将其他winit事件转换为RustPixel事件
+                // Convert other winit events to RustPixel events
                 let winit_event = WinitEvent::WindowEvent {
                     window_id: _window_id,
                     event,
@@ -393,15 +394,15 @@ impl ApplicationHandler for WinitGlowAppHandler {
 }
 
 impl WinitGlowAdapter {
-    /// 创建新的Winit + Glow适配器实例
+    /// Create a new Winit + Glow adapter instance
     ///
-    /// # 参数
-    /// - `gn`: 游戏名称标识符
-    /// - `project_path`: 项目根路径，用于资源加载
+    /// # Parameters
+    /// - `gn`: Game name identifier
+    /// - `project_path`: Project root path for resource loading
     ///
-    /// # 返回值
-    /// 返回初始化的WinitGlowAdapter实例，所有OpenGL相关组件都为None，
-    /// 需要在调用init()方法后才能正常使用。
+    /// # Returns
+    /// Returns the initialized WinitGlowAdapter instance, all OpenGL related components are None,
+    /// and need to be used normally after calling the init() method.
     pub fn new(gn: &str, project_path: &str) -> Self {
         Self {
             base: AdapterBase::new(gn, project_path),
@@ -423,34 +424,34 @@ impl WinitGlowAdapter {
         }
     }
 
-    /// 通用初始化方法 - 处理所有公共逻辑
+    /// General initialization method - handles all common logic
     ///
-    /// 这个方法处理两种渲染后端都需要的初始化步骤：
-    /// 1. 加载纹理文件和设置符号尺寸
-    /// 2. 设置基础参数（尺寸、比例、像素大小）
-    /// 3. 创建事件循环
-    /// 4. 设置应用处理器
-    /// 5. 存储窗口初始化参数
+    /// This method handles initialization steps required by both rendering backends:
+    /// 1. Load texture files and set symbol dimensions
+    /// 2. Set basic parameters (size, ratio, pixel size)
+    /// 3. Create event loop
+    /// 4. Set application handler
+    /// 5. Store window initialization parameters
     ///
-    /// # 参数
-    /// - `w`: 逻辑宽度（字符数）
-    /// - `h`: 逻辑高度（字符数）
-    /// - `rx`: X轴缩放比例
-    /// - `ry`: Y轴缩放比例
-    /// - `title`: 窗口标题
+    /// # Parameters
+    /// - `w`: Logical width (number of characters)
+    /// - `h`: Logical height (number of characters)
+    /// - `rx`: X-axis scaling ratio
+    /// - `ry`: Y-axis scaling ratio
+    /// - `title`: Window title
     ///
-    /// # 返回值
-    /// 返回纹理路径，用于后续的渲染器初始化
+    /// # Returns
+    /// Returns the texture path for subsequent renderer initialization
     fn init_common(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) -> String {
-        // 使用统一的winit共享初始化逻辑
+        // Use unified winit shared initialization logic
         let (event_loop, window_init_params, texture_path) =
             winit_init_common(self, w, h, rx, ry, title);
 
-        // 存储共享初始化结果
+        // Store shared initialization results
         self.event_loop = Some(event_loop);
         self.window_init_params = Some(window_init_params);
 
-        // 设置Glow特定的应用处理器
+        // Set Glow specific application handler
         self.app_handler = Some(WinitGlowAppHandler {
             pending_events: Vec::new(),
             cursor_position: (0.0, 0.0),
@@ -463,22 +464,22 @@ impl WinitGlowAdapter {
         texture_path
     }
 
-    /// OpenGL 后端初始化
+    /// OpenGL backend initialization
     ///
-    /// 使用统一的生命周期管理，窗口创建推迟到resumed事件中。
+    /// Uses unified lifecycle management, window creation deferred to resumed event.
     fn init_glow(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing WinitGlow adapter with OpenGL backend...");
         let _texture_path = self.init_common(w, h, rx, ry, title);
-        // 窗口创建将在resumed事件中完成
+        // Window creation will be completed in resumed event
     }
 
-    /// 在resumed事件中创建OpenGL窗口和上下文
+    /// Create OpenGL window and context in resumed event
     fn create_glow_window_and_context(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let params = self.window_init_params.as_ref().unwrap().clone();
 
         info!("Creating OpenGL window and context...");
 
-        // 计算窗口大小（处理 Retina 显示器）
+        // Calculate window size (handle Retina displays)
         let window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
 
         let template = ConfigTemplateBuilder::new();
@@ -486,7 +487,7 @@ impl WinitGlowAdapter {
             winit::window::Window::default_attributes()
                 .with_title(&params.title)
                 .with_inner_size(window_size)
-                .with_decorations(false) // 无边框，与SDL版本一致
+                .with_decorations(false) // No border, consistent with SDL version
                 .with_resizable(false),
         ));
 
@@ -512,7 +513,7 @@ impl WinitGlowAdapter {
             self.base.gr.pixel_w, self.base.gr.pixel_h, physical_size.width, physical_size.height
         );
 
-        // 创建OpenGL上下文
+        // Create OpenGL context
         let gl_display = gl_config.display();
         let raw_window_handle = window.window_handle().unwrap().as_raw();
 
@@ -541,7 +542,7 @@ impl WinitGlowAdapter {
 
         let gl_context = not_current_gl_context.make_current(&gl_surface).unwrap();
 
-        // 创建OpenGL渲染器
+        // Create OpenGL renderer
         let gl = unsafe {
             glow::Context::from_loader_function(|s| {
                 let s = std::ffi::CString::new(s)
@@ -550,7 +551,7 @@ impl WinitGlowAdapter {
             })
         };
 
-        // 创建并初始化GlPixelRenderer
+        // Create and initialize GlPixelRenderer
         let teximg = image::open(&params.texture_path)
             .map_err(|e| e.to_string())
             .unwrap()
@@ -568,7 +569,7 @@ impl WinitGlowAdapter {
             &teximg,
         );
 
-        // 存储所有OpenGL对象
+        // Store all OpenGL objects
         self.window = Some(window);
         self.gl_display = Some(gl_display);
         self.gl_context = Some(gl_context);
@@ -578,10 +579,10 @@ impl WinitGlowAdapter {
         info!("OpenGL window & context initialized successfully");
     }
 
-    /// 执行初始清屏操作
+    /// Execute initial clear screen operation
     ///
-    /// 防止窗口创建时的白屏闪烁，立即清空屏幕并显示黑色背景。
-    /// 在OpenGL模式下，这确保了窗口创建后立即显示正确的背景色。
+    /// Prevents white screen flicker during window creation, immediately clears the screen and displays a black background.
+    /// In OpenGL mode, this ensures that the window is displayed correctly immediately after creation.
     fn initial_clear_screen(&mut self) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             use glow::HasContext;
@@ -601,14 +602,14 @@ impl WinitGlowAdapter {
         }
     }
 
-    /// 设置自定义鼠标光标
+    /// Set custom mouse cursor
     ///
-    /// 从assets/pix/cursor.png加载光标图像，并设置为窗口的自定义光标。
-    /// - 自动转换为RGBA8格式
-    /// - 热点位置设置为(0, 0)
-    /// - 处理透明度和预乘alpha
+    /// Loads cursor image from assets/pix/cursor.png and sets it as the window's custom cursor.
+    /// - Automatically converts to RGBA8 format
+    /// - Hotspot position set to (0, 0)
+    /// - Handles transparency and pre-multiplied alpha
     fn set_mouse_cursor(&mut self) {
-        // 构建光标图像文件路径
+        // Build cursor image file path
         let cursor_path = format!(
             "{}{}{}",
             self.base.project_path,
@@ -621,7 +622,7 @@ impl WinitGlowAdapter {
             let (width, height) = cursor_rgba.dimensions();
             let mut cursor_data = cursor_rgba.into_raw();
 
-            // 预乘alpha处理 - 这是解决光标透明度问题的常见方法
+            // Pre-multiplied alpha handling - this is a common method to solve cursor transparency issues
             for chunk in cursor_data.chunks_exact_mut(4) {
                 let alpha = chunk[3] as f32 / 255.0;
                 chunk[0] = (chunk[0] as f32 * alpha) as u8; // R * alpha
@@ -644,16 +645,16 @@ impl WinitGlowAdapter {
         }
     }
 
-    /// 检查鼠标位置是否在边框区域
+    /// Check if mouse position is in border area
     ///
-    /// 用于确定鼠标点击位置的区域类型，决定是否触发拖拽操作。
+    /// Determines the type of border area for the mouse click position, decides whether to trigger drag operation.
     ///
-    /// # 参数
-    /// - `x`: 鼠标X坐标
-    /// - `y`: 鼠标Y坐标
+    /// # Parameters
+    /// - `x`: Mouse X coordinate
+    /// - `y`: Mouse Y coordinate
     ///
-    /// # 返回值
-    /// 返回对应的边框区域类型
+    /// # Returns
+    /// Returns the corresponding border area type
     fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
         let w = self.base.gr.cell_width();
         let h = self.base.gr.cell_height();
@@ -673,16 +674,16 @@ impl WinitGlowAdapter {
 }
 
 impl Adapter for WinitGlowAdapter {
-    /// 初始化Winit + Glow适配器
+    /// Initialize Winit + Glow adapter
     ///
-    /// 这是适配器的主要初始化方法，专门使用OpenGL + Glutin渲染管线。
+    /// This is the main initialization method for the adapter, specifically using OpenGL + Glutin rendering pipeline.
     ///
-    /// # 参数
-    /// - `w`: 逻辑宽度（字符数）
-    /// - `h`: 逻辑高度（字符数）
-    /// - `rx`: X轴缩放比例
-    /// - `ry`: Y轴缩放比例
-    /// - `title`: 窗口标题
+    /// # Parameters
+    /// - `w`: Logical width (number of characters)
+    /// - `h`: Logical height (number of characters)
+    /// - `rx`: X-axis scaling ratio
+    /// - `ry`: Y-axis scaling ratio
+    /// - `title`: Window title
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing WinitGlow adapter with OpenGL backend...");
         self.init_glow(w, h, rx, ry, title);
@@ -694,22 +695,22 @@ impl Adapter for WinitGlowAdapter {
 
     fn reset(&mut self) {}
 
-    /// 轮询事件
+    /// Poll events
     ///
-    /// 处理窗口事件并将其转换为RustPixel事件。使用pump_events模式
-    /// 避免阻塞主线程，确保渲染性能。
+    /// Handles window events and converts them to RustPixel events. Uses pump_events mode
+    /// to avoid blocking the main thread and ensure rendering performance.
     ///
-    /// # 参数
-    /// - `timeout`: 事件轮询超时时间（未使用）
-    /// - `es`: 输出事件向量
+    /// # Parameters
+    /// - `timeout`: Event polling timeout (unused)
+    /// - `es`: Output event vector
     ///
-    /// # 返回值
-    /// 如果应该退出程序则返回true
+    /// # Returns
+    /// Returns true if program should exit
     ///
-    /// # 特殊处理
-    /// - 窗口拖拽：检测并执行窗口移动
-    /// - Q键退出：与SDL版本保持一致
-    /// - Retina显示：正确处理高DPI坐标转换
+    /// # Special handling
+    /// - Window drag: Detect and execute window movement
+    /// - Q key exit: Consistent with SDL version
+    /// - Retina display: Correctly handle high DPI coordinate conversion
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
         // Poll event logic - debug output removed
 
@@ -743,17 +744,17 @@ impl Adapter for WinitGlowAdapter {
         self.should_exit
     }
 
-    /// 渲染一帧到屏幕
+    /// Render a frame to the screen
     ///
-    /// 根据编译特性选择不同的渲染后端：
-    /// - WGPU 版本：使用现代 GPU 渲染管线
-    /// - OpenGL 版本：使用传统 OpenGL 渲染管线
+    /// Selects different rendering backends based on compilation features:
+    /// - WGPU version: Uses modern GPU rendering pipeline
+    /// - OpenGL version: Uses traditional OpenGL rendering pipeline
     ///
-    /// # 参数
-    /// - `current_buffer`: 当前帧缓冲区
-    /// - `previous_buffer`: 前一帧缓冲区
-    /// - `pixel_sprites`: 像素精灵列表
-    /// - `stage`: 渲染阶段
+    /// # Parameters
+    /// - `current_buffer`: Current frame buffer
+    /// - `previous_buffer`: Previous frame buffer
+    /// - `pixel_sprites`: List of pixel sprites
+    /// - `stage`: Rendering stage
     fn draw_all(
         &mut self,
         current_buffer: &Buffer,
@@ -761,7 +762,7 @@ impl Adapter for WinitGlowAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // 处理窗口拖拽移动
+        // Handle window drag movement
         winit_move_win(
             &mut self.drag.need,
             self.window.as_ref().map(|v| &**v),
@@ -769,14 +770,14 @@ impl Adapter for WinitGlowAdapter {
             self.drag.dy,
         );
 
-        // 使用统一的图形渲染流程 - 与SdlAdapter保持一致
+        // Use unified graphics rendering process - consistent with SdlAdapter
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
         self.post_draw();
         Ok(())
     }
 
     fn post_draw(&mut self) {
-        // OpenGL模式：交换缓冲区显示渲染结果
+        // OpenGL mode: swap buffers to display rendering results
         if let (Some(gl_surface), Some(gl_context)) = (&self.gl_surface, &self.gl_context) {
             if let Err(e) = gl_surface.swap_buffers(gl_context) {
                 eprintln!("Failed to swap buffers: {:?}", e);
@@ -788,16 +789,16 @@ impl Adapter for WinitGlowAdapter {
         }
     }
 
-    /// 隐藏光标
+    /// Hide cursor
     ///
-    /// 在图形应用程序中，我们不希望隐藏鼠标光标。
-    /// 这与SDL版本的行为相似 - 让鼠标光标保持可见。
+    /// In graphical applications, we do not want to hide the mouse cursor.
+    /// This is similar to the behavior of the SDL version - keep the mouse cursor visible.
     fn hide_cursor(&mut self) -> Result<(), String> {
-        // 对于GUI应用程序，我们不希望隐藏鼠标光标
+        // For GUI applications, we do not want to hide the mouse cursor
         Ok(())
     }
 
-    /// 显示光标
+    /// Show cursor
     fn show_cursor(&mut self) -> Result<(), String> {
         if let Some(window) = &self.window {
             window.set_cursor_visible(true);
@@ -805,12 +806,12 @@ impl Adapter for WinitGlowAdapter {
         Ok(())
     }
 
-    /// 设置光标位置
+    /// Set cursor position
     fn set_cursor(&mut self, _x: u16, _y: u16) -> Result<(), String> {
         Ok(())
     }
 
-    /// 获取光标位置
+    /// Get cursor position
     fn get_cursor(&mut self) -> Result<(u16, u16), String> {
         Ok((0, 0))
     }
@@ -819,9 +820,9 @@ impl Adapter for WinitGlowAdapter {
         self
     }
 
-    /// 重写渲染缓冲区到纹理的方法，直接使用我们的OpenGL渲染器
+    /// Override render buffer to texture method, directly use our OpenGL renderer
     ///
-    /// 这个方法专门为WinitGlowAdapter实现，不依赖统一的pixel_renderer抽象
+    /// This method is specifically implemented for WinitGlowAdapter, does not rely on the unified pixel_renderer abstraction
     fn draw_render_buffer_to_texture(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
@@ -834,7 +835,7 @@ impl Adapter for WinitGlowAdapter {
             let ratio_x = self.base.gr.ratio_x;
             let ratio_y = self.base.gr.ratio_y;
 
-            // 直接调用我们的GlPixelRenderer方法
+            // Directly call our GlPixelRenderer method
             if let Err(e) = gl_pixel_renderer
                 .render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y)
             {
@@ -848,9 +849,9 @@ impl Adapter for WinitGlowAdapter {
         }
     }
 
-    /// 重写渲染纹理到屏幕的方法，直接使用我们的OpenGL渲染器
+    /// Override render texture to screen method, directly use our OpenGL renderer
     ///
-    /// 这个方法专门为WinitGlowAdapter实现，处理转场效果的最终合成
+    /// This method is specifically implemented for WinitGlowAdapter, handles final composition of transition effects
     fn draw_render_textures_to_screen(&mut self)
     where
         Self: Sized,
@@ -859,27 +860,27 @@ impl Adapter for WinitGlowAdapter {
             let ratio_x = self.base.gr.ratio_x;
             let ratio_y = self.base.gr.ratio_y;
 
-            // 获取物理窗口大小用于Retina显示支持
+            // Get physical window size for Retina display support
             let physical_size = if let Some(window) = &self.window {
                 Some(window.inner_size())
             } else {
                 None
             };
 
-            // 绑定屏幕并设置正确的viewport
+            // Bind screen and set correct viewport
             if let Some(physical_size) = physical_size {
                 gl_pixel_renderer.bind_screen_with_viewport(
                     physical_size.width as i32,
                     physical_size.height as i32,
                 );
             } else {
-                // Fallback: 使用标准绑定
+                // Fallback: use standard binding
                 gl_pixel_renderer
                     .gl_pixel
                     .bind_screen(&gl_pixel_renderer.gl);
             }
 
-            // 清屏
+            // Clear screen
             use glow::HasContext;
             let gl = gl_pixel_renderer.get_gl();
             unsafe {
@@ -887,7 +888,7 @@ impl Adapter for WinitGlowAdapter {
                 gl.clear(glow::COLOR_BUFFER_BIT);
             }
 
-            // 直接调用我们的渲染方法，不需要绑定屏幕
+            // Directly call our rendering method, no need to bind screen
             if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
                 eprintln!(
                     "WinitGlowAdapter: Failed to render textures to screen: {}",

@@ -78,7 +78,7 @@ unsafe impl bytemuck::Zeroable for WgpuVertex {}
 pub struct WgpuUniforms {
     /// 4x4 transformation matrix (column-major order)
     pub transform: [[f32; 4]; 4],
-    /// Color filter like GL mode (r, g, b, a) - 暂时保留结构但不使用
+    /// Color filter like GL mode (r, g, b, a) - Structure temporarily retained but not used
     pub color_filter: [f32; 4],
 }
 
@@ -208,7 +208,7 @@ impl WgpuPixelRender {
     /// # Parameters
     /// - `device`: WGPU device handle
     pub fn init_general2d_renderer(&mut self, device: &wgpu::Device) {
-        // 确保General2D渲染器使用与surface相同的格式
+        // Ensure General2D renderer uses the same format as surface
         self.general2d_renderer
             .create_shader_with_format(device, self.surface_format);
         self.general2d_renderer.create_buffer(device);
@@ -633,7 +633,7 @@ impl WgpuPixelRender {
         }
     }
 
-    // 已移除未使用的VERTICES和INDICES常量
+    // Removed unused VERTICES and INDICES constants
 
     /// Prepare drawing with actual game buffer content
     pub fn prepare_draw_with_buffer(
