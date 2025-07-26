@@ -48,7 +48,7 @@ image = { version = "0.24.9", optional = true }
 glow = { version = "0.14.2" }
 # wgpu dependencies for modern GPU rendering
 wgpu = { version = "0.20", optional = true }
-bytemuck = { version = "1.16", features = ["derive"], optional = true }
+bytemuck = { version = "1.23", features = ["derive"], optional = true }
 pollster = { version = "0.3", optional = true }
 unicode-segmentation = "1.12"
 unicode-width = "0.1"
