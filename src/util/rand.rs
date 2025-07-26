@@ -70,7 +70,7 @@ impl Rand {
         (u1 + (self.rng.next_u64() % (u2 - u1 + 1))) as f64 / 1000.0
     }
 
-    pub fn shuffle<T: Copy>(&mut self, v: &mut Vec<T>) {
+    pub fn shuffle<T: Copy>(&mut self, v: &mut [T]) {
         v.shuffle(&mut self.rng);
     }
 }

@@ -43,16 +43,16 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
 
     let cdir;
     if let Some(sdir) = sa_dir {
-        cdir = format!("{}", sdir);
+        cdir = sdir.to_string();
         println!(
-            "🍀 creat standalone app folder...({})",
-            format!("{}/{}/", sdir, mod_name)
+            "🍀 creat standalone app folder...({}/{}/)",
+            sdir, mod_name
         );
     } else {
-        cdir = format!("{}", dir_name);
+        cdir = dir_name.to_string();
         println!(
-            "🍀 creat app folder...({})",
-            format!("{}/{}/", dir_name, mod_name)
+            "🍀 creat app folder...({}/{}/)",
+            dir_name, mod_name
         );
     }
 
@@ -67,7 +67,7 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         exec_cmd("cp apps/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
-        dir_name = format!("{}", stand_dir);
+        dir_name = stand_dir.to_string();
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
 

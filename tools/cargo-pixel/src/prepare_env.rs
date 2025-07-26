@@ -74,7 +74,7 @@ pub fn check_pixel_env() -> PixelContext {
             if !repo_dir.exists() {
                 println!("  Cloning rust_pixel from GitHub...");
                 let status = Command::new("git")
-                    .args(&[
+                    .args([
                         "clone",
                         "https://github.com/zipxing/rust_pixel",
                         repo_dir.to_str().unwrap(),
@@ -100,11 +100,9 @@ pub fn check_pixel_env() -> PixelContext {
     if let Some(idx) = pc.rust_pixel_dir.iter().position(|x| x == &cdir_s) {
         pc.cdir_state = PState::PixelRoot;
         pc.rust_pixel_idx = idx;
-    } else {
-        if let Some(pidx) = pc.projects.iter().position(|x| x == &cdir_s) {
-            pc.cdir_state = PState::PixelProject;
-            pc.project_idx = pidx;
-        }
+    } else if let Some(pidx) = pc.projects.iter().position(|x| x == &cdir_s) {
+        pc.cdir_state = PState::PixelProject;
+        pc.project_idx = pidx;
     }
 
     // 检查版本并更新
@@ -132,16 +130,14 @@ pub fn check_pixel_env() -> PixelContext {
                             std::process::exit(0);
                         }
                     }
-                } else {
-                    if pc.cdir_state == PState::NotPixel {
-                        if let Some(dep) = doc.get("dependencies") {
-                            if let Some(_drp) = dep.get("rust_pixel") {
-                                println!("🍭 Found a new pixel project:{:?}", cdir_s);
-                                pc.cdir_state = PState::PixelProject;
-                                pc.projects.push(cdir_s);
-                                pc.project_idx = pc.projects.len() - 1;
-                                write_config(&pc, &pixel_config);
-                            }
+                } else if pc.cdir_state == PState::NotPixel {
+                    if let Some(dep) = doc.get("dependencies") {
+                        if let Some(_drp) = dep.get("rust_pixel") {
+                            println!("🍭 Found a new pixel project:{:?}", cdir_s);
+                            pc.cdir_state = PState::PixelProject;
+                            pc.projects.push(cdir_s);
+                            pc.project_idx = pc.projects.len() - 1;
+                            write_config(&pc, &pixel_config);
                         }
                     }
                 }

@@ -45,7 +45,7 @@ pub fn make_parser() -> ArgMatches {
                 .arg(
                     Arg::with_name("build_type")
                         .required(true)
-                        .possible_values(&["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
+                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
                 )
                 .arg(Arg::with_name("other").multiple(true)),
         ))
@@ -56,7 +56,7 @@ pub fn make_parser() -> ArgMatches {
                 .arg(
                     Arg::with_name("build_type")
                         .required(true)
-                        .possible_values(&["t", "s", "w", "term", "sdl", "web"]),
+                        .possible_values(["t", "s", "w", "term", "sdl", "web"]),
                 ),
         ))
         .subcommand(common_arg(

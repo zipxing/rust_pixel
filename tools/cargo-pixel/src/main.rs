@@ -37,17 +37,12 @@ use convert_gif::*;
 
 // current dir state
 // not pixel dir, rust_pixel root dir, depend rust_pixel project
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 enum PState {
+    #[default]
     NotPixel,
     PixelRoot,
     PixelProject,
-}
-
-impl Default for PState {
-    fn default() -> Self {
-        PState::NotPixel
-    }
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -75,7 +70,7 @@ fn replace_in_files(
     is_standalone: bool,
     dir: &Path,
     rust_pixel_path: &str,
-    dirname: &str,
+    _dirname: &str,
     capname: &str,
     upname: &str,
     loname: &str,
@@ -89,7 +84,7 @@ fn replace_in_files(
                     is_standalone,
                     &path,
                     rust_pixel_path,
-                    dirname,
+                    _dirname,
                     capname,
                     upname,
                     loname,
