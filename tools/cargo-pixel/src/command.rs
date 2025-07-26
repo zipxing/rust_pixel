@@ -263,8 +263,8 @@ pub fn make_parser() -> ArgMatches {
 /// Create the parser app without getting matches (for help display)
 pub fn make_parser_app() -> App<'static> {
     App::new("cargo pixel")
-        .author("zipxing@hotmail.com")
-        .about("RustPixel cargo build tool")
+        .author("Author: zipxing@hotmail.com")
+        .about("RustPixel cargo tools")
         .arg(Arg::with_name("pixel"))
         .subcommand(common_arg(
             SubCommand::with_name("run")
