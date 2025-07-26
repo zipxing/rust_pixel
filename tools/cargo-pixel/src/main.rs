@@ -742,6 +742,12 @@ fn main() {
         Some(("ssf", sub_m)) => pixel_ssf(&ctx, sub_m),
         Some(("symbol", sub_m)) => pixel_symbol(&ctx, sub_m),
         Some(("ttf", sub_m)) => pixel_ttf(&ctx, sub_m),
-        _ => {}
+        _ => {
+            // No subcommand provided, show help
+            use crate::command::make_parser_app;
+            let mut app = make_parser_app();
+            let _ = app.print_help();
+            println!(); // Add a newline after help
+        }
     }
 }
