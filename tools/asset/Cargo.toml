@@ -2,6 +2,16 @@
 name = "asset"
 version = "0.1.0"
 edition = "2021"
+description = "RustPixel Asset Packer - A tool for packing images into texture atlases with .pix metadata generation"
+authors = ["zipxing@hotmail.com"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/zipxing/rust_pixel"
+keywords = ["gamedev", "texture-atlas", "image-packing", "rustpixel"]
+categories = ["command-line-utilities", "game-development", "graphics"]
+
+[[bin]]
+name = "asset"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,5 +24,6 @@ deltae = "0.3.2"
 rust_pixel = { path = "../.." }
 
 [features]
+default = []
 sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
