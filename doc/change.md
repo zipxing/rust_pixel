@@ -1,3 +1,7 @@
+# 1.0.2
+- cargo upgrade: upgrade depend crate version
+- toml 0.9 is bad, downgrade to toml 0.8 for cargo.toml parse
+
 # 1.0.1
 - Merge tools to cargo-pixel
 ```
