@@ -164,25 +164,25 @@ fn pixel_asset(ctx: &PixelContext, sub_m: &ArgMatches) {
     ];
     
     // Add all provided arguments
-    if let Some(input_folder) = sub_m.value_of("input_folder") {
-        run_args.push(input_folder);
+    if let Some(input_folder) = sub_m.get_one::<String>("input_folder") {
+        run_args.push(input_folder.as_str());
     }
-    if let Some(output_folder) = sub_m.value_of("output_folder") {
-        run_args.push(output_folder);
+    if let Some(output_folder) = sub_m.get_one::<String>("output_folder") {
+        run_args.push(output_folder.as_str());
     }
     
     println!("   Running: cargo pixel r asset t -r {}", run_args[4..].join(" "));
     println!();
     
     // Create a simulated ArgMatches for the run command
-    use clap::{App, Arg};
-    let run_app = App::new("run")
-        .arg(Arg::with_name("mod_name"))
-        .arg(Arg::with_name("build_type"))
-        .arg(Arg::with_name("other").multiple(true))
-        .arg(Arg::with_name("release").short('r').long("release"));
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
     
-    let run_matches = run_app.get_matches_from_safe(run_args);
+    let run_matches = run_app.try_get_matches_from(run_args);
     
     match run_matches {
         Ok(matches) => {
@@ -200,7 +200,7 @@ fn pixel_edit(ctx: &PixelContext, sub_m: &ArgMatches) {
     println!("🎨 Running RustPixel Image/Sprite Editor...");
     
     // For edit tool, default to terminal mode if not specified
-    let mode = sub_m.value_of("mode").unwrap_or("t");
+    let mode = sub_m.get_one::<String>("mode").map(|s| s.as_str()).unwrap_or("t");
     
     // Build argument list for the run command
     let mut run_args = vec![
@@ -211,27 +211,27 @@ fn pixel_edit(ctx: &PixelContext, sub_m: &ArgMatches) {
     ];
     
     // Add work directory if provided
-    if let Some(work_dir) = sub_m.value_of("work_dir") {
-        run_args.push(work_dir);
+    if let Some(work_dir) = sub_m.get_one::<String>("work_dir") {
+        run_args.push(work_dir.as_str());
     }
     
     // Add file path if provided
-    if let Some(file_path) = sub_m.value_of("file_path") {
-        run_args.push(file_path);
+    if let Some(file_path) = sub_m.get_one::<String>("file_path") {
+        run_args.push(file_path.as_str());
     }
     
     println!("   Running: cargo pixel r edit {} -r {}", mode, run_args[4..].join(" "));
     println!();
     
     // Create a simulated ArgMatches for the run command
-    use clap::{App, Arg};
-    let run_app = App::new("run")
-        .arg(Arg::with_name("mod_name"))
-        .arg(Arg::with_name("build_type"))
-        .arg(Arg::with_name("other").multiple(true))
-        .arg(Arg::with_name("release").short('r').long("release"));
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
     
-    let run_matches = run_app.get_matches_from_safe(run_args);
+    let run_matches = run_app.try_get_matches_from(run_args);
     
     match run_matches {
         Ok(matches) => {
@@ -256,43 +256,43 @@ fn pixel_petii(ctx: &PixelContext, sub_m: &ArgMatches) {
     ];
     
     // Add all provided arguments
-    if let Some(image_file) = sub_m.value_of("image_file") {
-        run_args.push(image_file);
+    if let Some(image_file) = sub_m.get_one::<String>("image_file") {
+        run_args.push(image_file.as_str());
     }
-    if let Some(width) = sub_m.value_of("width") {
-        run_args.push(width);
+    if let Some(width) = sub_m.get_one::<String>("width") {
+        run_args.push(width.as_str());
     }
-    if let Some(height) = sub_m.value_of("height") {
-        run_args.push(height);
+    if let Some(height) = sub_m.get_one::<String>("height") {
+        run_args.push(height.as_str());
     }
-    if let Some(is_petscii) = sub_m.value_of("is_petscii") {
-        run_args.push(is_petscii);
+    if let Some(is_petscii) = sub_m.get_one::<String>("is_petscii") {
+        run_args.push(is_petscii.as_str());
     }
-    if let Some(crop_x) = sub_m.value_of("crop_x") {
-        run_args.push(crop_x);
+    if let Some(crop_x) = sub_m.get_one::<String>("crop_x") {
+        run_args.push(crop_x.as_str());
     }
-    if let Some(crop_y) = sub_m.value_of("crop_y") {
-        run_args.push(crop_y);
+    if let Some(crop_y) = sub_m.get_one::<String>("crop_y") {
+        run_args.push(crop_y.as_str());
     }
-    if let Some(crop_width) = sub_m.value_of("crop_width") {
-        run_args.push(crop_width);
+    if let Some(crop_width) = sub_m.get_one::<String>("crop_width") {
+        run_args.push(crop_width.as_str());
     }
-    if let Some(crop_height) = sub_m.value_of("crop_height") {
-        run_args.push(crop_height);
+    if let Some(crop_height) = sub_m.get_one::<String>("crop_height") {
+        run_args.push(crop_height.as_str());
     }
     
     println!("   Running: cargo pixel r petii t -r {}", run_args[4..].join(" "));
     println!();
     
     // Create and execute the run command
-    use clap::{App, Arg};
-    let run_app = App::new("run")
-        .arg(Arg::with_name("mod_name"))
-        .arg(Arg::with_name("build_type"))
-        .arg(Arg::with_name("other").multiple(true))
-        .arg(Arg::with_name("release").short('r').long("release"));
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
     
-    let run_matches = run_app.get_matches_from_safe(run_args);
+    let run_matches = run_app.try_get_matches_from(run_args);
     
     match run_matches {
         Ok(matches) => {
@@ -308,7 +308,7 @@ fn pixel_petii(ctx: &PixelContext, sub_m: &ArgMatches) {
 /// For pixel_game! based tools, we need to provide build_type but let tool handle params
 fn pixel_ssf(ctx: &PixelContext, sub_m: &ArgMatches) {
     // Check if no arguments are provided, show help
-    if sub_m.value_of("work_dir").is_none() {
+    if sub_m.get_one::<String>("work_dir").is_none() {
         use crate::command::make_parser_app;
         let mut app = make_parser_app();
         if let Some(ssf_subcommand) = app.find_subcommand_mut("ssf") {
@@ -332,25 +332,25 @@ fn pixel_ssf(ctx: &PixelContext, sub_m: &ArgMatches) {
     ];
     
     // Add remaining arguments that will be passed to ssf tool
-    if let Some(work_dir) = sub_m.value_of("work_dir") {
-        run_args.push(work_dir);
+    if let Some(work_dir) = sub_m.get_one::<String>("work_dir") {
+        run_args.push(work_dir.as_str());
     }
-    if let Some(ssf_file) = sub_m.value_of("ssf_file") {
-        run_args.push(ssf_file);
+    if let Some(ssf_file) = sub_m.get_one::<String>("ssf_file") {
+        run_args.push(ssf_file.as_str());
     }
     
     println!("   Running: cargo pixel r ssf {} -r {}", mode, run_args[4..].join(" "));
     println!();
     
     // Create and execute the run command
-    use clap::{App, Arg};
-    let run_app = App::new("run")
-        .arg(Arg::with_name("mod_name"))
-        .arg(Arg::with_name("build_type"))
-        .arg(Arg::with_name("other").multiple(true))
-        .arg(Arg::with_name("release").short('r').long("release"));
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
     
-    let run_matches = run_app.get_matches_from_safe(run_args);
+    let run_matches = run_app.try_get_matches_from(run_args);
     
     match run_matches {
         Ok(matches) => {
@@ -375,37 +375,37 @@ fn pixel_symbol(ctx: &PixelContext, sub_m: &ArgMatches) {
     ];
     
     // Add all provided arguments
-    if let Some(image_file) = sub_m.value_of("image_file") {
-        run_args.push(image_file);
+    if let Some(image_file) = sub_m.get_one::<String>("image_file") {
+        run_args.push(image_file.as_str());
     }
-    if let Some(symsize) = sub_m.value_of("symsize") {
-        run_args.push(symsize);
+    if let Some(symsize) = sub_m.get_one::<String>("symsize") {
+        run_args.push(symsize.as_str());
     }
-    if let Some(start_x) = sub_m.value_of("start_x") {
-        run_args.push(start_x);
+    if let Some(start_x) = sub_m.get_one::<String>("start_x") {
+        run_args.push(start_x.as_str());
     }
-    if let Some(start_y) = sub_m.value_of("start_y") {
-        run_args.push(start_y);
+    if let Some(start_y) = sub_m.get_one::<String>("start_y") {
+        run_args.push(start_y.as_str());
     }
-    if let Some(width) = sub_m.value_of("width") {
-        run_args.push(width);
+    if let Some(width) = sub_m.get_one::<String>("width") {
+        run_args.push(width.as_str());
     }
-    if let Some(height) = sub_m.value_of("height") {
-        run_args.push(height);
+    if let Some(height) = sub_m.get_one::<String>("height") {
+        run_args.push(height.as_str());
     }
     
     println!("   Running: cargo pixel r symbol t -r {}", run_args[4..].join(" "));
     println!();
     
     // Create and execute the run command
-    use clap::{App, Arg};
-    let run_app = App::new("run")
-        .arg(Arg::with_name("mod_name"))
-        .arg(Arg::with_name("build_type"))
-        .arg(Arg::with_name("other").multiple(true))
-        .arg(Arg::with_name("release").short('r').long("release"));
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
     
-    let run_matches = run_app.get_matches_from_safe(run_args);
+    let run_matches = run_app.try_get_matches_from(run_args);
     
     match run_matches {
         Ok(matches) => {
@@ -432,14 +432,14 @@ fn pixel_ttf(ctx: &PixelContext, _sub_m: &ArgMatches) {
     ];
     
     // Create and execute the run command
-    use clap::{App, Arg};
-    let run_app = App::new("run")
-        .arg(Arg::with_name("mod_name"))
-        .arg(Arg::with_name("build_type"))
-        .arg(Arg::with_name("other").multiple(true))
-        .arg(Arg::with_name("release").short('r').long("release"));
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
     
-    let run_matches = run_app.get_matches_from_safe(run_args);
+    let run_matches = run_app.try_get_matches_from(run_args);
     
     match run_matches {
         Ok(matches) => {

@@ -29,10 +29,10 @@ use crate::PixelContext;
 use crate::exec_cmd;
 
 pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
-    let gif = args.value_of("gif").unwrap();
-    let ssf = args.value_of("ssf").unwrap();
-    let width: usize = args.value_of("width").unwrap().parse().unwrap();
-    let height: usize = args.value_of("height").unwrap().parse().unwrap();
+    let gif = args.get_one::<String>("gif").unwrap();
+    let ssf = args.get_one::<String>("ssf").unwrap();
+    let width: usize = args.get_one::<String>("width").unwrap().parse().unwrap();
+    let height: usize = args.get_one::<String>("height").unwrap().parse().unwrap();
 
     println!("🍀 extract pngs use ffmpeg...");
     let output = Command::new("sh")

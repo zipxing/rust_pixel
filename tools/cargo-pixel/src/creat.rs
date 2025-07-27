@@ -34,8 +34,8 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         return;
     }
     let mut dir_name = "apps".to_string();
-    let sa_dir = args.value_of("standalone_dir_name");
-    let mod_name = args.value_of("mod_name").unwrap();
+    let sa_dir = args.get_one::<String>("standalone_dir_name");
+    let mod_name = args.get_one::<String>("mod_name").unwrap();
     let mut is_standalone = false;
     let upname = mod_name.to_uppercase();
     let loname = mod_name.to_lowercase();

@@ -52,25 +52,26 @@ pub fn pixel_build(ctx: &PixelContext, args: &ArgMatches) {
 
 fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> {
     let mut cmds = Vec::new();
-    let mod_name = args.value_of("mod_name").unwrap();
+    let mod_name = args.get_one::<String>("mod_name").unwrap();
     let loname = mod_name.to_lowercase();
     let capname = capitalize(mod_name);
-    let build_type = args.value_of("build_type").unwrap();
-    let release = if args.is_present("release") {
+    let build_type = args.get_one::<String>("build_type").unwrap();
+    let release = if args.get_flag("release") {
         "--release"
     } else {
         ""
     };
-    let webport = args.value_of("webport").unwrap_or("8080");
+    let webport = args.get_one::<String>("webport").map(|s| s.as_str()).unwrap_or("8080");
 
-    match build_type {
+    match build_type.as_str() {
         "term" | "t" => cmds.push(format!(
             "cargo {} -p {} --features term {} {}",
             subcmd, // build or run
             mod_name,
             release,
-            args.values_of("other")
+            args.get_many::<String>("other")
                 .unwrap_or_default()
+                .map(|s| s.as_str())
                 .collect::<Vec<&str>>()
                 .join(" ")
         )),
@@ -79,8 +80,9 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             subcmd, // build or run
             mod_name,
             release,
-            args.values_of("other")
+            args.get_many::<String>("other")
                 .unwrap_or_default()
+                .map(|s| s.as_str())
                 .collect::<Vec<&str>>()
                 .join(" ")
         )),
@@ -89,8 +91,9 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             subcmd, // build or run
             mod_name,
             release,
-            args.values_of("other")
+            args.get_many::<String>("other")
                 .unwrap_or_default()
+                .map(|s| s.as_str())
                 .collect::<Vec<&str>>()
                 .join(" ")
         )),
@@ -99,8 +102,9 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             subcmd, // build or run
             mod_name,
             release,
-            args.values_of("other")
+            args.get_many::<String>("other")
                 .unwrap_or_default()
+                .map(|s| s.as_str())
                 .collect::<Vec<&str>>()
                 .join(" ")
         )),
@@ -117,11 +121,12 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 }
             }
             cmds.push(format!(
-                "wasm-pack build --target web {} {} {}",
+                "RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' wasm-pack build --target web {} {} {}",
                 crate_path,
                 release,
-                args.values_of("other")
+                args.get_many::<String>("other")
                     .unwrap_or_default()
+                    .map(|s| s.as_str())
                     .collect::<Vec<&str>>()
                     .join(" ")
             ));

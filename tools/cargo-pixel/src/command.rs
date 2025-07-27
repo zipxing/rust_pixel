@@ -29,161 +29,160 @@
 /// cargo pixel tf
 /// ...
 ///
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{Arg, ArgAction, ArgMatches, Command};
 
 /// Internal function to build the command line parser app structure
 /// This eliminates code duplication between make_parser and make_parser_app
-fn build_app() -> App<'static> {
-    App::new("cargo pixel")
+fn build_app() -> Command {
+    Command::new("cargo pixel")
         .author("zipxing@hotmail.com")
         .about("RustPixel cargo tools")
-        .arg(Arg::with_name("pixel"))
+        .arg(Arg::new("pixel"))
         .subcommand(common_arg(
-            SubCommand::with_name("run")
+            Command::new("run")
                 .alias("r")
                 .about("Run RustPixel projects and tools")
-                .arg(Arg::with_name("mod_name").required(true))
+                .arg(Arg::new("mod_name").required(true))
                 .arg(
-                    Arg::with_name("build_type")
+                    Arg::new("build_type")
                         .required(true)
-                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
+                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
                 )
-                .arg(Arg::with_name("other").multiple(true)),
+                .arg(Arg::new("other").action(ArgAction::Append)),
         ))
         .subcommand(common_arg(
-            SubCommand::with_name("build")
+            Command::new("build")
                 .alias("b")
                 .about("Build RustPixel projects for different targets")
-                .arg(Arg::with_name("mod_name").required(true))
+                .arg(Arg::new("mod_name").required(true))
                 .arg(
-                    Arg::with_name("build_type")
+                    Arg::new("build_type")
                         .required(true)
-                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
+                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
                 ),
         ))
         .subcommand(common_arg(
-            SubCommand::with_name("creat")
+            Command::new("creat")
                 .alias("c")
                 .about("Create new RustPixel projects from templates")
-                .arg(Arg::with_name("mod_name").required(true))
-                .arg(Arg::with_name("standalone_dir_name").required(false)),
+                .arg(Arg::new("mod_name").required(true))
+                .arg(Arg::new("standalone_dir_name").required(false)),
         ))
         .subcommand(common_arg(
-            SubCommand::with_name("convert_gif")
+            Command::new("convert_gif")
                 .alias("cg")
                 .about("Convert GIF animations to SSF sequence frame format")
-                .arg(Arg::with_name("gif").required(true))
-                .arg(Arg::with_name("ssf").required(true))
-                .arg(Arg::with_name("width").required(true))
-                .arg(Arg::with_name("height").required(true)),
+                .arg(Arg::new("gif").required(true))
+                .arg(Arg::new("ssf").required(true))
+                .arg(Arg::new("width").required(true))
+                .arg(Arg::new("height").required(true)),
         ))
         .subcommand(
-            SubCommand::with_name("asset")
+            Command::new("asset")
                 .alias("a")
                 .about("Pack images into texture atlas and generate .pix files")
                 .arg(
-                    Arg::with_name("input_folder")
+                    Arg::new("input_folder")
                         .help("Folder containing images to pack")
                         .required(false)
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("output_folder")
+                    Arg::new("output_folder")
                         .help("Folder where output files will be written")
                         .required(false)
                         .index(2),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("edit")
+            Command::new("edit")
                 .alias("e")
                 .about("Run RustPixel image/sprite editor")
                 .arg(
-                    Arg::with_name("mode")
+                    Arg::new("mode")
                         .help("Running mode")
                         .required(false)
-                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
+                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("image_file")
+                    Arg::new("image_file")
                         .help("Image file to edit")
                         .required(false)
                         .index(2),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("petii")
+            Command::new("petii")
                 .alias("pe")
                 .about("Convert images to PETSCII art")
                 .arg(
-                    Arg::with_name("mode")
+                    Arg::new("mode")
                         .help("Running mode")
                         .required(false)
-                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
+                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("image_file")
+                    Arg::new("image_file")
                         .help("Image file to convert")
                         .required(false)
                         .index(2),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("ssf")
+            Command::new("ssf")
                 .alias("sf")
                 .about("Run SSF sequence frame player (fixed wgpu mode)")
                 .arg(
-                    Arg::with_name("work_dir")
+                    Arg::new("work_dir")
                         .help("Working directory")
                         .required(false)
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("ssf_file")
+                    Arg::new("ssf_file")
                         .help("SSF file path (optional)")
                         .required(false)
                         .index(2),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("symbol")
+            Command::new("symbol")
                 .alias("sy")
                 .about("Extract symbols/characters from images")
                 .arg(
-                    Arg::with_name("image_file")
+                    Arg::new("image_file")
                         .help("Input image file path")
                         .required(false)
                         .index(1),
                 )
                 .arg(
-                    Arg::with_name("output_file")
+                    Arg::new("output_file")
                         .help("Output text file path")
                         .required(false)
                         .index(2),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("ttf")
+            Command::new("ttf")
                 .alias("tt")
                 .about("Process TTF fonts"),
         )
 }
 
-pub fn common_arg(app: App) -> App {
+pub fn common_arg(app: Command) -> Command {
     app.arg(
-        Arg::with_name("release")
+        Arg::new("release")
             .short('r')
             .long("release")
-            .takes_value(false),
+            .action(ArgAction::SetTrue),
     )
     .arg(
-        Arg::with_name("webport")
+        Arg::new("webport")
             .short('p')
             .long("webport")
-            .default_value("8080")
-            .takes_value(true),
+            .default_value("8080"),
     )
 }
 
@@ -192,7 +191,7 @@ pub fn make_parser() -> ArgMatches {
 }
 
 /// Create the parser app without getting matches (for help display)
-pub fn make_parser_app() -> App<'static> {
+pub fn make_parser_app() -> Command {
     build_app()
 }
 

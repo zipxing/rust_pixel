@@ -178,40 +178,54 @@ pub fn check_pixel_env() -> PixelContext {
 
     // Check version and update
     if let Ok(ct) = fs::read_to_string("Cargo.toml") {
-        let doc = ct.parse::<toml::Value>().unwrap();
-        if let Some(package) = doc.get("package") {
-            if let Some(name) = package.get("name") {
-                if &name.to_string() == "\"rust_pixel\"" {
-                    if pc.cdir_state == PState::NotPixel {
-                        println!("🍭 Found a new pixel root:{:?}", cdir_s);
-                        pc.cdir_state = PState::PixelRoot;
-                        pc.rust_pixel_dir.push(cdir_s);
-                        pc.rust_pixel_idx = pc.rust_pixel_dir.len() - 1;
-                        write_config(&pc, &pixel_config);
-                    }
-                    if let Some(new_version) = package.get("version") {
-                        let nvs = new_version.to_string();
-                        let cvs = format!("\"{}\"", current_version);
-                        if nvs != cvs {
-                            exec_cmd("cargo install --path . --force");
-                            println!("new ver:{:?} ver:{:?}", nvs, cvs);
-                            println!("🍭 Updated cargo-pixel by: cargo install --path . --force");
-                            println!("🍭 Re-run new version cargo-pixel");
-                            exec_cmd(&command_line);
-                            std::process::exit(0);
-                        }
-                    }
-                } else if pc.cdir_state == PState::NotPixel {
-                    if let Some(dep) = doc.get("dependencies") {
-                        if let Some(_drp) = dep.get("rust_pixel") {
-                            println!("🍭 Found a new pixel project:{:?}", cdir_s);
-                            pc.cdir_state = PState::PixelProject;
-                            pc.projects.push(cdir_s);
-                            pc.project_idx = pc.projects.len() - 1;
-                            write_config(&pc, &pixel_config);
+        println!("🔍 Debug: Reading Cargo.toml, length: {}", ct.len());
+        println!("🔍 Debug: First 100 chars: {}", &ct[..std::cmp::min(100, ct.len())]);
+        
+        match ct.parse::<toml::Value>() {
+            Ok(doc) => {
+                println!("✅ TOML parsing successful");
+                // Process the TOML document
+                if let Some(package) = doc.get("package") {
+                    if let Some(name) = package.get("name") {
+                        if &name.to_string() == "\"rust_pixel\"" {
+                            if pc.cdir_state == PState::NotPixel {
+                                println!("🍭 Found a new pixel root:{:?}", cdir_s);
+                                pc.cdir_state = PState::PixelRoot;
+                                pc.rust_pixel_dir.push(cdir_s);
+                                pc.rust_pixel_idx = pc.rust_pixel_dir.len() - 1;
+                                write_config(&pc, &pixel_config);
+                            }
+                            if let Some(new_version) = package.get("version") {
+                                let nvs = new_version.to_string();
+                                let cvs = format!("\"{}\"", current_version);
+                                if nvs != cvs {
+                                    exec_cmd("cargo install --path . --force");
+                                    println!("new ver:{:?} ver:{:?}", nvs, cvs);
+                                    println!("🍭 Updated cargo-pixel by: cargo install --path . --force");
+                                    println!("🍭 Re-run new version cargo-pixel");
+                                    exec_cmd(&command_line);
+                                    std::process::exit(0);
+                                }
+                            }
+                        } else if pc.cdir_state == PState::NotPixel {
+                            if let Some(dep) = doc.get("dependencies") {
+                                if let Some(_drp) = dep.get("rust_pixel") {
+                                    println!("🍭 Found a new pixel project:{:?}", cdir_s);
+                                    pc.cdir_state = PState::PixelProject;
+                                    pc.projects.push(cdir_s);
+                                    pc.project_idx = pc.projects.len() - 1;
+                                    write_config(&pc, &pixel_config);
+                                }
+                            }
                         }
                     }
                 }
+            }
+            Err(e) => {
+                println!("❌ TOML parsing failed: {}", e);
+                println!("❌ Error details: {:?}", e);
+                // Skip TOML processing but continue with function
+                println!("⚠️ Skipping version check due to TOML parsing error");
             }
         }
     }
