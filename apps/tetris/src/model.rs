@@ -110,12 +110,9 @@ impl TetrisModel {
 impl Model for TetrisModel {
     fn init(&mut self, _context: &mut Context) {
         self.reset();
-        
-                // Start playing background music
-        // Note: Due to current limitations with rodio's thread safety,
-        // the audio will play briefly but may stop when the stream handle is dropped
-        self.audio.play_file("assets/back.mp3", true);
-        log::info!("Tetris background music initiated");
+        log::info!("Starting tetris background music...");
+        self.audio.play_file("back.mp3", true);
+        log::info!("Tetris background music play_file called");
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
