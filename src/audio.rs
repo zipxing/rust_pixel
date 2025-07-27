@@ -10,6 +10,7 @@
 //! audio provides playing music and sound effect, reference
 //! https://docs.rs/rodio
 
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crate::util::get_project_path;
 
 #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
@@ -49,6 +50,7 @@ impl Audio {
         Self {}
     }
 
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
     pub fn play_file(&self, fpath: &str, is_loop: bool) {
         #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
         {

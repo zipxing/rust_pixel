@@ -195,7 +195,7 @@ fn pixel_asset(ctx: &PixelContext, sub_m: &ArgMatches) {
 }
 
 /// Handle the edit subcommand by converting it to a run command
-/// cargo pixel edit mode work_dir [file_path] -> cargo pixel r edit mode -r work_dir [file_path]
+/// cargo pixel edit [mode] [work_dir] [image_file] -> cargo pixel r edit mode -r [work_dir] [image_file]
 fn pixel_edit(ctx: &PixelContext, sub_m: &ArgMatches) {
     println!("🎨 Running RustPixel Image/Sprite Editor...");
     
@@ -215,9 +215,9 @@ fn pixel_edit(ctx: &PixelContext, sub_m: &ArgMatches) {
         run_args.push(work_dir.as_str());
     }
     
-    // Add file path if provided
-    if let Some(file_path) = sub_m.get_one::<String>("file_path") {
-        run_args.push(file_path.as_str());
+    // Add image file if provided
+    if let Some(image_file) = sub_m.get_one::<String>("image_file") {
+        run_args.push(image_file.as_str());
     }
     
     println!("   Running: cargo pixel r edit {} -r {}", mode, run_args[4..].join(" "));

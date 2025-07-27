@@ -106,10 +106,16 @@ fn build_app() -> Command {
                         .index(1),
                 )
                 .arg(
+                    Arg::new("work_dir")
+                        .help("Working directory")
+                        .required(false)
+                        .index(2),
+                )
+                .arg(
                     Arg::new("image_file")
                         .help("Image file to edit")
                         .required(false)
-                        .index(2),
+                        .index(3),
                 ),
         )
         .subcommand(
