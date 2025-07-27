@@ -495,7 +495,7 @@ impl WinitWgpuAdapter {
         );
 
         // Initialize WGPU core components
-        let wgpu_instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
@@ -531,8 +531,9 @@ impl WinitWgpuAdapter {
                         label: Some("RustPixel WGPU Device"),
                         required_features: wgpu::Features::empty(),
                         required_limits: wgpu::Limits::default(),
+                        memory_hints: wgpu::MemoryHints::Performance,
+                        ..Default::default()
                     },
-                    None,
                 )
                 .await
                 .expect("Failed to create WGPU device");
@@ -637,6 +638,7 @@ impl WinitWgpuAdapter {
                                 load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                                 store: wgpu::StoreOp::Store,
                             },
+                            depth_slice: None,
                         })],
                         depth_stencil_attachment: None,
                         occlusion_query_set: None,
@@ -862,6 +864,7 @@ impl WinitWgpuAdapter {
                             load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                             store: wgpu::StoreOp::Store,
                         },
+                        depth_slice: None,
                     })],
                     depth_stencil_attachment: None,
                     occlusion_query_set: None,
@@ -974,15 +977,10 @@ impl WinitWgpuAdapter {
 
             // Copy texture to buffer
             encoder.copy_texture_to_buffer(
-                wgpu::ImageCopyTexture {
-                    texture: &render_texture.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::ImageCopyBuffer {
+                render_texture.texture.as_image_copy(),
+                wgpu::TexelCopyBufferInfo {
                     buffer: &staging_buffer,
-                    layout: wgpu::ImageDataLayout {
+                    layout: wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(bytes_per_row),
                         rows_per_image: Some(texture_height),
@@ -1007,7 +1005,7 @@ impl WinitWgpuAdapter {
             });
 
             // Wait for mapping to complete
-            device.poll(wgpu::Maintain::Wait);
+            // device.poll() is no longer needed in newer wgpu versions
 
             match receiver.recv() {
                 Ok(Ok(())) => {

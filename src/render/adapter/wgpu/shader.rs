@@ -75,15 +75,16 @@ impl WgpuShader {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("RustPixel Render Pipeline"),
             layout: Some(&pipeline_layout),
+            cache: None,
             vertex: wgpu::VertexState {
                 module: vertex_module,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[vertex_layout.clone()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: fragment_module,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_format,
                     blend: Some(wgpu::BlendState {

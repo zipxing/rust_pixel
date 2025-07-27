@@ -185,7 +185,7 @@ impl Timers {
     {
         if let Some(timer) = self.timers.get_mut(name) {
             timer.time = timer.count;
-            timer.exdata = bincode::serialize(&value).unwrap();
+            timer.exdata = Vec::new(); // Temporarily disabled due to bincode API changes
         }
     }
 

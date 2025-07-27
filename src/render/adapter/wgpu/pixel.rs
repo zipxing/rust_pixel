@@ -318,6 +318,7 @@ impl WgpuPixelRender {
                     }),
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -544,14 +545,9 @@ impl WgpuPixelRender {
 
         // Write texture data
         queue.write_texture(
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
+            texture.as_image_copy(),
             &texture_image,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * texture_width),
                 rows_per_image: Some(texture_height),
@@ -856,6 +852,7 @@ impl WgpuPixelRender {
                     }),
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
@@ -965,15 +962,16 @@ impl WgpuRender for WgpuPixelRender {
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Symbol Instanced Render Pipeline"),
             layout: Some(&render_pipeline_layout),
+            cache: None,
             vertex: wgpu::VertexState {
                 module: &vertex_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[WgpuQuadVertex::desc(), WgpuSymbolInstance::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fragment_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: self.surface_format,
                     blend: Some(wgpu::BlendState {
@@ -1097,6 +1095,7 @@ impl WgpuRender for WgpuPixelRender {
                     }),
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,

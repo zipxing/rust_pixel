@@ -162,6 +162,7 @@ impl WgpuRender for WgpuGeneral2dRender {
                         load: wgpu::LoadOp::Load, // Don't clear, blend with existing content
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
@@ -261,15 +262,16 @@ impl WgpuGeneral2dRender {
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("General2D Render Pipeline"),
             layout: Some(&pipeline_layout),
+            cache: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[General2dVertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: format, // Use the specified format
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),

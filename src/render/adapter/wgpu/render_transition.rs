@@ -345,15 +345,16 @@ impl WgpuTransitionRender {
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(&format!("Transition Render Pipeline {} (format: {:?})", shader_idx, format)),
             layout: Some(&pipeline_layout),
+            cache: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[TransitionVertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format, // Use the target texture format
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
@@ -461,6 +462,7 @@ impl WgpuTransitionRender {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
