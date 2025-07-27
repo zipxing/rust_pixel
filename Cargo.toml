@@ -22,7 +22,7 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 paste = "1.0"
 
-bincode = "2.0.1"
+bincode = { version = "2.0.1", features = ["serde"] }
 bitflags = { version = "2.9", features = ["serde"] }
 crossterm = { version = "0.29", optional = true }
 dirs-next = "2.0.0"
