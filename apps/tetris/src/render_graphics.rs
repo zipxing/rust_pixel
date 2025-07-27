@@ -193,7 +193,7 @@ impl Render for TetrisRender {
     type Model = TetrisModel;
 
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
-        context.adapter.init(35, 24, 0.3, 0.3, "tetris".to_string());
+        context.adapter.init(35, 24, 0.5, 0.5, "tetris".to_string());
         self.panel.init(context);
         let l = self.panel.get_sprite("back");
         let bp = "back.pix";

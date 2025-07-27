@@ -1,5 +1,6 @@
 use log::debug;
 use rand::prelude::*;
+use rand::rng;
 use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::{
     context::Context,
@@ -128,10 +129,10 @@ impl SnakeModel {
             return;
         }
         if self.grid[cy as usize][cx as usize] == 10000 {
-            let mut rng = thread_rng();
+            let mut rng = rng();
             for i in 0..888 {
-                let nx = rng.gen_range(0..SNAKEW) as u16;
-                let ny = rng.gen_range(0..SNAKEH) as u16;
+                let nx = rng.random_range(0..SNAKEW) as u16;
+                let ny = rng.random_range(0..SNAKEH) as u16;
                 let np = self.grid[ny as usize][nx as usize];
                 //if np == 10000 || np == 0 {
                 if np == 0 {
@@ -172,9 +173,9 @@ impl Model for SnakeModel {
             x: SNAKEW as u16 / 2,
             y: SNAKEH as u16 / 2,
         });
-        let mut rng = thread_rng();
-        self.seed.x = rng.gen_range(0..SNAKEW) as u16;
-        self.seed.y = rng.gen_range(0..SNAKEH) as u16;
+        let mut rng = rng();
+        self.seed.x = rng.random_range(0..SNAKEW) as u16;
+        self.seed.y = rng.random_range(0..SNAKEH) as u16;
         self.make_grid();
         self.dir = Dir::Down;
         context.input_events.clear();
