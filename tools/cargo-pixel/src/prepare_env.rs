@@ -178,12 +178,9 @@ pub fn check_pixel_env() -> PixelContext {
 
     // Check version and update
     if let Ok(ct) = fs::read_to_string("Cargo.toml") {
-        println!("🔍 Debug: Reading Cargo.toml, length: {}", ct.len());
-        println!("🔍 Debug: First 100 chars: {}", &ct[..std::cmp::min(100, ct.len())]);
         
         match ct.parse::<toml::Value>() {
             Ok(doc) => {
-                println!("✅ TOML parsing successful");
                 // Process the TOML document
                 if let Some(package) = doc.get("package") {
                     if let Some(name) = package.get("name") {
