@@ -23,7 +23,40 @@ pub use particle::*;
 mod rand;
 pub use rand::*;
 
-/// smart get project path function
+/// Intelligently determines the project path based on command line arguments and environment variables.
+///
+/// This function provides a smart way to resolve the working directory for RustPixel applications
+/// by checking multiple sources in order of priority:
+///
+/// # Return Value
+/// Returns a `String` representing the project path, determined by the following logic:
+///
+/// 1. **No arguments**: If no command line arguments are provided, tries to use the 
+///    `CARGO_MANIFEST_DIR` environment variable (set when running with `cargo run`).
+///    Falls back to "." (current directory) if the environment variable is not available.
+///
+/// 2. **One argument**: Uses the first command line argument as the project path.
+///    This is typically used when the path is explicitly provided by tools like `cargo-pixel`.
+///
+/// 3. **Multiple arguments**: Falls back to "." (current directory) when there are
+///    multiple arguments, assuming the path specification is unclear.
+///
+/// # Examples
+/// ```
+/// // When run with: cargo run
+/// // Returns: /path/to/project (from CARGO_MANIFEST_DIR)
+///
+/// // When run with: my_app /home/user/projects/game
+/// // Returns: "/home/user/projects/game"
+///
+/// // When run with: my_app arg1 arg2 arg3
+/// // Returns: "."
+/// ```
+///
+/// # Use Cases
+/// - Standalone executables that need to find their working directory
+/// - Tools launched by `cargo-pixel` that receive the project path as an argument
+/// - Development scenarios where `CARGO_MANIFEST_DIR` provides the correct path
 pub fn get_project_path() -> String {
     let args: Vec<String> = std::env::args().collect();
     match args.len() {

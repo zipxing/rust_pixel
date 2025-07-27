@@ -64,11 +64,11 @@ fn can_write_to_dir(dir: &std::path::Path) -> bool {
 fn decide_rust_pixel_location(current_dir: &std::path::Path) -> std::path::PathBuf {
     let current_dir_str = current_dir.to_str().unwrap();
     
-    // 检查当前目录是否是 rust_pixel 项目
+    // Check if current directory is a rust_pixel project
     if is_pixel_project(current_dir_str) {
         println!("🍭 Detected rust_pixel project in current directory");
         
-        // 尝试在父目录创建 rust_pixel
+        // Try to create rust_pixel in parent directory
         if let Some(parent_dir) = current_dir.parent() {
             let parent_rust_pixel = parent_dir.join("rust_pixel");
             if can_write_to_dir(parent_dir) && !parent_rust_pixel.exists() {
@@ -77,18 +77,18 @@ fn decide_rust_pixel_location(current_dir: &std::path::Path) -> std::path::PathB
             }
         }
         
-        // 父目录不可写或已存在，使用 home 目录
+        // Parent directory not writable or already exists, use home directory
         let home_dir = dirs_next::home_dir().expect("Could not find home directory");
         let home_rust_pixel = home_dir.join("rust_pixel_work");
         println!("  Will use home directory for rust_pixel");
         return home_rust_pixel;
     } else {
-        // 普通目录，检查是否可写
+        // Regular directory, check if writable
         if can_write_to_dir(current_dir) {
             println!("  Will create rust_pixel in current directory");
             return current_dir.join("rust_pixel");
         } else {
-            // 当前目录不可写，使用 home 目录
+            // Current directory not writable, use home directory
             let home_dir = dirs_next::home_dir().expect("Could not find home directory");
             let home_rust_pixel = home_dir.join("rust_pixel_work");
             println!("  Current directory not writable, will use home directory");
@@ -145,14 +145,14 @@ pub fn check_pixel_env() -> PixelContext {
         pc = toml::from_str(&config_content).expect("Failed to parse config file");
         println!("🍭 Loaded configuration from {:?}", pixel_config);
     } else {
-        // 检查当前目录是否是 PixelRoot
+        // Check if current directory is PixelRoot
         if is_pixel_root(&cdir_s) {
             println!("🍭 Current directory is rust_pixel root, using it");
             pc.rust_pixel_dir.push(cdir_s.clone());
             pc.rust_pixel_idx = 0;
             pc.cdir_state = PState::PixelRoot;
         } else {
-            // 当前目录不是 PixelRoot，需要决定在哪里创建 rust_pixel
+            // Current directory is not PixelRoot, need to decide where to create rust_pixel
             let repo_dir = decide_rust_pixel_location(&cdir);
             
             if !repo_dir.exists() {
@@ -166,7 +166,7 @@ pub fn check_pixel_env() -> PixelContext {
         write_config(&pc, &pixel_config);
     }
 
-    // 检查当前目录状态
+    // Check current directory status
     pc.cdir_state = PState::NotPixel;
     if let Some(idx) = pc.rust_pixel_dir.iter().position(|x| x == &cdir_s) {
         pc.cdir_state = PState::PixelRoot;
@@ -176,7 +176,7 @@ pub fn check_pixel_env() -> PixelContext {
         pc.project_idx = pidx;
     }
 
-    // 检查版本并更新
+    // Check version and update
     if let Ok(ct) = fs::read_to_string("Cargo.toml") {
         let doc = ct.parse::<toml::Value>().unwrap();
         if let Some(package) = doc.get("package") {

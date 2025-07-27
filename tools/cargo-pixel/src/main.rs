@@ -307,11 +307,21 @@ fn pixel_petii(ctx: &PixelContext, sub_m: &ArgMatches) {
 /// Handle the ssf subcommand by converting it to a run command
 /// For pixel_game! based tools, we need to provide build_type but let tool handle params
 fn pixel_ssf(ctx: &PixelContext, sub_m: &ArgMatches) {
-    println!("🎨 Running RustPixel SSF Player...");
+    // Check if no arguments are provided, show help
+    if sub_m.value_of("work_dir").is_none() {
+        use crate::command::make_parser_app;
+        let mut app = make_parser_app();
+        if let Some(ssf_subcommand) = app.find_subcommand_mut("ssf") {
+            let _ = ssf_subcommand.print_help();
+            println!(); // Add a newline after help
+        }
+        return;
+    }
     
-    // For ssf tool (uses pixel_game! macro), we need to provide the mode/build_type
-    // Default to terminal mode, but use provided mode if available
-    let mode = sub_m.value_of("mode").unwrap_or("t");
+    println!("🎨 Running RustPixel SSF Player (WGPU mode)...");
+    
+    // Fixed to wgpu mode
+    let mode = "wg";
     
     // Build argument list for the run command
     let mut run_args = vec![

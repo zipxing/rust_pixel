@@ -72,7 +72,7 @@ pub fn make_parser() -> ArgMatches {
                 .arg(
                     Arg::with_name("build_type")
                         .required(true)
-                        .possible_values(["t", "s", "w", "term", "sdl", "web"]),
+                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
                 ),
         ))
         .subcommand(common_arg(
@@ -188,25 +188,18 @@ pub fn make_parser() -> ArgMatches {
         .subcommand(
             SubCommand::with_name("ssf")
                 .alias("sf")
-                .about("Run SSF sequence frame player")
-                .arg(
-                    Arg::with_name("mode")
-                        .help("Running mode")
-                        .required(false)
-                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
-                        .index(1),
-                )
+                .about("Run SSF sequence frame player (fixed wgpu mode)")
                 .arg(
                     Arg::with_name("work_dir")
                         .help("Working directory")
                         .required(false)
-                        .index(2),
+                        .index(1),
                 )
                 .arg(
                     Arg::with_name("ssf_file")
                         .help("SSF file path (optional)")
                         .required(false)
-                        .index(3),
+                        .index(2),
                 ),
         )
         .subcommand(
@@ -286,7 +279,7 @@ pub fn make_parser_app() -> App<'static> {
                 .arg(
                     Arg::with_name("build_type")
                         .required(true)
-                        .possible_values(["t", "s", "w", "term", "sdl", "web"]),
+                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"]),
                 ),
         ))
         .subcommand(common_arg(
@@ -402,25 +395,18 @@ pub fn make_parser_app() -> App<'static> {
         .subcommand(
             SubCommand::with_name("ssf")
                 .alias("sf")
-                .about("Run SSF sequence frame player")
-                .arg(
-                    Arg::with_name("mode")
-                        .help("Running mode")
-                        .required(false)
-                        .possible_values(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
-                        .index(1),
-                )
+                .about("Run SSF sequence frame player (fixed wgpu mode)")
                 .arg(
                     Arg::with_name("work_dir")
                         .help("Working directory")
                         .required(false)
-                        .index(2),
+                        .index(1),
                 )
                 .arg(
                     Arg::with_name("ssf_file")
                         .help("SSF file path (optional)")
                         .required(false)
-                        .index(3),
+                        .index(2),
                 ),
         )
         .subcommand(

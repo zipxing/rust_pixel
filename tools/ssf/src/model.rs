@@ -7,26 +7,22 @@ use rust_pixel::{
 };
 
 fn print_ssf_usage() {
-    eprintln!("RustPixel SSF Sequence Frame Player");
+    eprintln!("RustPixel SSF Sequence Frame Player (WGPU Mode)");
     eprintln!();
     eprintln!("USAGE:");
     eprintln!("    ssf [SSF_FILE]");
-    eprintln!("    cargo pixel ssf <MODE> <WORK_DIR> [SSF_FILE]");
-    eprintln!("    cargo pixel sf <MODE> <WORK_DIR> [SSF_FILE]");
+    eprintln!("    cargo pixel ssf                          # Show this help");
+    eprintln!("    cargo pixel ssf <WORK_DIR>               # Use default animation");
+    eprintln!("    cargo pixel ssf <WORK_DIR> <SSF_FILE>    # Use specific file");
+    eprintln!("    cargo pixel sf <WORK_DIR> [SSF_FILE]     # Short alias");
     eprintln!();
     eprintln!("ARGS:");
+    eprintln!("    <WORK_DIR>   Working directory (usually '.')");
     eprintln!("    [SSF_FILE]   SSF sequence frame file path (optional, uses default if not specified)");
     eprintln!();
-    eprintln!("MODES (when used via cargo-pixel):");
-    eprintln!("    t, term    Terminal mode");
-    eprintln!("    s, sdl     SDL2 mode (graphics with OpenGL)");
-    eprintln!("    w, web     Web mode (browser)");
-    eprintln!("    g, winit   Winit mode (native window with OpenGL)");
-    eprintln!("    wg, wgpu   WGPU mode (native window with modern GPU API)");
-    eprintln!();
     eprintln!("DESCRIPTION:");
-    eprintln!("    Plays SSF (Sequence Frame) animation files. Supports various rendering");
-    eprintln!("    modes and interactive playback controls. SSF files contain frame-by-frame");
+    eprintln!("    Plays SSF (Sequence Frame) animation files using WGPU rendering backend.");
+    eprintln!("    Supports interactive playback controls. SSF files contain frame-by-frame");
     eprintln!("    animation data for creating smooth animated sequences.");
     eprintln!();
     eprintln!("PLAYBACK CONTROLS:");
@@ -43,20 +39,24 @@ fn print_ssf_usage() {
     eprintln!("    - Auto-play with configurable speed");
     eprintln!("    - Manual frame-by-frame control");
     eprintln!("    - Loop mode support");
-    eprintln!("    - Multiple rendering backends");
+    eprintln!("    - WGPU rendering backend");
     eprintln!("    - Real-time speed adjustment");
     eprintln!();
     eprintln!("EXAMPLES:");
-    eprintln!("    ssf                                        # Play default animation");
-    eprintln!("    ssf assets/sdq/dance.ssf                  # Play specific SSF file");
-    eprintln!("    cargo pixel ssf t . dance.ssf             # Terminal mode via cargo-pixel");
-    eprintln!("    cargo pixel ssf wg .                      # WGPU mode with default file");
+    eprintln!("    ssf                                       # Play default animation");
+    eprintln!("    ssf assets/sdq/dance.ssf                 # Play specific SSF file");
+    eprintln!("    cargo pixel ssf                          # Show help");
+    eprintln!("    cargo pixel ssf .                        # Play default animation");
+    eprintln!("    cargo pixel ssf . assets/sdq/dance.ssf   # Play specific file");
+    eprintln!("    cargo pixel ssf . fire.ssf               # Play custom file");
     eprintln!();
     eprintln!("DEFAULT SSF FILE:");
-    eprintln!("    If no file is specified, plays: sdq/dance.ssf");
+    eprintln!("    If no file is specified, plays: assets/sdq/dance.ssf");
     eprintln!();
     eprintln!("NOTE:");
-    eprintln!("    When used via cargo-pixel, equivalent to: cargo pixel r ssf <MODE> -r <WORK_DIR> [SSF_FILE]");
+    eprintln!("    Fixed to WGPU mode for optimal performance. Equivalent commands:");
+    eprintln!("    cargo pixel ssf .           →  cargo pixel r ssf wg -r .");
+    eprintln!("    cargo pixel ssf . dance.ssf →  cargo pixel r ssf wg -r . dance.ssf");
 }
 
 pub const SSFPLAYERW: u16 = 80;
@@ -83,20 +83,33 @@ impl PixelSsfModel {
             std::process::exit(0);
         }
         
-        // cargo-pixel传递参数格式: program_name project_path ssf_file_path
-        // 或者直接运行: program_name [ssf_file_path]
+        // Check if no arguments are provided via cargo-pixel (just show help)
+        if args.len() == 1 {
+            print_ssf_usage();
+            std::process::exit(0);
+        }
+        
+        // 新的简化参数格式:
+        // cargo-pixel传递: program_name work_dir [ssf_file]
+        // 直接运行: program_name [ssf_file]
         let ssf_file = if args.len() >= 3 {
-            // cargo-pixel模式: args[1]是项目路径, args[2]是SSF文件
+            // cargo-pixel模式，两个参数: args[1]是work_dir, args[2]是SSF文件
             let path = args[2].clone();
             path
         } else if args.len() == 2 {
-            // 直接运行模式: args[1]是SSF文件路径
-            let path = args[1].clone();
-            // asset2sprite宏会自动添加"assets/"前缀，所以我们需要去除它
-            if path.starts_with("assets/") {
-                path.strip_prefix("assets/").unwrap().to_string()
+            // 检查特殊情况: cargo pixel ssf .
+            if args[1] == "." {
+                // 使用默认的 dance.ssf 文件
+                "assets/sdq/dance.ssf".to_string()
             } else {
-                path
+                // 直接运行模式: args[1]是SSF文件路径
+                let path = args[1].clone();
+                // asset2sprite宏会自动添加"assets/"前缀，所以我们需要去除它
+                if path.starts_with("assets/") {
+                    path.strip_prefix("assets/").unwrap().to_string()
+                } else {
+                    path
+                }
             }
         } else {
             // 默认文件
