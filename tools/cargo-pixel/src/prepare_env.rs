@@ -37,6 +37,90 @@ fn is_pixel_root(dir_path: &str) -> bool {
     false
 }
 
+fn is_pixel_project(dir_path: &str) -> bool {
+    if let Ok(ct) = fs::read_to_string(format!("{}/Cargo.toml", dir_path)) {
+        if let Ok(doc) = ct.parse::<toml::Value>() {
+            if let Some(dep) = doc.get("dependencies") {
+                if dep.get("rust_pixel").is_some() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn can_write_to_dir(dir: &std::path::Path) -> bool {
+    let test_file = dir.join(".rust_pixel_write_test");
+    match fs::write(&test_file, "test") {
+        Ok(_) => {
+            let _ = fs::remove_file(&test_file);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn decide_rust_pixel_location(current_dir: &std::path::Path) -> std::path::PathBuf {
+    let current_dir_str = current_dir.to_str().unwrap();
+    
+    // 检查当前目录是否是 rust_pixel 项目
+    if is_pixel_project(current_dir_str) {
+        println!("🍭 Detected rust_pixel project in current directory");
+        
+        // 尝试在父目录创建 rust_pixel
+        if let Some(parent_dir) = current_dir.parent() {
+            let parent_rust_pixel = parent_dir.join("rust_pixel");
+            if can_write_to_dir(parent_dir) && !parent_rust_pixel.exists() {
+                println!("  Will create rust_pixel in parent directory");
+                return parent_rust_pixel;
+            }
+        }
+        
+        // 父目录不可写或已存在，使用 home 目录
+        let home_dir = dirs_next::home_dir().expect("Could not find home directory");
+        let home_rust_pixel = home_dir.join("rust_pixel_work");
+        println!("  Will use home directory for rust_pixel");
+        return home_rust_pixel;
+    } else {
+        // 普通目录，检查是否可写
+        if can_write_to_dir(current_dir) {
+            println!("  Will create rust_pixel in current directory");
+            return current_dir.join("rust_pixel");
+        } else {
+            // 当前目录不可写，使用 home 目录
+            let home_dir = dirs_next::home_dir().expect("Could not find home directory");
+            let home_rust_pixel = home_dir.join("rust_pixel_work");
+            println!("  Current directory not writable, will use home directory");
+            return home_rust_pixel;
+        }
+    }
+}
+
+fn create_rust_pixel_repo(repo_dir: &std::path::Path) {
+    println!("  Cloning rust_pixel to {:?}...", repo_dir);
+    
+    let parent_dir = repo_dir.parent().unwrap();
+    let repo_name = repo_dir.file_name().unwrap().to_str().unwrap();
+    
+    let status = Command::new("git")
+        .current_dir(parent_dir)
+        .args([
+            "clone",
+            "https://github.com/zipxing/rust_pixel",
+            repo_name,
+        ])
+        .status()
+        .expect("Failed to execute git command");
+        
+    if status.success() {
+        println!("  Repository cloned successfully to {:?}", repo_dir);
+    } else {
+        println!("🚫 Failed to clone rust_pixel repository");
+        std::process::exit(1);
+    }
+}
+
 pub fn check_pixel_env() -> PixelContext {
     let args: Vec<String> = env::args().collect();
     let command_line = args.join(" ");
@@ -68,26 +152,13 @@ pub fn check_pixel_env() -> PixelContext {
             pc.rust_pixel_idx = 0;
             pc.cdir_state = PState::PixelRoot;
         } else {
-            // 当前目录不是 PixelRoot，创建新的 rust_pixel_work
-            let home_dir = dirs_next::home_dir().expect("Could not find home directory");
-            let repo_dir = home_dir.join("rust_pixel_work");
+            // 当前目录不是 PixelRoot，需要决定在哪里创建 rust_pixel
+            let repo_dir = decide_rust_pixel_location(&cdir);
+            
             if !repo_dir.exists() {
-                println!("  Cloning rust_pixel from GitHub...");
-                let status = Command::new("git")
-                    .args([
-                        "clone",
-                        "https://github.com/zipxing/rust_pixel",
-                        repo_dir.to_str().unwrap(),
-                    ])
-                    .status()
-                    .expect("Failed to execute git command");
-                if status.success() {
-                    println!("  Repository cloned successfully.");
-                } else {
-                    println!("🚫 Failed to clone rust_pixel repository");
-                }
+                create_rust_pixel_repo(&repo_dir);
             } else {
-                println!("🍭 Using existing rust_pixel_work directory");
+                println!("🍭 Using existing rust_pixel directory at {:?}", repo_dir);
             }
             pc.rust_pixel_dir.push(repo_dir.to_str().unwrap().to_string());
             pc.rust_pixel_idx = 0;
