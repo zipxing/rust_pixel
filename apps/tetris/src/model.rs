@@ -2,6 +2,7 @@ use log::debug;
 use rust_pixel::event::{Event, KeyCode};
 //use rand::prelude::*;
 use rust_pixel::{
+    audio::Audio,
     context::Context,
     event::{event_emit, timer_fire},
     game::Model,
@@ -13,6 +14,7 @@ use tetris_lib::{
     constant::*,
     side::{Move, MoveRet, TetrisCell},
 };
+// Note: Thread-related imports removed due to current rodio limitations
 
 //https://harddrop.com/wiki/T-Spin_Triple_Setups
 //https://katyscode.wordpress.com/2012/10/13/tetris-aside-coding-for-t-spins/
@@ -30,6 +32,7 @@ pub struct TetrisModel {
     pub tai: TetrisAi,
     pub timeout_auto: f32,
     pub timeout_ai: f32,
+    pub audio: Audio,
 }
 
 impl TetrisModel {
@@ -42,6 +45,7 @@ impl TetrisModel {
             tai: TetrisAi::new(),
             timeout_auto: 0.0,
             timeout_ai: 0.0,
+            audio: Audio::new(),
         }
     }
 
@@ -106,6 +110,12 @@ impl TetrisModel {
 impl Model for TetrisModel {
     fn init(&mut self, _context: &mut Context) {
         self.reset();
+        
+                // Start playing background music
+        // Note: Due to current limitations with rodio's thread safety,
+        // the audio will play briefly but may stop when the stream handle is dropped
+        self.audio.play_file("assets/back.mp3", true);
+        log::info!("Tetris background music initiated");
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {

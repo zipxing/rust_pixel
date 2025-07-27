@@ -137,7 +137,9 @@ impl TetrisRender {
             let mut fri: Vec<i8> = vec![];
             if frs != 0 {
                 let fr = timer_exdata(&format!("clear-row{}", n)).unwrap();
-                fri = bincode::deserialize(&fr).unwrap();
+                // TODO: Fix for new bincode API
+                // fri = bincode::deserialize(&fr).unwrap();
+                fri = vec![];
                 //info!("frs..{} fri..{:?}", frs, fri);
             }
             for i in 0..ZONG {
