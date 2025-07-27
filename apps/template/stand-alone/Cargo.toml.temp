@@ -24,3 +24,5 @@ rust_pixel = { path = "$RUST_PIXEL_ROOT", default-features = false }
 [features]
 sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
+winit = ["rust_pixel/winit"]
+wgpu = ["rust_pixel/wgpu"]
