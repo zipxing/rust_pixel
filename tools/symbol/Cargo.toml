@@ -1,20 +1,47 @@
+# RustPixel Symbol Extractor Tool
+# 
+# A specialized tool for extracting and analyzing symbols/characters from images.
+# Converts images into binary patterns and maps colors to ANSI palette for
+# use in character set creation, pixel art analysis, and font generation.
+
 [package]
 name = "symbol"
 version = "0.1.0"
 edition = "2021"
+description = "Extract symbols and characters from images with pattern recognition and color analysis"
+authors = ["zipxing@hotmail.com"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/zipxing/rust_pixel"
+keywords = ["image-processing", "symbol-extraction", "pixel-art", "character-sets", "ansi-colors"]
+categories = ["command-line-utilities", "graphics", "multimedia::images"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Logging infrastructure for debug and info messages
 log = "0.4.27"
-log4rs = "1.3.0"
-image = "0.25.6"
-lab = "0.11.0"
-deltae = "0.3.2"
-rust_pixel = { path = "../.." }
+log4rs = "1.3.0"  # File-based logging configuration
 
+# Image processing and manipulation
+image = "0.25.6"   # Load, decode and manipulate various image formats
+
+# Color science and analysis
+lab = "0.11.0"     # LAB color space conversions for perceptual color analysis
+deltae = "0.3.2"   # Delta E color difference calculations (CIE color standards)
+
+# RustPixel framework integration
+rust_pixel = { path = "../.." }  # Access to ANSI color palette and rendering systems
+
+# Feature-based conditional compilation for different rendering backends
 [features]
+# SDL2-based rendering (desktop graphics mode)
 sdl = ["rust_pixel/sdl"]
+
+# Terminal/console mode (text-based rendering)
 term = ["rust_pixel/term"]
+
+# Winit-based rendering (cross-platform windowing with OpenGL)
 winit = ["rust_pixel/winit"]
+
+# WGPU-based rendering (modern GPU API, WebGPU standard)
 wgpu = ["rust_pixel/wgpu"]

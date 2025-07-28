@@ -374,7 +374,7 @@ fn pixel_symbol(ctx: &PixelContext, sub_m: &ArgMatches) {
         "-r",       // release mode
     ];
     
-    // Add all provided arguments
+    // Add all provided arguments in order
     if let Some(image_file) = sub_m.get_one::<String>("image_file") {
         run_args.push(image_file.as_str());
     }

@@ -164,10 +164,34 @@ fn build_app() -> Command {
                         .index(1),
                 )
                 .arg(
-                    Arg::new("output_file")
-                        .help("Output text file path")
+                    Arg::new("symsize")
+                        .help("Symbol size in pixels (e.g., 8 for 8x8 symbols)")
                         .required(false)
                         .index(2),
+                )
+                .arg(
+                    Arg::new("start_x")
+                        .help("Start X coordinate for processing area")
+                        .required(false)
+                        .index(3),
+                )
+                .arg(
+                    Arg::new("start_y")
+                        .help("Start Y coordinate for processing area")
+                        .required(false)
+                        .index(4),
+                )
+                .arg(
+                    Arg::new("width")
+                        .help("Width of processing area")
+                        .required(false)
+                        .index(5),
+                )
+                .arg(
+                    Arg::new("height")
+                        .help("Height of processing area")
+                        .required(false)
+                        .index(6),
                 ),
         )
         .subcommand(
