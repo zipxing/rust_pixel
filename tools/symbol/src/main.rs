@@ -26,7 +26,7 @@
 //! - **Dual Output**: Generates both symbol atlas and color-reconstructed images
 
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbImage};
-use rust_pixel::render::style::ANSI_COLOR_RGB;
+// use rust_pixel::render::style::ANSI_COLOR_RGB;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
@@ -458,35 +458,35 @@ fn extract_unique_cells(
     (unique_cells, cell_map)
 }
 
-/// Find the closest ANSI color match for a given RGB color
-///
-/// This function searches through the standard ANSI 256-color palette
-/// to find the best perceptual match using Euclidean distance in RGB space.
-///
-/// # Arguments
-/// * `target` - RGB color to match
-///
-/// # Returns
-/// Index of the closest ANSI color (0-255)
-fn find_best_ansi_color(target: &Rgb<u8>) -> usize {
-    let mut min_distance = f32::MAX;
-    let mut best_match_index = 0;
+///// Find the closest ANSI color match for a given RGB color
+/////
+///// This function searches through the standard ANSI 256-color palette
+///// to find the best perceptual match using Euclidean distance in RGB space.
+/////
+///// # Arguments
+///// * `target` - RGB color to match
+/////
+///// # Returns
+///// Index of the closest ANSI color (0-255)
+//fn find_best_ansi_color(target: &Rgb<u8>) -> usize {
+//    let mut min_distance = f32::MAX;
+//    let mut best_match_index = 0;
 
-    for (index, ansi_color) in ANSI_COLOR_RGB.iter().enumerate() {
-        // Calculate Euclidean distance in RGB space
-        let dr = target[0] as f32 - ansi_color[0] as f32;
-        let dg = target[1] as f32 - ansi_color[1] as f32;
-        let db = target[2] as f32 - ansi_color[2] as f32;
-        let distance = (dr * dr + dg * dg + db * db).sqrt();
+//    for (index, ansi_color) in ANSI_COLOR_RGB.iter().enumerate() {
+//        // Calculate Euclidean distance in RGB space
+//        let dr = target[0] as f32 - ansi_color[0] as f32;
+//        let dg = target[1] as f32 - ansi_color[1] as f32;
+//        let db = target[2] as f32 - ansi_color[2] as f32;
+//        let distance = (dr * dr + dg * dg + db * db).sqrt();
 
-        if distance < min_distance {
-            min_distance = distance;
-            best_match_index = index;
-        }
-    }
+//        if distance < min_distance {
+//            min_distance = distance;
+//            best_match_index = index;
+//        }
+//    }
 
-    best_match_index
-}
+//    best_match_index
+//}
 
 /// Render character set as a black and white atlas image
 ///
@@ -581,27 +581,27 @@ fn reconstruct_image(
     out
 }
 
-/// Print symbol pattern in terminal using ASCII representation
-///
-/// Displays the binary pattern using '█' for foreground and ' ' for background.
-///
-/// # Arguments
-/// * `bitmap` - Variable-sized binary pattern to display
-/// * `index` - Symbol index for labeling
-fn print_symbol_pattern(bitmap: &[Vec<u8>], index: usize) {
-    println!("Symbol {}:", index);
-    for row in bitmap {
-        print!("  ");
-        for &pixel in row {
-            if pixel == 1 {
-                print!("█");
-            } else {
-                print!(" ");
-            }
-        }
-        println!();
-    }
-}
+///// Print symbol pattern in terminal using ASCII representation
+/////
+///// Displays the binary pattern using '█' for foreground and ' ' for background.
+/////
+///// # Arguments
+///// * `bitmap` - Variable-sized binary pattern to display
+///// * `index` - Symbol index for labeling
+//fn print_symbol_pattern(bitmap: &[Vec<u8>], index: usize) {
+//    println!("Symbol {}:", index);
+//    for row in bitmap {
+//        print!("  ");
+//        for &pixel in row {
+//            if pixel == 1 {
+//                print!("█");
+//            } else {
+//                print!(" ");
+//            }
+//        }
+//        println!();
+//    }
+//}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
