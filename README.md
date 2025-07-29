@@ -58,11 +58,12 @@ The main steps of the installation process are as follows:
 - Install dependent libraries and softwares
 - Install **Rust** and **Wasm-pack**
 
-The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | &nbsp;&nbsp;[Linux]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows]
+The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | &nbsp;&nbsp;[Linux]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows (WSL)]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows (Native)]
 
 [MacOS]: doc/mac.md
 [Linux]: doc/linux.md
-[Windows]: doc/win.md
+[Windows (WSL)]: doc/win.md
+[Windows (Native)]: doc/win-native.md
 [DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
 
 Starting from version 0.5.3, you can deploy **cargo-pixel** directly from crates.io:
