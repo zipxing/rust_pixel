@@ -73,7 +73,9 @@ fn print_symbol_usage() {
     eprintln!();
     eprintln!("ARGUMENTS:");
     eprintln!("    IMAGE_FILE       Path to input image file (PNG, JPG, etc.)");
-    eprintln!("    SYMBOL_SIZE      Size of each symbol block (e.g., 8 for 8x8 pixels, 16 for 16x16)");
+    eprintln!(
+        "    SYMBOL_SIZE      Size of each symbol block (e.g., 8 for 8x8 pixels, 16 for 16x16)"
+    );
     eprintln!("    NOISE_THRESHOLD  Optional: Hamming distance threshold for similarity clustering (default: 2)");
     eprintln!("                     Lower values = more strict clustering, higher = more aggressive merging");
     eprintln!("    X Y WIDTH HEIGHT Optional: Crop region coordinates and dimensions");
@@ -134,12 +136,12 @@ fn process_cell(cell: &[Vec<Rgb<u8>>], size: usize, min_contrast_ratio: f32) -> 
     let min_brightness = *brightnesses.iter().min().unwrap();
     let max_brightness = *brightnesses.iter().max().unwrap();
     let avg_brightness = brightnesses.iter().map(|&b| b as f32).sum::<f32>() / (size * size) as f32;
-    
+
     // Determine threshold using adaptive method
     let threshold = {
         let contrast = max_brightness - min_brightness;
         let min_contrast = (min_contrast_ratio * 255.0) as u8;
-        
+
         if contrast < min_contrast {
             // Low contrast: classify as single color block
             if avg_brightness > 128.0 {
@@ -162,7 +164,7 @@ fn process_cell(cell: &[Vec<Rgb<u8>>], size: usize, min_contrast_ratio: f32) -> 
         for x in 0..size {
             let px = &cell[y][x];
             let brightness = brightnesses[y * size + x];
-            
+
             if brightness > threshold {
                 bitmap[y][x] = 1;
                 foreground_pixels.push(*px);
@@ -502,7 +504,7 @@ fn render_character_set(chars: &Vec<CharacterCell>, chars_per_row: usize) -> Rgb
     if chars.is_empty() {
         return ImageBuffer::new(1, 1);
     }
-    
+
     let symbol_size = chars[0].size;
     let rows = (chars.len() + chars_per_row - 1) / chars_per_row;
     let w = chars_per_row * symbol_size;
@@ -564,7 +566,7 @@ fn reconstruct_image(
                 for dx in 0..symsize as usize {
                     let x = gx * symsize + dx as u32;
                     let y = gy * symsize + dy as u32;
-                    
+
                     if x < width && y < height {
                         let color = match char_cell.bitmap[dy][dx] {
                             0 => cell_info.background_color,
