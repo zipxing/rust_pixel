@@ -10,11 +10,14 @@
 //! ## Core Algorithm
 //!
 //! The extractor uses an advanced multi-stage processing pipeline:
-//! 1. **Adaptive Thresholding**: Uses Otsu's algorithm or fixed threshold for binarization
-//! 2. **Color Analysis**: Calculates optimal foreground/background colors per block
-//! 3. **Pattern Recognition**: Extracts binary patterns from symbol blocks
-//! 4. **Similarity Clustering**: Groups similar symbols using Hamming distance
-//! 5. **ANSI Mapping**: Maps colors to standard 256-color ANSI palette
+//! 1. **Contrast-Aware Thresholding**: Intelligently chooses between Otsu's algorithm and 
+//!    uniform classification based on contrast analysis (10% brightness difference threshold)
+//! 2. **Noise Filtering**: Low-contrast blocks are treated as uniform regions to prevent
+//!    noise amplification and false pattern detection
+//! 3. **Color Analysis**: Calculates optimal foreground/background colors per block
+//! 4. **Pattern Recognition**: Extracts binary patterns from symbol blocks
+//! 5. **Similarity Clustering**: Groups similar symbols using Hamming distance
+//! 6. **ANSI Mapping**: Maps colors to standard 256-color ANSI palette
 //!
 //! ## Features
 //!
@@ -108,18 +111,28 @@ fn print_symbol_usage() {
 
 /// Process a single variable-sized cell using adaptive thresholding and color analysis
 ///
-/// This function implements the core cell processing logic:
-/// 1. Calculate brightness values for all pixels
-/// 2. Apply adaptive thresholding using Otsu's algorithm
-/// 3. Generate binary pattern and extract colors
+/// This function implements the core cell processing logic with intelligent contrast detection:
+/// 1. Calculate brightness values for all pixels using standard luminance formula
+/// 2. Analyze contrast to distinguish between noise and genuine patterns
+/// 3. Apply appropriate thresholding strategy based on contrast level
+/// 4. Generate binary pattern and extract representative colors
 ///
 /// # Arguments
-/// * `cell` - Variable-sized array of RGB pixels
-/// * `size` - Size of the cell (width and height)
-/// * `min_contrast_ratio` - Minimum contrast ratio for adaptive thresholding
+/// * `cell` - Variable-sized array of RGB pixels representing the symbol block
+/// * `size` - Size of the cell (width and height in pixels)
+/// * `min_contrast_ratio` - Minimum contrast ratio (0.0-1.0) for triggering Otsu's algorithm
+///   - Recommended value: 0.1 (10% brightness difference)
+///   - Below threshold: Treats block as uniform color (filters noise/gradients)
+///   - Above threshold: Applies Otsu's algorithm for optimal binary separation
+///   - This prevents noise amplification while preserving real symbol patterns
 ///
 /// # Returns
-/// CharacterCell with binary pattern and extracted colors
+/// CharacterCell with optimized binary pattern and extracted foreground/background colors
+///
+/// # Algorithm Details
+/// - Low contrast (< threshold): Single-color classification based on average brightness
+/// - High contrast (≥ threshold): Otsu's algorithm with fallback to average-based threshold
+/// - Color extraction: Separate averaging of foreground and background pixel groups
 fn process_cell(cell: &[Vec<Rgb<u8>>], size: usize, min_contrast_ratio: f32) -> CharacterCell {
     // Calculate brightness values for all pixels
     let mut brightnesses = Vec::with_capacity(size * size);
@@ -137,20 +150,28 @@ fn process_cell(cell: &[Vec<Rgb<u8>>], size: usize, min_contrast_ratio: f32) -> 
     let max_brightness = *brightnesses.iter().max().unwrap();
     let avg_brightness = brightnesses.iter().map(|&b| b as f32).sum::<f32>() / (size * size) as f32;
 
-    // Determine threshold using adaptive method
+    // Determine threshold using adaptive contrast-based method
     let threshold = {
         let contrast = max_brightness - min_brightness;
-        let min_contrast = (min_contrast_ratio * 255.0) as u8;
-
+        let min_contrast = (min_contrast_ratio * 255.0) as u8; // Convert ratio to absolute value
+        
+        // The core principle: Only apply sophisticated thresholding to blocks with sufficient contrast
+        // This approach prevents noise amplification while preserving meaningful patterns
         if contrast < min_contrast {
-            // Low contrast: classify as single color block
+            // Low contrast case (< 10% brightness difference):
+            // - Likely uniform/gradient regions, noise, or JPEG compression artifacts
+            // - Classify entire block as single color to avoid false pattern detection
+            // - Use midpoint (128) as the decision boundary for foreground vs background
             if avg_brightness > 128.0 {
-                0
+                0   // Bright region → treat as background (all pixels = 0)
             } else {
-                255
+                255 // Dark region → treat as foreground (all pixels = 1)
             }
         } else {
-            // Use Otsu's algorithm for optimal threshold
+            // High contrast case (≥ 10% brightness difference):
+            // - Contains genuine patterns, edges, or symbol features
+            // - Apply Otsu's algorithm for optimal binary separation
+            // - Fallback to average brightness if Otsu fails (edge case protection)
             find_optimal_threshold(&brightnesses).unwrap_or(avg_brightness as u8)
         }
     };
@@ -436,7 +457,12 @@ fn extract_unique_cells(
             }
 
             // Process the cell with adaptive thresholding
-            let char_cell = process_cell(&cell, symsize as usize, 0.1); // min_contrast_ratio = 0.1
+            // min_contrast_ratio = 0.1 means minimum 10% brightness difference (25/255) is required
+            // to trigger Otsu's algorithm. This value balances noise filtering with pattern preservation:
+            // - Lower values (< 0.1): Too sensitive, treats noise/JPEG artifacts as patterns
+            // - Higher values (> 0.1): Too conservative, may miss low-contrast real symbols
+            // 0.1 is an empirically proven threshold that works well across different image types
+            let char_cell = process_cell(&cell, symsize as usize, 0.1);
 
             // Check for existing bitmap pattern
             let bitmap_index = if let Some(&existing_index) = bitmap_to_index.get(&char_cell.bitmap)
