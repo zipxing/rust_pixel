@@ -1,6 +1,6 @@
 //! # RustPixel Symbol Extractor
 //!
-//! A powerful tool for extracting symbols/characters from images and converting them 
+//! A powerful tool for extracting symbols/characters from images and converting them
 //! into analyzable patterns. This tool is particularly useful for:
 //! - Creating custom character sets and fonts
 //! - Analyzing pixel art and sprite sheets
@@ -9,78 +9,81 @@
 //!
 //! ## Core Algorithm
 //!
-//! The symbol extraction process involves several key steps:
-//! 1. **Image Segmentation**: Divide the input image into uniform blocks (symbols)
-//! 2. **Color Analysis**: Identify background and foreground colors using Delta E color distance
-//! 3. **Pattern Recognition**: Convert each block into a binary pattern (0s and 1s)
-//! 4. **Deduplication**: Group identical patterns together to find unique symbols
-//! 5. **Color Mapping**: Map original colors to the closest ANSI color palette
-//! 6. **Output Generation**: Create both symbol atlas and reconstructed images
+//! The extractor uses an advanced multi-stage processing pipeline:
+//! 1. **Adaptive Thresholding**: Uses Otsu's algorithm or fixed threshold for binarization
+//! 2. **Color Analysis**: Calculates optimal foreground/background colors per block
+//! 3. **Pattern Recognition**: Extracts binary patterns from symbol blocks
+//! 4. **Similarity Clustering**: Groups similar symbols using Hamming distance
+//! 5. **ANSI Mapping**: Maps colors to standard 256-color ANSI palette
 //!
 //! ## Features
 //!
-//! - **Delta E Color Distance**: Uses perceptually accurate color comparison
-//! - **Automatic Background Detection**: Finds the most common color as background
+//! - **Adaptive Binarization**: Automatic threshold detection using Otsu's method
+//! - **Similarity Clustering**: Reduces redundant symbols using Hamming distance
 //! - **ANSI Color Mapping**: Maps colors to standard 256-color ANSI palette
 //! - **Flexible Processing**: Supports custom processing regions within images
 //! - **Binary Pattern Generation**: Creates 1-bit representations of symbols
 //! - **Dual Output**: Generates both symbol atlas and color-reconstructed images
 
-use deltae::*;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
-use lab::Lab;
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbImage};
 use rust_pixel::render::style::ANSI_COLOR_RGB;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
-/// RGB color structure for internal color processing
-/// 
-/// This structure provides a convenient way to work with RGB values
-/// throughout the symbol extraction process.
-struct RGB {
-    r: u8,  // Red component (0-255)
-    g: u8,  // Green component (0-255)
-    b: u8,  // Blue component (0-255)
+/// Character cell structure representing a variable-sized symbol
+///
+/// Each cell contains a binary pattern and associated colors.
+/// The bitmap uses 0 for background pixels and 1 for foreground pixels.
+#[derive(Debug, Clone)]
+struct CharacterCell {
+    /// Variable-sized binary pattern (0 = background, 1 = foreground)
+    bitmap: Vec<Vec<u8>>,
+    /// Symbol size (width and height)
+    size: usize,
+    /// Average foreground color
+    foreground_color: Rgb<u8>,
+    /// Average background color  
+    background_color: Rgb<u8>,
 }
 
-/// Display comprehensive usage information for the symbol extractor
+/// Cell information for image reconstruction
 ///
-/// This function provides detailed documentation about command-line usage,
-/// parameters, examples, and feature descriptions. It serves as the primary
-/// help system for users.
+/// Stores the bitmap index and position-specific colors
+#[derive(Debug, Clone)]
+struct CellInfo {
+    /// Index into the unique character array
+    bitmap_index: usize,
+    /// Foreground color for this specific position
+    foreground_color: Rgb<u8>,
+    /// Background color for this specific position
+    background_color: Rgb<u8>,
+}
+
+/// Print usage information and examples for the symbol extraction tool
+///
+/// This function displays comprehensive help including command-line syntax,
+/// parameter descriptions, and practical usage examples.
 fn print_symbol_usage() {
     eprintln!("RustPixel Symbol Extractor");
+    eprintln!("==========================");
     eprintln!();
     eprintln!("USAGE:");
-    eprintln!("    symbol <IMAGE_FILE> <SYMSIZE> [START_X START_Y WIDTH HEIGHT] [NOISE_THRESHOLD]");
-    eprintln!("    cargo pixel symbol <IMAGE_FILE> <SYMSIZE> [START_X START_Y WIDTH HEIGHT] [NOISE_THRESHOLD]");
-    eprintln!("    cargo pixel sy <IMAGE_FILE> <SYMSIZE> [START_X START_Y WIDTH HEIGHT] [NOISE_THRESHOLD]");
+    eprintln!("    cargo pixel sy <IMAGE_FILE> <SYMBOL_SIZE> [NOISE_THRESHOLD] [X Y WIDTH HEIGHT]");
     eprintln!();
-    eprintln!("ARGS:");
-    eprintln!("    <IMAGE_FILE>      Input image file path");
-    eprintln!("    <SYMSIZE>         Symbol size in pixels (e.g., 8 for 8x8 symbols)");
-    eprintln!("    [START_X]         Start X coordinate for processing area");
-    eprintln!("    [START_Y]         Start Y coordinate for processing area");
-    eprintln!("    [WIDTH]           Width of processing area");
-    eprintln!("    [HEIGHT]          Height of processing area");
-    eprintln!("    [NOISE_THRESHOLD] Noise detection sensitivity (default: 4.0)");
-    eprintln!("                      Lower values = more sensitive to noise");
-    eprintln!("                      Higher values = less sensitive to noise");
-    eprintln!("                      Range: 1.0-10.0, recommended: 2.0-6.0");
+    eprintln!("ARGUMENTS:");
+    eprintln!("    IMAGE_FILE       Path to input image file (PNG, JPG, etc.)");
+    eprintln!("    SYMBOL_SIZE      Size of each symbol block (e.g., 8 for 8x8 pixels, 16 for 16x16)");
+    eprintln!("    NOISE_THRESHOLD  Optional: Hamming distance threshold for similarity clustering (default: 2)");
+    eprintln!("                     Lower values = more strict clustering, higher = more aggressive merging");
+    eprintln!("    X Y WIDTH HEIGHT Optional: Crop region coordinates and dimensions");
     eprintln!();
-    eprintln!("DESCRIPTION:");
-    eprintln!("    Extracts symbols/characters from images for use in creating symbol fonts");
-    eprintln!("    or character sets. Analyzes image blocks and generates unique symbol");
-    eprintln!("    patterns with color mappings for optimal representation.");
-    eprintln!("    Includes advanced noise reduction for compressed images.");
-    eprintln!();
-    eprintln!("PROCESSING:");
-    eprintln!("    - Applies intelligent noise reduction to clean compression artifacts");
-    eprintln!("    - Divides image into blocks of specified symbol size");
-    eprintln!("    - Analyzes each block for unique patterns");
-    eprintln!("    - Maps colors to ANSI color palette");
-    eprintln!("    - Generates symbol map and color associations");
+    eprintln!("ALGORITHM:");
+    eprintln!("    1. Adaptive Thresholding: Uses Otsu's algorithm for optimal binarization");
+    eprintln!("    2. Color Analysis: Calculates foreground/background colors per block");
+    eprintln!("    3. Pattern Extraction: Generates binary patterns from symbol blocks");
+    eprintln!("    4. Similarity Clustering: Groups similar symbols using Hamming distance");
+    eprintln!("    5. ANSI Color Mapping: Maps colors to 256-color ANSI palette");
     eprintln!();
     eprintln!("OUTPUT:");
     eprintln!("    - Symbol patterns displayed in terminal");
@@ -90,598 +93,392 @@ fn print_symbol_usage() {
     eprintln!("    - bout.png: Reconstructed image with ANSI colors");
     eprintln!();
     eprintln!("EXAMPLES:");
-    eprintln!("    symbol font.png 8                          # Extract 8x8 symbols from entire image");
-    eprintln!("    symbol charset.png 16                      # Extract 16x16 symbols");
-    eprintln!("    symbol image.png 8 0 0 128 64              # Extract from 128x64 area at (0,0)");
-    eprintln!("    symbol tiles.png 16 32 32 256 256 2.5      # Extract with high noise sensitivity");
-    eprintln!("    symbol compressed.jpg 8 0 0 64 64 6.0      # Extract with low noise sensitivity");
+    eprintln!("    cargo pixel sy image.png 8");
+    eprintln!("    cargo pixel sy sprite.png 16 1");
+    eprintln!("    cargo pixel sy logo.png 8 3 10 10 100 50");
     eprintln!();
-    eprintln!("NOISE REDUCTION:");
-    eprintln!("    - Detects isolated pixels that differ from neighbors");
-    eprintln!("    - Identifies statistically rare colors in each block");
-    eprintln!("    - Uses median filtering to preserve edges");
-    eprintln!("    - Applies bilateral smoothing for subtle artifacts");
-    eprintln!("    - Particularly effective for JPEG compression artifacts");
-    eprintln!();
-    eprintln!("FEATURES:");
-    eprintln!("    - Color similarity analysis using Delta E");
-    eprintln!("    - ANSI color palette mapping");
-    eprintln!("    - Binary pattern recognition");
-    eprintln!("    - Selective area processing");
-    eprintln!("    - Advanced noise detection and removal");
-    eprintln!("    - Compression artifact cleanup");
-    eprintln!();
-    eprintln!("NOTE:");
-    eprintln!("    When used via cargo-pixel, equivalent to: cargo pixel r symbol t -r <ARGS...>");
+    eprintln!("NOISE_THRESHOLD VALUES:");
+    eprintln!("    0: Perfect match only (no clustering)");
+    eprintln!("    1-2: Very strict clustering (recommended for pixel art)");
+    eprintln!("    3-5: Moderate clustering (good for compressed images)");
+    eprintln!("    6+: Aggressive clustering (may lose detail)");
 }
 
-/// Main entry point for the symbol extraction tool
+/// Process a single variable-sized cell using adaptive thresholding and color analysis
 ///
-/// This function orchestrates the entire symbol extraction process:
-/// 1. Parse command-line arguments and validate input
-/// 2. Load and optionally crop the input image
-/// 3. Analyze the image to find the most common background color
-/// 4. Process each symbol block to extract patterns and colors
-/// 5. Generate symbol maps and color associations
-/// 6. Create output images (symbol atlas and reconstructed image)
+/// This function implements the core cell processing logic:
+/// 1. Calculate brightness values for all pixels
+/// 2. Apply adaptive thresholding using Otsu's algorithm
+/// 3. Generate binary pattern and extract colors
 ///
-/// The algorithm divides the image into uniform blocks of the specified size,
-/// analyzes each block for color patterns, and creates binary representations
-/// of unique symbols while mapping colors to the ANSI palette.
-fn main() {
-    // Input parameters parsed from command line
-    let input_image_path;
-    let symsize: u32;             // Size of each symbol block (e.g., 8 for 8x8)
-    let mut width: u32;           // Number of symbol blocks horizontally
-    let mut height: u32;          // Number of symbol blocks vertically  
-    let start_x: u32;             // Starting X coordinate for processing region
-    let start_y: u32;             // Starting Y coordinate for processing region
-    
-    // Core data structures for symbol extraction
-    // Maps binary patterns to lists of block indices that use that pattern
-    let mut symbol_map: HashMap<Vec<Vec<u8>>, Vec<u32>> = HashMap::new();
-    // Maps block indices to their (background_color, foreground_color) pair
-    let mut color_map: HashMap<u32, (usize, usize)> = HashMap::new();
-
-    // Parse command line arguments with validation
-    let args: Vec<String> = env::args().collect();
-    
-    // Handle help requests
-    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
-        print_symbol_usage();
-        return;
+/// # Arguments
+/// * `cell` - Variable-sized array of RGB pixels
+/// * `size` - Size of the cell (width and height)
+/// * `min_contrast_ratio` - Minimum contrast ratio for adaptive thresholding
+///
+/// # Returns
+/// CharacterCell with binary pattern and extracted colors
+fn process_cell(cell: &[Vec<Rgb<u8>>], size: usize, min_contrast_ratio: f32) -> CharacterCell {
+    // Calculate brightness values for all pixels
+    let mut brightnesses = Vec::with_capacity(size * size);
+    for y in 0..size {
+        for x in 0..size {
+            let px = &cell[y][x];
+            let brightness =
+                (0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32) as u8;
+            brightnesses.push(brightness);
+        }
     }
-    
-    // Validate argument count: either 3 args (image + symsize) or 7+ args (+ crop region + optional noise threshold)
-    let arglen = args.len();
-    if arglen < 3 || (arglen > 3 && arglen < 7) || arglen > 8 {
-        print_symbol_usage();
-        return;
-    }
-    
-    // Parse required arguments
-    input_image_path = Path::new(&args[1]);
-    symsize = args[2].parse().unwrap_or_else(|_| {
-        eprintln!("Error: SYMSIZE must be a valid positive integer");
-        std::process::exit(1);
-    });
 
-    // Load the input image
-    let mut img = image::open(&input_image_path).expect("Failed to open the input image");
+    // Calculate statistics
+    let min_brightness = *brightnesses.iter().min().unwrap();
+    let max_brightness = *brightnesses.iter().max().unwrap();
+    let avg_brightness = brightnesses.iter().map(|&b| b as f32).sum::<f32>() / (size * size) as f32;
     
-    // Calculate initial grid dimensions based on symbol size
-    width = img.width() as u32 / symsize;
-    height = img.height() as u32 / symsize;
-
-    // Handle optional crop parameters for processing specific image regions
-    let noise_threshold = if arglen >= 7 {
-        start_x = args[3].parse().unwrap_or_else(|_| {
-            eprintln!("Error: START_X must be a valid integer");
-            std::process::exit(1);
-        });
-        start_y = args[4].parse().unwrap_or_else(|_| {
-            eprintln!("Error: START_Y must be a valid integer");
-            std::process::exit(1);
-        });
-        let crop_width = args[5].parse::<u32>().unwrap_or_else(|_| {
-            eprintln!("Error: WIDTH must be a valid positive integer");
-            std::process::exit(1);
-        });
-        let crop_height = args[6].parse::<u32>().unwrap_or_else(|_| {
-            eprintln!("Error: HEIGHT must be a valid positive integer");
-            std::process::exit(1);
-        });
+    // Determine threshold using adaptive method
+    let threshold = {
+        let contrast = max_brightness - min_brightness;
+        let min_contrast = (min_contrast_ratio * 255.0) as u8;
         
-        // Parse optional noise threshold (8th argument)
-        let threshold = if arglen == 8 {
-            args[7].parse::<f32>().unwrap_or_else(|_| {
-                eprintln!("Error: NOISE_THRESHOLD must be a valid float (e.g., 4.0)");
-                std::process::exit(1);
-            })
+        if contrast < min_contrast {
+            // Low contrast: classify as single color block
+            if avg_brightness > 128.0 {
+                0
+            } else {
+                255
+            }
         } else {
-            4.0 // Default noise threshold
-        };
-        
-        // Recalculate grid dimensions for cropped region
-        width = crop_width / symsize;
-        height = crop_height / symsize;
-        
-        // Crop the image to the specified region
-        img = img.crop(start_x, start_y, width * symsize, height * symsize);
-        threshold
-    } else {
-        4.0 // Default noise threshold for full image processing
-    };
-    
-    println!("Processing {}x{} symbol grid ({}x{} pixels each)", width, height, symsize, symsize);
-    println!("Noise reduction threshold: {:.1} Delta E", noise_threshold);
-
-    // Step 1: Analyze the image to find the most common background color
-    // This color will be used as a reference for pattern recognition
-    let back_color = find_background_color(&img, width * symsize, height * symsize);
-    println!("Detected background color: 0x{:08x}", back_color);
-
-    // Step 2: Process each symbol block in the grid
-    // Extract binary patterns and color information for each block
-    for i in 0..height {
-        for j in 0..width {
-            // Process individual symbol block at grid position (j, i) with noise reduction
-            let (bg_color_idx, fg_color_idx, pattern) = process_block(&img, symsize as usize, j, i, back_color, noise_threshold);
-            
-            // Calculate linear block index for mapping
-            let block_index = i * width + j;
-            
-            // Store color mapping for this block
-            color_map.entry(block_index).or_insert((bg_color_idx, fg_color_idx));
-            
-            // Group blocks by their binary patterns to identify unique symbols
-            symbol_map
-                .entry(pattern)
-                .or_insert(Vec::new())
-                .push(block_index);
-        }
-    }
-    
-    // Calculate symbol atlas layout (16 symbols per row)
-    let unique_symbol_count = symbol_map.len();
-    let atlas_width = 16;
-    let atlas_height = unique_symbol_count / 16 + if unique_symbol_count % 16 == 0 { 0 } else { 1 };
-    
-    println!("Found {} unique symbols, creating {}x{} atlas", unique_symbol_count, atlas_width, atlas_height);
-
-    // Step 3: Generate output images
-    // Create symbol atlas showing all unique patterns in black and white
-    let mut symbol_atlas = ImageBuffer::new(symsize * atlas_width as u32, symsize * atlas_height as u32);
-    // Create reconstructed image using ANSI colors
-    let mut reconstructed_img = ImageBuffer::new(symsize * width, symsize * height);
-    
-    let mut symbol_counter = 0;
-    
-    // Process each unique symbol pattern
-    for (pattern, block_indices) in symbol_map.iter() {
-        // Step 3a: Draw symbol in atlas (black and white representation)
-        for y in 0..symsize {
-            for x in 0..symsize {
-                // Convert binary pattern to black/white pixels
-                let pixel_value = if pattern[y as usize][x as usize] == 1 {
-                    [255u8, 255, 255, 255]  // White for foreground
-                } else {
-                    [0u8, 0, 0, 255]        // Black for background
-                };
-                
-                // Calculate position in symbol atlas
-                let atlas_x = (symbol_counter % 16) * symsize + x;
-                let atlas_y = (symbol_counter / 16) * symsize + y;
-                symbol_atlas.put_pixel(atlas_x, atlas_y, Rgba(pixel_value));
-            }
-        }
-        symbol_counter += 1;
-
-        // Step 3b: Draw all instances of this symbol in the reconstructed image
-        for &block_index in block_indices {
-            // Calculate grid position from linear index
-            let grid_x = block_index % width;
-            let grid_y = block_index / width;
-            
-            // Get color mapping for this block
-            let (bg_color_idx, fg_color_idx) = color_map.get(&block_index).unwrap();
-            
-            // Draw symbol using ANSI colors
-            for y in 0..symsize {
-                for x in 0..symsize {
-                    // Choose color based on pattern bit
-                    let color_idx = if pattern[y as usize][x as usize] == 1 {
-                        *fg_color_idx  // Use foreground color for '1' bits
-                    } else {
-                        *bg_color_idx  // Use background color for '0' bits
-                    };
-                    
-                    // Get RGB values from ANSI color palette
-                    let ansi_color = ANSI_COLOR_RGB[color_idx];
-                    let pixel_value = [ansi_color[0], ansi_color[1], ansi_color[2], 255];
-                    
-                    // Calculate final pixel position in reconstructed image
-                    let final_x = grid_x * symsize + x;
-                    let final_y = grid_y * symsize + y;
-                    reconstructed_img.put_pixel(final_x, final_y, Rgba(pixel_value));
-                }
-            }
-        }
-    }
-    
-    // Step 4: Save output images
-    println!("Saving symbol atlas to sout.png ({} symbols, {} rows, {} cols)", 
-             unique_symbol_count, atlas_height, atlas_width);
-    symbol_atlas.save("sout.png").expect("Failed to save symbol atlas");
-    
-    println!("Saving reconstructed image to bout.png");
-    reconstructed_img.save("bout.png").expect("Failed to save reconstructed image");
-    
-    println!("Symbol extraction completed successfully!");
-}
-
-/// Find the most common color in the image to use as background
-///
-/// This function analyzes all pixels in the specified region to determine
-/// the most frequently occurring color, which is assumed to be the background.
-/// This background color is crucial for proper pattern recognition and
-/// binary conversion of symbol blocks.
-///
-/// # Arguments
-/// * `img` - The source image to analyze
-/// * `w` - Width of the region to analyze (in pixels)
-/// * `h` - Height of the region to analyze (in pixels)
-///
-/// # Returns
-/// The most common color encoded as a 32-bit integer (RGBA format)
-///
-/// # Algorithm
-/// 1. Scan every pixel in the specified region
-/// 2. Count occurrence of each unique color
-/// 3. Sort by frequency and return the most common
-fn find_background_color(img: &DynamicImage, w: u32, h: u32) -> u32 {
-    // Map to store color frequencies: color_u32 -> (first_x, first_y, count)
-    let mut color_counts: HashMap<u32, (u32, u32, u32)> = HashMap::new();
-    
-    // Scan every pixel in the specified region
-    for y in 0..h {
-        for x in 0..w {
-            let pixel = img.get_pixel(x, y);
-            
-            // Pack RGBA values into a single 32-bit integer for efficient hashing
-            let color_key: u32 = ((pixel[0] as u32) << 24)  // Red
-                                + ((pixel[1] as u32) << 16)  // Green  
-                                + ((pixel[2] as u32) << 8)   // Blue
-                                + (pixel[3] as u32);         // Alpha
-            
-            // Update color count, storing first occurrence position
-            (*color_counts.entry(color_key).or_insert((x, y, 0))).2 += 1;
-        }
-    }
-    
-    // Convert to vector and sort by frequency (descending)
-    let mut color_frequency: Vec<_> = color_counts.iter().collect();
-    color_frequency.sort_by(|a, b| (&b.1 .2).cmp(&a.1 .2));  // Sort by count (descending)
-    
-    // Return the most frequent color
-    *color_frequency[0].0
-}
-
-/// Calculate luminance of a color using standard coefficients
-///
-/// Luminance is used to determine which color should be considered
-/// foreground vs background when only intensity differences matter.
-///
-/// # Arguments
-/// * `color` - 32-bit RGBA color value
-///
-/// # Returns
-/// Luminance value as a float (0.0 = black, 255.0 = white)
-fn luminance(color: u32) -> f32 {
-    let r = (color >> 24 & 0xff) as u8;
-    let g = (color >> 16 & 0xff) as u8;
-    let b = (color >> 8 & 0xff) as u8;
-    
-    // Standard luminance formula (ITU-R BT.601)
-    0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32
-}
-
-/// Calculate perceptually accurate color distance using Delta E (CIE Lab)
-///
-/// Delta E provides a more accurate measure of color difference than
-/// simple Euclidean distance in RGB space, as it accounts for human
-/// color perception characteristics.
-///
-/// # Arguments
-/// * `color1` - First color as 32-bit RGBA
-/// * `color2` - Second color as 32-bit RGBA
-///
-/// # Returns
-/// Delta E distance (0.0 = identical, higher = more different)
-///
-/// # Color Distance Thresholds
-/// - < 1.0: Barely perceptible difference
-/// - 1.0-2.0: Perceptible through close observation
-/// - 2.0-10.0: Perceptible at a glance
-/// - > 10.0: Very obvious difference
-fn color_distance(color1: u32, color2: u32) -> f32 {
-    // Extract RGB components from packed format
-    let r1 = (color1 >> 24 & 0xff) as u8;
-    let g1 = (color1 >> 16 & 0xff) as u8;
-    let b1 = (color1 >> 8 & 0xff) as u8;
-    let r2 = (color2 >> 24 & 0xff) as u8;
-    let g2 = (color2 >> 16 & 0xff) as u8;
-    let b2 = (color2 >> 8 & 0xff) as u8;
-
-    // Convert RGB to LAB color space for perceptually accurate comparison
-    let lab1 = Lab::from_rgb(&[r1, g1, b1]);
-    let lab2 = Lab::from_rgb(&[r2, g2, b2]);
-    
-    // Create LAB value structures for Delta E calculation
-    let lab_val1 = LabValue { l: lab1.l, a: lab1.a, b: lab1.b };
-    let lab_val2 = LabValue { l: lab2.l, a: lab2.a, b: lab2.b };
-    
-    // Calculate Delta E 2000 (most accurate color difference formula)
-    *DeltaE::new(&lab_val1, &lab_val2, DE2000).value()
-}
-
-/// Process a single symbol block to extract pattern and color information
-///
-/// This is the core function that analyzes each symbol block to:
-/// 1. Apply noise reduction to clean compression artifacts
-/// 2. Identify all unique colors within the cleaned block
-/// 3. Determine optimal foreground and background colors
-/// 4. Convert the block to a binary pattern
-/// 5. Map colors to the closest ANSI palette entries
-///
-/// # Arguments
-/// * `image` - Source image to process
-/// * `block_size` - Size of the symbol block (e.g., 8 for 8x8)
-/// * `grid_x` - X position in the symbol grid
-/// * `grid_y` - Y position in the symbol grid  
-/// * `background_color` - The detected background color for reference
-/// * `noise_threshold` - Delta E threshold for noise detection (4.0 = moderate, lower = more sensitive)
-///
-/// # Returns
-/// Tuple containing:
-/// - Background color index in ANSI palette
-/// - Foreground color index in ANSI palette  
-/// - Binary pattern as 2D vector (0s and 1s)
-///
-/// # Algorithm
-/// 1. Apply denoising to reduce compression artifacts
-/// 2. Collect all colors within the cleaned block
-/// 3. Determine if background color is present
-/// 4. Select optimal foreground/background pair
-/// 5. Convert each pixel to binary based on color similarity
-/// 6. Map final colors to ANSI palette
-fn process_block(
-    image: &DynamicImage,
-    block_size: usize,
-    grid_x: u32,
-    grid_y: u32,
-    background_color: u32,
-    noise_threshold: f32,
-) -> (usize, usize, Vec<Vec<u8>>) {
-    
-    // Step 1: Apply denoising to reduce compression artifacts and noise
-    let denoised_pixel_colors = denoise_block(image, block_size, grid_x, grid_y, noise_threshold);
-    
-    // Map to store unique colors and their first occurrence position
-    let mut unique_colors: HashMap<u32, (u32, u32)> = HashMap::new();
-    // Initialize binary pattern matrix
-    let mut binary_pattern = vec![vec![0u8; block_size]; block_size];
-    
-    // Step 2: Analyze the denoised colors to build color map
-    for (idx, &color_key) in denoised_pixel_colors.iter().enumerate() {
-        let row = idx / block_size;
-        let col = idx % block_size;
-        let pixel_x = grid_x * block_size as u32 + col as u32;
-        let pixel_y = grid_y * block_size as u32 + row as u32;
-        
-        // Record unique colors and their positions
-        unique_colors.entry(color_key).or_insert((pixel_x, pixel_y));
-    }
-    
-    // Step 3: Analyze color composition and determine optimal color pair
-    let mut colors_vec: Vec<_> = unique_colors.iter().collect();
-    let mut background_present = false;
-    let unique_color_count = colors_vec.len();
-    
-    // Check if any colors are similar to the detected background
-    for color_entry in &mut colors_vec {
-        if *color_entry.0 == background_color {
-            background_present = true;
-        } else {
-            let distance = color_distance(*color_entry.0, background_color);
-            // Merge colors that are very similar to background (Delta E < 1.5, slightly more tolerant after denoising)
-            if distance < 1.5 {
-                (*color_entry).0 = &background_color;
-                background_present = true;
-            }
-        }
-    }
-    
-    // Step 4: Determine optimal foreground/background color pair based on color composition
-    let optimal_colors = if background_present {
-        match unique_color_count {
-            1 => {
-                // Single color block (likely all background)
-                Some((background_color, background_color))
-            }
-            2 => {
-                // Two colors: background + one foreground
-                let mut result = (background_color, background_color);
-                for color_entry in &colors_vec {
-                    if *color_entry.0 != background_color {
-                        result.1 = *color_entry.0;
-                        break;
-                    }
-                }
-                Some(result)
-            }
-            _ => {
-                // Multiple colors: keep background, find most contrasting foreground
-                let mut max_distance = 0.0f32;
-                let mut best_foreground = colors_vec[0];
-                
-                for color_entry in &colors_vec {
-                    let distance = color_distance(*color_entry.0, background_color);
-                    if distance > max_distance {
-                        max_distance = distance;
-                        best_foreground = *color_entry;
-                    }
-                }
-                Some((background_color, *best_foreground.0))
-            }
-        }
-    } else {
-        // No background color present
-        match unique_color_count {
-            1 => {
-                // Single foreground color
-                Some((*colors_vec[0].0, *colors_vec[0].0))
-            }
-            2 => {
-                // Two colors: assign based on luminance (darker = background)
-                let lum1 = luminance(*colors_vec[0].0);
-                let lum2 = luminance(*colors_vec[1].0);
-                
-                if lum2 > lum1 {
-                    Some((*colors_vec[0].0, *colors_vec[1].0))  // Dark bg, light fg
-                } else {
-                    Some((*colors_vec[1].0, *colors_vec[0].0))  // Light bg, dark fg
-                }
-            }
-            _ => {
-                // Multiple colors: merge similar ones and pick two most contrasting
-                let mut distinct_colors = vec![];
-                colors_vec.sort();
-                
-                let mut base_color = *colors_vec[0].0;
-                distinct_colors.push(colors_vec[0]);
-                
-                // Find distinct colors (Delta E > 1.5, slightly more tolerant after denoising)
-                for i in 1..unique_color_count {
-                    let distance = color_distance(*colors_vec[i].0, base_color);
-                    if distance > 1.5 {
-                        distinct_colors.push(colors_vec[i]);
-                    }
-                    base_color = *colors_vec[i].0;
-                }
-                
-                // Use luminance to determine foreground/background
-                if distinct_colors.len() >= 2 {
-                    let lum1 = luminance(*distinct_colors[0].0);
-                    let lum2 = luminance(*distinct_colors[1].0);
-                    
-                    if lum2 > lum1 {
-                        Some((*distinct_colors[0].0, *distinct_colors[1].0))
-                    } else {
-                        Some((*distinct_colors[1].0, *distinct_colors[0].0))
-                    }
-                } else {
-                    Some((*distinct_colors[0].0, *distinct_colors[0].0))
-                }
-            }
+            // Use Otsu's algorithm for optimal threshold
+            find_optimal_threshold(&brightnesses).unwrap_or(avg_brightness as u8)
         }
     };
 
-    // Step 5: Generate binary pattern based on color similarity using denoised colors
-    if let Some((bg_color, fg_color)) = optimal_colors {
-        for row in 0..block_size {
-            for col in 0..block_size {
-                let pixel_idx = row * block_size + col;
-                let pixel_color = denoised_pixel_colors[pixel_idx];
-                
-                // Calculate distances to both background and foreground
-                let distance_to_bg = color_distance(pixel_color, bg_color);
-                let distance_to_fg = color_distance(pixel_color, fg_color);
-                
-                // Assign bit based on which color is closer
-                binary_pattern[row][col] = if distance_to_bg <= distance_to_fg { 0 } else { 1 };
+    // Perform binarization and color grouping
+    let mut bitmap = vec![vec![0u8; size]; size];
+    let mut foreground_pixels = Vec::new();
+    let mut background_pixels = Vec::new();
+
+    for y in 0..size {
+        for x in 0..size {
+            let px = &cell[y][x];
+            let brightness = brightnesses[y * size + x];
+            
+            if brightness > threshold {
+                bitmap[y][x] = 1;
+                foreground_pixels.push(*px);
+            } else {
+                bitmap[y][x] = 0;
+                background_pixels.push(*px);
             }
         }
-        
-        // Step 6: Map colors to ANSI palette and return result
-        (
-            find_best_ansi_color_from_u32(bg_color),
-            find_best_ansi_color_from_u32(fg_color),
-            binary_pattern
-        )
+    }
+
+    // Calculate average foreground and background colors
+    let foreground_color = if foreground_pixels.is_empty() {
+        Rgb([255, 255, 255])
     } else {
-        // Fallback case (should rarely occur)
-        (0, 0, binary_pattern)
+        let r = foreground_pixels.iter().map(|p| p[0] as u32).sum::<u32>()
+            / foreground_pixels.len() as u32;
+        let g = foreground_pixels.iter().map(|p| p[1] as u32).sum::<u32>()
+            / foreground_pixels.len() as u32;
+        let b = foreground_pixels.iter().map(|p| p[2] as u32).sum::<u32>()
+            / foreground_pixels.len() as u32;
+        Rgb([r as u8, g as u8, b as u8])
+    };
+
+    let background_color = if background_pixels.is_empty() {
+        Rgb([0, 0, 0])
+    } else {
+        let r = background_pixels.iter().map(|p| p[0] as u32).sum::<u32>()
+            / background_pixels.len() as u32;
+        let g = background_pixels.iter().map(|p| p[1] as u32).sum::<u32>()
+            / background_pixels.len() as u32;
+        let b = background_pixels.iter().map(|p| p[2] as u32).sum::<u32>()
+            / background_pixels.len() as u32;
+        Rgb([r as u8, g as u8, b as u8])
+    };
+
+    CharacterCell {
+        bitmap,
+        size,
+        foreground_color,
+        background_color,
     }
 }
 
-/// Convert a 32-bit color to RGB struct for ANSI color matching
+/// Find optimal threshold using Otsu's algorithm
+///
+/// Otsu's method automatically selects an optimal threshold by maximizing
+/// the between-class variance of the foreground and background pixels.
 ///
 /// # Arguments
-/// * `color` - 32-bit RGBA color value
+/// * `brightnesses` - Array of brightness values
 ///
 /// # Returns
-/// RGB struct with extracted color components
-fn find_best_ansi_color_from_u32(color: u32) -> usize {
-    find_best_ansi_color(RGB {
-        r: (color >> 24) as u8,
-        g: (color >> 16) as u8,
-        b: (color >> 8) as u8,
-    })
+/// Optimal threshold value if calculation succeeds
+fn find_optimal_threshold(brightnesses: &[u8]) -> Option<u8> {
+    if brightnesses.len() < 2 {
+        return None;
+    }
+
+    let mut histogram = [0u32; 256];
+    for &brightness in brightnesses {
+        histogram[brightness as usize] += 1;
+    }
+
+    let total = brightnesses.len() as f32;
+    let mut best_threshold = 128u8;
+    let mut best_variance = 0.0f32;
+
+    for threshold in 1..=254 {
+        let mut w0 = 0.0f32; // Background weight
+        let mut w1 = 0.0f32; // Foreground weight
+        let mut sum0 = 0.0f32; // Background brightness sum
+        let mut sum1 = 0.0f32; // Foreground brightness sum
+
+        // Calculate background portion
+        for i in 0..threshold {
+            let count = histogram[i as usize] as f32;
+            w0 += count;
+            sum0 += i as f32 * count;
+        }
+
+        // Calculate foreground portion
+        for i in threshold..=255 {
+            let count = histogram[i as usize] as f32;
+            w1 += count;
+            sum1 += i as f32 * count;
+        }
+
+        if w0 == 0.0 || w1 == 0.0 {
+            continue;
+        }
+
+        let mean0 = sum0 / w0; // Background mean
+        let mean1 = sum1 / w1; // Foreground mean
+
+        // Between-class variance
+        let between_class_variance = (w0 / total) * (w1 / total) * (mean0 - mean1).powi(2);
+
+        if between_class_variance > best_variance {
+            best_variance = between_class_variance;
+            best_threshold = threshold;
+        }
+    }
+
+    Some(best_threshold)
 }
 
-/// Calculate color distance between two RGB colors using Delta E
+/// Convert variable-sized bitmap to vector for distance calculation
 ///
-/// # Arguments  
-/// * `color1` - First RGB color
-/// * `color2` - Second RGB color
+/// # Arguments
+/// * `bitmap` - Variable-sized binary pattern
 ///
 /// # Returns
-/// Delta E color distance value
-fn color_distance_rgb(color1: &RGB, color2: &RGB) -> f32 {
-    // Convert both colors to LAB space
-    let lab1 = Lab::from_rgb(&[color1.r, color1.g, color1.b]);
-    let lab2 = Lab::from_rgb(&[color2.r, color2.g, color2.b]);
-    
-    // Create LAB value structures
-    let lab_val1 = LabValue { l: lab1.l, a: lab1.a, b: lab1.b };
-    let lab_val2 = LabValue { l: lab2.l, a: lab2.a, b: lab2.b };
-    
-    // Calculate Delta E 2000
-    *DeltaE::new(&lab_val1, &lab_val2, DE2000).value()
+/// Flattened vector representation
+fn bitmap_to_vector(bitmap: &[Vec<u8>]) -> Vec<u8> {
+    let mut vector = Vec::new();
+    for row in bitmap {
+        for &pixel in row {
+            vector.push(pixel);
+        }
+    }
+    vector
+}
+
+/// Calculate Hamming distance between two binary vectors
+///
+/// Hamming distance counts the number of positions where the vectors differ.
+/// This is ideal for comparing binary patterns.
+///
+/// # Arguments
+/// * `v1` - First binary vector
+/// * `v2` - Second binary vector
+///
+/// # Returns
+/// Number of differing positions
+fn hamming_distance(v1: &[u8], v2: &[u8]) -> u32 {
+    v1.iter()
+        .zip(v2.iter())
+        .map(|(a, b)| if a != b { 1 } else { 0 })
+        .sum()
+}
+
+/// Cluster similar characters using Hamming distance threshold
+///
+/// This function groups similar binary patterns together to reduce redundancy.
+/// Characters within the similarity threshold are merged into clusters.
+///
+/// # Arguments
+/// * `chars` - Vector of character cells to cluster
+/// * `similarity_threshold` - Maximum Hamming distance for clustering
+///
+/// # Returns
+/// Tuple of (clustered characters, bitmap-to-index mapping)
+fn cluster_similar_characters(
+    chars: Vec<CharacterCell>,
+    similarity_threshold: u32,
+) -> (Vec<CharacterCell>, HashMap<Vec<Vec<u8>>, usize>) {
+    if chars.is_empty() {
+        return (chars, HashMap::new());
+    }
+
+    let mut clustered = Vec::new();
+    let mut used = vec![false; chars.len()];
+    let mut bitmap_to_new_index = HashMap::new();
+
+    for i in 0..chars.len() {
+        if used[i] {
+            continue;
+        }
+
+        let char_vector = bitmap_to_vector(&chars[i].bitmap);
+        let mut cluster_chars = vec![chars[i].clone()];
+        used[i] = true;
+
+        // Find similar characters
+        for j in (i + 1)..chars.len() {
+            if used[j] {
+                continue;
+            }
+
+            let other_vector = bitmap_to_vector(&chars[j].bitmap);
+            let distance = hamming_distance(&char_vector, &other_vector);
+
+            if distance <= similarity_threshold {
+                cluster_chars.push(chars[j].clone());
+                used[j] = true;
+            }
+        }
+
+        // Choose cluster representative (first character)
+        let representative = cluster_chars[0].clone();
+        let new_index = clustered.len();
+
+        // Map all bitmaps in this cluster to the new index
+        for cluster_char in &cluster_chars {
+            bitmap_to_new_index.insert(cluster_char.bitmap.clone(), new_index);
+        }
+
+        clustered.push(representative);
+
+        if cluster_chars.len() > 1 {
+            println!(
+                "Merged {} similar characters (hamming distance <= {})",
+                cluster_chars.len(),
+                similarity_threshold
+            );
+        }
+    }
+
+    (clustered, bitmap_to_new_index)
+}
+
+/// Extract unique character cells from image using adaptive processing
+///
+/// This is the main processing function that:
+/// 1. Divides the image into symbol-sized blocks
+/// 2. Processes each block with adaptive thresholding
+/// 3. Extracts unique patterns and colors
+///
+/// # Arguments
+/// * `img` - Source image to process
+/// * `symsize` - Size of each symbol block
+/// * `crop_region` - Optional crop region (x, y, width, height)
+///
+/// # Returns
+/// Tuple of (unique character cells, position mapping)
+fn extract_unique_cells(
+    img: &DynamicImage,
+    symsize: u32,
+    crop_region: Option<(u32, u32, u32, u32)>,
+) -> (Vec<CharacterCell>, Vec<Vec<CellInfo>>) {
+    let (img_width, img_height, start_x, start_y) = if let Some((x, y, w, h)) = crop_region {
+        (w, h, x, y)
+    } else {
+        (img.width(), img.height(), 0, 0)
+    };
+
+    let grid_w = img_width / symsize;
+    let grid_h = img_height / symsize;
+    let mut bitmap_to_index: HashMap<Vec<Vec<u8>>, usize> = HashMap::new();
+    let mut unique_cells = vec![];
+    let mut cell_map = vec![
+        vec![
+            CellInfo {
+                bitmap_index: 0,
+                foreground_color: Rgb([0, 0, 0]),
+                background_color: Rgb([0, 0, 0])
+            };
+            grid_w as usize
+        ];
+        grid_h as usize
+    ];
+
+    // Process each symbol block
+    for gy in 0..grid_h {
+        for gx in 0..grid_w {
+            let mut cell = vec![vec![Rgb([0, 0, 0]); symsize as usize]; symsize as usize];
+
+            // Extract pixel block
+            for dy in 0..symsize as usize {
+                for dx in 0..symsize as usize {
+                    let x = start_x + gx * symsize + dx as u32;
+                    let y = start_y + gy * symsize + dy as u32;
+
+                    if x < img.width() && y < img.height() {
+                        let pixel = img.get_pixel(x, y);
+                        cell[dy][dx] = Rgb([pixel[0], pixel[1], pixel[2]]);
+                    }
+                }
+            }
+
+            // Process the cell with adaptive thresholding
+            let char_cell = process_cell(&cell, symsize as usize, 0.1); // min_contrast_ratio = 0.1
+
+            // Check for existing bitmap pattern
+            let bitmap_index = if let Some(&existing_index) = bitmap_to_index.get(&char_cell.bitmap)
+            {
+                existing_index
+            } else {
+                let new_index = unique_cells.len();
+                bitmap_to_index.insert(char_cell.bitmap.clone(), new_index);
+                unique_cells.push(char_cell.clone());
+                new_index
+            };
+
+            cell_map[gy as usize][gx as usize] = CellInfo {
+                bitmap_index,
+                foreground_color: char_cell.foreground_color,
+                background_color: char_cell.background_color,
+            };
+        }
+    }
+
+    (unique_cells, cell_map)
 }
 
 /// Find the closest ANSI color match for a given RGB color
 ///
 /// This function searches through the standard ANSI 256-color palette
-/// to find the perceptually closest match using Delta E color distance.
+/// to find the best perceptual match using Euclidean distance in RGB space.
 ///
 /// # Arguments
-/// * `target_color` - RGB color to match
+/// * `target` - RGB color to match
 ///
 /// # Returns
 /// Index of the closest ANSI color (0-255)
-///
-/// # Algorithm
-/// 1. Compare input color against all 256 ANSI colors
-/// 2. Use Delta E for perceptually accurate distance measurement
-/// 3. Return index of color with minimum distance
-fn find_best_ansi_color(target_color: RGB) -> usize {
+fn find_best_ansi_color(target: &Rgb<u8>) -> usize {
     let mut min_distance = f32::MAX;
     let mut best_match_index = 0;
 
-    // Search through all ANSI colors for the best match
     for (index, ansi_color) in ANSI_COLOR_RGB.iter().enumerate() {
-        let ansi_rgb = RGB {
-            r: ansi_color[0],
-            g: ansi_color[1], 
-            b: ansi_color[2],
-        };
-        
-        // Calculate perceptual color distance
-        let distance = color_distance_rgb(&ansi_rgb, &target_color);
+        // Calculate Euclidean distance in RGB space
+        let dr = target[0] as f32 - ansi_color[0] as f32;
+        let dg = target[1] as f32 - ansi_color[1] as f32;
+        let db = target[2] as f32 - ansi_color[2] as f32;
+        let distance = (dr * dr + dg * dg + db * db).sqrt();
 
-        // Track the closest match
         if distance < min_distance {
             min_distance = distance;
             best_match_index = index;
@@ -691,254 +488,252 @@ fn find_best_ansi_color(target_color: RGB) -> usize {
     best_match_index
 }
 
-/// Detect and remove noise pixels from an image block
+/// Render character set as a black and white atlas image
 ///
-/// This function identifies noise pixels that are likely artifacts from image compression
-/// or other sources, and replaces them with more appropriate colors based on their
-/// local neighborhood context.
+/// Creates a grid layout showing all unique symbols as binary patterns.
 ///
 /// # Arguments
-/// * `image` - Source image to analyze
-/// * `block_size` - Size of the symbol block
-/// * `grid_x` - X position in the symbol grid
-/// * `grid_y` - Y position in the symbol grid
-/// * `noise_threshold` - Delta E threshold for noise detection (lower = more sensitive)
+/// * `chars` - Vector of unique character cells
+/// * `chars_per_row` - Number of characters per row in output
 ///
 /// # Returns
-/// Vector of cleaned pixel colors
-///
-/// # Noise Detection Strategy
-/// 1. **Isolation Detection**: Pixels that differ significantly from all neighbors
-/// 2. **Statistical Outliers**: Colors that appear very rarely in the block
-/// 3. **Compression Artifacts**: Subtle color variations near edges
-///
-/// # Denoising Approach
-/// - Use neighborhood voting to determine correct pixel colors
-/// - Apply median filtering for edge preservation
-/// - Replace isolated pixels with dominant neighbor colors
-fn denoise_block(
-    image: &DynamicImage,
-    block_size: usize,
-    grid_x: u32,
-    grid_y: u32,
-    noise_threshold: f32,
-) -> Vec<u32> {
-    let mut pixel_colors = vec![0u32; block_size * block_size];
-    let mut denoised_colors = vec![0u32; block_size * block_size];
-    
-    // Step 1: Extract all pixel colors from the block
-    for row in 0..block_size {
-        for col in 0..block_size {
-            let pixel_x = grid_x * block_size as u32 + col as u32;
-            let pixel_y = grid_y * block_size as u32 + row as u32;
-            
-            if pixel_x < image.width() && pixel_y < image.height() {
-                let pixel = image.get_pixel(pixel_x, pixel_y);
-                let color = ((pixel[0] as u32) << 24)
-                          + ((pixel[1] as u32) << 16)
-                          + ((pixel[2] as u32) << 8)
-                          + (pixel[3] as u32);
-                pixel_colors[row * block_size + col] = color;
-            }
-        }
+/// RGB image containing the character atlas
+fn render_character_set(chars: &Vec<CharacterCell>, chars_per_row: usize) -> RgbImage {
+    if chars.is_empty() {
+        return ImageBuffer::new(1, 1);
     }
     
-    // Step 2: Identify noise pixels using neighborhood analysis
-    for row in 0..block_size {
-        for col in 0..block_size {
-            let current_idx = row * block_size + col;
-            let current_color = pixel_colors[current_idx];
-            
-            // Collect neighbor colors (3x3 neighborhood)
-            let mut neighbor_colors = Vec::new();
-            for dy in -1i32..=1 {
-                for dx in -1i32..=1 {
-                    let nr = row as i32 + dy;
-                    let nc = col as i32 + dx;
-                    
-                    // Skip out-of-bounds and center pixel
-                    if nr < 0 || nc < 0 || nr >= block_size as i32 || nc >= block_size as i32 || (dy == 0 && dx == 0) {
-                        continue;
-                    }
-                    
-                    let neighbor_idx = nr as usize * block_size + nc as usize;
-                    neighbor_colors.push(pixel_colors[neighbor_idx]);
-                }
-            }
-            
-            // Step 3: Check if current pixel is noise
-            let is_noise = if neighbor_colors.is_empty() {
-                false // Edge pixels are not considered noise
-            } else {
-                // Calculate average distance to neighbors
-                let total_distance: f32 = neighbor_colors.iter()
-                    .map(|&neighbor| color_distance(current_color, neighbor))
-                    .sum();
-                let avg_distance = total_distance / neighbor_colors.len() as f32;
-                
-                // Also check if this color is statistically rare in the block
-                let color_frequency = pixel_colors.iter()
-                    .filter(|&&c| color_distance(c, current_color) < 2.0)
-                    .count();
-                let frequency_ratio = color_frequency as f32 / (block_size * block_size) as f32;
-                
-                // Consider it noise if it's isolated AND rare
-                avg_distance > noise_threshold && frequency_ratio < 0.1
-            };
-            
-            // Step 4: Replace noise pixels with corrected colors
-            if is_noise {
-                // Use median color from neighbors for replacement
-                let corrected_color = if !neighbor_colors.is_empty() {
-                    find_median_color(&neighbor_colors)
-                } else {
-                    current_color // Keep original if no neighbors
+    let symbol_size = chars[0].size;
+    let rows = (chars.len() + chars_per_row - 1) / chars_per_row;
+    let w = chars_per_row * symbol_size;
+    let h = rows * symbol_size;
+    let mut out = ImageBuffer::new(w as u32, h as u32);
+
+    for (i, char_cell) in chars.iter().enumerate() {
+        let row = i / chars_per_row;
+        let col = i % chars_per_row;
+        let start_x = col * symbol_size;
+        let start_y = row * symbol_size;
+
+        for y in 0..symbol_size {
+            for x in 0..symbol_size {
+                let color = match char_cell.bitmap[y][x] {
+                    0 => Rgb([255, 255, 255]), // White background
+                    1 => Rgb([0, 0, 0]),       // Black foreground
+                    _ => Rgb([128, 128, 128]), // Should not occur
                 };
-                denoised_colors[current_idx] = corrected_color;
+                out.put_pixel((start_x + x) as u32, (start_y + y) as u32, color);
+            }
+        }
+    }
+
+    out
+}
+
+/// Reconstruct the original image using extracted symbols and colors
+///
+/// Creates a faithful reconstruction using the extracted patterns and
+/// position-specific colors.
+///
+/// # Arguments
+/// * `unique_cells` - Vector of unique character patterns
+/// * `cell_map` - Mapping of positions to characters and colors
+/// * `width` - Output image width
+/// * `height` - Output image height
+/// * `symsize` - Symbol size
+///
+/// # Returns
+/// RGB image reconstruction
+fn reconstruct_image(
+    unique_cells: &Vec<CharacterCell>,
+    cell_map: &Vec<Vec<CellInfo>>,
+    width: u32,
+    height: u32,
+    symsize: u32,
+) -> RgbImage {
+    let mut out = ImageBuffer::new(width, height);
+    let grid_w = width / symsize;
+    let grid_h = height / symsize;
+
+    for gy in 0..grid_h {
+        for gx in 0..grid_w {
+            let cell_info = &cell_map[gy as usize][gx as usize];
+            let char_cell = &unique_cells[cell_info.bitmap_index];
+
+            for dy in 0..symsize as usize {
+                for dx in 0..symsize as usize {
+                    let x = gx * symsize + dx as u32;
+                    let y = gy * symsize + dy as u32;
+                    
+                    if x < width && y < height {
+                        let color = match char_cell.bitmap[dy][dx] {
+                            0 => cell_info.background_color,
+                            1 => cell_info.foreground_color,
+                            _ => Rgb([128, 128, 128]),
+                        };
+                        out.put_pixel(x, y, color);
+                    }
+                }
+            }
+        }
+    }
+
+    out
+}
+
+/// Print symbol pattern in terminal using ASCII representation
+///
+/// Displays the binary pattern using '█' for foreground and ' ' for background.
+///
+/// # Arguments
+/// * `bitmap` - Variable-sized binary pattern to display
+/// * `index` - Symbol index for labeling
+fn print_symbol_pattern(bitmap: &[Vec<u8>], index: usize) {
+    println!("Symbol {}:", index);
+    for row in bitmap {
+        print!("  ");
+        for &pixel in row {
+            if pixel == 1 {
+                print!("█");
             } else {
-                denoised_colors[current_idx] = current_color;
+                print!(" ");
+            }
+        }
+        println!();
+    }
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        print_symbol_usage();
+        return;
+    }
+
+    // Parse command line arguments
+    let image_path = &args[1];
+    let symsize: u32 = args[2].parse().unwrap_or_else(|_| {
+        eprintln!("Error: Symbol size must be a valid number");
+        std::process::exit(1);
+    });
+
+    let similarity_threshold: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(2); // Default to 2 for moderate clustering
+
+    // Parse optional crop region
+    let crop_region = if args.len() >= 8 {
+        let x: u32 = args[4].parse().unwrap_or(0);
+        let y: u32 = args[5].parse().unwrap_or(0);
+        let w: u32 = args[6].parse().unwrap_or(0);
+        let h: u32 = args[7].parse().unwrap_or(0);
+        Some((x, y, w, h))
+    } else {
+        None
+    };
+
+    // Validate file path
+    if !Path::new(image_path).exists() {
+        eprintln!("Error: Image file '{}' not found", image_path);
+        std::process::exit(1);
+    }
+
+    // Load and process image
+    println!("Loading image: {}", image_path);
+    let img = image::open(image_path).unwrap_or_else(|e| {
+        eprintln!("Error: Failed to load image: {}", e);
+        std::process::exit(1);
+    });
+
+    println!("Processing image with adaptive thresholding...");
+    let (original_unique_cells, mut cell_map) = extract_unique_cells(&img, symsize, crop_region);
+
+    println!(
+        "Found {} unique character cells (before similarity clustering)",
+        original_unique_cells.len()
+    );
+
+    // Apply similarity clustering
+    println!(
+        "Clustering similar characters (threshold: {} pixels)...",
+        similarity_threshold
+    );
+    let (unique_cells, bitmap_to_new_index) =
+        cluster_similar_characters(original_unique_cells.clone(), similarity_threshold);
+
+    println!(
+        "After similarity clustering: {} unique character cells",
+        unique_cells.len()
+    );
+
+    // Update cell mapping with clustered indices
+    for row in &mut cell_map {
+        for cell_info in row {
+            let old_char = &original_unique_cells[cell_info.bitmap_index];
+            if let Some(&new_index) = bitmap_to_new_index.get(&old_char.bitmap) {
+                cell_info.bitmap_index = new_index;
             }
         }
     }
-    
-    // Step 5: Apply additional smoothing for remaining artifacts
-    apply_smoothing_filter(&mut denoised_colors, block_size)
-}
 
-/// Find the median color from a list of colors
-///
-/// This function helps reduce noise by finding a representative color
-/// from a neighborhood, which is more robust than simple averaging.
-///
-/// # Arguments
-/// * `colors` - List of colors to analyze
-///
-/// # Returns
-/// Median color that best represents the input colors
-fn find_median_color(colors: &[u32]) -> u32 {
-    if colors.is_empty() {
-        return 0;
-    }
-    
-    if colors.len() == 1 {
-        return colors[0];
-    }
-    
-    // Extract RGB components for median calculation
-    let mut reds: Vec<u8> = colors.iter().map(|&c| (c >> 24) as u8).collect();
-    let mut greens: Vec<u8> = colors.iter().map(|&c| (c >> 16) as u8).collect();
-    let mut blues: Vec<u8> = colors.iter().map(|&c| (c >> 8) as u8).collect();
-    let mut alphas: Vec<u8> = colors.iter().map(|&c| c as u8).collect();
-    
-    // Sort each component
-    reds.sort();
-    greens.sort();
-    blues.sort();
-    alphas.sort();
-    
-    // Find median values
-    let mid = colors.len() / 2;
-    let median_r = if colors.len() % 2 == 0 {
-        ((reds[mid - 1] as u16 + reds[mid] as u16) / 2) as u8
-    } else {
-        reds[mid]
-    };
-    
-    let median_g = if colors.len() % 2 == 0 {
-        ((greens[mid - 1] as u16 + greens[mid] as u16) / 2) as u8
-    } else {
-        greens[mid]
-    };
-    
-    let median_b = if colors.len() % 2 == 0 {
-        ((blues[mid - 1] as u16 + blues[mid] as u16) / 2) as u8
-    } else {
-        blues[mid]
-    };
-    
-    let median_a = if colors.len() % 2 == 0 {
-        ((alphas[mid - 1] as u16 + alphas[mid] as u16) / 2) as u8
-    } else {
-        alphas[mid]
-    };
-    
-    // Reconstruct median color
-    ((median_r as u32) << 24) + ((median_g as u32) << 16) + ((median_b as u32) << 8) + (median_a as u32)
-}
+    // Display symbols and color information
+    // println!("\nExtracted Symbols:");
+    // println!("==================");
 
-/// Apply additional smoothing to reduce remaining compression artifacts
-///
-/// This function performs a gentle smoothing operation that preserves edges
-/// while reducing subtle noise that might remain after the initial denoising.
-///
-/// # Arguments
-/// * `colors` - Mutable reference to the color array
-/// * `block_size` - Size of the block (assuming square)
-///
-/// # Returns
-/// Modified color array with smoothing applied
-fn apply_smoothing_filter(colors: &mut [u32], block_size: usize) -> Vec<u32> {
-    let mut smoothed = colors.to_vec();
-    
-    // Apply a gentle bilateral-like filter
-    for row in 1..(block_size - 1) {
-        for col in 1..(block_size - 1) {
-            let center_idx = row * block_size + col;
-            let center_color = colors[center_idx];
-            
-            // Collect nearby colors with weights
-            let mut weighted_colors = Vec::new();
-            let mut total_weight = 0.0f32;
-            
-            for dy in -1i32..=1 {
-                for dx in -1i32..=1 {
-                    let nr = row as i32 + dy;
-                    let nc = col as i32 + dx;
-                    let neighbor_idx = nr as usize * block_size + nc as usize;
-                    let neighbor_color = colors[neighbor_idx];
-                    
-                    // Calculate spatial and color distances
-                    let spatial_distance = ((dy * dy + dx * dx) as f32).sqrt();
-                    let color_distance_val = color_distance(center_color, neighbor_color);
-                    
-                    // Bilateral filter weight: close in space AND similar in color get higher weight
-                    let spatial_weight = (-spatial_distance * spatial_distance / 2.0).exp();
-                    let color_weight = (-color_distance_val * color_distance_val / 8.0).exp();
-                    let weight = spatial_weight * color_weight;
-                    
-                    weighted_colors.push((neighbor_color, weight));
-                    total_weight += weight;
-                }
-            }
-            
-            // Calculate weighted average color
-            if total_weight > 0.0 {
-                let mut sum_r = 0.0f32;
-                let mut sum_g = 0.0f32;
-                let mut sum_b = 0.0f32;
-                let mut sum_a = 0.0f32;
-                
-                for (color, weight) in weighted_colors {
-                    let w = weight / total_weight;
-                    sum_r += ((color >> 24) as u8) as f32 * w;
-                    sum_g += ((color >> 16) as u8) as f32 * w;
-                    sum_b += ((color >> 8) as u8) as f32 * w;
-                    sum_a += (color as u8) as f32 * w;
-                }
-                
-                let smoothed_color = ((sum_r as u8 as u32) << 24)
-                                   + ((sum_g as u8 as u32) << 16)
-                                   + ((sum_b as u8 as u32) << 8)
-                                   + (sum_a as u8 as u32);
-                
-                // Only apply smoothing if the change is subtle (preserve edges)
-                let change_amount = color_distance(center_color, smoothed_color);
-                if change_amount < 3.0 {
-                    smoothed[center_idx] = smoothed_color;
-                }
-            }
-        }
-    }
-    
-    smoothed
+    // for (i, char_cell) in unique_cells.iter().enumerate() {
+    //     print_symbol_pattern(&char_cell.bitmap, i);
+
+    //     let fg_ansi = find_best_ansi_color(&char_cell.foreground_color);
+    //     let bg_ansi = find_best_ansi_color(&char_cell.background_color);
+
+    //     println!(
+    //         "  Colors: FG=RGB({},{},{})→ANSI[{}], BG=RGB({},{},{})→ANSI[{}]",
+    //         char_cell.foreground_color[0], char_cell.foreground_color[1], char_cell.foreground_color[2], fg_ansi,
+    //         char_cell.background_color[0], char_cell.background_color[1], char_cell.background_color[2], bg_ansi
+    //     );
+    //     println!();
+    // }
+
+    // Generate output images
+    let image_width = if let Some((_, _, w, _)) = crop_region {
+        w
+    } else {
+        img.width()
+    };
+    let image_height = if let Some((_, _, _, h)) = crop_region {
+        h
+    } else {
+        img.height()
+    };
+
+    // Save character set (black & white)
+    let char_set = render_character_set(&unique_cells, 16);
+    char_set
+        .save("sout.png")
+        .expect("Failed to save character set");
+    println!("Saved character set to sout.png (16 chars per row, B&W)");
+
+    // Save reconstructed image (with colors)
+    let reconstructed =
+        reconstruct_image(&unique_cells, &cell_map, image_width, image_height, symsize);
+    reconstructed
+        .save("bout.png")
+        .expect("Failed to save reconstructed image");
+    println!("Saved reconstructed image to bout.png (with colors)");
+
+    // Print summary statistics
+    println!("\nProcessing Summary:");
+    println!("===================");
+    println!("Image size: {}x{}", image_width, image_height);
+    println!("Symbol size: {}x{}", symsize, symsize);
+    println!(
+        "Grid dimensions: {}x{}",
+        image_width / symsize,
+        image_height / symsize
+    );
+    println!("Original unique symbols: {}", original_unique_cells.len());
+    println!("After clustering: {}", unique_cells.len());
+    println!(
+        "Compression ratio: {:.1}%",
+        (1.0 - unique_cells.len() as f32 / original_unique_cells.len() as f32) * 100.0
+    );
+    println!("Similarity threshold: {} pixels", similarity_threshold);
 }
