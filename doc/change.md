@@ -1,3 +1,6 @@
+# 1.0.4
+- Fix stand-alone application web compile bug
+
 # 1.0.3
 - Added build.rs, set cfg_aliases
 - Fix creat stand-alone application
