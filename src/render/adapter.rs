@@ -190,7 +190,7 @@ use std::time::Duration;
 // use log::info;
 
 /// OpenGL rendering subsystem for winit, SDL and web modes
-#[cfg(graphics_simple)]
+#[cfg(any(sdl_backend, winit_backend, wasm))]
 pub mod gl;
 
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering

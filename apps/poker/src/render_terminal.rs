@@ -48,9 +48,9 @@ impl PokerRender {
                 let l = self.panel.get_sprite(&format!("t{}", i + n * 5));
                 let bi = ts[n].best[i].to_u8() as usize;
 
-                #[cfg(graphics_simple)]
+                #[cfg(graphics_mode)]
                 let ext = "pix";
-                #[cfg(not(graphics_simple))]
+                #[cfg(not(graphics_mode))]
                 let ext = "txt";
                 let cn = if bi == 0 {
                     format!("poker/back.{}", ext)
@@ -82,7 +82,7 @@ impl Render for PokerRender {
             .adapter
             .init(82, 20, 0.5, 0.5, "redblack".to_string());
         self.panel.init(context);
-        #[cfg(not(graphics_simple))]
+        #[cfg(not(graphics_mode))]
         {
             let gb = self.panel.get_sprite("back");
             asset2sprite!(gb, context, "back.txt");
