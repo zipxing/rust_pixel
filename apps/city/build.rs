@@ -1,5 +1,5 @@
-include!("../../build_aliases.rs");
+include!("../../build_support.rs");
 
 fn main() {
-    setup_cfg_aliases();
+    setup_rust_pixel_cfg_aliases();
 }

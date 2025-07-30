@@ -22,6 +22,7 @@ cfg_aliases = "0.2.1"
 cfg_aliases = { workspace = true }
 
 [dependencies]
+cfg_aliases = { workspace = true }
 # Procedural macro dependencies
 quote = "1.0"
 syn = { version = "2.0", features = ["full"] }

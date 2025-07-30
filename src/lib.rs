@@ -141,6 +141,9 @@ macro_rules! pixel_game {
 /// disjoint-set data structure, astar
 pub mod algorithm;
 
+/// build support utilities for external projects
+pub mod build_support;
+
 /// resource manager, supporting async load to better compatible with wasm mode
 #[cfg(not(feature = "base"))]
 pub mod asset;
