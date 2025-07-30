@@ -194,7 +194,7 @@ use std::time::Duration;
 pub mod gl;
 
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering
-#[cfg(feature = "wgpu")]
+#[cfg(wgpu_backend)]
 pub mod wgpu;
 
 /// SDL adapter module - Desktop rendering backend based on SDL2
@@ -206,10 +206,7 @@ pub mod sdl_adapter;
 pub mod web_adapter;
 
 /// Winit common module - Shared code between winit_glow and winit_wgpu adapters
-#[cfg(any(
-    all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")),
-    all(feature = "wgpu", not(target_arch = "wasm32"))
-))]
+#[cfg(any(winit_backend, wgpu_backend))]
 pub mod winit_common;
 
 /// Winit + Glow adapter module - OpenGL backend with winit window management
@@ -221,23 +218,11 @@ pub mod winit_glow_adapter;
 pub mod winit_wgpu_adapter;
 
 /// Crossterm adapter module - Terminal-based text mode rendering
-#[cfg(not(any(
-    feature = "sdl",
-    feature = "winit",
-    feature = "wgpu",
-    target_os = "android",
-    target_os = "ios",
-    target_arch = "wasm32"
-)))]
+#[cfg(cross_backend)]
 pub mod cross_adapter;
 
 // Re-export graph rendering functions and data structures
-#[cfg(any(
-    feature = "sdl",
-    feature = "winit",
-    feature = "wgpu",
-    target_arch = "wasm32"
-))]
+#[cfg(graphics_mode)]
 pub use crate::render::graph::{
     generate_render_buffer, init_sym_height, init_sym_width, push_render_buffer, render_border,
     render_logo, render_main_buffer, render_pixel_sprites, Graph, RenderCell, PIXEL_LOGO,

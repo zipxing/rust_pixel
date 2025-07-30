@@ -16,7 +16,7 @@ fn setup_rust_pixel_cfg_aliases() {
         sdl_backend: { all(feature = "sdl", not(wasm)) },
         winit_backend: { all(feature = "winit", not(wasm), not(feature = "wgpu")) },
         wgpu_backend: { all(feature = "wgpu", not(wasm)) },
-        cross_backend: { not(graphics_backend) },
+        cross_backend: { not(graphics_mode) },
         
         // Audio support aliases
         audio_support: { not(any(mobile, wasm)) },
