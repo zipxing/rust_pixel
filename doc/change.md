@@ -1,3 +1,7 @@
+# 1.0.3
+- Added build.rs, set cfg_aliases
+- Fix creat stand-alone application
+
 # 1.0.2
 - cargo upgrade: upgrade depend crate version
 - toml 0.9 is bad, downgrade to toml 0.8 for cargo.toml parse
