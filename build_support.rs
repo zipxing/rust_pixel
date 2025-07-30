@@ -1,3 +1,6 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022～2025
+
 // Shared cfg_aliases configuration function
 // Called in each crate's build.rs: setup_cfg_aliases();
 

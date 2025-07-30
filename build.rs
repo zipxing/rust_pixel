@@ -1,3 +1,6 @@
+// RustPixel
+// copyright zipxing@hotmail.com 2022～2025
+
 include!("build_support.rs");
 
 fn main() {
