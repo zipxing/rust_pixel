@@ -19,16 +19,16 @@ use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::R
 ))]
 use crate::render::adapter::cross_adapter::CrosstermAdapter;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
+#[cfg(sdl_backend)]
 use crate::render::adapter::sdl_adapter::SdlAdapter;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "winit", not(feature = "wgpu")))]
+#[cfg(winit_backend)]
 use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "wgpu"))]
+#[cfg(wgpu_backend)]
 use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(wasm)]
 use crate::render::adapter::web_adapter::WebAdapter;
 
 pub struct Context {
@@ -52,13 +52,13 @@ impl Context {
             rand: Rand::new(),
             asset_manager: AssetManager::new(),
             input_events: vec![],
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(wasm)]
             adapter: Box::new(WebAdapter::new(name, project_path)),
-            #[cfg(all(not(target_arch = "wasm32"), feature = "sdl"))]
+            #[cfg(sdl_backend)]
             adapter: Box::new(SdlAdapter::new(name, project_path)),
-            #[cfg(all(not(target_arch = "wasm32"), feature = "winit", not(feature = "wgpu")))]
+            #[cfg(winit_backend)]
             adapter: Box::new(WinitGlowAdapter::new(name, project_path)),
-            #[cfg(all(not(target_arch = "wasm32"), feature = "wgpu"))]
+            #[cfg(wgpu_backend)]
             adapter: Box::new(WinitWgpuAdapter::new(name, project_path)),
             #[cfg(all(
                 not(target_arch = "wasm32"),

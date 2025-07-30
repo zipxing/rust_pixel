@@ -190,7 +190,7 @@ use std::time::Duration;
 // use log::info;
 
 /// OpenGL rendering subsystem for winit, SDL and web modes
-#[cfg(any(feature = "sdl", feature = "winit", target_arch = "wasm32"))]
+#[cfg(graphics_simple)]
 pub mod gl;
 
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering
@@ -198,11 +198,11 @@ pub mod gl;
 pub mod wgpu;
 
 /// SDL adapter module - Desktop rendering backend based on SDL2
-#[cfg(all(feature = "sdl", not(target_arch = "wasm32")))]
+#[cfg(sdl_backend)]
 pub mod sdl_adapter;
 
 /// Web adapter module - WebGL-based browser rendering backend
-#[cfg(target_arch = "wasm32")]
+#[cfg(wasm)]
 pub mod web_adapter;
 
 /// Winit common module - Shared code between winit_glow and winit_wgpu adapters
@@ -213,11 +213,11 @@ pub mod web_adapter;
 pub mod winit_common;
 
 /// Winit + Glow adapter module - OpenGL backend with winit window management
-#[cfg(all(feature = "winit", not(feature = "wgpu"), not(target_arch = "wasm32")))]
+#[cfg(winit_backend)]
 pub mod winit_glow_adapter;
 
 /// Winit + WGPU adapter module - Modern GPU backend with winit window management  
-#[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
+#[cfg(wgpu_backend)]
 pub mod winit_wgpu_adapter;
 
 /// Crossterm adapter module - Terminal-based text mode rendering
@@ -308,12 +308,7 @@ pub struct AdapterBase {
     pub rd: Rand,
 
     /// Datas using by graph mode
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     pub gr: Graph,
 }
 
@@ -531,12 +526,7 @@ pub trait Adapter {
     /// ## Rendering Modes
     /// - **rflag=true**: Normal rendering directly to screen
     /// - **rflag=false**: Buffered mode - stores render data for external access (FFI/WASM)
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn draw_all_graph(
         &mut self,
         current_buffer: &Buffer,
@@ -568,12 +558,7 @@ pub trait Adapter {
     }
 
     // draw buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
         // Convert buffer to render buffer first
         let rbuf = self.buffer_to_render_buffer(buf);
@@ -591,21 +576,11 @@ pub trait Adapter {
     /// - `rbuf`: Array of RenderCell data (GPU-ready format)
     /// - `rtidx`: Target render texture index (typically 2 for main scene, 3 for transitions)
     /// - `debug`: Enable debug mode rendering (colored backgrounds for debugging)
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool);
 
     // buffer to render buffer - unified for both OpenGL and WGPU
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
         let mut rbuf = vec![];
         let rx = self.get_base().gr.ratio_x;
@@ -626,12 +601,7 @@ pub trait Adapter {
         rbuf
     }
 
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn only_render_buffer(&mut self) {
         self.get_base().gr.rflag = false;
     }
@@ -681,12 +651,7 @@ pub trait Adapter {
     /// │  └─────────────────────────┘                               │
     /// └─────────────────────────────────────────────────────────────┘
     /// ```
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn draw_render_textures_to_screen(&mut self);
 
     fn as_any(&mut self) -> &mut dyn Any;
@@ -702,12 +667,7 @@ pub trait Adapter {
     /// # Parameters
     /// - `texture_index`: Render texture index (0-3, typically 2=main, 3=effects)
     /// - `visible`: Whether the texture should be visible
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
         // Default implementation for graphics modes
         // Each adapter can override this with optimized implementations
@@ -720,12 +680,7 @@ pub trait Adapter {
     ///
     /// # Parameters
     /// - `target_texture`: Target render texture index
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn render_simple_transition(&mut self, target_texture: usize) {
         // Default implementation - no effect
         // Graphics adapters should override this
@@ -740,12 +695,7 @@ pub trait Adapter {
     /// - `target_texture`: Target render texture index
     /// - `effect_type`: Transition effect type (0=dissolve, 1=wipe, etc.)
     /// - `progress`: Transition progress from 0.0 to 1.0
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn render_advanced_transition(
         &mut self,
         target_texture: usize,
@@ -763,12 +713,7 @@ pub trait Adapter {
     ///
     /// # Returns
     /// (width, height) tuple in pixels
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn get_canvas_size(&self) -> (u32, u32) {
         let base = unsafe { &*(self as *const Self as *const AdapterBase) };
         (base.gr.pixel_w as u32, base.gr.pixel_h as u32)
@@ -782,12 +727,7 @@ pub trait Adapter {
     ///
     /// # Parameters
     /// - `target_texture`: Target render texture index for transition effects
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    #[cfg(graphics_mode)]
     fn setup_buffer_transition(&mut self, target_texture: usize) {
         // Default implementation - no special setup needed
         // Graphics adapters can override this with optimized implementations

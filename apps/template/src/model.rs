@@ -11,9 +11,9 @@ use std::f64::consts::PI;
 use template_lib::TemplateData;
 
 pub const CARDW: usize = 7;
-#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub const CARDH: usize = 7;
-#[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
+#[cfg(not(graphics_mode))]
 pub const CARDH: usize = 5;
 pub const TEMPLATEW: u16 = 80;
 pub const TEMPLATEH: u16 = 40;

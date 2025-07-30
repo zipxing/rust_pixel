@@ -9,6 +9,9 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
 [dependencies]
 # crossterm = { version = "0.22" }
 itertools = "0.14.0"

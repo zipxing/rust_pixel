@@ -8,6 +8,9 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
 [dependencies]
 itertools = "0.14.0"
 log = "0.4.27"

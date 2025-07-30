@@ -308,7 +308,7 @@ impl Buffer {
         // self.content[pos_self].symbol = other.content[pos_other].symbol.clone();
         // self.content[pos_self].bg = other.content[pos_other].bg;
         self.content[pos_self] = other.content[pos_other].clone();
-        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+        #[cfg(graphics_mode)]
         {
             let fc = other.content[pos_other].fg.get_rgba();
             if other.content[pos_other].bg != Color::Reset {

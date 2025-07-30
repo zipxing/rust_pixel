@@ -1092,7 +1092,7 @@ pub fn generate_render_buffer(
         };
 
         // render windows border, for sdl, winit and wgpu mode
-        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu"))]
+        #[cfg(graphics_backend)]
         render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
         // render main buffer...

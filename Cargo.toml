@@ -15,6 +15,12 @@ exclude = ["/screen-shot", "/doc", "/test", "/assets", "/web-template"]
 name = "cargo-pixel"
 path = "tools/cargo-pixel/src/main.rs"
 
+[workspace.dependencies]
+cfg_aliases = "0.2.1"
+
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
 [dependencies]
 # Procedural macro dependencies
 quote = "1.0"

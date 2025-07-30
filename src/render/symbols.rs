@@ -8,10 +8,10 @@
 
 use crate::render::style::ANSI_COLOR_RGB;
 use deltae::*;
-#[cfg(all(feature = "sdl", feature = "winit", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
 use image::{DynamicImage, GenericImageView};
 use lab::Lab;
-#[cfg(all(feature = "sdl", feature = "winit", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
 use std::collections::HashMap;
 
 pub struct RGB {
@@ -21,7 +21,7 @@ pub struct RGB {
 }
 
 // find big image background colors...
-#[cfg(all(feature = "sdl", feature = "winit", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
 pub fn find_background_color(img: &DynamicImage, w: u32, h: u32) -> u32 {
     // color_u32 : (first_x, first_y, count)
     let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
@@ -130,7 +130,7 @@ pub struct Symbol {
     pub binary_data: Vec<Vec<u8>>,
 }
 
-#[cfg(all(feature = "sdl", feature = "winit", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
 impl Symbol {
     pub fn new(width: u8, height: u8, is_binary: bool, img: &DynamicImage) -> Self {
         let mut data = vec![];

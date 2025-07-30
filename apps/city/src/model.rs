@@ -14,21 +14,21 @@ use std::fmt;
 
 pub const NROW: usize = 5;
 pub const NCOL: usize = 5;
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub const CELLW: usize = 8;
-#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
+#[cfg(not(graphics_mode))]
 pub const CELLW: usize = 10;
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub const CELLH: usize = 8;
-#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
+#[cfg(not(graphics_mode))]
 pub const CELLH: usize = 5;
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub const ADJX: usize = 9;
-#[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub const ADJY: usize = 10;
-#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
+#[cfg(not(graphics_mode))]
 pub const ADJX: usize = 3;
-#[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
+#[cfg(not(graphics_mode))]
 pub const ADJY: usize = 8;
 
 //四种基本颜色 + Tower

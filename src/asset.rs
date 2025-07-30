@@ -5,17 +5,17 @@
 //! It supports async loading. It calls JavaScript methods to load resources asynchronously when running in WASM mode.
 //! https://www.reddit.com/r/rust/comments/8ymzwg/common_data_and_behavior/
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(wasm))]
 use crate::util::get_abs_path;
 use crate::{
     render::buffer::Buffer,
     render::image::{EscAsset, PixAsset, SeqFrameAsset},
     render::sprite::Sprite,
 };
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(wasm))]
 use log::info;
 use std::collections::HashMap;
-#[cfg(target_arch = "wasm32")]
+#[cfg(wasm)]
 use wasm_bindgen::prelude::*;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -121,11 +121,11 @@ impl AssetManager {
             Some(_) => {}
             None => {
                 let mut ab = AssetBase::new(t, loc);
-                #[cfg(target_arch = "wasm32")]
+                #[cfg(wasm)]
                 {
                     js_load_asset(loc);
                 }
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(wasm))]
                 {}
                 let mut ast: Box<dyn Asset> = match t {
                     AssetType::ImgPix => Box::new(PixAsset::new(ab)),
@@ -134,7 +134,7 @@ impl AssetManager {
                 };
                 self.assets.push(ast);
                 self.assets_index.insert(loc.to_string(), self.assets.len());
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(wasm))]
                 {
                     let fpstr = get_abs_path(loc);
                     let fdata = std::fs::read(&fpstr.clone()).expect(&format!("read file {} error", fpstr.clone()));
@@ -166,7 +166,7 @@ impl AssetManager {
 }
 
 // refer to rust-pixel/web-templates/index.js
-#[cfg(target_arch = "wasm32")]
+#[cfg(wasm)]
 #[wasm_bindgen(raw_module = "/index.js")]
 extern "C" {
     fn js_load_asset(url: &str);

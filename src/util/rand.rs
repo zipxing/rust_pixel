@@ -11,7 +11,7 @@ use rand_xoshiro::{
     rand_core::{RngCore, SeedableRng},
     Xoshiro256StarStar,
 };
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(wasm))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Random number generator (RNG) wrapper.
@@ -37,13 +37,13 @@ impl Rand {
         self.rng = Xoshiro256StarStar::seed_from_u64(seed);
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(wasm)]
     pub fn srand_now(&mut self) {
         let seed: u64 = js_sys::Date::now() as u64;
         self.srand(seed);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(wasm))]
     pub fn srand_now(&mut self) {
         let start = SystemTime::now();
         let since_the_epoch = start
@@ -100,13 +100,13 @@ impl RandLCG {
         self.random_next = seed;
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(wasm)]
     pub fn srand_now(&mut self) {
         let seed: u64 = js_sys::Date::now() as u64;
         self.srand(seed);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(wasm))]
     pub fn srand_now(&mut self) {
         let start = SystemTime::now();
         let since_the_epoch = start

@@ -19,7 +19,7 @@
 pub mod adapter;
 pub mod buffer;
 pub mod cell;
-#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub mod graph;
 pub mod image;
 pub mod panel;
@@ -31,7 +31,7 @@ pub mod symbols;
 pub use adapter::{Adapter, AdapterBase};
 pub use buffer::Buffer;
 pub use cell::Cell;
-#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
     render_main_buffer, render_pixel_sprites, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,

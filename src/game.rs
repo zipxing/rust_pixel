@@ -143,7 +143,7 @@ where
 #[macro_export]
 macro_rules! only_terminal_mode {
     () => {
-        #[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+        #[cfg(graphics_mode)]
         {
             println!("Run in terminal only...");
             std::process::exit(0);
@@ -154,7 +154,7 @@ macro_rules! only_terminal_mode {
 #[macro_export]
 macro_rules! only_graphics_mode {
     () => {
-        #[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
+        #[cfg(not(graphics_mode))]
         {
             println!("Run in graphics only...");
             std::process::exit(0);

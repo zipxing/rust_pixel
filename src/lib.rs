@@ -23,9 +23,9 @@
 
 /// framerate per second, set to moderate number to save CPUs
 pub const GAME_FRAME: u32 = 60;
-#[cfg(not(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32")))]
+#[cfg(not(graphics_mode))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
-#[cfg(any(feature = "sdl", feature = "wgpu", feature = "winit", target_arch = "wasm32"))]
+#[cfg(graphics_mode)]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
 
 /// Re-export paste for use in macros
@@ -38,24 +38,24 @@ pub use paste;
 macro_rules! pixel_game {
     ($name:ident) => {
         mod model;
-        #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
+        #[cfg(not(graphics_mode))]
         mod render_terminal;
-        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+        #[cfg(graphics_mode)]
         mod render_graphics;
 
-        #[cfg(not(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32")))]
+        #[cfg(not(graphics_mode))]
         use crate::{model::*, render_terminal::*};
-        #[cfg(any(feature = "sdl", feature = "winit", feature = "wgpu", target_arch = "wasm32"))]
+        #[cfg(graphics_mode)]
         use crate::{model::*, render_graphics::*};
         use rust_pixel::game::Game;
         use rust_pixel::util::get_project_path;
 
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(wasm)]
         use rust_pixel::render::adapter::web_adapter::{input_events_from_web, WebAdapter};
         use wasm_bindgen::prelude::*;
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(wasm)]
         use wasm_bindgen_futures::js_sys;
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(wasm)]
         use log::info;
 
         rust_pixel::paste::paste! {
@@ -74,7 +74,7 @@ macro_rules! pixel_game {
                 [<$name Game>] { g }
             }
 
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(wasm)]
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             impl [<$name Game>] {
                 pub fn new() -> Self {
