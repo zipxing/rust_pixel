@@ -60,7 +60,6 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
     let _ = fs::create_dir_all(cdir);
     exec_cmd("mkdir tmp");
     exec_cmd("cp -r apps/template tmp/pixel_game_template");
-    exec_cmd("cp -r build_support.rs tmp/pixel_game_template/build_support.rs");
 
     if let Some(stand_dir) = sa_dir {
         is_standalone = true;
@@ -69,19 +68,20 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
         exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
         dir_name = stand_dir.to_string();
+
+        exec_cmd("cp -r build_support.rs tmp/pixel_game_template/build_support.rs");
+        // Update tmp/pixel_game_template/build.rs first line to include!("build_support.rs");
+        let build_rs_path = "tmp/pixel_game_template/build.rs";
+        if let Ok(lines) = fs::read_to_string(build_rs_path) {
+            let mut new_content = String::from("include!(\"build_support.rs\");\n");
+            // Skip first line
+            if let Some(pos) = lines.find('\n') {
+                new_content.push_str(&lines[pos+1..]);
+            }
+            let _ = fs::write(build_rs_path, new_content);
+        }
     }
     exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
-
-    // Update tmp/pixel_game_template/build.rs first line to include!("build_support.rs");
-    let build_rs_path = "tmp/pixel_game_template/build.rs";
-    if let Ok(lines) = fs::read_to_string(build_rs_path) {
-        let mut new_content = String::from("include!(\"build_support.rs\");\n");
-        // 跳过原来的第一行
-        if let Some(pos) = lines.find('\n') {
-            new_content.push_str(&lines[pos+1..]);
-        }
-        let _ = fs::write(build_rs_path, new_content);
-    }
 
     replace_in_files(
         is_standalone,
