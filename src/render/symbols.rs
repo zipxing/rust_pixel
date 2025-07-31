@@ -4,20 +4,46 @@
 //! Symbol processing utilities for RustPixel.
 //! 
 //! A symbol comprises a point vector with width * height elements.
-//! This module provides functions for symbol manipulation and color processing.
+//! This module provides functions for symbol manipulation, color processing, and block binarization.
 
 use crate::render::style::ANSI_COLOR_RGB;
 use deltae::*;
 #[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
-use image::{DynamicImage, GenericImageView};
+use image::{DynamicImage, GenericImageView, Rgb};
 use lab::Lab;
 #[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Copy)]
 pub struct RGB {
-    r: u8,
-    g: u8,
-    b: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+/// Result of block binarization processing
+/// 
+/// Contains the binary pattern and extracted colors for a symbol block
+#[derive(Debug, Clone)]
+pub struct BinarizedBlock {
+    /// Binary pattern (0 = background, 1 = foreground)
+    pub bitmap: Vec<Vec<u8>>,
+    /// Block size (width and height)
+    pub size: usize,
+    /// Average foreground color
+    pub foreground_color: RGB,
+    /// Average background color  
+    pub background_color: RGB,
+    /// Threshold value used for binarization
+    pub threshold: u8,
+}
+
+/// Configuration for block binarization
+#[derive(Debug, Clone)]
+pub struct BinarizationConfig {
+    /// Minimum contrast ratio (0.0-1.0) for triggering Otsu's algorithm
+    /// Recommended: 0.1 (10% brightness difference)
+    pub min_contrast_ratio: f32,
 }
 
 // find big image background colors...
@@ -279,5 +305,254 @@ impl Symbol {
                 self.fore_color = 0;
             }
         }
+    }
+}
+
+// ============================================================================
+// Block Binarization Functions (Advanced Algorithms)
+// ============================================================================
+
+impl Default for BinarizationConfig {
+    fn default() -> Self {
+        Self {
+            min_contrast_ratio: 0.1, // 10% brightness difference threshold
+        }
+    }
+}
+
+/// Process a variable-sized block using adaptive thresholding and color analysis
+///
+/// This function implements intelligent contrast detection and binarization:
+/// 1. Calculate brightness values for all pixels using standard luminance formula
+/// 2. Analyze contrast to distinguish between noise and genuine patterns
+/// 3. Apply appropriate thresholding strategy based on contrast level
+/// 4. Generate binary pattern and extract representative colors
+///
+/// # Arguments
+/// * `pixels` - 2D array of RGB pixels representing the symbol block
+/// * `config` - Binarization configuration parameters
+///
+/// # Returns
+/// BinarizedBlock with optimized binary pattern and extracted colors
+///
+/// # Algorithm Details
+/// - Low contrast (< threshold): Single-color classification based on average brightness
+/// - High contrast (≥ threshold): Otsu's algorithm with fallback to average-based threshold
+/// - Color extraction: Separate averaging of foreground and background pixel groups
+pub fn binarize_block(pixels: &[Vec<RGB>], config: &BinarizationConfig) -> BinarizedBlock {
+    let size = pixels.len();
+    if size == 0 || pixels[0].len() != size {
+        panic!("Invalid block size: must be square and non-empty");
+    }
+
+    // Calculate brightness values for all pixels
+    let mut brightnesses = Vec::with_capacity(size * size);
+    for y in 0..size {
+        for x in 0..size {
+            let px = &pixels[y][x];
+            let brightness =
+                (0.299 * px.r as f32 + 0.587 * px.g as f32 + 0.114 * px.b as f32) as u8;
+            brightnesses.push(brightness);
+        }
+    }
+
+    // Calculate statistics
+    let min_brightness = *brightnesses.iter().min().unwrap();
+    let max_brightness = *brightnesses.iter().max().unwrap();
+    let avg_brightness = brightnesses.iter().map(|&b| b as f32).sum::<f32>() / (size * size) as f32;
+
+    // Determine threshold using adaptive contrast-based method
+    let threshold = {
+        let contrast = max_brightness - min_brightness;
+        let min_contrast = (config.min_contrast_ratio * 255.0) as u8;
+        
+        // The core principle: Only apply sophisticated thresholding to blocks with sufficient contrast
+        // This approach prevents noise amplification while preserving meaningful patterns
+        if contrast < min_contrast {
+            // Low contrast case (< 10% brightness difference):
+            // - Likely uniform/gradient regions, noise, or compression artifacts
+            // - Classify entire block as single color to avoid false pattern detection
+            // - Use midpoint (128) as the decision boundary for foreground vs background
+            if avg_brightness > 128.0 {
+                0   // Bright region → treat as background (all pixels = 0)
+            } else {
+                255 // Dark region → treat as foreground (all pixels = 1)
+            }
+        } else {
+            // High contrast case (≥ 10% brightness difference):
+            // - Contains genuine patterns, edges, or symbol features
+            // - Apply Otsu's algorithm for optimal binary separation
+            // - Fallback to average brightness if Otsu fails (edge case protection)
+            find_optimal_threshold(&brightnesses).unwrap_or(avg_brightness as u8)
+        }
+    };
+
+    // Perform binarization and color grouping
+    let mut bitmap = vec![vec![0u8; size]; size];
+    let mut foreground_pixels = Vec::new();
+    let mut background_pixels = Vec::new();
+
+    for y in 0..size {
+        for x in 0..size {
+            let px = &pixels[y][x];
+            let brightness = brightnesses[y * size + x];
+
+            if brightness > threshold {
+                bitmap[y][x] = 1;
+                foreground_pixels.push(*px);
+            } else {
+                bitmap[y][x] = 0;
+                background_pixels.push(*px);
+            }
+        }
+    }
+
+    // Calculate average foreground and background colors
+    let foreground_color = if foreground_pixels.is_empty() {
+        RGB { r: 255, g: 255, b: 255 }
+    } else {
+        let r = foreground_pixels.iter().map(|p| p.r as u32).sum::<u32>()
+            / foreground_pixels.len() as u32;
+        let g = foreground_pixels.iter().map(|p| p.g as u32).sum::<u32>()
+            / foreground_pixels.len() as u32;
+        let b = foreground_pixels.iter().map(|p| p.b as u32).sum::<u32>()
+            / foreground_pixels.len() as u32;
+        RGB { r: r as u8, g: g as u8, b: b as u8 }
+    };
+
+    let background_color = if background_pixels.is_empty() {
+        RGB { r: 0, g: 0, b: 0 }
+    } else {
+        let r = background_pixels.iter().map(|p| p.r as u32).sum::<u32>()
+            / background_pixels.len() as u32;
+        let g = background_pixels.iter().map(|p| p.g as u32).sum::<u32>()
+            / background_pixels.len() as u32;
+        let b = background_pixels.iter().map(|p| p.b as u32).sum::<u32>()
+            / background_pixels.len() as u32;
+        RGB { r: r as u8, g: g as u8, b: b as u8 }
+    };
+
+    BinarizedBlock {
+        bitmap,
+        size,
+        foreground_color,
+        background_color,
+        threshold,
+    }
+}
+
+/// Find optimal threshold using Otsu's algorithm
+///
+/// Otsu's method automatically selects an optimal threshold by maximizing
+/// the between-class variance of the foreground and background pixels.
+///
+/// # Arguments
+/// * `brightnesses` - Array of brightness values
+///
+/// # Returns
+/// Optimal threshold value if calculation succeeds
+pub fn find_optimal_threshold(brightnesses: &[u8]) -> Option<u8> {
+    if brightnesses.len() < 2 {
+        return None;
+    }
+
+    let mut histogram = [0u32; 256];
+    for &brightness in brightnesses {
+        histogram[brightness as usize] += 1;
+    }
+
+    let total = brightnesses.len() as f32;
+    let mut best_threshold = 128u8;
+    let mut best_variance = 0.0f32;
+
+    for threshold in 1..=254 {
+        let mut w0 = 0.0f32; // Background weight
+        let mut w1 = 0.0f32; // Foreground weight
+        let mut sum0 = 0.0f32; // Background brightness sum
+        let mut sum1 = 0.0f32; // Foreground brightness sum
+
+        // Calculate background portion
+        for i in 0..threshold {
+            let count = histogram[i as usize] as f32;
+            w0 += count;
+            sum0 += i as f32 * count;
+        }
+
+        // Calculate foreground portion
+        for i in threshold..=255 {
+            let count = histogram[i as usize] as f32;
+            w1 += count;
+            sum1 += i as f32 * count;
+        }
+
+        if w0 == 0.0 || w1 == 0.0 {
+            continue;
+        }
+
+        let mean0 = sum0 / w0; // Background mean
+        let mean1 = sum1 / w1; // Foreground mean
+
+        // Between-class variance
+        let between_class_variance = (w0 / total) * (w1 / total) * (mean0 - mean1).powi(2);
+
+        if between_class_variance > best_variance {
+            best_variance = between_class_variance;
+            best_threshold = threshold;
+        }
+    }
+
+    Some(best_threshold)
+}
+
+/// Extract a block from image at specified position
+/// 
+/// # Arguments
+/// * `img` - Source image
+/// * `x` - Block X coordinate (in block units)
+/// * `y` - Block Y coordinate (in block units) 
+/// * `block_size` - Size of each block
+///
+/// # Returns
+/// 2D array of RGB pixels
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) -> Vec<Vec<RGB>> {
+    let mut block = vec![vec![RGB { r: 0, g: 0, b: 0 }; block_size as usize]; block_size as usize];
+
+    for dy in 0..block_size as usize {
+        for dx in 0..block_size as usize {
+            let pixel_x = x * block_size + dx as u32;
+            let pixel_y = y * block_size + dy as u32;
+
+            if pixel_x < img.width() && pixel_y < img.height() {
+                let pixel = img.get_pixel(pixel_x, pixel_y);
+                block[dy][dx] = RGB {
+                    r: pixel[0],
+                    g: pixel[1], 
+                    b: pixel[2],
+                };
+            }
+        }
+    }
+
+    block
+}
+
+/// Convert image RGB to symbols RGB
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+impl From<Rgb<u8>> for RGB {
+    fn from(rgb: Rgb<u8>) -> Self {
+        RGB {
+            r: rgb[0],
+            g: rgb[1],
+            b: rgb[2],
+        }
+    }
+}
+
+/// Convert symbols RGB to image RGB  
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+impl From<RGB> for Rgb<u8> {
+    fn from(rgb: RGB) -> Self {
+        Rgb([rgb.r, rgb.g, rgb.b])
     }
 }

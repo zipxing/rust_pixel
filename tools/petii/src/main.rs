@@ -7,6 +7,9 @@ use deltae::*;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use lab::Lab;
 use rust_pixel::render::style::ANSI_COLOR_RGB;
+use rust_pixel::render::symbols::{
+    binarize_block, BinarizationConfig, BinarizedBlock, RGB as SymbolsRGB
+};
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
@@ -117,16 +120,38 @@ fn main() {
     println!("width={},height={},texture=255", width, height);
     for i in 0..height {
         for j in 0..width {
-            let block_at = get_block_at(&gray_img, j, i);
-            let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
-            if !is_petii {
+            if is_petii {
+                // Use advanced binarization for PETSCII mode
+                let binarized_block = get_binarized_block_at(&resized_img, j, i);
+                
+                // Convert the advanced binarized pattern to 8x8 grayscale for compatibility with existing matching
+                let block_at = binarized_to_grayscale(&binarized_block);
+                let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
+                
+                // Use the library's color extraction
+                let fg_color = SymbolsRGB {
+                    r: binarized_block.foreground_color.r,
+                    g: binarized_block.foreground_color.g,
+                    b: binarized_block.foreground_color.b,
+                };
+                let bg_color = SymbolsRGB {
+                    r: binarized_block.background_color.r,
+                    g: binarized_block.background_color.g,
+                    b: binarized_block.background_color.b,
+                };
+                
+                let fg_index = find_best_color(RGB { r: fg_color.r, g: fg_color.g, b: fg_color.b });
+                let bg_index = find_best_color(RGB { r: bg_color.r, g: bg_color.g, b: bg_color.b });
+                
+                // sym, fg, tex, bg
+                print!("{},{},1,{} ", bm, fg_index, bg_index);
+            } else {
+                // Use original algorithm for non-PETSCII mode
+                let block_at = get_block_at(&gray_img, j, i);
+                let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
                 let block_color = get_block_color(&resized_img, j, i);
                 let bc = find_best_color(block_color);
                 print!("{},{},1 ", bm, bc,);
-            } else {
-                let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb);
-                // sym, fg, tex, bg
-                print!("{},{},1,{} ", bm, bc.1, bc.0);
             }
         }
         println!("");
@@ -338,6 +363,37 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image
     block
 }
 
+/// Get binarized block using the advanced library algorithm
+/// 
+/// This function uses the rust_pixel library's advanced Otsu-based binarization
+/// instead of the simple eigenvector approach
+fn get_binarized_block_at(image: &DynamicImage, x: u32, y: u32) -> BinarizedBlock {
+    // Extract the 8x8 block manually
+    let mut pixels = vec![vec![SymbolsRGB { r: 0, g: 0, b: 0 }; 8]; 8];
+
+    for dy in 0..8usize {
+        for dx in 0..8usize {
+            let pixel_x = x * 8 + dx as u32;
+            let pixel_y = y * 8 + dy as u32;
+
+            if pixel_x < image.width() && pixel_y < image.height() {
+                let pixel = image.get_pixel(pixel_x, pixel_y);
+                pixels[dy][dx] = SymbolsRGB {
+                    r: pixel[0],
+                    g: pixel[1], 
+                    b: pixel[2],
+                };
+            }
+        }
+    }
+    
+    // Use default configuration (10% contrast threshold)
+    let config = BinarizationConfig::default();
+    
+    // Apply advanced binarization
+    binarize_block(&pixels, &config)
+}
+
 fn find_best_match(
     input_image: &Image8x8,
     char_images: &[Image8x8],
@@ -358,6 +414,23 @@ fn find_best_match(
     }
 
     best_match
+}
+
+/// Convert binarized block to grayscale format for compatibility with existing matching algorithm
+/// 
+/// This converts the advanced binary pattern back to an 8x8 grayscale block
+/// so it can be used with the existing eigenvector-based matching
+fn binarized_to_grayscale(block: &BinarizedBlock) -> Image8x8 {
+    let mut grayscale = vec![vec![0u8; 8]; 8];
+    
+    for y in 0..8 {
+        for x in 0..8 {
+            // Convert binary pattern to grayscale: 0 -> 0 (black), 1 -> 255 (white)
+            grayscale[y][x] = if block.bitmap[y][x] == 1 { 255 } else { 0 };
+        }
+    }
+    
+    grayscale
 }
 
 fn find_best_color_u32(c: u32) -> usize {
