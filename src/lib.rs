@@ -33,6 +33,65 @@ pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 5;
 pub use paste;
 
 /// pixel_game macro for creating game applications
+///
+/// ## Architecture Design Philosophy
+/// 
+/// This macro generates a lib.rs + main.rs separation pattern for RustPixel applications.
+/// While it might seem redundant to have both files, this design is essential for supporting
+/// multiple deployment targets and maintaining a unified architecture across the framework.
+///
+/// ### Why Separate lib.rs and main.rs?
+///
+/// **1. WASM Support Requirements:**
+/// - WASM compilation requires `crate-type = ["cdylib", "rlib"]` in Cargo.toml
+/// - WASM cannot use `main()` function directly - it needs exported functions for JavaScript
+/// - The generated `GameStruct` with methods like `new()`, `tick()`, `key_event()` can be 
+///   exported to WASM and called from JavaScript/WebGL frontend
+///
+/// **2. Multi-Platform Deployment:**
+/// - **Native Binary**: main.rs → calls `game_name::run()` from lib.rs
+/// - **WASM Library**: JavaScript → calls `GameStruct::new()`, `tick()`, etc. from lib.rs  
+/// - **Library Dependency**: Other projects can depend on the crate as a library
+///
+/// **3. Unified Architecture:**
+/// - All RustPixel games follow the same pattern: Model + Render + Game struct
+/// - Consistent interface across Terminal, SDL, and Web rendering backends
+/// - Enables framework-wide optimizations and feature additions
+///
+/// **4. Code Organization Benefits:**
+/// - Clear separation of concerns: lib.rs defines the API, main.rs provides entry point
+/// - Facilitates testing (can test library functions without main())
+/// - Enables conditional compilation for different platforms and features
+///
+/// ### What This Macro Generates:
+/// 
+/// ```rust
+/// // Module structure
+/// mod model;           // Game logic and state
+/// mod render_terminal; // Terminal-mode rendering (text-based)
+/// mod render_graphics; // Graphics-mode rendering (SDL/Web)
+/// 
+/// // Generated structs and functions
+/// pub struct {Name}Game {
+///     g: Game<{Name}Model, {Name}Render>,
+/// }
+/// 
+/// pub fn init_game() -> {Name}Game { ... }
+/// pub fn run() { ... }  // Called by main.rs
+/// 
+/// // WASM-specific exports
+/// impl {Name}Game {
+///     pub fn new() -> Self { ... }        // WASM constructor
+///     pub fn tick(&mut self, dt: f32) { ... }      // WASM game loop
+///     pub fn key_event(&mut self, ...) { ... }     // WASM input handling
+/// }
+/// ```
+///
+/// This design enables RustPixel applications to run seamlessly across:
+/// - Terminal (crossterm backend)
+/// - Desktop (SDL2 backend) 
+/// - Web (WebGL backend via WASM)
+/// - As library dependencies in other Rust projects
 #[cfg(not(feature = "base"))]
 #[macro_export]
 macro_rules! pixel_game {
