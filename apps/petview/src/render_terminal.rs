@@ -11,7 +11,7 @@ use rust_pixel::{
     event::{event_check, event_register, timer_fire, timer_register},
     game::{Model, Render},
     render::{
-        adapter::{Adapter, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
+        adapter::Adapter,
         buffer::Buffer,
         cell::cellsym,
         panel::Panel,
@@ -79,24 +79,6 @@ impl Render for PetviewRender {
 
         let p2 = self.panel.get_pixel_sprite("petimg2");
         asset2sprite!(p2, ctx, "2.pix");
-
-        let rx = ctx.adapter.get_base().ratio_x;
-        let ry = ctx.adapter.get_base().ratio_y;
-        let p3 = self.panel.get_pixel_sprite("petimg3");
-        p3.set_pos(
-            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
-        );
-        let p4 = self.panel.get_pixel_sprite("petimg4");
-        p4.set_pos(
-            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
-        );
-        let pmsg = self.panel.get_pixel_sprite("pet-msg");
-        pmsg.set_pos(
-            (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
-        );
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {}
