@@ -26,7 +26,7 @@ use std::process::Stdio;
 use std::str;
 
 use crate::PixelContext;
-use crate::exec_cmd;
+use crate::{exec_cmd, remove_files_pattern};
 
 pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     let gif = args.get_one::<String>("gif").unwrap();
@@ -98,6 +98,6 @@ pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     fsdq.write_all(&datas).unwrap();
 
     println!("\n🍀 {} write ok!", ssf);
-    exec_cmd("rm tmp/t*.p*");
+    remove_files_pattern("tmp/t*.p*");
 }
 

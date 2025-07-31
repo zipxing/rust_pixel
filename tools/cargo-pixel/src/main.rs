@@ -130,11 +130,104 @@ fn replace_in_files(
 }
 
 fn exec_cmd(cmd: &str) {
-    Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .expect("failed to execute process");
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", cmd])
+            .status()
+            .expect("failed to execute process");
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .status()
+            .expect("failed to execute process");
+    }
+}
+
+/// Cross-platform directory creation
+fn create_dir_cmd(dir: &str) {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("Failed to create directory {}: {}", dir, e);
+    }
+}
+
+/// Cross-platform file/directory copying
+fn copy_cmd(from: &str, to: &str, recursive: bool) {
+    if recursive {
+        copy_dir_recursive(from, to).expect(&format!("Failed to copy {} to {}", from, to));
+    } else {
+        std::fs::copy(from, to).expect(&format!("Failed to copy file {} to {}", from, to));
+    }
+}
+
+/// Cross-platform directory removal
+fn remove_dir_cmd(dir: &str, recursive: bool) {
+    let result = if recursive {
+        std::fs::remove_dir_all(dir)
+    } else {
+        std::fs::remove_dir(dir)
+    };
+    
+    if let Err(e) = result {
+        eprintln!("Failed to remove directory {}: {}", dir, e);
+    }
+}
+
+/// Recursively copy a directory and its contents
+fn copy_dir_recursive_impl(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    if !to.exists() {
+        std::fs::create_dir_all(to)?;
+    }
+    
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let dest_path = to.join(entry.file_name());
+        
+        if entry_path.is_dir() {
+            copy_dir_recursive_impl(&entry_path, &dest_path)?;
+        } else {
+            std::fs::copy(&entry_path, &dest_path)?;
+        }
+    }
+    
+    Ok(())
+}
+
+/// Helper function to handle string paths for copy_dir_recursive
+fn copy_dir_recursive(from: &str, to: &str) -> std::io::Result<()> {
+    copy_dir_recursive_impl(std::path::Path::new(from), std::path::Path::new(to))
+}
+
+/// Cross-platform wildcard file removal
+/// Removes files matching a pattern (e.g., "tmp/t*.p*")
+fn remove_files_pattern(pattern: &str) {
+    use std::path::Path;
+    
+    // Simple pattern matching for the specific case "tmp/t*.p*"
+    if pattern == "tmp/t*.p*" {
+        let tmp_dir = Path::new("tmp");
+        if tmp_dir.exists() && tmp_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(tmp_dir) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    let file_name_str = file_name.to_string_lossy();
+                    
+                    // Check if filename starts with 't' and contains '.p'
+                    if file_name_str.starts_with('t') && file_name_str.contains(".p") {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
+    } else {
+        // For other patterns, fall back to shell command
+        exec_cmd(&format!("rm {}", pattern));
+    }
 }
 
 fn capitalize(s: &str) -> String {

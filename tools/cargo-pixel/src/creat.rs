@@ -22,7 +22,7 @@ use std::path::Path;
 
 use crate::PixelContext;
 use crate::PState;
-use crate::exec_cmd;
+use crate::{create_dir_cmd, copy_cmd, remove_dir_cmd};
 use crate::replace_in_files;
 use crate::write_config;
 use crate::capitalize;
@@ -58,18 +58,18 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
 
     let _ = fs::remove_dir_all("tmp/pixel_game_template");
     let _ = fs::create_dir_all(cdir);
-    exec_cmd("mkdir tmp");
-    exec_cmd("cp -r apps/template tmp/pixel_game_template");
+    create_dir_cmd("tmp");
+    copy_cmd("apps/template", "tmp/pixel_game_template", true);
 
     if let Some(stand_dir) = sa_dir {
         is_standalone = true;
-        exec_cmd("cp apps/template/stand-alone/Cargo.toml.temp tmp/pixel_game_template/Cargo.toml");
-        exec_cmd("cp apps/template/stand-alone/LibCargo.toml.temp tmp/pixel_game_template/lib/Cargo.toml");
-        exec_cmd("cp apps/template/stand-alone/FfiCargo.toml.temp tmp/pixel_game_template/ffi/Cargo.toml");
-        exec_cmd("cp apps/template/stand-alone/WasmCargo.toml.temp tmp/pixel_game_template/wasm/Cargo.toml");
+        copy_cmd("apps/template/stand-alone/Cargo.toml.temp", "tmp/pixel_game_template/Cargo.toml", false);
+        copy_cmd("apps/template/stand-alone/LibCargo.toml.temp", "tmp/pixel_game_template/lib/Cargo.toml", false);
+        copy_cmd("apps/template/stand-alone/FfiCargo.toml.temp", "tmp/pixel_game_template/ffi/Cargo.toml", false);
+        copy_cmd("apps/template/stand-alone/WasmCargo.toml.temp", "tmp/pixel_game_template/wasm/Cargo.toml", false);
         dir_name = stand_dir.to_string();
 
-        exec_cmd("cp -r build_support.rs tmp/pixel_game_template/build_support.rs");
+        copy_cmd("build_support.rs", "tmp/pixel_game_template/build_support.rs", false);
         // Update tmp/pixel_game_template/build.rs first line to include!("build_support.rs");
         let build_rs_path = "tmp/pixel_game_template/build.rs";
         if let Ok(lines) = fs::read_to_string(build_rs_path) {
@@ -81,7 +81,7 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
             let _ = fs::write(build_rs_path, new_content);
         }
     }
-    exec_cmd("rm -fr tmp/pixel_game_template/stand-alone");
+    remove_dir_cmd("tmp/pixel_game_template/stand-alone", true);
 
     replace_in_files(
         is_standalone,
