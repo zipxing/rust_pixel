@@ -348,10 +348,15 @@ fn pixel_petii(ctx: &PixelContext, sub_m: &ArgMatches) {
         "-r",       // release mode
     ];
     
-    // Add all provided arguments
+    // Add the required image file argument
     if let Some(image_file) = sub_m.get_one::<String>("image_file") {
         run_args.push(image_file.as_str());
+    } else {
+        eprintln!("Error: Image file is required");
+        return;
     }
+    
+    // Add all optional arguments in order
     if let Some(width) = sub_m.get_one::<String>("width") {
         run_args.push(width.as_str());
     }

@@ -29,7 +29,8 @@ pub struct BinarizedBlock {
     /// Binary pattern (0 = background, 1 = foreground)
     pub bitmap: Vec<Vec<u8>>,
     /// Block size (width and height)
-    pub size: usize,
+    pub width: usize,
+    pub height: usize,
     /// Average foreground color
     pub foreground_color: RGB,
     /// Average background color  
@@ -340,15 +341,19 @@ impl Default for BinarizationConfig {
 /// - High contrast (≥ threshold): Otsu's algorithm with fallback to average-based threshold
 /// - Color extraction: Separate averaging of foreground and background pixel groups
 pub fn binarize_block(pixels: &[Vec<RGB>], config: &BinarizationConfig) -> BinarizedBlock {
-    let size = pixels.len();
-    if size == 0 || pixels[0].len() != size {
-        panic!("Invalid block size: must be square and non-empty");
+    let height = pixels.len();
+    if height == 0 {
+        panic!("Invalid block size: height must be non-zero");
+    }
+    let width = pixels[0].len();
+    if width == 0 {
+        panic!("Invalid block size: width must be non-zero");
     }
 
     // Calculate brightness values for all pixels
-    let mut brightnesses = Vec::with_capacity(size * size);
-    for y in 0..size {
-        for x in 0..size {
+    let mut brightnesses = Vec::with_capacity(height * width);
+    for y in 0..height {
+        for x in 0..width {
             let px = &pixels[y][x];
             let brightness =
                 (0.299 * px.r as f32 + 0.587 * px.g as f32 + 0.114 * px.b as f32) as u8;
@@ -359,7 +364,7 @@ pub fn binarize_block(pixels: &[Vec<RGB>], config: &BinarizationConfig) -> Binar
     // Calculate statistics
     let min_brightness = *brightnesses.iter().min().unwrap();
     let max_brightness = *brightnesses.iter().max().unwrap();
-    let avg_brightness = brightnesses.iter().map(|&b| b as f32).sum::<f32>() / (size * size) as f32;
+    let avg_brightness = brightnesses.iter().map(|&b| b as f32).sum::<f32>() / (height * width) as f32;
 
     // Determine threshold using adaptive contrast-based method
     let threshold = {
@@ -388,14 +393,14 @@ pub fn binarize_block(pixels: &[Vec<RGB>], config: &BinarizationConfig) -> Binar
     };
 
     // Perform binarization and color grouping
-    let mut bitmap = vec![vec![0u8; size]; size];
+    let mut bitmap = vec![vec![0u8; width]; height];
     let mut foreground_pixels = Vec::new();
     let mut background_pixels = Vec::new();
 
-    for y in 0..size {
-        for x in 0..size {
+    for y in 0..height {
+        for x in 0..width {
             let px = &pixels[y][x];
-            let brightness = brightnesses[y * size + x];
+            let brightness = brightnesses[y * width + x];
 
             if brightness > threshold {
                 bitmap[y][x] = 1;
@@ -434,7 +439,8 @@ pub fn binarize_block(pixels: &[Vec<RGB>], config: &BinarizationConfig) -> Binar
 
     BinarizedBlock {
         bitmap,
-        size,
+        width,
+        height,
         foreground_color,
         background_color,
         threshold,
@@ -504,7 +510,7 @@ pub fn find_optimal_threshold(brightnesses: &[u8]) -> Option<u8> {
     Some(best_threshold)
 }
 
-/// Extract a block from image at specified position
+/// Extract a square block from image at specified position
 /// 
 /// # Arguments
 /// * `img` - Source image
@@ -516,12 +522,28 @@ pub fn find_optimal_threshold(brightnesses: &[u8]) -> Option<u8> {
 /// 2D array of RGB pixels
 #[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
 pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) -> Vec<Vec<RGB>> {
-    let mut block = vec![vec![RGB { r: 0, g: 0, b: 0 }; block_size as usize]; block_size as usize];
+    extract_image_block_rect(img, x, y, block_size, block_size)
+}
 
-    for dy in 0..block_size as usize {
-        for dx in 0..block_size as usize {
-            let pixel_x = x * block_size + dx as u32;
-            let pixel_y = y * block_size + dy as u32;
+/// Extract a rectangular block from image at specified position
+/// 
+/// # Arguments
+/// * `img` - Source image
+/// * `x` - Block X coordinate (in block units)
+/// * `y` - Block Y coordinate (in block units) 
+/// * `block_width` - Width of each block
+/// * `block_height` - Height of each block
+///
+/// # Returns
+/// 2D array of RGB pixels
+#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+pub fn extract_image_block_rect(img: &DynamicImage, x: u32, y: u32, block_width: u32, block_height: u32) -> Vec<Vec<RGB>> {
+    let mut block = vec![vec![RGB { r: 0, g: 0, b: 0 }; block_width as usize]; block_height as usize];
+
+    for dy in 0..block_height as usize {
+        for dx in 0..block_width as usize {
+            let pixel_x = x * block_width + dx as u32;
+            let pixel_y = y * block_height + dy as u32;
 
             if pixel_x < img.width() && pixel_y < img.height() {
                 let pixel = img.get_pixel(pixel_x, pixel_y);

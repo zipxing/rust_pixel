@@ -54,9 +54,20 @@ struct CharacterCell {
 
 impl From<BinarizedBlock> for CharacterCell {
     fn from(block: BinarizedBlock) -> Self {
+        // For compatibility with existing code that expects square symbols,
+        // ensure the block is square or use the minimum dimension
+        let size = if block.width == block.height {
+            block.width
+        } else {
+            // For non-square blocks, use the minimum dimension and warn
+            eprintln!("Warning: Converting non-square BinarizedBlock ({}x{}) to square CharacterCell, using size {}", 
+                block.width, block.height, block.width.min(block.height));
+            block.width.min(block.height)
+        };
+        
         Self {
             bitmap: block.bitmap,
-            size: block.size,
+            size,
             foreground_color: Rgb([block.foreground_color.r, block.foreground_color.g, block.foreground_color.b]),
             background_color: Rgb([block.background_color.r, block.background_color.g, block.background_color.b]),
         }

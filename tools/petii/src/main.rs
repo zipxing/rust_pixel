@@ -115,7 +115,7 @@ fn main() {
     // find background color...
     let bret = find_background_color(&resized_img, &gray_img, width * 8, height * 8);
     let back_gray = bret.0;
-    let back_rgb = bret.1;
+    // let back_rgb = bret.1;
 
     println!("width={},height={},texture=255", width, height);
     for i in 0..height {
@@ -235,80 +235,80 @@ fn find_background_color(
 }
 
 // get petscii block color
-fn get_petii_block_color(
-    image: &DynamicImage,
-    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
-    x: u32,
-    y: u32,
-    back_rgb: u32,
-) -> (usize, usize) {
-    let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
-    for i in 0..8usize {
-        for j in 0..8usize {
-            let pixel_x = x * 8 + j as u32;
-            let pixel_y = y * 8 + i as u32;
-            if pixel_x < image.width() && pixel_y < image.height() {
-                let p = image.get_pixel(pixel_x, pixel_y);
-                let k: u32 = ((p[0] as u32) << 24)
-                    + ((p[1] as u32) << 16)
-                    + ((p[2] as u32) << 8)
-                    + (p[3] as u32);
-                cc.entry(k).or_insert((pixel_x, pixel_y));
-            }
-        }
-    }
-    let cv: Vec<_> = cc.iter().collect();
-    let mut include_back = false;
-    let clen = cv.len();
-    for c in &cv {
-        if *c.0 == back_rgb {
-            include_back = true;
-        }
-    }
-    let mut ret = None;
-    if include_back {
-        if clen == 1 {
-            ret = Some((back_rgb, back_rgb));
-            // println!("<B>{:?}", ret);
-        } else if clen == 2 {
-            let mut r = (back_rgb, back_rgb);
-            if *cv[0].0 != back_rgb {
-                r.1 = *cv[0].0;
-            } 
-            if *cv[1].0 != back_rgb {
-                r.1 = *cv[1].0;
-            } 
-            ret = Some(r);
-            // println!("<B,F>{:?}", ret);
-        } else {
-            println!("ERROR!!!");
-        }
-    } else {
-        if clen == 1 {
-            ret = Some((*cv[0].0, *cv[0].0));
-            // println!("<F>{:?}", ret);
-        } else if clen == 2 {
-            let g0 = img.get_pixel(cv[0].1.0, cv[0].1.1).0[0];
-            let g1 = img.get_pixel(cv[1].1.0, cv[1].1.1).0[0];
-            if g0 <= g1 {
-                ret = Some((*cv[0].0, *cv[1].0));
-            } else {
-                ret = Some((*cv[1].0, *cv[0].0));
-            }
-            // println!("<F1,F2>{:?}", ret);
-        } else {
-            println!("ERROR2!!!");
-        }
-    }
-    match ret {
-        Some(r) => {
-            (find_best_color_u32(r.0), find_best_color_u32(r.1))
-        }
-        _ => {
-            (0, 0)
-        }
-    }
-}
+// fn get_petii_block_color(
+//     image: &DynamicImage,
+//     img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+//     x: u32,
+//     y: u32,
+//     back_rgb: u32,
+// ) -> (usize, usize) {
+//     let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
+//     for i in 0..8usize {
+//         for j in 0..8usize {
+//             let pixel_x = x * 8 + j as u32;
+//             let pixel_y = y * 8 + i as u32;
+//             if pixel_x < image.width() && pixel_y < image.height() {
+//                 let p = image.get_pixel(pixel_x, pixel_y);
+//                 let k: u32 = ((p[0] as u32) << 24)
+//                     + ((p[1] as u32) << 16)
+//                     + ((p[2] as u32) << 8)
+//                     + (p[3] as u32);
+//                 cc.entry(k).or_insert((pixel_x, pixel_y));
+//             }
+//         }
+//     }
+//     let cv: Vec<_> = cc.iter().collect();
+//     let mut include_back = false;
+//     let clen = cv.len();
+//     for c in &cv {
+//         if *c.0 == back_rgb {
+//             include_back = true;
+//         }
+//     }
+//     let mut ret = None;
+//     if include_back {
+//         if clen == 1 {
+//             ret = Some((back_rgb, back_rgb));
+//             // println!("<B>{:?}", ret);
+//         } else if clen == 2 {
+//             let mut r = (back_rgb, back_rgb);
+//             if *cv[0].0 != back_rgb {
+//                 r.1 = *cv[0].0;
+//             } 
+//             if *cv[1].0 != back_rgb {
+//                 r.1 = *cv[1].0;
+//             } 
+//             ret = Some(r);
+//             // println!("<B,F>{:?}", ret);
+//         } else {
+//             println!("ERROR!!!");
+//         }
+//     } else {
+//         if clen == 1 {
+//             ret = Some((*cv[0].0, *cv[0].0));
+//             // println!("<F>{:?}", ret);
+//         } else if clen == 2 {
+//             let g0 = img.get_pixel(cv[0].1.0, cv[0].1.1).0[0];
+//             let g1 = img.get_pixel(cv[1].1.0, cv[1].1.1).0[0];
+//             if g0 <= g1 {
+//                 ret = Some((*cv[0].0, *cv[1].0));
+//             } else {
+//                 ret = Some((*cv[1].0, *cv[0].0));
+//             }
+//             // println!("<F1,F2>{:?}", ret);
+//         } else {
+//             println!("ERROR2!!!");
+//         }
+//     }
+//     match ret {
+//         Some(r) => {
+//             (find_best_color_u32(r.0), find_best_color_u32(r.1))
+//         }
+//         _ => {
+//             (0, 0)
+//         }
+//     }
+// }
 
 // get block average color(for not petscii image)
 fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
@@ -433,13 +433,13 @@ fn binarized_to_grayscale(block: &BinarizedBlock) -> Image8x8 {
     grayscale
 }
 
-fn find_best_color_u32(c: u32) -> usize {
-    find_best_color(RGB{
-        r: (c >> 24) as u8,
-        g: (c >> 16) as u8,
-        b: (c >> 8) as u8,
-    })
-}
+// fn find_best_color_u32(c: u32) -> usize {
+//     find_best_color(RGB{
+//         r: (c >> 24) as u8,
+//         g: (c >> 16) as u8,
+//         b: (c >> 8) as u8,
+//     })
+// }
 
 fn find_best_color(color: RGB) -> usize {
     let mut min_mse = f32::MAX;

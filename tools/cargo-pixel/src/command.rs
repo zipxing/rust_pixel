@@ -120,20 +120,55 @@ fn build_app() -> Command {
         )
         .subcommand(
             Command::new("petii")
-                .alias("pe")
+                .alias("p")
                 .about("Convert images to PETSCII art")
                 .arg(
-                    Arg::new("mode")
-                        .help("Running mode")
-                        .required(false)
-                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "winit", "wgpu"])
+                    Arg::new("image_file")
+                        .help("Input image file path")
+                        .required(true)
                         .index(1),
                 )
                 .arg(
-                    Arg::new("image_file")
-                        .help("Image file to convert")
+                    Arg::new("width")
+                        .help("Output width in characters (default: 40)")
                         .required(false)
                         .index(2),
+                )
+                .arg(
+                    Arg::new("height")
+                        .help("Output height in characters (default: 25)")
+                        .required(false)
+                        .index(3),
+                )
+                .arg(
+                    Arg::new("is_petscii")
+                        .help("Use PETSCII characters: true/false (default: false)")
+                        .required(false)
+                        .index(4),
+                )
+                .arg(
+                    Arg::new("crop_x")
+                        .help("Crop start X coordinate (requires all crop params)")
+                        .required(false)
+                        .index(5),
+                )
+                .arg(
+                    Arg::new("crop_y")
+                        .help("Crop start Y coordinate")
+                        .required(false)
+                        .index(6),
+                )
+                .arg(
+                    Arg::new("crop_width")
+                        .help("Crop width")
+                        .required(false)
+                        .index(7),
+                )
+                .arg(
+                    Arg::new("crop_height")
+                        .help("Crop height")
+                        .required(false)
+                        .index(8),
                 ),
         )
         .subcommand(
