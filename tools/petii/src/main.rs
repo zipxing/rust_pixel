@@ -13,6 +13,7 @@ use deltae::*;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use lab::Lab;
 use rust_pixel::render::style::ANSI_COLOR_RGB;
+use rust_pixel::render::symbols::find_background_color;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
@@ -186,43 +187,7 @@ fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
     vcs
 }
 
-// find background colors...
-fn find_background_color(
-    img: &DynamicImage,
-    image: &ImageBuffer<Luma<u8>, Vec<u8>>,
-    w: u32,
-    h: u32,
-) -> (u8, u32) {
-    // (first_x, first_y, count)
-    let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
-    for i in 0..h {
-        for j in 0..w {
-            let p = img.get_pixel(j, i);
-            let k: u32 = ((p[0] as u32) << 24)
-                + ((p[1] as u32) << 16)
-                + ((p[2] as u32) << 8)
-                + (p[3] as u32);
-            (*cc.entry(k).or_insert((j, i, 0))).2 += 1;
-        }
-    }
-    let mut cv: Vec<_> = cc.iter().collect();
-    cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
-    let bx = cv[0].1 .0;
-    let by = cv[0].1 .1;
-    let bc = cv[0].0;
-    // for c in cv {
-    //     println!("cc..{:x} {:?}", c.0, c.1);
-    // }
-    // for i in 0..h {
-    //     for j in 0..w {
-    //         print!("{:?} ", image.get_pixel(j, i).0[0]);
-    //     }
-    //     println!("");
-    // }
-    let gray = image.get_pixel(bx, by).0[0];
-    // println!("gray..{}", gray);
-    (gray, *bc)
-}
+
 
 // get petscii block color
 fn get_petii_block_color(

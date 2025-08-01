@@ -8,10 +8,10 @@
 
 use crate::render::style::ANSI_COLOR_RGB;
 use deltae::*;
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
-use image::{DynamicImage, GenericImageView, Rgb};
+#[cfg(not(wasm))]
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb};
 use lab::Lab;
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+#[cfg(not(wasm))]
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
@@ -47,10 +47,27 @@ pub struct BinarizationConfig {
     pub min_contrast_ratio: f32,
 }
 
-// find big image background colors...
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
-pub fn find_background_color(img: &DynamicImage, w: u32, h: u32) -> u32 {
-    // color_u32 : (first_x, first_y, count)
+/// Find background colors from image
+/// 
+/// Given an original image and its luma8 grayscale version, finds both
+/// the background gray value and background RGB color.
+/// 
+/// # Arguments
+/// * `img` - Original RGB image
+/// * `image` - Luma8 grayscale version of the image
+/// * `w` - Image width
+/// * `h` - Image height
+/// 
+/// # Returns
+/// Tuple of (background_gray_value, background_rgb_color)
+#[cfg(not(wasm))]
+pub fn find_background_color(
+    img: &DynamicImage,
+    image: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    w: u32,
+    h: u32,
+) -> (u8, u32) {
+    // (first_x, first_y, count)
     let mut cc: HashMap<u32, (u32, u32, u32)> = HashMap::new();
     for i in 0..h {
         for j in 0..w {
@@ -64,7 +81,21 @@ pub fn find_background_color(img: &DynamicImage, w: u32, h: u32) -> u32 {
     }
     let mut cv: Vec<_> = cc.iter().collect();
     cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
-    *cv[0].0
+    let bx = cv[0].1 .0;
+    let by = cv[0].1 .1;
+    let bc = cv[0].0;
+    // for c in cv {
+    //     println!("cc..{:x} {:?}", c.0, c.1);
+    // }
+    // for i in 0..h {
+    //     for j in 0..w {
+    //         print!("{:?} ", image.get_pixel(j, i).0[0]);
+    //     }
+    //     println!("");
+    // }
+    let gray = image.get_pixel(bx, by).0[0];
+    // println!("gray..{}", gray);
+    (gray, *bc)
 }
 
 pub fn find_best_color(color: RGB) -> usize {
@@ -157,7 +188,7 @@ pub struct Symbol {
     pub binary_data: Vec<Vec<u8>>,
 }
 
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+#[cfg(not(wasm))]
 impl Symbol {
     pub fn new(width: u8, height: u8, is_binary: bool, img: &DynamicImage) -> Self {
         let mut data = vec![];
@@ -520,7 +551,7 @@ pub fn find_optimal_threshold(brightnesses: &[u8]) -> Option<u8> {
 ///
 /// # Returns
 /// 2D array of RGB pixels
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+#[cfg(not(wasm))]
 pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) -> Vec<Vec<RGB>> {
     extract_image_block_rect(img, x, y, block_size, block_size)
 }
@@ -536,7 +567,7 @@ pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) 
 ///
 /// # Returns
 /// 2D array of RGB pixels
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+#[cfg(not(wasm))]
 pub fn extract_image_block_rect(img: &DynamicImage, x: u32, y: u32, block_width: u32, block_height: u32) -> Vec<Vec<RGB>> {
     let mut block = vec![vec![RGB { r: 0, g: 0, b: 0 }; block_width as usize]; block_height as usize];
 
@@ -560,7 +591,7 @@ pub fn extract_image_block_rect(img: &DynamicImage, x: u32, y: u32, block_width:
 }
 
 /// Convert image RGB to symbols RGB
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+#[cfg(not(wasm))]
 impl From<Rgb<u8>> for RGB {
     fn from(rgb: Rgb<u8>) -> Self {
         RGB {
@@ -572,7 +603,7 @@ impl From<Rgb<u8>> for RGB {
 }
 
 /// Convert symbols RGB to image RGB  
-#[cfg(all(feature = "sdl", feature = "winit", not(wasm)))]
+#[cfg(not(wasm))]
 impl From<RGB> for Rgb<u8> {
     fn from(rgb: RGB) -> Self {
         Rgb([rgb.r, rgb.g, rgb.b])
