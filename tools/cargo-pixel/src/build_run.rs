@@ -120,35 +120,75 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                     crate_path = cpath;
                 }
             }
-            cmds.push(format!(
-                "RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' wasm-pack build --target web {} {} {}",
-                crate_path,
-                release,
-                args.get_many::<String>("other")
-                    .unwrap_or_default()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<&str>>()
-                    .join(" ")
-            ));
+            
+            // Cross-platform wasm-pack build command
+            if cfg!(target_os = "windows") {
+                cmds.push(format!(
+                    "set RUSTFLAGS=--cfg getrandom_backend=\"wasm_js\" && wasm-pack build --target web {} {} {}",
+                    crate_path,
+                    release,
+                    args.get_many::<String>("other")
+                        .unwrap_or_default()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<&str>>()
+                        .join(" ")
+                ));
+            } else {
+                cmds.push(format!(
+                    "RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' wasm-pack build --target web {} {} {}",
+                    crate_path,
+                    release,
+                    args.get_many::<String>("other")
+                        .unwrap_or_default()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<&str>>()
+                        .join(" ")
+                ));
+            }
+            
             let tmpwd = format!("tmp/web_{}/", mod_name);
-            cmds.push(format!("rm -r {}/*", tmpwd));
-            cmds.push(format!("mkdir -p {}", tmpwd));
-            cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
-            cmds.push(format!(
-                "cp {}/web-templates/* {}",
-                ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
-            ));
-            cmds.push(format!(
-                "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
-                capname, tmpwd
-            ));
-            cmds.push(format!(
-                "sed -i '' \"s/pixel/{}/g\" {}/index.js",
-                loname, tmpwd
-            ));
-            cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
-            if subcmd == "run" {
-                cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
+            
+            // Cross-platform directory cleanup and creation
+            if cfg!(target_os = "windows") {
+                cmds.push(format!("if exist {}\\* del /q /s {}\\*", tmpwd, tmpwd));
+                cmds.push(format!("if not exist {} mkdir {}", tmpwd, tmpwd));
+                cmds.push(format!("xcopy /E /I /Y {}\\assets {}\\assets", crate_path, tmpwd));
+                cmds.push(format!(
+                    "xcopy /Y {}\\web-templates\\* {}",
+                    ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
+                ));
+                cmds.push(format!(
+                    "powershell -Command \"(Get-Content {}/index.js) -replace 'Pixel', '{}' | Set-Content {}/index.js\"",
+                    tmpwd, capname, tmpwd
+                ));
+                cmds.push(format!(
+                    "powershell -Command \"(Get-Content {}/index.js) -replace 'pixel', '{}' | Set-Content {}/index.js\"",
+                    tmpwd, loname, tmpwd
+                ));
+                cmds.push(format!("xcopy /E /I /Y {}\\pkg {}\\pkg", crate_path, tmpwd));
+                if subcmd == "run" {
+                    cmds.push(format!("python -m http.server -d {} {}", tmpwd, webport));
+                }
+            } else {
+                cmds.push(format!("rm -r {}/*", tmpwd));
+                cmds.push(format!("mkdir -p {}", tmpwd));
+                cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
+                cmds.push(format!(
+                    "cp {}/web-templates/* {}",
+                    ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
+                ));
+                cmds.push(format!(
+                    "sed -i '' \"s/Pixel/{}/g\" {}/index.js",
+                    capname, tmpwd
+                ));
+                cmds.push(format!(
+                    "sed -i '' \"s/pixel/{}/g\" {}/index.js",
+                    loname, tmpwd
+                ));
+                cmds.push(format!("cp -r {}/pkg {}", crate_path, tmpwd));
+                if subcmd == "run" {
+                    cmds.push(format!("python3 -m http.server -d {} {}", tmpwd, webport));
+                }
             }
         }
         _ => {}
