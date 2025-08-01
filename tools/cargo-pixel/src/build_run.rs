@@ -123,8 +123,9 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             
             // Cross-platform wasm-pack build command
             if cfg!(target_os = "windows") {
+                // Windows: Use PowerShell for environment variable setting (works in both PowerShell and cmd via powershell -Command)
                 cmds.push(format!(
-                    "set RUSTFLAGS=--cfg getrandom_backend=\"wasm_js\" && wasm-pack build --target web {} {} {}",
+                    "powershell -Command \"$env:RUSTFLAGS='--cfg getrandom_backend=\\\"wasm_js\\\"'; wasm-pack build --target web {} {} {}\"",
                     crate_path,
                     release,
                     args.get_many::<String>("other")
@@ -134,6 +135,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                         .join(" ")
                 ));
             } else {
+                // Unix-like systems (Linux, macOS)
                 cmds.push(format!(
                     "RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' wasm-pack build --target web {} {} {}",
                     crate_path,
@@ -150,27 +152,41 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             
             // Cross-platform directory cleanup and creation
             if cfg!(target_os = "windows") {
-                cmds.push(format!("if exist {}\\* del /q /s {}\\*", tmpwd, tmpwd));
-                cmds.push(format!("if not exist {} mkdir {}", tmpwd, tmpwd));
-                cmds.push(format!("xcopy /E /I /Y {}\\assets {}\\assets", crate_path, tmpwd));
+                // Use PowerShell for all Windows operations for consistency
                 cmds.push(format!(
-                    "xcopy /Y {}\\web-templates\\* {}",
+                    "powershell -Command \"if (Test-Path '{}') {{ Remove-Item -Recurse -Force '{}/*' }}\"",
+                    tmpwd, tmpwd
+                ));
+                cmds.push(format!(
+                    "powershell -Command \"if (-not (Test-Path '{}')) {{ New-Item -ItemType Directory -Path '{}' -Force }}\"",
+                    tmpwd, tmpwd
+                ));
+                cmds.push(format!(
+                    "powershell -Command \"if (Test-Path '{}/assets') {{ Copy-Item -Recurse -Force '{}/assets' '{}/' }}\"",
+                    crate_path, crate_path, tmpwd
+                ));
+                cmds.push(format!(
+                    "powershell -Command \"Copy-Item -Force '{}/web-templates/*' '{}'\"",
                     ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
                 ));
                 cmds.push(format!(
-                    "powershell -Command \"(Get-Content {}/index.js) -replace 'Pixel', '{}' | Set-Content {}/index.js\"",
+                    "powershell -Command \"(Get-Content '{}/index.js') -replace 'Pixel', '{}' | Set-Content '{}/index.js'\"",
                     tmpwd, capname, tmpwd
                 ));
                 cmds.push(format!(
-                    "powershell -Command \"(Get-Content {}/index.js) -replace 'pixel', '{}' | Set-Content {}/index.js\"",
+                    "powershell -Command \"(Get-Content '{}/index.js') -replace 'pixel', '{}' | Set-Content '{}/index.js'\"",
                     tmpwd, loname, tmpwd
                 ));
-                cmds.push(format!("xcopy /E /I /Y {}\\pkg {}\\pkg", crate_path, tmpwd));
+                cmds.push(format!(
+                    "powershell -Command \"if (Test-Path '{}/pkg') {{ Copy-Item -Recurse -Force '{}/pkg' '{}/' }}\"",
+                    crate_path, crate_path, tmpwd
+                ));
                 if subcmd == "run" {
                     cmds.push(format!("python -m http.server -d {} {}", tmpwd, webport));
                 }
             } else {
-                cmds.push(format!("rm -r {}/*", tmpwd));
+                // Unix-like systems (Linux, macOS)
+                cmds.push(format!("rm -rf {}/*", tmpwd));
                 cmds.push(format!("mkdir -p {}", tmpwd));
                 cmds.push(format!("cp -r {}/assets {}", crate_path, tmpwd));
                 cmds.push(format!(
