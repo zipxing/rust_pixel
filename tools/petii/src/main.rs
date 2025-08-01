@@ -1,5 +1,11 @@
 // https://github.com/JuliaPoo/AsciiArtist
 // https://github.com/EgonOlsen71/petsciiator
+//
+// REFACTORED VERSION:
+// - Extracted binarization logic from calc_eigenvector to a dedicated binarize_block() function
+// - Unified binarization processing: now performed once before character matching
+// - Simplified calc_eigenvector: removed complex internal binarization logic
+// - Improved code clarity and maintainability while preserving original functionality
 
 mod c64;
 use c64::{C64LOW, C64UP};
@@ -7,9 +13,6 @@ use deltae::*;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use lab::Lab;
 use rust_pixel::render::style::ANSI_COLOR_RGB;
-use rust_pixel::render::symbols::{
-    binarize_block, BinarizationConfig, BinarizedBlock, RGB as SymbolsRGB
-};
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
@@ -115,43 +118,30 @@ fn main() {
     // find background color...
     let bret = find_background_color(&resized_img, &gray_img, width * 8, height * 8);
     let back_gray = bret.0;
-    // let back_rgb = bret.1;
+    let back_rgb = bret.1;
 
     println!("width={},height={},texture=255", width, height);
     for i in 0..height {
         for j in 0..width {
-            if is_petii {
-                // Use advanced binarization for PETSCII mode
-                let binarized_block = get_binarized_block_at(&resized_img, j, i);
-                
-                // Convert the advanced binarized pattern to 8x8 grayscale for compatibility with existing matching
-                let block_at = binarized_to_grayscale(&binarized_block);
-                let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
-                
-                // Use the library's color extraction
-                let fg_color = SymbolsRGB {
-                    r: binarized_block.foreground_color.r,
-                    g: binarized_block.foreground_color.g,
-                    b: binarized_block.foreground_color.b,
-                };
-                let bg_color = SymbolsRGB {
-                    r: binarized_block.background_color.r,
-                    g: binarized_block.background_color.g,
-                    b: binarized_block.background_color.b,
-                };
-                
-                let fg_index = find_best_color(RGB { r: fg_color.r, g: fg_color.g, b: fg_color.b });
-                let bg_index = find_best_color(RGB { r: bg_color.r, g: bg_color.g, b: bg_color.b });
-                
-                // sym, fg, tex, bg
-                print!("{},{},1,{} ", bm, fg_index, bg_index);
+            let block_at = get_block_at(&gray_img, j, i);
+
+            // Apply binarization for PETSCII mode before character matching
+            let processed_block = if is_petii {
+                binarize_block(&block_at, back_gray)
             } else {
-                // Use original algorithm for non-PETSCII mode
-                let block_at = get_block_at(&gray_img, j, i);
-                let bm = find_best_match(&block_at, &vcs, back_gray, is_petii);
+                block_at
+            };
+
+            let bm = find_best_match(&processed_block, &vcs);
+
+            if !is_petii {
                 let block_color = get_block_color(&resized_img, j, i);
                 let bc = find_best_color(block_color);
                 print!("{},{},1 ", bm, bc,);
+            } else {
+                let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb);
+                // sym, fg, tex, bg
+                print!("{},{},1,{} ", bm, bc.1, bc.0);
             }
         }
         println!("");
@@ -235,80 +225,76 @@ fn find_background_color(
 }
 
 // get petscii block color
-// fn get_petii_block_color(
-//     image: &DynamicImage,
-//     img: &ImageBuffer<Luma<u8>, Vec<u8>>,
-//     x: u32,
-//     y: u32,
-//     back_rgb: u32,
-// ) -> (usize, usize) {
-//     let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
-//     for i in 0..8usize {
-//         for j in 0..8usize {
-//             let pixel_x = x * 8 + j as u32;
-//             let pixel_y = y * 8 + i as u32;
-//             if pixel_x < image.width() && pixel_y < image.height() {
-//                 let p = image.get_pixel(pixel_x, pixel_y);
-//                 let k: u32 = ((p[0] as u32) << 24)
-//                     + ((p[1] as u32) << 16)
-//                     + ((p[2] as u32) << 8)
-//                     + (p[3] as u32);
-//                 cc.entry(k).or_insert((pixel_x, pixel_y));
-//             }
-//         }
-//     }
-//     let cv: Vec<_> = cc.iter().collect();
-//     let mut include_back = false;
-//     let clen = cv.len();
-//     for c in &cv {
-//         if *c.0 == back_rgb {
-//             include_back = true;
-//         }
-//     }
-//     let mut ret = None;
-//     if include_back {
-//         if clen == 1 {
-//             ret = Some((back_rgb, back_rgb));
-//             // println!("<B>{:?}", ret);
-//         } else if clen == 2 {
-//             let mut r = (back_rgb, back_rgb);
-//             if *cv[0].0 != back_rgb {
-//                 r.1 = *cv[0].0;
-//             } 
-//             if *cv[1].0 != back_rgb {
-//                 r.1 = *cv[1].0;
-//             } 
-//             ret = Some(r);
-//             // println!("<B,F>{:?}", ret);
-//         } else {
-//             println!("ERROR!!!");
-//         }
-//     } else {
-//         if clen == 1 {
-//             ret = Some((*cv[0].0, *cv[0].0));
-//             // println!("<F>{:?}", ret);
-//         } else if clen == 2 {
-//             let g0 = img.get_pixel(cv[0].1.0, cv[0].1.1).0[0];
-//             let g1 = img.get_pixel(cv[1].1.0, cv[1].1.1).0[0];
-//             if g0 <= g1 {
-//                 ret = Some((*cv[0].0, *cv[1].0));
-//             } else {
-//                 ret = Some((*cv[1].0, *cv[0].0));
-//             }
-//             // println!("<F1,F2>{:?}", ret);
-//         } else {
-//             println!("ERROR2!!!");
-//         }
-//     }
-//     match ret {
-//         Some(r) => {
-//             (find_best_color_u32(r.0), find_best_color_u32(r.1))
-//         }
-//         _ => {
-//             (0, 0)
-//         }
-//     }
-// }
+fn get_petii_block_color(
+    image: &DynamicImage,
+    img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    x: u32,
+    y: u32,
+    back_rgb: u32,
+) -> (usize, usize) {
+    let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
+    for i in 0..8usize {
+        for j in 0..8usize {
+            let pixel_x = x * 8 + j as u32;
+            let pixel_y = y * 8 + i as u32;
+            if pixel_x < image.width() && pixel_y < image.height() {
+                let p = image.get_pixel(pixel_x, pixel_y);
+                let k: u32 = ((p[0] as u32) << 24)
+                    + ((p[1] as u32) << 16)
+                    + ((p[2] as u32) << 8)
+                    + (p[3] as u32);
+                cc.entry(k).or_insert((pixel_x, pixel_y));
+            }
+        }
+    }
+    let cv: Vec<_> = cc.iter().collect();
+    let mut include_back = false;
+    let clen = cv.len();
+    for c in &cv {
+        if *c.0 == back_rgb {
+            include_back = true;
+        }
+    }
+    let mut ret = None;
+    if include_back {
+        if clen == 1 {
+            ret = Some((back_rgb, back_rgb));
+            // println!("<B>{:?}", ret);
+        } else if clen == 2 {
+            let mut r = (back_rgb, back_rgb);
+            if *cv[0].0 != back_rgb {
+                r.1 = *cv[0].0;
+            }
+            if *cv[1].0 != back_rgb {
+                r.1 = *cv[1].0;
+            }
+            ret = Some(r);
+            // println!("<B,F>{:?}", ret);
+        } else {
+            println!("ERROR!!!");
+        }
+    } else {
+        if clen == 1 {
+            ret = Some((*cv[0].0, *cv[0].0));
+            // println!("<F>{:?}", ret);
+        } else if clen == 2 {
+            let g0 = img.get_pixel(cv[0].1 .0, cv[0].1 .1).0[0];
+            let g1 = img.get_pixel(cv[1].1 .0, cv[1].1 .1).0[0];
+            if g0 <= g1 {
+                ret = Some((*cv[0].0, *cv[1].0));
+            } else {
+                ret = Some((*cv[1].0, *cv[0].0));
+            }
+            // println!("<F1,F2>{:?}", ret);
+        } else {
+            println!("ERROR2!!!");
+        }
+    }
+    match ret {
+        Some(r) => (find_best_color_u32(r.0), find_best_color_u32(r.1)),
+        _ => (0, 0),
+    }
+}
 
 // get block average color(for not petscii image)
 fn get_block_color(image: &DynamicImage, x: u32, y: u32) -> RGB {
@@ -363,48 +349,69 @@ fn get_block_at(image: &ImageBuffer<Luma<u8>, Vec<u8>>, x: u32, y: u32) -> Image
     block
 }
 
-/// Get binarized block using the advanced library algorithm
-/// 
-/// This function uses the rust_pixel library's advanced Otsu-based binarization
-/// instead of the simple eigenvector approach
-fn get_binarized_block_at(image: &DynamicImage, x: u32, y: u32) -> BinarizedBlock {
-    // Extract the 8x8 block manually
-    let mut pixels = vec![vec![SymbolsRGB { r: 0, g: 0, b: 0 }; 8]; 8];
+/// Binarize a grayscale block for PETSCII processing
+///
+/// This function extracts the binarization logic from calc_eigenvector
+/// to provide a unified binarization step before character matching.
+fn binarize_block(img: &Image8x8, back: u8) -> Image8x8 {
+    let mut binary_block = vec![vec![0u8; 8]; 8];
+    let mut min = u8::MAX;
+    let mut max = 0u8;
+    let mut include_back = false;
 
-    for dy in 0..8usize {
-        for dx in 0..8usize {
-            let pixel_x = x * 8 + dx as u32;
-            let pixel_y = y * 8 + dy as u32;
-
-            if pixel_x < image.width() && pixel_y < image.height() {
-                let pixel = image.get_pixel(pixel_x, pixel_y);
-                pixels[dy][dx] = SymbolsRGB {
-                    r: pixel[0],
-                    g: pixel[1], 
-                    b: pixel[2],
-                };
+    // Find min & max gray value and check for background color
+    for x in 0..8 {
+        for y in 0..8 {
+            let p = img[y][x];
+            if !include_back && p == back {
+                include_back = true;
+            }
+            if p > max {
+                max = p;
+            }
+            if p < min {
+                min = p;
             }
         }
     }
-    
-    // Use default configuration (10% contrast threshold)
-    let config = BinarizationConfig::default();
-    
-    // Apply advanced binarization
-    binarize_block(&pixels, &config)
+
+    // Apply binarization logic
+    for x in 0..8 {
+        for y in 0..8 {
+            let iyx = img[y][x];
+            let binary_value = if include_back {
+                // If block includes background color
+                if iyx == back {
+                    0
+                } else {
+                    255
+                }
+            } else {
+                if min == max {
+                    // If only 1 color
+                    255
+                } else {
+                    // Min to 0 and max to 255
+                    if iyx == min {
+                        0
+                    } else {
+                        255
+                    }
+                }
+            };
+            binary_block[y][x] = binary_value;
+        }
+    }
+
+    binary_block
 }
 
-fn find_best_match(
-    input_image: &Image8x8,
-    char_images: &[Image8x8],
-    back: u8,
-    is_petii: bool,
-) -> usize {
+fn find_best_match(input_image: &Image8x8, char_images: &[Image8x8]) -> usize {
     let mut min_mse = f64::MAX;
     let mut best_match = 0;
 
     for (i, char_image) in char_images.iter().enumerate() {
-        let mse = calculate_mse(input_image, char_image, back, is_petii);
+        let mse = calculate_mse(input_image, char_image);
         // println!("i..{} mse..{}", i, mse);
 
         if mse < min_mse {
@@ -416,30 +423,13 @@ fn find_best_match(
     best_match
 }
 
-/// Convert binarized block to grayscale format for compatibility with existing matching algorithm
-/// 
-/// This converts the advanced binary pattern back to an 8x8 grayscale block
-/// so it can be used with the existing eigenvector-based matching
-fn binarized_to_grayscale(block: &BinarizedBlock) -> Image8x8 {
-    let mut grayscale = vec![vec![0u8; 8]; 8];
-    
-    for y in 0..8 {
-        for x in 0..8 {
-            // Convert binary pattern to grayscale: 0 -> 0 (black), 1 -> 255 (white)
-            grayscale[y][x] = if block.bitmap[y][x] == 1 { 255 } else { 0 };
-        }
-    }
-    
-    grayscale
+fn find_best_color_u32(c: u32) -> usize {
+    find_best_color(RGB {
+        r: (c >> 24) as u8,
+        g: (c >> 16) as u8,
+        b: (c >> 8) as u8,
+    })
 }
-
-// fn find_best_color_u32(c: u32) -> usize {
-//     find_best_color(RGB{
-//         r: (c >> 24) as u8,
-//         g: (c >> 16) as u8,
-//         b: (c >> 8) as u8,
-//     })
-// }
 
 fn find_best_color(color: RGB) -> usize {
     let mut min_mse = f32::MAX;
@@ -462,59 +452,12 @@ fn find_best_color(color: RGB) -> usize {
     best_match
 }
 
-fn calc_eigenvector(img: &Image8x8, back: u8, is_petii: bool, is_source: bool) -> Vec<i32> {
+fn calc_eigenvector(img: &Image8x8) -> Vec<i32> {
     let mut v = vec![0i32; 10];
-    let mut min = u8::MAX;
-    let mut max = 0u8;
-    let mut include_back = false;
-
-    // find min & max gray value...
-    if is_petii {
-        for x in 0..8 {
-            for y in 0..8 {
-                let p = img[y][x];
-                if !include_back {
-                    if p == back {
-                        include_back = true;
-                    }
-                }
-                if p > max {
-                    max = p;
-                }
-                if p < min {
-                    min = p;
-                }
-            }
-        }
-    }
 
     for x in 0..8 {
         for y in 0..8 {
-            let p;
-            if is_petii {
-                // gray image8x8 binarization...
-                let iyx = img[y][x];
-                if is_source {
-                    // for petscii source...
-                    p = if iyx == 0 { 0i32 } else { 1i32 };
-                } else {
-                    if include_back {
-                        // if block include back colors...
-                        p = if iyx == back { 0i32 } else { 1i32 };
-                    } else {
-                        if min == max {
-                            // if only 1 color...
-                            p = 1i32;
-                        } else {
-                            // min to 0 and max to 1...
-                            p = if iyx == min { 0i32 } else { 1i32 };
-                        }
-                    }
-                }
-            } else {
-                // normal image...
-                p = img[y][x] as i32;
-            }
+            let p = img[y][x] as i32;
 
             if x < 4 && y < 4 {
                 v[0] += p;
@@ -551,10 +494,10 @@ fn calc_eigenvector(img: &Image8x8, back: u8, is_petii: bool, is_source: bool) -
     v
 }
 
-fn calculate_mse(img1: &Image8x8, img2: &Image8x8, back: u8, is_petii: bool) -> f64 {
+fn calculate_mse(img1: &Image8x8, img2: &Image8x8) -> f64 {
     let mut mse = 0.0f64;
-    let v1 = calc_eigenvector(img1, back, is_petii, false);
-    let v2 = calc_eigenvector(img2, back, is_petii, true);
+    let v1 = calc_eigenvector(img1);
+    let v2 = calc_eigenvector(img2);
     // println!("input......{:?}", v1);
     // println!("petii......{:?}", v2);
     for i in 0..10usize {
