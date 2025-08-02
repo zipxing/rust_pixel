@@ -90,7 +90,6 @@ fn main() {
         }
     }
     input_image_path = Path::new(&args[1]);
-    println!("image={:?}", &input_image_path);
     let mut img = image::open(&input_image_path).expect("Failed to open the input image");
     if args.len() > 2 {
         width = args[2].parse().unwrap();
@@ -99,6 +98,7 @@ fn main() {
     if args.len() > 4 {
         is_petii = args[4].parse().unwrap();
     }
+
     if args.len() == 9 {
         let cx = args[5].parse().unwrap();
         let cy = args[6].parse().unwrap();
@@ -106,12 +106,17 @@ fn main() {
         let ch = args[8].parse().unwrap();
         img = img.crop(cx, cy, cw, ch);
         img.save("tmp/out0.png").expect("save tmp/out0.png error");
+    }
 
     let resized_img =
         img.resize_exact(width * 8, height * 8, image::imageops::FilterType::Lanczos3);
-    resized_img.save("tmp/out1.png").expect("save tmp/out1.png error");
+    resized_img
+        .save("tmp/out1.png")
+        .expect("save tmp/out1.png error");
     let gray_img = resized_img.clone().into_luma8();
-    gray_img.save("tmp/out2.png").expect("save tmp/out2.png error");
+    gray_img
+        .save("tmp/out2.png")
+        .expect("save tmp/out2.png error");
 
     // get petscii images...
     let vcs = gen_charset_images(false);
@@ -186,8 +191,6 @@ fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
     }
     vcs
 }
-
-
 
 // get petscii block color
 fn get_petii_block_color(

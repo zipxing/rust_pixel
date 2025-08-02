@@ -53,7 +53,7 @@ pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
         print!("\r{}  ", x + 1);
         io::stdout().flush().unwrap();
         let cmd = format!(
-            "cargo r --bin pixel_petii --release tmp/t{}.png  {} {} > tmp/t{}.pix 2>/dev/null",
+            "cargo pixel p tmp/t{}.png  {} {} > tmp/t{}.pix 2>/dev/null",
             x + 1,
             width,
             height,
