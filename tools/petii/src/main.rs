@@ -90,6 +90,7 @@ fn main() {
         }
     }
     input_image_path = Path::new(&args[1]);
+    println!("image={:?}", &input_image_path);
     let mut img = image::open(&input_image_path).expect("Failed to open the input image");
     if args.len() > 2 {
         width = args[2].parse().unwrap();
@@ -104,14 +105,13 @@ fn main() {
         let cw = args[7].parse().unwrap();
         let ch = args[8].parse().unwrap();
         img = img.crop(cx, cy, cw, ch);
-        img.save("tmp/out0.png").unwrap();
-    }
+        img.save("tmp/out0.png").expect("save tmp/out0.png error");
 
     let resized_img =
         img.resize_exact(width * 8, height * 8, image::imageops::FilterType::Lanczos3);
-    resized_img.save("tmp/out1.png").unwrap();
+    resized_img.save("tmp/out1.png").expect("save tmp/out1.png error");
     let gray_img = resized_img.clone().into_luma8();
-    gray_img.save("tmp/out2.png").unwrap();
+    gray_img.save("tmp/out2.png").expect("save tmp/out2.png error");
 
     // get petscii images...
     let vcs = gen_charset_images(false);
