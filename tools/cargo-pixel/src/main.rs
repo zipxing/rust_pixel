@@ -129,22 +129,34 @@ fn replace_in_files(
     }
 }
 
+/// Execute a command using cross-platform shell
+/// For simple commands, consider using Command::new() directly instead
 fn exec_cmd(cmd: &str) {
+    println!("🍀 Executing: {}", cmd);
+    
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
+        let status = Command::new("cmd")
             .args(["/C", cmd])
             .status()
             .expect("failed to execute process");
+        
+        if !status.success() {
+            eprintln!("❌ Command failed with exit code: {:?}", status.code());
+        }
     }
     
     #[cfg(not(target_os = "windows"))]
     {
-        Command::new("sh")
+        let status = Command::new("sh")
             .arg("-c")
             .arg(cmd)
             .status()
             .expect("failed to execute process");
+            
+        if !status.success() {
+            eprintln!("❌ Command failed with exit code: {:?}", status.code());
+        }
     }
 }
 
@@ -203,30 +215,49 @@ fn copy_dir_recursive(from: &str, to: &str) -> std::io::Result<()> {
     copy_dir_recursive_impl(std::path::Path::new(from), std::path::Path::new(to))
 }
 
-/// Cross-platform wildcard file removal
-/// Removes files matching a pattern (e.g., "tmp/t*.p*")
+/// Cross-platform wildcard file removal using pure Rust
+/// Removes files matching simple patterns
+#[allow(dead_code)]
 fn remove_files_pattern(pattern: &str) {
     use std::path::Path;
     
-    // Simple pattern matching for the specific case "tmp/t*.p*"
-    if pattern == "tmp/t*.p*" {
-        let tmp_dir = Path::new("tmp");
-        if tmp_dir.exists() && tmp_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(tmp_dir) {
-                for entry in entries.flatten() {
-                    let file_name = entry.file_name();
-                    let file_name_str = file_name.to_string_lossy();
-                    
-                    // Check if filename starts with 't' and contains '.p'
-                    if file_name_str.starts_with('t') && file_name_str.contains(".p") {
-                        let _ = std::fs::remove_file(entry.path());
+    // Parse pattern to extract directory and filename pattern
+    let path = Path::new(pattern);
+    let parent_dir = path.parent().unwrap_or(Path::new("."));
+    let file_pattern = path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    
+    if parent_dir.exists() && parent_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(parent_dir) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                let file_name_str = file_name.to_string_lossy();
+                
+                // Simple pattern matching for common cases
+                let should_remove = if file_pattern == "t*.p*" {
+                    // Match files like t1.png, t2.pix, etc.
+                    file_name_str.starts_with('t') && file_name_str.contains(".p")
+                } else if file_pattern.contains('*') {
+                    // Generic wildcard matching - simple implementation
+                    let parts: Vec<&str> = file_pattern.split('*').collect();
+                    if parts.len() == 2 {
+                        file_name_str.starts_with(parts[0]) && file_name_str.ends_with(parts[1])
+                    } else {
+                        false
+                    }
+                } else {
+                    // Exact match
+                    file_name_str == file_pattern
+                };
+                
+                if should_remove {
+                    if let Err(e) = std::fs::remove_file(entry.path()) {
+                        eprintln!("Warning: Failed to remove file {:?}: {}", entry.path(), e);
                     }
                 }
             }
         }
-    } else {
-        // For other patterns, fall back to shell command
-        exec_cmd(&format!("rm {}", pattern));
     }
 }
 

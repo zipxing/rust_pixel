@@ -21,12 +21,12 @@ use flate2::Compression;
 use regex::Regex;
 use std::fs;
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
 
 use crate::PixelContext;
-use crate::{exec_cmd, remove_files_pattern};
 
 pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     let gif = args.get_one::<String>("gif").unwrap();
@@ -35,12 +35,20 @@ pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     let height: usize = args.get_one::<String>("height").unwrap().parse().unwrap();
 
     println!("🍀 extract pngs use ffmpeg...");
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(format!("ffmpeg -i {} -vsync 0 tmp/t%d.png", gif))
+    
+    // Create tmp directory if it doesn't exist
+    let tmp_dir = Path::new("tmp");
+    if !tmp_dir.exists() {
+        fs::create_dir_all(tmp_dir).expect("Failed to create tmp directory");
+    }
+    
+    // Cross-platform ffmpeg execution
+    let output_pattern = tmp_dir.join("t%d.png").to_string_lossy().to_string();
+    let output = Command::new("ffmpeg")
+        .args(["-i", gif, "-vsync", "0", &output_pattern])
         .stderr(Stdio::piped())
         .output()
-        .expect("failed to execute process");
+        .expect("failed to execute ffmpeg process");
 
     let stderr = str::from_utf8(&output.stderr).unwrap();
     let rf = Regex::new(r"(.*)frame=(.*?)(\d+)(.*)").unwrap();
@@ -52,14 +60,29 @@ pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     for x in 0..frame_count {
         print!("\r{}  ", x + 1);
         io::stdout().flush().unwrap();
-        let cmd = format!(
-            "cargo pixel p tmp/t{}.png  {} {} > tmp/t{}.pix 2>/dev/null",
-            x + 1,
-            width,
-            height,
-            x + 1
-        );
-        exec_cmd(&cmd);
+        
+        // Cross-platform path handling
+        let input_png = tmp_dir.join(format!("t{}.png", x + 1));
+        let output_pix = tmp_dir.join(format!("t{}.pix", x + 1));
+        
+        // Execute cargo pixel command and redirect output
+        let output = Command::new("cargo")
+            .args([
+                "pixel", "p", 
+                &input_png.to_string_lossy(),
+                &width.to_string(),
+                &height.to_string()
+            ])
+            .output()
+            .expect("Failed to execute cargo pixel p");
+            
+        if output.status.success() {
+            // Write stdout to .pix file
+            fs::write(&output_pix, &output.stdout)
+                .expect("Failed to write .pix file");
+        } else {
+            eprintln!("Warning: Failed to convert {}", input_png.display());
+        }
     }
 
     let mut fsdq = fs::File::create(ssf).unwrap();
@@ -74,8 +97,8 @@ pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     let mut datas = Vec::new();
     let mut flens = Vec::new();
     for x in 0..frame_count {
-        let pix_file = format!("tmp/t{}.pix", x + 1);
-        let content = fs::read_to_string(pix_file).unwrap();
+        let pix_file = tmp_dir.join(format!("t{}.pix", x + 1));
+        let content = fs::read_to_string(&pix_file).unwrap();
         let mut sdatas = Vec::new();
         for line in content.lines().skip(1) {
             for cap in rds.captures_iter(line) {
@@ -98,6 +121,19 @@ pub fn pixel_convert_gif(_ctx: &PixelContext, args: &ArgMatches) {
     fsdq.write_all(&datas).unwrap();
 
     println!("\n🍀 {} write ok!", ssf);
-    remove_files_pattern("tmp/t*.p*");
+    
+    // Clean up temporary files
+    if let Ok(entries) = fs::read_dir(tmp_dir) {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let file_name_str = file_name.to_string_lossy();
+            
+            // Remove files matching pattern t*.p* (t1.png, t1.pix, etc.)
+            if file_name_str.starts_with('t') && 
+               (file_name_str.contains(".png") || file_name_str.contains(".pix")) {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
 }
 

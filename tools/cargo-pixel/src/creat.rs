@@ -56,36 +56,60 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         );
     }
 
-    let _ = fs::remove_dir_all("tmp/pixel_game_template");
+    // Use cross-platform paths
+    let tmp_template = Path::new("tmp").join("pixel_game_template");
+    let _ = fs::remove_dir_all(&tmp_template);
     let _ = fs::create_dir_all(cdir);
     create_dir_cmd("tmp");
-    copy_cmd("apps/template", "tmp/pixel_game_template", true);
+    
+    let apps_template = Path::new("apps").join("template");
+    copy_cmd(&apps_template.to_string_lossy(), &tmp_template.to_string_lossy(), true);
 
     if let Some(stand_dir) = sa_dir {
         is_standalone = true;
-        copy_cmd("apps/template/stand-alone/Cargo.toml.temp", "tmp/pixel_game_template/Cargo.toml", false);
-        copy_cmd("apps/template/stand-alone/LibCargo.toml.temp", "tmp/pixel_game_template/lib/Cargo.toml", false);
-        copy_cmd("apps/template/stand-alone/FfiCargo.toml.temp", "tmp/pixel_game_template/ffi/Cargo.toml", false);
-        copy_cmd("apps/template/stand-alone/WasmCargo.toml.temp", "tmp/pixel_game_template/wasm/Cargo.toml", false);
+        
+        // Cross-platform standalone template paths
+        let standalone_path = apps_template.join("stand-alone");
+        copy_cmd(
+            &standalone_path.join("Cargo.toml.temp").to_string_lossy(), 
+            &tmp_template.join("Cargo.toml").to_string_lossy(), 
+            false
+        );
+        copy_cmd(
+            &standalone_path.join("LibCargo.toml.temp").to_string_lossy(), 
+            &tmp_template.join("lib").join("Cargo.toml").to_string_lossy(), 
+            false
+        );
+        copy_cmd(
+            &standalone_path.join("FfiCargo.toml.temp").to_string_lossy(), 
+            &tmp_template.join("ffi").join("Cargo.toml").to_string_lossy(), 
+            false
+        );
+        copy_cmd(
+            &standalone_path.join("WasmCargo.toml.temp").to_string_lossy(), 
+            &tmp_template.join("wasm").join("Cargo.toml").to_string_lossy(), 
+            false
+        );
         dir_name = stand_dir.to_string();
 
-        copy_cmd("build_support.rs", "tmp/pixel_game_template/build_support.rs", false);
-        // Update tmp/pixel_game_template/build.rs first line to include!("build_support.rs");
-        let build_rs_path = "tmp/pixel_game_template/build.rs";
-        if let Ok(lines) = fs::read_to_string(build_rs_path) {
+        copy_cmd("build_support.rs", &tmp_template.join("build_support.rs").to_string_lossy(), false);
+        // Update build.rs first line to include!("build_support.rs");
+        let build_rs_path = tmp_template.join("build.rs");
+        if let Ok(lines) = fs::read_to_string(&build_rs_path) {
             let mut new_content = String::from("include!(\"build_support.rs\");\n");
             // Skip first line
             if let Some(pos) = lines.find('\n') {
                 new_content.push_str(&lines[pos+1..]);
             }
-            let _ = fs::write(build_rs_path, new_content);
+            let _ = fs::write(&build_rs_path, new_content);
         }
     }
-    remove_dir_cmd("tmp/pixel_game_template/stand-alone", true);
+    let standalone_dir = tmp_template.join("stand-alone");
+    remove_dir_cmd(&standalone_dir.to_string_lossy(), true);
 
     replace_in_files(
         is_standalone,
-        Path::new("tmp/pixel_game_template"),
+        &tmp_template,
         &ctx.rust_pixel_dir[ctx.rust_pixel_idx],
         &dir_name,
         &capname,
@@ -93,8 +117,8 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         &loname,
     );
 
-    let mut new_path;
-    new_path = format!("{}/{}", dir_name, mod_name);
+    let new_path_buf = Path::new(&dir_name).join(&mod_name);
+    let mut new_path = new_path_buf.to_string_lossy().to_string();
     let mut count = 0;
     while Path::new(&new_path).exists() {
         // println!("  {} dir already exists, append {}!", new_path, count);
@@ -105,7 +129,7 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         }
     }
     println!("crate path: {:?}", new_path);
-    fs::rename("tmp/pixel_game_template", &new_path).unwrap();
+    fs::rename(&tmp_template, &new_path).unwrap();
 
     if is_standalone {
         let path = Path::new(&new_path);

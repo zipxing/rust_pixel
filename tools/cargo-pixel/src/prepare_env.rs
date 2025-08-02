@@ -196,12 +196,24 @@ pub fn check_pixel_env() -> PixelContext {
                                 let nvs = new_version.to_string();
                                 let cvs = format!("\"{}\"", current_version);
                                 if nvs != cvs {
-                                    exec_cmd("cargo install --path . --force");
-                                    println!("new ver:{:?} ver:{:?}", nvs, cvs);
-                                    println!("🍭 Updated cargo-pixel by: cargo install --path . --force");
-                                    println!("🍭 Re-run new version cargo-pixel");
-                                    exec_cmd(&command_line);
-                                    std::process::exit(0);
+                                    // Update cargo-pixel using direct Command execution
+                                    println!("🍭 Updating cargo-pixel...");
+                                    let status = Command::new("cargo")
+                                        .args(["install", "--path", ".", "--force"])
+                                        .status()
+                                        .expect("Failed to execute cargo install");
+                                    
+                                    if status.success() {
+                                        println!("new ver:{:?} ver:{:?}", nvs, cvs);
+                                        println!("🍭 Updated cargo-pixel by: cargo install --path . --force");
+                                        println!("🍭 Re-run new version cargo-pixel");
+                                        
+                                        // Re-execute with the same command line
+                                        exec_cmd(&command_line);
+                                        std::process::exit(0);
+                                    } else {
+                                        eprintln!("❌ Failed to update cargo-pixel");
+                                    }
                                 }
                             }
                         } else if pc.cdir_state == PState::NotPixel {
