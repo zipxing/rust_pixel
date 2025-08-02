@@ -1,0 +1,12 @@
+🍀 if exist "tmp/web_petview/" rmdir /s /q "tmp/web_petview/"
+🍀 mkdir "tmp/web_petview/"
+🍀 if exist "apps/petview/assets" robocopy "apps/petview/assets" "tmp/web_petview//assets" /E /NFL /NDL /NJH /NJS /nc /ns /np
+🍀 robocopy "C:\Users\zipxi\rust_pixel/web-templates" "tmp/web_petview/" /E /NFL /NDL /NJH /NJS /nc /ns /np
+
+2025/08/02 13:39:42 错误 123 (0x0000007B) 正在访问源目录 C:\Users\zipxi\rust_pixel\"C:\Users\zipxi\rust_pixel\web-templates"\
+文件名、目录名或卷标语法不正确。
+🍀 python -c "import os; content=open('tmp/web_petview//index.js','r',encoding='utf-8').read().replace('Pixel','Petview').replace('pixel','petview'); open('tmp/web_petview//index.js','w',encoding='utf-8').write(content)" 2>nul || echo Warning: Failed to update index.js
+Warning: Failed to update index.js
+🍀 if exist "apps/petview/pkg" robocopy "apps/petview/pkg" "tmp/web_petview//pkg" /E /NFL /NDL /NJH /NJS /nc /ns /np
+🍀 python3 -m http.server -d tmp/web_petview/ 8080
+Serving HTTP on :: port 8080 (http://[::]:8080/) ...
