@@ -298,20 +298,30 @@ pub fn input_events_from_winit(
                     cursor_pos.0 = position.x;
                     cursor_pos.1 = position.y;
 
-                    let px = cursor_pos.0 / *sym_width as f64 / adjx as f64;
-                    let py = cursor_pos.1 / *sym_height as f64 / adjy as f64;
+                    // Use same coordinate conversion as SDL for consistency
+                    let mut px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
+                    let mut py = (cursor_pos.1 / (*sym_height as f64 / adjy as f64)) as u16;
+                    
+                    // Apply offset correction like SDL does
+                    if px >= 1 { px -= 1; }
+                    if py >= 1 { py -= 1; }
 
                     return Some(Event::Mouse(MouseEvent {
                         kind: Moved,
-                        column: px as u16,
-                        row: py as u16,
+                        column: px,
+                        row: py,
                         modifiers: KeyModifiers::NONE,
                     }));
                 }
                 WindowEvent::MouseInput { state, button, .. } => {
                     if *state == winit::event::ElementState::Pressed {
-                        let px = cursor_pos.0 / *sym_width as f64 / adjx as f64;
-                        let py = cursor_pos.1 / *sym_height as f64 / adjy as f64;
+                        // Use same coordinate conversion as SDL for consistency
+                        let mut px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
+                        let mut py = (cursor_pos.1 / (*sym_height as f64 / adjy as f64)) as u16;
+                        
+                        // Apply offset correction like SDL does
+                        if px >= 1 { px -= 1; }
+                        if py >= 1 { py -= 1; }
 
                         let mouse_button = match button {
                             winit::event::MouseButton::Left => Left,
@@ -322,13 +332,18 @@ pub fn input_events_from_winit(
 
                         return Some(Event::Mouse(MouseEvent {
                             kind: Down(mouse_button),
-                            column: px as u16,
-                            row: py as u16,
+                            column: px,
+                            row: py,
                             modifiers: KeyModifiers::NONE,
                         }));
                     } else {
-                        let px = cursor_pos.0 / *sym_width as f64 / adjx as f64;
-                        let py = cursor_pos.1 / *sym_height as f64 / adjy as f64;
+                        // Use same coordinate conversion as SDL for consistency
+                        let mut px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
+                        let mut py = (cursor_pos.1 / (*sym_height as f64 / adjy as f64)) as u16;
+                        
+                        // Apply offset correction like SDL does
+                        if px >= 1 { px -= 1; }
+                        if py >= 1 { py -= 1; }
 
                         let mouse_button = match button {
                             winit::event::MouseButton::Left => Left,
@@ -339,8 +354,8 @@ pub fn input_events_from_winit(
 
                         return Some(Event::Mouse(MouseEvent {
                             kind: Up(mouse_button),
-                            column: px as u16,
-                            row: py as u16,
+                            column: px,
+                            row: py,
                             modifiers: KeyModifiers::NONE,
                         }));
                     }
