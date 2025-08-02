@@ -122,25 +122,29 @@ cargo pixel r palette t -r
 ```
  ![palette](./screen-shot/palette.gif)
 
-2. **tedit**: Used to edit character art assets, example:
+2. **edit**: Used to edit character art assets, example:
 ``` 
 #term mode
-cargo pixel r pixel_edit term . assets/logo.txt
+cargo pixel edit term . assets/logo.txt
+or
+cargo pixel e t . assets/logo.txt
 
 #graphics mode
-cargo pixel r pixel_edit sdl . assets/logo.pix
+cargo pixel edit sdl . assets/logo.pix
+or 
+cargo pixel e s . assets/logo.pix
 ```
  ![tedit_t](./screen-shot/tedit_term.png)
  ![tedit_s](./screen-shot/tedit_sdl.png)
 
-3. **tpetii**: Used to convert regular images into PETSCII character art, example:
+3. **petii**: Used to convert regular images into PETSCII character art, example:
 ```
-cargo pixel r pixel_petii t assets/a.png -r > assets/a.pix
-cargo pixel r pixel_edit s . assets/a.pix
+cargo pixel p assets/a.png > a.pix
+cargo pixel e g . assets/a.pix
 ```
 ```
-cargo pixel r pixel_petii t assets/lion.png 40 40 -r > assets/lion.pix
-cargo pixel r pixel_edit s . assets/lion.pix
+cargo pixel p assets/lion.png 40 40 > assets/lion.pix
+cargo pixel e g . assets/lion.pix
 ```
  ![tpetii_1](./screen-shot/a.png)
  ![tpetii_2](./screen-shot/lion.png)
@@ -148,7 +152,7 @@ cargo pixel r pixel_edit s . assets/lion.pix
 4. Script to automatically **convert gif images into PETSCII animations (.ssf)**
 ```
 cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25 
-cargo pixel r pixel_ssf wg -r . assets/sdq/fire.ssf       # preview ssf 
+cargo pixel ssf . assets/sdq/fire.ssf       # preview ssf 
 ```
 
 ### Demo games

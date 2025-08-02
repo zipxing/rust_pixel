@@ -8,6 +8,9 @@ description = "SSF sequence frame player tool for RustPixel"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
 [dependencies]
 itertools = "0.14.0"
 log = "0.4.27"
@@ -21,8 +24,13 @@ wasm-logger = "0.2.0"
 rust_pixel = { path = "../..", default-features = false }
 
 [features]
-default = ["term"]
 sdl = ["rust_pixel/sdl"]
 winit = ["rust_pixel/winit"]
 wgpu = ["rust_pixel/wgpu"]
-term = ["rust_pixel/term"] 
+term = ["rust_pixel/term"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(graphics_mode)',
+    'cfg(wasm)',
+] } 
