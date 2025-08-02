@@ -1,3 +1,25 @@
+# 1.0.5
+## ✨ Refactor: Add Cross-Platform Windows Support for `cargo-pixel`
+
+### Summary
+
+This release improves the cross-platform compatibility of `cargo-pixel`, especially on Windows. It includes a full refactor of the command execution and path handling logic to ensure reliable builds across different environments.
+
+### Changes
+
+- ✅ Switched to platform-aware command execution:
+  - Uses `cmd /C` on Windows
+  - Uses `sh -c` on Unix-like systems
+- ✅ Replaced hardcoded shell commands with `std::process::Command` API
+- ✅ Fixed path separator issues (`/` vs `\`) by using `PathBuf` to construct paths
+- ✅ Cleaned up temporary directory setup and asset copying logic
+
+### Impact
+
+- 🪟 `cargo-pixel` now works reliably on Windows Native
+- 🧼 More robust, maintainable, and portable build scripts
+
+
 # 1.0.4
 - Fix stand-alone application web compile bug
 
