@@ -150,35 +150,36 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 ));
             }
             
-            let tmpwd = format!("tmp/web_{}/", mod_name);
+            let tmpwd = format!("tmp/web_{}", mod_name);
             
             // Cross-platform directory and file operations
             if cfg!(target_os = "windows") {
-                // Windows: Use cmd commands instead of PowerShell
+                // Windows: Use simple cmd commands
                 cmds.push(format!("if exist \"{}\" rmdir /s /q \"{}\"", tmpwd, tmpwd));
                 cmds.push(format!("mkdir \"{}\"", tmpwd));
                 
                 // Copy assets if exists
                 cmds.push(format!(
-                    "if exist \"{}/assets\" robocopy \"{}/assets\" \"{}/assets\" /E /NFL /NDL /NJH /NJS /nc /ns /np",
+                    "if exist \"{}/assets\" xcopy \"{}/assets\" \"{}/assets\" /E /I /Y /Q >nul",
                     crate_path, crate_path, tmpwd
                 ));
                 
-                // Copy web-templates
+                // Copy web-templates contents
+                let rust_pixel_path = &ctx.rust_pixel_dir[ctx.rust_pixel_idx];
                 cmds.push(format!(
-                    "robocopy \"{}/web-templates\" \"{}\" /E /NFL /NDL /NJH /NJS /nc /ns /np",
-                    ctx.rust_pixel_dir[ctx.rust_pixel_idx], tmpwd
+                    "xcopy \"{}/web-templates/*\" \"{}\" /Y /Q >nul",
+                    rust_pixel_path, tmpwd
                 ));
                 
                 // Replace content in index.js using Python (more reliable than PowerShell)
                 cmds.push(format!(
-                    "python -c \"import os; content=open('{}/index.js','r',encoding='utf-8').read().replace('Pixel','{}').replace('pixel','{}'); open('{}/index.js','w',encoding='utf-8').write(content)\" 2>nul || echo Warning: Failed to update index.js",
-                    tmpwd, capname, loname, tmpwd
+                    "python -c \"import os; f='{}/index.js'; content=open(f,'r',encoding='utf-8').read() if os.path.exists(f) else ''; content=content.replace('Pixel','{}').replace('pixel','{}'); open(f,'w',encoding='utf-8').write(content) if content else None\" 2>nul || echo Warning: Failed to update index.js",
+                    tmpwd, capname, loname
                 ));
                 
                 // Copy pkg if exists (this happens after wasm-pack)
                 cmds.push(format!(
-                    "if exist \"{}/pkg\" robocopy \"{}/pkg\" \"{}/pkg\" /E /NFL /NDL /NJH /NJS /nc /ns /np",
+                    "if exist \"{}/pkg\" xcopy \"{}/pkg\" \"{}/pkg\" /E /I /Y /Q >nul",
                     crate_path, crate_path, tmpwd
                 ));
             } else {
