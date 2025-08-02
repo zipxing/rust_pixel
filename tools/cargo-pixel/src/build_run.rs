@@ -125,7 +125,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             if cfg!(target_os = "windows") {
                 // Windows: Use PowerShell script block to avoid complex escaping
                 cmds.push(format!(
-                    "powershell -Command \"& {{$env:RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"'; wasm-pack build --target web {} {} {}}}\"",
+                    "set RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' && wasm-pack build --target web {} {} {}}}\"",
                     crate_path,
                     release,
                     args.get_many::<String>("other")
