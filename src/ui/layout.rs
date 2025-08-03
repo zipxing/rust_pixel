@@ -205,11 +205,21 @@ impl LinearLayout {
         let mut y = bounds.y + self.padding.top;
         
         for (i, (widget, constraint)) in widgets.iter_mut().zip(constraints.iter()).enumerate() {
-            // Calculate height based on weight
-            let widget_height = if total_weight > 0.0 {
-                ((content_height as f32) * (constraint.weight / total_weight)) as u16
-            } else {
-                content_height / widget_count as u16
+            // Calculate height based on alignment
+            let widget_height = match self.alignment {
+                Alignment::Stretch => {
+                    // Use weight-based allocation for stretch
+                    if total_weight > 0.0 {
+                        ((content_height as f32) * (constraint.weight / total_weight)) as u16
+                    } else {
+                        content_height / widget_count as u16
+                    }
+                }
+                _ => {
+                    // Use preferred size for non-stretch alignments
+                    let preferred = widget.preferred_size(Rect::new(x, y, available_width, content_height));
+                    preferred.height.min(content_height)
+                }
             };
             
             let widget_height = widget_height.clamp(constraint.min_height, constraint.max_height);

@@ -4,15 +4,15 @@
 //! ScrollBar component for scrollable content.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
-use crate::render::style::{Color, Style};
+use crate::render::Buffer;
+use crate::render::style::Style;
 use crate::util::Rect;
 use crate::ui::{
-    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent, WidgetValue,
+    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,
     next_widget_id
 };
 use crate::impl_widget_base;
-use crate::event::{Event as InputEvent, MouseEvent, MouseEventKind, MouseButton};
+use crate::event::{Event as InputEvent, MouseEventKind, MouseButton};
 
 /// Scrollbar orientation
 #[derive(Debug, Clone, Copy, PartialEq)]

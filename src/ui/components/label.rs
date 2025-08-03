@@ -4,8 +4,8 @@
 //! Label component for displaying text.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
-use crate::render::style::{Color, Style};
+use crate::render::Buffer;
+use crate::render::style::Style;
 use crate::util::Rect;
 use crate::ui::{
     Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,

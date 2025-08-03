@@ -4,12 +4,12 @@
 //! Application framework for building UI applications.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
-use crate::render::style::{Color, Style};
+use crate::render::Buffer;
+
 use crate::util::Rect;
 use crate::ui::{
     Widget, Container, UIEvent, UIResult, UIError, EventDispatcher, ThemeManager,
-    AppEvent, WidgetEvent, WidgetId
+    AppEvent, WidgetId, Panel
 };
 use crate::event::Event as InputEvent;
 use std::time::{Duration, Instant};
@@ -118,8 +118,10 @@ impl UIApp {
             // Set root widget bounds to full buffer area
             root.set_bounds(*self.buffer.area());
             
-            // TODO: Layout children if root is a container
-            // Note: We need concrete type checking for Container trait
+            // Try to cast to Container and call layout
+            if let Some(container) = root.as_any_mut().downcast_mut::<Panel>() {
+                container.layout();
+            }
         }
     }
     

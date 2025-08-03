@@ -4,15 +4,15 @@
 //! TextBox component for text input.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
+use crate::render::Buffer;
 use crate::render::style::{Color, Style};
 use crate::util::Rect;
 use crate::ui::{
-    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent, WidgetValue,
+    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent,
     next_widget_id
 };
 use crate::impl_widget_base;
-use crate::event::{Event as InputEvent, KeyEvent, KeyCode, KeyModifiers};
+use crate::event::{Event as InputEvent, KeyCode, KeyModifiers};
 use unicode_width::UnicodeWidthStr;
 
 /// TextBox component for text input
@@ -210,7 +210,7 @@ impl TextBox {
 impl Widget for TextBox {
     impl_widget_base!(TextBox, base);
     
-    fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
+    fn render(&self, buffer: &mut Buffer, _ctx: &Context) -> UIResult<()> {
         if !self.state().visible {
             return Ok(());
         }
@@ -308,7 +308,7 @@ impl Widget for TextBox {
     }
     
     fn preferred_size(&self, available: Rect) -> Rect {
-        let height = 1.min(available.height);
+        let height = 3.min(available.height); // 3 lines for better visibility (border + content + border)
         let width = available.width; // TextBox usually wants to use available width
         
         Rect::new(available.x, available.y, width, height)
@@ -319,27 +319,47 @@ impl TextBox {
     fn render_border(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
         
-        if bounds.width < 2 {
+        if bounds.width < 2 || bounds.height < 2 {
             return Ok(());
         }
         
-        let border_char = if self.state().focused { "─" } else { "─" };
-        let border_style = style;
+        let border_style = if self.state().focused {
+            Style::default().fg(Color::Yellow).bg(style.bg.unwrap_or(Color::Reset))
+        } else {
+            Style::default().fg(Color::Gray).bg(style.bg.unwrap_or(Color::Reset))
+        };
         
-        // Simple underline border
+        // Draw full border box
+        // Top border
         for x in bounds.x..bounds.x + bounds.width {
-            if bounds.height > 0 {
-                buffer.get_mut(x, bounds.y + bounds.height - 1).set_symbol(border_char).set_style(border_style);
-            }
+            buffer.get_mut(x, bounds.y).set_symbol("─").set_style(border_style);
         }
+        
+        // Bottom border
+        for x in bounds.x..bounds.x + bounds.width {
+            buffer.get_mut(x, bounds.y + bounds.height - 1).set_symbol("─").set_style(border_style);
+        }
+        
+        // Left and right borders
+        for y in bounds.y..bounds.y + bounds.height {
+            buffer.get_mut(bounds.x, y).set_symbol("│").set_style(border_style);
+            buffer.get_mut(bounds.x + bounds.width - 1, y).set_symbol("│").set_style(border_style);
+        }
+        
+        // Corners
+        buffer.get_mut(bounds.x, bounds.y).set_symbol("┌").set_style(border_style);
+        buffer.get_mut(bounds.x + bounds.width - 1, bounds.y).set_symbol("┐").set_style(border_style);
+        buffer.get_mut(bounds.x, bounds.y + bounds.height - 1).set_symbol("└").set_style(border_style);
+        buffer.get_mut(bounds.x + bounds.width - 1, bounds.y + bounds.height - 1).set_symbol("┘").set_style(border_style);
         
         Ok(())
     }
     
     fn render_content(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
-        let content_width = bounds.width as usize;
-        let content_y = bounds.y;
+        // Account for border (1 char on each side)
+        let content_width = bounds.width.saturating_sub(2) as usize;
+        let content_y = bounds.y + 1; // Place text in the middle row
         
         if content_width == 0 {
             return Ok(());
@@ -388,7 +408,7 @@ impl TextBox {
             style
         };
         
-        buffer.set_string(bounds.x, content_y, &visible_text, text_style);
+        buffer.set_string(bounds.x + 1, content_y, &visible_text, text_style); // Account for left border
         
         Ok(())
     }
@@ -398,8 +418,8 @@ impl TextBox {
         let cursor_display_pos = self.text[..self.cursor_pos].width();
         
         if cursor_display_pos >= self.scroll_offset {
-            let cursor_x = bounds.x + (cursor_display_pos - self.scroll_offset) as u16;
-            let cursor_y = bounds.y;
+            let cursor_x = bounds.x + 1 + (cursor_display_pos - self.scroll_offset) as u16; // Account for left border
+            let cursor_y = bounds.y + 1; // Place cursor in content area (middle row)
             
             if cursor_x < bounds.x + bounds.width {
                 let cursor_style = Style::default()

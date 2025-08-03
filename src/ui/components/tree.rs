@@ -4,15 +4,15 @@
 //! Tree component for hierarchical data display.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
+use crate::render::Buffer;
 use crate::render::style::{Color, Style};
 use crate::util::Rect;
 use crate::ui::{
-    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent, WidgetValue,
+    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,
     next_widget_id
 };
 use crate::impl_widget_base;
-use crate::event::{Event as InputEvent, KeyEvent, KeyCode, MouseEvent, MouseEventKind, MouseButton};
+use crate::event::{Event as InputEvent, KeyCode, MouseEventKind, MouseButton};
 use unicode_width::UnicodeWidthStr;
 use std::collections::HashMap;
 
@@ -194,7 +194,7 @@ impl Tree {
     pub fn toggle_node(&mut self, node_id: NodeId) {
         if let Some(node) = self.nodes.get(&node_id) {
             let expanded = node.expanded;
-            drop(node); // Release borrow
+            let _ = node; // Release borrow
             
             if expanded {
                 self.collapse_node(node_id);
@@ -267,7 +267,7 @@ impl Tree {
 impl Widget for Tree {
     impl_widget_base!(Tree, base);
     
-    fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
+    fn render(&self, buffer: &mut Buffer, _ctx: &Context) -> UIResult<()> {
         if !self.state().visible {
             return Ok(());
         }
@@ -422,7 +422,7 @@ impl Tree {
             
             // Render indentation and tree lines
             if self.show_lines && depth > 0 {
-                for i in 0..depth {
+                for _i in 0..depth {
                     if x + 1 < bounds.x + bounds.width {
                         buffer.set_string(x, y, "  ", base_style);
                         x += 2;

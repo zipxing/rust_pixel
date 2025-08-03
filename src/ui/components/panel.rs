@@ -4,8 +4,8 @@
 //! Panel component - a container widget for organizing other widgets.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
-use crate::render::style::{Color, Style};
+use crate::render::Buffer;
+use crate::render::style::Style;
 use crate::util::Rect;
 use crate::ui::{
     Widget, Container, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,
@@ -223,9 +223,14 @@ impl Container for Panel {
         // Apply layout
         self.layout.layout(&mut self.children, content_area, &self.layout_constraints);
         
-        // Mark all children as dirty after layout
+        // Recursively layout child containers (panels)
         for child in &mut self.children {
             child.mark_dirty();
+            
+            // If child is a Panel, recursively layout its children
+            if let Some(child_panel) = child.as_any_mut().downcast_mut::<Panel>() {
+                child_panel.layout();
+            }
         }
     }
 }

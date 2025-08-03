@@ -4,15 +4,15 @@
 //! Button component for user interaction.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
+use crate::render::Buffer;
 use crate::render::style::{Color, Style};
 use crate::util::Rect;
 use crate::ui::{
-    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent, WidgetValue,
-    next_widget_id, ThemeManager, ComponentStyle
+    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent,
+    next_widget_id
 };
 use crate::impl_widget_base;
-use crate::event::{Event as InputEvent, MouseEvent, MouseEventKind, MouseButton};
+use crate::event::{Event as InputEvent, MouseEventKind, MouseButton};
 use unicode_width::UnicodeWidthStr;
 
 /// Button style variants
@@ -82,7 +82,7 @@ impl Button {
 impl Widget for Button {
     impl_widget_base!(Button, base);
     
-    fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
+    fn render(&self, buffer: &mut Buffer, _ctx: &Context) -> UIResult<()> {
         if !self.state().visible {
             return Ok(());
         }

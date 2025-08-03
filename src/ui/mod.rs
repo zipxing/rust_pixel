@@ -50,9 +50,9 @@ pub use theme::*;
 pub use components::*;
 pub use app::*;
 
-use crate::render::{Buffer, Cell};
-use crate::render::style::{Color, Style};
-use crate::util::Rect;
+
+
+
 
 /// UI Framework result type
 pub type UIResult<T> = Result<T, UIError>;

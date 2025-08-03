@@ -4,15 +4,15 @@
 //! List component for displaying and selecting items.
 
 use crate::context::Context;
-use crate::render::{Buffer, Cell};
+use crate::render::Buffer;
 use crate::render::style::{Color, Style};
 use crate::util::Rect;
 use crate::ui::{
-    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult, WidgetEvent, WidgetValue,
+    Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,
     next_widget_id
 };
 use crate::impl_widget_base;
-use crate::event::{Event as InputEvent, KeyEvent, KeyCode, MouseEvent, MouseEventKind, MouseButton};
+use crate::event::{Event as InputEvent, KeyCode, MouseEventKind, MouseButton};
 use unicode_width::UnicodeWidthStr;
 
 /// List item data
@@ -206,7 +206,7 @@ impl List {
 impl Widget for List {
     impl_widget_base!(List, base);
     
-    fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
+    fn render(&self, buffer: &mut Buffer, _ctx: &Context) -> UIResult<()> {
         if !self.state().visible {
             return Ok(());
         }
