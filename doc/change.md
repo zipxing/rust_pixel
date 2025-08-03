@@ -1,3 +1,6 @@
+# 1.0.6
+- Fix winit mouse bug
+
 # 1.0.5
 ## ✨ Refactor: Add Cross-Platform Windows Support for `cargo-pixel`
 
