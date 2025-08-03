@@ -247,3 +247,8 @@ pub mod log;
 #[cfg(not(feature = "base"))]
 pub mod render;
 
+/// UI Framework for building character-based user interfaces
+/// Provides widgets, layouts, events, and themes for rapid UI development
+#[cfg(not(feature = "base"))]
+pub mod ui;
+
