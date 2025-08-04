@@ -192,7 +192,36 @@ fn gen_charset_images(low_up: bool) -> Vec<Image8x8> {
     vcs
 }
 
-// get petscii block color
+/// Determines optimal foreground and background colors for a PETSCII character block
+/// 
+/// This function analyzes an 8x8 pixel block to determine the best foreground and background
+/// color pair for PETSCII rendering. PETSCII characters can only display two colors per block,
+/// so this function must intelligently choose which colors to use based on the content.
+///
+/// # Arguments
+/// * `image` - The source color image (DynamicImage) 
+/// * `img` - The corresponding grayscale version for luminance analysis
+/// * `x` - Block column coordinate (multiply by 8 to get pixel coordinate)
+/// * `y` - Block row coordinate (multiply by 8 to get pixel coordinate)  
+/// * `back_rgb` - The pre-computed global background color as a packed RGBA u32
+///
+/// # Returns
+/// A tuple `(background_color_index, foreground_color_index)` where each index
+/// refers to the ANSI color palette used for rendering.
+///
+/// # Algorithm Overview
+/// 1. **Color Collection**: Scans all 64 pixels in the 8x8 block and collects unique colors
+/// 2. **Background Detection**: Checks if the global background color appears in this block
+/// 3. **Color Assignment Logic**:
+///    - If background color is present:
+///      - 1 color total → Both fg/bg use background color (solid background block)
+///      - 2 colors total → Background + one foreground color
+///      - 3+ colors → Error condition (PETSCII can't represent this)
+///    - If no background color:
+///      - 1 color total → Both fg/bg use same color (solid foreground block) 
+///      - 2 colors total → Use grayscale values to determine which is fg vs bg
+///      - 3+ colors → Error condition
+/// 4. **Color Mapping**: Converts the selected RGB colors to nearest ANSI palette indices
 fn get_petii_block_color(
     image: &DynamicImage,
     img: &ImageBuffer<Luma<u8>, Vec<u8>>,
@@ -200,67 +229,103 @@ fn get_petii_block_color(
     y: u32,
     back_rgb: u32,
 ) -> (usize, usize) {
+    // HashMap to store unique colors found in this block
+    // Key: packed RGBA color (R<<24 | G<<16 | B<<8 | A)
+    // Value: first occurrence position (pixel_x, pixel_y) for potential grayscale lookup
     let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
+    
+    // Scan all 64 pixels in the 8x8 block
     for i in 0..8usize {
         for j in 0..8usize {
             let pixel_x = x * 8 + j as u32;
             let pixel_y = y * 8 + i as u32;
+            
+            // Ensure we don't go out of image bounds
             if pixel_x < image.width() && pixel_y < image.height() {
                 let p = image.get_pixel(pixel_x, pixel_y);
-                let k: u32 = ((p[0] as u32) << 24)
-                    + ((p[1] as u32) << 16)
-                    + ((p[2] as u32) << 8)
-                    + (p[3] as u32);
+                
+                // Pack RGBA components into a single u32 for efficient comparison
+                // Format: RGBA (R in highest byte, A in lowest byte)
+                let k: u32 = ((p[0] as u32) << 24)    // Red
+                    + ((p[1] as u32) << 16)            // Green  
+                    + ((p[2] as u32) << 8)             // Blue
+                    + (p[3] as u32);                   // Alpha
+                
+                // Store unique colors with their first occurrence position
                 cc.entry(k).or_insert((pixel_x, pixel_y));
             }
         }
     }
+    
+    // Convert HashMap to Vec for easier iteration and indexing
     let cv: Vec<_> = cc.iter().collect();
     let mut include_back = false;
     let clen = cv.len();
+    
+    // Check if the global background color appears in this block
     for c in &cv {
         if *c.0 == back_rgb {
             include_back = true;
         }
     }
+    
     let mut ret = None;
+    
     if include_back {
+        // Case 1: Block contains the global background color
         if clen == 1 {
+            // Only background color present - solid background block
             ret = Some((back_rgb, back_rgb));
             // println!("<B>{:?}", ret);
         } else if clen == 2 {
+            // Background + one other color - ideal PETSCII case
             let mut r = (back_rgb, back_rgb);
+            
+            // Find the non-background color to use as foreground
             if *cv[0].0 != back_rgb {
-                r.1 = *cv[0].0;
+                r.1 = *cv[0].0;  // First color is foreground
             }
             if *cv[1].0 != back_rgb {
-                r.1 = *cv[1].0;
+                r.1 = *cv[1].0;  // Second color is foreground  
             }
             ret = Some(r);
             // println!("<B,F>{:?}", ret);
         } else {
+            // 3+ colors including background - cannot represent in PETSCII
             println!("ERROR!!!");
         }
     } else {
+        // Case 2: Block does not contain global background color
         if clen == 1 {
+            // Single color block - use same color for both fg and bg
             ret = Some((*cv[0].0, *cv[0].0));
             // println!("<F>{:?}", ret);
         } else if clen == 2 {
-            let g0 = img.get_pixel(cv[0].1 .0, cv[0].1 .1).0[0];
-            let g1 = img.get_pixel(cv[1].1 .0, cv[1].1 .1).0[0];
+            // Two colors, neither is global background
+            // Use grayscale values to determine which should be background vs foreground
+            // Darker color typically becomes background in PETSCII convention
+            
+            let g0 = img.get_pixel(cv[0].1 .0, cv[0].1 .1).0[0];  // Grayscale of first color
+            let g1 = img.get_pixel(cv[1].1 .0, cv[1].1 .1).0[0];  // Grayscale of second color
+            
             if g0 <= g1 {
+                // First color is darker, use as background
                 ret = Some((*cv[0].0, *cv[1].0));
             } else {
+                // Second color is darker, use as background
                 ret = Some((*cv[1].0, *cv[0].0));
             }
             // println!("<F1,F2>{:?}", ret);
         } else {
+            // 3+ colors with no global background - cannot represent in PETSCII
             println!("ERROR2!!!");
         }
     }
+    
+    // Convert the selected RGB colors to ANSI color palette indices
     match ret {
         Some(r) => (find_best_color_u32(r.0), find_best_color_u32(r.1)),
-        _ => (0, 0),
+        _ => (0, 0),  // Fallback to black if something went wrong
     }
 }
 

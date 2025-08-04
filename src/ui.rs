@@ -53,7 +53,6 @@ pub use app::*;
 
 
 
-
 /// UI Framework result type
 pub type UIResult<T> = Result<T, UIError>;
 
