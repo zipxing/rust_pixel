@@ -609,3 +609,612 @@ impl From<RGB> for Rgb<u8> {
         Rgb([rgb.r, rgb.g, rgb.b])
     }
 }
+
+// ============================================================================
+// Character Block Processing for PETSCII/ASCII Conversion
+// ============================================================================
+
+/// Type alias for an NxM grayscale image block represented as a 2D vector of u8 values
+/// Each value represents a grayscale pixel intensity from 0 (black) to 255 (white)
+/// Block dimensions are configurable and not limited to 8x8
+pub type BlockGrayImage = Vec<Vec<u8>>;
+
+/// Generates NxM pixel representations of 256 PETSCII/C64 characters for pattern matching
+/// 
+/// This function creates binary images (using only 0 and 255 values) for each character
+/// in the C64 character set by interpreting the bitmap data from the character ROM.
+/// The generated images are scaled to match the specified block dimensions.
+/// 
+/// # Character Set Organization:
+/// - Characters 0-127: Normal character set with foreground pixels as 255, background as 0
+/// - Characters 128-255: Inverted versions with foreground as 0, background as 255
+/// - Total: 256 character variants for comprehensive matching
+/// 
+/// # Arguments:
+/// * `low_up` - Character set variant selector:
+///   - `true`: Uses lowercase/uppercase character set (C64LOW)
+///   - `false`: Uses uppercase/graphics character set (C64UP) - **typically used**
+/// * `block_width` - Width of each character block in pixels
+/// * `block_height` - Height of each character block in pixels
+/// * `charset_data` - Reference to C64 character set data (256 characters, each 8 bytes)
+/// 
+/// # Returns:
+/// * `Vec<BlockGrayImage>` - Vector of 256 NxM binary character images
+/// 
+/// # Implementation Details:
+/// Each character is defined by 8 bytes representing 8 rows of 8 bits each.
+/// The original 8x8 pattern is scaled to the target block dimensions.
+/// Bits are processed right-to-left to match C64 character orientation.
+#[cfg(not(wasm))]
+pub fn gen_charset_images(
+    low_up: bool, 
+    block_width: usize, 
+    block_height: usize,
+    c64low_data: &[[u8; 8]; 128],
+    c64up_data: &[[u8; 8]; 128],
+) -> Vec<BlockGrayImage> {
+    let data = if low_up { c64low_data } else { c64up_data };
+    let mut vcs = vec![vec![vec![0u8; block_width]; block_height]; 256];
+
+    // Scale factors for converting from 8x8 to target dimensions
+    let scale_x = block_width as f32 / 8.0;
+    let scale_y = block_height as f32 / 8.0;
+
+    for i in 0..128 {
+        for y in 0..block_height {
+            for x in 0..block_width {
+                // Map target coordinates back to original 8x8 pattern
+                let orig_x = (x as f32 / scale_x) as usize;
+                let orig_y = (y as f32 / scale_y) as usize;
+                let orig_x = orig_x.min(7);
+                let orig_y = orig_y.min(7);
+                
+                // Extract bit from original pattern
+                let bit = 7 - orig_x; // Right-to-left bit order
+                if data[i][orig_y] >> bit & 1 == 1 {
+                    vcs[i][y][x] = 255;
+                    vcs[128 + i][y][x] = 0;
+                } else {
+                    vcs[i][y][x] = 0;
+                    vcs[128 + i][y][x] = 255;
+                }
+            }
+        }
+    }
+    vcs
+}
+
+/// Extracts an NxM grayscale pixel block from the source image at the specified character position
+/// 
+/// This function creates a local copy of image data for a single character cell,
+/// converting the image coordinates from character space to pixel space.
+/// The extracted block is used for character pattern matching and analysis.
+/// 
+/// # Coordinate System:
+/// - Input coordinates (x,y) represent character positions in the output grid
+/// - Pixel coordinates are calculated as (x*block_width, y*block_height)
+/// - Handles boundary cases gracefully when blocks extend beyond image edges
+/// 
+/// # Arguments:
+/// * `image` - Source grayscale image (single channel, u8 values)
+/// * `x` - Character X position in the output grid
+/// * `y` - Character Y position in the output grid
+/// * `block_width` - Width of each character block in pixels
+/// * `block_height` - Height of each character block in pixels
+/// 
+/// # Returns:
+/// * `BlockGrayImage` - NxM matrix of grayscale values (0-255)
+///   - `block[row][column]` format for easy iteration
+///   - Out-of-bounds pixels default to 0 (black)
+/// 
+/// # Memory Layout:
+/// The returned block uses [row][column] indexing where:
+/// - First index (0..block_height-1) represents vertical position (Y)
+/// - Second index (0..block_width-1) represents horizontal position (X)
+#[cfg(not(wasm))]
+pub fn get_grayscale_block_at(
+    image: &ImageBuffer<Luma<u8>, Vec<u8>>, 
+    x: u32, 
+    y: u32, 
+    block_width: u32, 
+    block_height: u32
+) -> BlockGrayImage {
+    let mut block = vec![vec![0u8; block_width as usize]; block_height as usize];
+
+    for i in 0..block_height as usize {
+        for j in 0..block_width as usize {
+            let pixel_x = x * block_width + j as u32;
+            let pixel_y = y * block_height + i as u32;
+
+            if pixel_x < image.width() && pixel_y < image.height() {
+                block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
+            }
+        }
+    }
+
+    block
+}
+
+/// Binarize a grayscale block for PETSCII processing
+///
+/// This function extracts the binarization logic from calc_eigenvector
+/// to provide a unified binarization step before character matching.
+/// 
+/// # Arguments:
+/// * `img` - Input grayscale block to binarize
+/// * `back` - Background gray value for comparison
+/// * `block_width` - Width of the block in pixels
+/// * `block_height` - Height of the block in pixels
+/// 
+/// # Returns:
+/// * `BlockGrayImage` - Binarized block with only 0 and 255 values
+pub fn binarize_grayscale_block(
+    img: &BlockGrayImage, 
+    back: u8, 
+    block_width: usize, 
+    block_height: usize
+) -> BlockGrayImage {
+    let mut binary_block = vec![vec![0u8; block_width]; block_height];
+    let mut min = u8::MAX;
+    let mut max = 0u8;
+    let mut include_back = false;
+
+    // Find min & max gray value and check for background color
+    for y in 0..block_height {
+        for x in 0..block_width {
+            let p = img[y][x];
+            if !include_back && p == back {
+                include_back = true;
+            }
+            if p > max {
+                max = p;
+            }
+            if p < min {
+                min = p;
+            }
+        }
+    }
+
+    // Apply binarization logic
+    for y in 0..block_height {
+        for x in 0..block_width {
+            let iyx = img[y][x];
+            let binary_value = if include_back {
+                // If block includes background color
+                if iyx == back {
+                    0
+                } else {
+                    255
+                }
+            } else {
+                // No background color present, use threshold
+                let threshold = (min + max) / 2;
+                if iyx > threshold {
+                    255
+                } else {
+                    0
+                }
+            };
+            binary_block[y][x] = binary_value;
+        }
+    }
+
+    binary_block
+}
+
+/// Calculates a 10-dimensional feature vector that captures structural patterns in an NxM image block
+/// 
+/// This function extracts geometric and structural features from grayscale image blocks
+/// to enable robust character matching. Instead of comparing raw pixel values, it computes
+/// higher-level features that are more invariant to brightness variations and minor distortions.
+/// 
+/// # Feature Components (10-dimensional vector):
+/// - **v[0]**: Top-left quadrant sum
+/// - **v[1]**: Top-right quadrant sum
+/// - **v[2]**: Bottom-left quadrant sum
+/// - **v[3]**: Bottom-right quadrant sum
+/// - **v[4]**: Central region sum - captures core pattern
+/// - **v[5]**: Main diagonals sum - detects diagonal patterns
+/// - **v[6]**: Left edge sum - vertical line detection
+/// - **v[7]**: Right edge sum - vertical line detection  
+/// - **v[8]**: Top edge sum - horizontal line detection
+/// - **v[9]**: Bottom edge sum - horizontal line detection
+/// 
+/// # Mathematical Properties:
+/// - **Translation invariant**: Features remain stable under small shifts
+/// - **Brightness adaptive**: Relative patterns matter more than absolute values
+/// - **Structurally descriptive**: Captures key geometric properties of characters
+/// 
+/// # Arguments:
+/// * `img` - NxM grayscale image block to analyze
+/// * `block_width` - Width of the block in pixels
+/// * `block_height` - Height of the block in pixels
+/// 
+/// # Returns:
+/// * `Vec<i32>` - 10-element feature vector representing structural characteristics
+/// 
+/// # Usage:
+/// Used by `calculate_mse()` to compare feature vectors rather than raw pixel data,
+/// providing more robust character matching for ASCII/PETSCII conversion.
+pub fn calc_eigenvector(img: &BlockGrayImage, block_width: usize, block_height: usize) -> Vec<i32> {
+    let mut v = vec![0i32; 10];
+    
+    // Calculate relative thresholds based on block dimensions
+    let half_width = block_width / 2;
+    let half_height = block_height / 2;
+    let quarter_width = block_width / 4;
+    let quarter_height = block_height / 4;
+    let center_start_x = quarter_width;
+    let center_end_x = block_width - quarter_width;
+    let center_start_y = quarter_height;
+    let center_end_y = block_height - quarter_height;
+    let max_x = block_width - 1;
+    let max_y = block_height - 1;
+
+    for y in 0..block_height {
+        for x in 0..block_width {
+            let p = img[y][x] as i32;
+
+            // Quadrants
+            if x < half_width && y < half_height {
+                v[0] += p; // Top-left
+            }
+            if x >= half_width && y < half_height {
+                v[1] += p; // Top-right
+            }
+            if x < half_width && y >= half_height {
+                v[2] += p; // Bottom-left
+            }
+            if x >= half_width && y >= half_height {
+                v[3] += p; // Bottom-right
+            }
+            
+            // Central region
+            if x >= center_start_x && x < center_end_x && y >= center_start_y && y < center_end_y {
+                v[4] += p;
+            }
+            
+            // Diagonal patterns (adapted for NxM)
+            let diag_main = (x as f32 / block_width as f32 * block_height as f32) as usize;
+            let diag_anti = (((block_width - 1 - x) as f32 / block_width as f32) * block_height as f32) as usize;
+            if y == diag_main || y == diag_anti {
+                v[5] += p;
+            }
+            
+            // Edges
+            if x == 0 {
+                v[6] += p; // Left edge
+            }
+            if x == max_x {
+                v[7] += p; // Right edge
+            }
+            if y == 0 {
+                v[8] += p; // Top edge
+            }
+            if y == max_y {
+                v[9] += p; // Bottom edge
+            }
+        }
+    }
+    v
+}
+
+/// Calculates the mean squared error between two NxM image blocks using feature vectors
+/// 
+/// This function computes a distance metric between image blocks by comparing their
+/// structural features rather than raw pixel values. This approach provides more robust
+/// and perceptually meaningful matching for character recognition applications.
+/// 
+/// # Algorithm Steps:
+/// 1. **Feature extraction**: Computes 10-dimensional eigenvectors for both images
+/// 2. **Component differences**: Calculates squared differences for each feature component
+/// 3. **Distance calculation**: Sums squared differences and takes square root (Euclidean norm)
+/// 
+/// # Why Feature-Based MSE:
+/// - **Structural focus**: Emphasizes shape and pattern over exact pixel intensity
+/// - **Noise robustness**: Less sensitive to compression artifacts and minor variations
+/// - **Efficiency**: 10 comparisons instead of NxM pixel comparisons
+/// - **Perceptual relevance**: Features correlate better with human character recognition
+/// 
+/// # Mathematical Formula:
+/// ```
+/// MSE = sqrt(Σ(feature1[i] - feature2[i])²) for i = 0 to 9
+/// ```
+/// 
+/// # Arguments:
+/// * `img1` - First NxM image block (typically from source image)
+/// * `img2` - Second NxM image block (typically character template)
+/// * `block_width` - Width of the blocks in pixels
+/// * `block_height` - Height of the blocks in pixels
+/// 
+/// # Returns:
+/// * `f64` - Distance metric where:
+///   - 0.0 = identical structural features
+///   - Lower values = better matches
+///   - Higher values = more dissimilar patterns
+/// 
+/// # Usage:
+/// Core function used by `find_best_match()` to rank character template similarity
+/// for optimal ASCII/PETSCII character selection.
+pub fn calculate_mse(
+    img1: &BlockGrayImage, 
+    img2: &BlockGrayImage, 
+    block_width: usize, 
+    block_height: usize
+) -> f64 {
+    let mut mse = 0.0f64;
+    let v1 = calc_eigenvector(img1, block_width, block_height);
+    let v2 = calc_eigenvector(img2, block_width, block_height);
+    
+    for i in 0..10usize {
+        mse += ((v1[i] - v2[i]) * (v1[i] - v2[i])) as f64;
+    }
+    
+    mse.sqrt()
+}
+
+/// Finds the character that best matches the input NxM grayscale block using feature comparison
+/// 
+/// This function compares the input block against all available character templates
+/// using a sophisticated feature-based matching algorithm rather than simple pixel comparison.
+/// The matching process uses eigenvector analysis to capture structural patterns
+/// and mean squared error for quantitative comparison.
+/// 
+/// # Matching Algorithm:
+/// 1. **Feature extraction**: Computes eigenvector features for input block
+/// 2. **Template comparison**: Calculates features for each character template
+/// 3. **Distance calculation**: Uses MSE between feature vectors (not raw pixels)
+/// 4. **Best match selection**: Returns character index with minimum MSE distance
+/// 
+/// # Why Feature-Based Matching:
+/// - More robust than pixel-by-pixel comparison
+/// - Captures structural patterns and shapes
+/// - Less sensitive to minor brightness variations
+/// - Better handles aliasing and scaling artifacts
+/// 
+/// # Arguments:
+/// * `input_image` - NxM grayscale block to match (from source image)
+/// * `char_images` - Array of 256 character template images (from `gen_charset_images`)
+/// * `block_width` - Width of the blocks in pixels
+/// * `block_height` - Height of the blocks in pixels
+/// 
+/// # Returns:
+/// * `usize` - Index (0-255) of the best matching character in the character set
+/// 
+/// # Performance:
+/// O(n) where n=256 characters, with feature comparison being much faster than full pixel MSE
+pub fn find_best_match(
+    input_image: &BlockGrayImage, 
+    char_images: &[BlockGrayImage], 
+    block_width: usize, 
+    block_height: usize
+) -> usize {
+    let mut min_mse = f64::MAX;
+    let mut best_match = 0;
+
+    for (i, char_image) in char_images.iter().enumerate() {
+        let mse = calculate_mse(input_image, char_image, block_width, block_height);
+
+        if mse < min_mse {
+            min_mse = mse;
+            best_match = i;
+        }
+    }
+
+    best_match
+}
+
+/// Analyzes an NxM pixel block to determine optimal foreground and background colors for PETSCII mode
+/// 
+/// PETSCII characters support only two colors per character cell (foreground and background).
+/// This function analyzes the color distribution within a block to determine the best
+/// two-color representation, considering the global background color detected in the image.
+/// 
+/// # Color Analysis Strategy:
+/// 1. **Color enumeration**: Collects all unique RGB colors in the NxM block
+/// 2. **Background consideration**: Checks if the global background color appears in the block
+/// 3. **Optimal pairing**: Determines the best foreground/background color combination:
+///    - If background color present: uses it as background, most contrasting color as foreground
+///    - If no background: uses darker color as background, lighter as foreground
+///    - Handles edge cases with single colors or too many colors gracefully
+/// 
+/// # Arguments:
+/// * `image` - Source color image for RGB analysis
+/// * `img` - Corresponding grayscale image for brightness comparison
+/// * `x` - Block X coordinate in character grid
+/// * `y` - Block Y coordinate in character grid  
+/// * `back_rgb` - Global background color (packed as u32: RGBA)
+/// * `block_width` - Width of each character block in pixels
+/// * `block_height` - Height of each character block in pixels
+/// 
+/// # Returns:
+/// * `(usize, usize)` - Tuple of (background_color_index, foreground_color_index)
+///   where indices refer to positions in the ANSI color palette
+/// 
+/// # Error Handling:
+/// Prints "ERROR!!!" or "ERROR2!!!" for invalid color configurations and returns (0,0)
+#[cfg(not(wasm))]
+pub fn get_petii_block_color(
+    image: &DynamicImage,
+    _img: &ImageBuffer<Luma<u8>, Vec<u8>>,
+    x: u32,
+    y: u32,
+    back_rgb: u32,
+    block_width: u32,
+    block_height: u32,
+) -> (usize, usize) {
+    let mut cc: HashMap<u32, (u32, u32)> = HashMap::new();
+    for i in 0..block_height as usize {
+        for j in 0..block_width as usize {
+            let pixel_x = x * block_width + j as u32;
+            let pixel_y = y * block_height + i as u32;
+            if pixel_x < image.width() && pixel_y < image.height() {
+                let p = image.get_pixel(pixel_x, pixel_y);
+                let k: u32 = ((p[0] as u32) << 24)
+                    + ((p[1] as u32) << 16)
+                    + ((p[2] as u32) << 8)
+                    + (p[3] as u32);
+                cc.entry(k).or_insert((pixel_x, pixel_y));
+            }
+        }
+    }
+    let mut cv: Vec<_> = cc.iter().collect();
+    let mut include_back = false;
+    let clen = cv.len();
+    for c in &mut cv {
+        if *c.0 == back_rgb {
+            include_back = true;
+        } else {
+            let cd = color_distance(*c.0, back_rgb);
+            // fix simliar color to back
+            if cd < 1.0 {
+                // println!("cd={} c1={} c2={}", cd, *c.0, back_rgb);
+                (*c).0 = &back_rgb;
+                include_back = true;
+            }
+        }
+    }
+    let ret;
+    if include_back {
+        if clen == 1 {
+            ret = Some((back_rgb, back_rgb));
+            // println!("<B>{:?}", ret);
+        } else if clen == 2 {
+            let mut r = (back_rgb, back_rgb);
+            if *cv[0].0 != back_rgb {
+                r.1 = *cv[0].0;
+            }
+            if *cv[1].0 != back_rgb {
+                r.1 = *cv[1].0;
+            }
+            ret = Some(r);
+            // println!("<B,F>{:?}", ret);
+        } else {
+            // select bigest distance color to forecolor
+            let mut bigd = 0.0f32;
+            let mut bcv = cv[0];
+            for c in &cv {
+                let cd = color_distance(*c.0, back_rgb);
+                if cd > bigd {
+                    bigd = cd;
+                    bcv = *c;
+                }
+            }
+            ret = Some((back_rgb, *bcv.0));
+            // println!("ERROR!!! clen={} cv={:?}", clen, cv);
+            // println!("bcv={:?}", bcv);
+        }
+    } else {
+        if clen == 1 {
+            ret = Some((*cv[0].0, *cv[0].0));
+            // println!("<F>{:?}", ret);
+        } else if clen == 2 {
+            let l1 = luminance(*cv[0].0);
+            let l2 = luminance(*cv[1].0);
+            if l2 > l1 {
+                ret = Some((*cv[0].0, *cv[1].0));
+            } else {
+                ret = Some((*cv[1].0, *cv[0].0));
+            }
+            // println!("<F1,F2>{:?}", ret);
+        } else {
+            let mut ccv = vec![];
+            cv.sort();
+            // println!("ERROR2!!! clen={} cv={:?}", clen, cv);
+            let mut base = *cv[0].0;
+            ccv.push(cv[0]);
+            for i in 1..clen {
+                let cd = color_distance(*cv[i].0, base);
+                if cd > 1.0 {
+                    ccv.push(cv[i]);
+                }
+                base = *cv[i].0;
+            }
+            if ccv.len() >= 2 {
+                let l1 = luminance(*ccv[0].0);
+                let l2 = luminance(*ccv[1].0);
+                if l2 > l1 {
+                    ret = Some((*ccv[0].0, *ccv[1].0));
+                } else {
+                    ret = Some((*ccv[1].0, *ccv[0].0));
+                }
+            } else {
+                println!("ERROR2!!!");
+                ret = Some((0, 0));
+            }
+            // println!("ccv = {:?}", ccv);
+        }
+    }
+
+    match ret {
+        Some(r) => (find_best_color_u32(r.0), find_best_color_u32(r.1)),
+        _ => (0, 0),
+    }
+}
+
+/// Calculates the average RGB color of an NxM pixel block for ASCII mode color matching
+/// 
+/// This function computes the mean color across all non-black pixels in the specified
+/// character block. Pure black pixels (0,0,0) are excluded from the average to prevent
+/// background pixels from skewing the color calculation toward darkness.
+/// 
+/// # Color Averaging Process:
+/// 1. **Pixel iteration**: Scans all pixels in the NxM block
+/// 2. **Black pixel filtering**: Skips pixels with RGB values of (0,0,0)
+/// 3. **Component accumulation**: Sums red, green, and blue values separately
+/// 4. **Average calculation**: Divides totals by pixel count for mean color
+/// 
+/// # Arguments:
+/// * `image` - Source color image to analyze
+/// * `x` - Block X coordinate in character grid
+/// * `y` - Block Y coordinate in character grid
+/// * `block_width` - Width of each character block in pixels
+/// * `block_height` - Height of each character block in pixels
+/// 
+/// # Returns:
+/// * `RGB` - Average color of the block, or black RGB{0,0,0} if no valid pixels found
+/// 
+/// # Use Case:
+/// In ASCII mode, each character position gets a single color determined by this average.
+/// The resulting color is then matched to the closest ANSI terminal color for display.
+#[cfg(not(wasm))]
+pub fn get_block_color(
+    image: &DynamicImage, 
+    x: u32, 
+    y: u32, 
+    block_width: u32, 
+    block_height: u32
+) -> RGB {
+    let mut r = 0u32;
+    let mut g = 0u32;
+    let mut b = 0u32;
+
+    let mut count = 0u32;
+
+    for i in 0..block_height as usize {
+        for j in 0..block_width as usize {
+            let pixel_x = x * block_width + j as u32;
+            let pixel_y = y * block_height + i as u32;
+
+            if pixel_x < image.width() && pixel_y < image.height() {
+                let p = image.get_pixel(pixel_x, pixel_y);
+                if p[0] != 0 || p[1] != 0 || p[2] != 0 {
+                    r += p[0] as u32;
+                    g += p[1] as u32;
+                    b += p[2] as u32;
+                    count += 1;
+                }
+            }
+        }
+    }
+
+    if count == 0 {
+        return RGB { r: 0, g: 0, b: 0 };
+    }
+
+    RGB {
+        r: (r / count) as u8,
+        g: (g / count) as u8,
+        b: (b / count) as u8,
+    }
+}
