@@ -11,12 +11,7 @@
 
 use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::Rand};
 
-#[cfg(all(
-    not(target_arch = "wasm32"),
-    not(feature = "sdl"),
-    not(feature = "winit"),
-    not(feature = "wgpu")
-))]
+#[cfg(cross_backend)]
 use crate::render::adapter::cross_adapter::CrosstermAdapter;
 
 #[cfg(sdl_backend)]
@@ -60,12 +55,7 @@ impl Context {
             adapter: Box::new(WinitGlowAdapter::new(name, project_path)),
             #[cfg(wgpu_backend)]
             adapter: Box::new(WinitWgpuAdapter::new(name, project_path)),
-            #[cfg(all(
-                not(target_arch = "wasm32"),
-                not(feature = "sdl"),
-                not(feature = "winit"),
-                not(feature = "wgpu")
-            ))]
+            #[cfg(cross_backend)]
             adapter: Box::new(CrosstermAdapter::new(name, project_path)),
         }
     }
@@ -74,23 +64,19 @@ impl Context {
         self.project_path = project_path.to_string();
     }
 
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     pub fn cell_width(&mut self) -> f32 {
-        self.adapter.get_base().gr.cell_width()
+        #[cfg(graphics_mode)]
+        let ret = self.adapter.get_base().gr.cell_width();
+        #[cfg(not(graphics_mode))]
+        let ret = 0.0f32;
+        ret
     }
 
-    #[cfg(any(
-        feature = "sdl",
-        feature = "winit",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
     pub fn cell_height(&mut self) -> f32 {
-        self.adapter.get_base().gr.cell_height()
+        #[cfg(graphics_mode)]
+        let ret = self.adapter.get_base().gr.cell_height();
+        #[cfg(not(graphics_mode))]
+        let ret = 0.0f32;
+        ret
     }
 }
