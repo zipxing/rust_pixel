@@ -192,7 +192,14 @@ impl WgpuSymbolRenderer {
                 -r.cx + PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x,
                 -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
             );
-            transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
+            
+            // Apply scaling based on RenderCell dimensions vs default symbol size
+            let cell_width = r.w as f32;
+            let cell_height = r.h as f32;
+            let default_width = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let default_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+            
+            transform.scale(cell_width / default_width / ratio_x, cell_height / default_height / ratio_y);
             
             // Draw background if it exists
             if let Some(b) = r.bcolor {

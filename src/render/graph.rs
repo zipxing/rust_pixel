@@ -647,6 +647,20 @@ pub fn render_helper(
     p: PointU16,
     is_border: bool,
 ) -> (ARect, ARect, ARect, usize, usize) {
+    render_helper_with_scale(cell_w, r, i, sh, p, is_border, 1.0, 1.0)
+}
+
+/// Enhanced render_helper with individual sprite scaling support
+pub fn render_helper_with_scale(
+    cell_w: u16,
+    r: PointF32,
+    i: usize,
+    sh: &(u8, u8, Color, Color),
+    p: PointU16,
+    is_border: bool,
+    scale_x: f32,  // Sprite X轴缩放
+    scale_y: f32,  // Sprite Y轴缩放
+) -> (ARect, ARect, ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;
     let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32;
     let dstx = i as u16 % cell_w;
@@ -657,6 +671,17 @@ pub fn render_helper(
     let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
     let bsrcy = 160u32 / w as u32;
     let bsrcx = 160u32 % w as u32 + w as u32;
+
+    // 应用sprite级别的缩放到目标渲染区域
+    let scaled_w = (w as f32 / r.x * scale_x) as u32;
+    let scaled_h = (h as f32 / r.y * scale_y) as u32;
+    
+    // 添加位置缩放：同时缩放symbol尺寸和间距，避免重叠
+    let base_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
+    let base_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
+    
+    let scaled_x = base_x * scale_x;
+    let scaled_y = base_y * scale_y;
 
     (
         // background sym rect in texture(sym=160 tex=1)
@@ -673,12 +698,12 @@ pub fn render_helper(
             w: w as u32,
             h: h as u32,
         },
-        // dst rect in render texture
+        // dst rect in render texture (with sprite scaling applied to both size and position)
         ARect {
-            x: (dstx + if is_border { 0 } else { 1 }) as i32 * (w as f32 / r.x) as i32 + p.x as i32,
-            y: (dsty + if is_border { 0 } else { 1 }) as i32 * (h as f32 / r.y) as i32 + p.y as i32,
-            w: (w as f32 / r.x) as u32,
-            h: (h as f32 / r.y) as u32,
+            x: scaled_x as i32 + p.x as i32,
+            y: scaled_y as i32 + p.y as i32,
+            w: scaled_w,  // 应用X轴缩放
+            h: scaled_h,  // 应用Y轴缩放
         },
         // texture id
         tx,
@@ -765,22 +790,30 @@ where
 
         for (i, cell) in s.content.content.iter().enumerate() {
             let sh = &cell.get_cell_info();
-            let (s0, s1, s2, texidx, symidx) = render_helper(
+            let (s0, s1, s2, texidx, symidx) = render_helper_with_scale(
                 pw,
                 PointF32 { x: rx, y: ry },
                 i,
                 sh,
                 PointU16 { x: px, y: py },
                 false,
+                s.scale_x,  // 应用sprite的X轴缩放
+                s.scale_y,  // 应用sprite的Y轴缩放
             );
             let x = i % pw as usize;
             let y = i / pw as usize;
-            // center point ...
+            // center point for rotation - 匹配缩放后的位置
+            // 既然我们缩放了symbol的位置，旋转中心也需要相应缩放
+            let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
+            let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
+            
+            let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
+            let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
+            
+            // 旋转中心偏移也需要按相同比例缩放
             let ccp = PointI32 {
-                x: ((pw as f32 / 2.0 - x as f32) * PIXEL_SYM_WIDTH.get().expect("lazylock init")
-                    / rx) as i32,
-                y: ((ph as f32 / 2.0 - y as f32) * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
-                    / ry) as i32,
+                x: (original_offset_x * s.scale_x) as i32,
+                y: (original_offset_y * s.scale_y) as i32,
             };
             let mut fc = sh.2.get_rgba();
             fc.3 = s.alpha;
