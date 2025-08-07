@@ -322,20 +322,25 @@ impl GlRenderSymbols {
         // info!("ratiox....{} ratioy....{}", ratio_x, ratio_y);
         for r in rbuf {
             let mut transform = UnifiedTransform::new();
+            let w = PIXEL_SYM_WIDTH.get().expect("lazylock init");
+            let h = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
 
             transform.translate(
-                r.x + r.cx - PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-                r.y + r.cy - PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+                r.x + r.cx - w,
+                r.y + r.cy - h,
             );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x,
-                -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
+                -r.cx + w,
+                -r.cy + h,
             );
             transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
-            
+            transform.translate(
+                (1.0 / ratio_x - 1.0) * w * ratio_x,
+                (1.0 / ratio_y - 1.0) * h * ratio_y,
+            );
             // Apply Y-axis flip for OpenGL to match WGPU behavior
             // This corrects the coordinate system difference
             // transform.scale(1.0, -1.0);
