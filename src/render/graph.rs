@@ -850,7 +850,7 @@ where
 /// │  │   │             │   │    │                             ││
 /// │  │   │ ┌─┬─┬─┬─┐   │   │    │ 1. Read character data      ││
 /// │  │   │ │A│B│C│D│   │   │    │ 2. Extract colors & symbol  ││
-/// │  │   │ ├─┼─┼─┼─┤   │───────► │ 3. Calculate screen pos    ││
+/// │  │   │ ├─┼─┼─┼─┤   │──────► │ 3. Calculate screen pos     ││
 /// │  │   │ │E│F│G│H│   │   │    │ 4. Map to texture coords    ││
 /// │  │   │ ├─┼─┼─┼─┤   │   │    │ 5. Call render callback     ││
 /// │  │   │ │I│J│K│L│   │   │    │                             ││

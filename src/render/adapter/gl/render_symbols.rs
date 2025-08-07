@@ -324,15 +324,15 @@ impl GlRenderSymbols {
             let mut transform = UnifiedTransform::new();
 
             transform.translate(
-                r.x + r.cx - PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-                r.y + r.cy - PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+                r.x + r.cx - r.w as f32,
+                r.y + r.cy - r.h as f32,
             );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x,
-                -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
+                -r.cx + r.w as f32,
+                -r.cy + r.h as f32,
             );
             
             // Apply scaling based on RenderCell dimensions vs default symbol size
