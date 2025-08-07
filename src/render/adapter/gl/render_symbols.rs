@@ -331,8 +331,8 @@ impl GlRenderSymbols {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + r.w as f32,
-                -r.cy + r.h as f32,
+                -r.cx + r.w as f32 + (1.0 / ratio_x - 1.0) * PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+                -r.cy + r.h as f32 + (1.0 / ratio_y - 1.0) * PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
             );
             
             // Apply scaling based on RenderCell dimensions vs default symbol size
