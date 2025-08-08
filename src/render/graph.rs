@@ -87,13 +87,19 @@ use std::sync::OnceLock;
 /// ```
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
-/// Symbol width static variable (lazy initialization)
+/// Symbol width (in pixels) resolved from the symbol atlas
+///
+/// Initialized exactly once during adapter initialization. Accessing this
+/// before initialization will panic with "lazylock init".
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
-/// Symbol height static variable (lazy initialization)
+/// Symbol height (in pixels) resolved from the symbol atlas
+///
+/// Initialized exactly once during adapter initialization. Accessing this
+/// before initialization will panic with "lazylock init".
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
-/// Calculate symbol width based on texture width
+/// Calculate the width of a single symbol (in pixels) based on the full texture width
 ///
 /// # Parameters
 /// - `width`: Total texture width
@@ -104,7 +110,7 @@ pub fn init_sym_width(width: u32) -> f32 {
     width as f32 / (16.0 * 8.0)
 }
 
-/// Calculate symbol height based on texture height
+/// Calculate the height of a single symbol (in pixels) based on the full texture height
 ///
 /// # Parameters
 /// - `height`: Total texture height
@@ -420,16 +426,30 @@ pub struct RenderCell {
     /// - Low bits: Symbol index (which character/symbol in texture)
     pub texsym: usize,
 
-    /// Screen coordinate X position
+    /// Screen-space X position (in pixels)
+    ///
+    /// Note: This value is derived from high-level destination rectangle `s`
+    /// produced by helper functions (e.g., `render_helper*`). It may be offset
+    /// relative to the original logical top-left to cooperate with the backend
+    /// transform chain, which applies additional translation and scaling.
     pub x: f32,
 
-    /// Screen coordinate Y position
+    /// Screen-space Y position (in pixels)
+    ///
+    /// See notes in `x` for how this value cooperates with the backend transform
+    /// chain for final positioning.
     pub y: f32,
 
-    /// Pixel width
+    /// Destination width (in pixels)
+    ///
+    /// This is the final display width for the symbol instance after ratio-based
+    /// adjustments performed in helper functions.
     pub w: u32,
 
-    /// Pixel height
+    /// Destination height (in pixels)
+    ///
+    /// This is the final display height for the symbol instance after ratio-based
+    /// adjustments performed in helper functions.
     pub h: u32,
 
     /// Rotation angle (radians)
@@ -568,11 +588,14 @@ impl Graph {
     }
 }
 
-/// Convert game data to RenderCell format with texture coordinate calculation
+/// Convert high-level element data to a GPU-ready RenderCell
 ///
 /// This function converts individual game elements (characters, sprites, etc.) into
-/// GPU-ready RenderCell format. It handles texture coordinate calculation, color
-/// conversion, and transformation parameters.
+/// a GPU-ready RenderCell. It handles:
+/// - Texture/symbol indexing and packing (texsym)
+/// - Color normalization (u8 → f32)
+/// - Destination rectangle mapping (position and size)
+/// - Rotation and rotation center
 ///
 /// ## Conversion Process
 /// ```text
@@ -600,8 +623,10 @@ impl Graph {
 /// - `bgc`: Optional background color
 /// - `texidx`: Texture index in the texture atlas
 /// - `symidx`: Symbol index within the texture
-/// - `s`: Screen rectangle (position and size)
-/// - `angle`: Rotation angle in radians
+/// - `s`: Destination rectangle in screen space (pixels). The helper functions
+///        already apply ratio-based sizing and spacing; this function may derive
+///        an offset from it to cooperate with backend transform chain.
+/// - `angle`: Rotation angle in degrees (will be converted to radians internally)
 /// - `ccp`: Center point for rotation
 pub fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
@@ -635,6 +660,10 @@ pub fn push_render_buffer(
     let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
     let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
     wc.texsym = (y * 16u32 * 8u32 + x) as usize;
+    // Derive the instance anchor from the destination rectangle produced by helper functions.
+    //
+    // The backend transform chain applies additional translation and ratio-compensation.
+    // Here we set the instance anchor relative to the destination rectangle to match that chain.
     wc.x = s.x as f32 + s.w as f32;
     wc.y = s.y as f32 + s.h as f32;
     wc.w = s.w;
@@ -668,7 +697,8 @@ pub fn render_helper(
     render_helper_with_scale(cell_w, r, i, sh, p, is_border, 1.0, 1.0)
 }
 
-/// Enhanced render_helper with individual sprite scaling support
+/// Enhanced helper that returns texture/background rectangles and a destination
+/// rectangle with per-sprite scaling.
 pub fn render_helper_with_scale(
     cell_w: u16,
     r: PointF32,
@@ -676,8 +706,8 @@ pub fn render_helper_with_scale(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
-    scale_x: f32, // Sprite X轴缩放
-    scale_y: f32, // Sprite Y轴缩放
+    scale_x: f32, // Sprite scaling along X (unitless, 1.0 means no scaling)
+    scale_y: f32, // Sprite scaling along Y (unitless, 1.0 means no scaling)
 ) -> (ARect, ARect, ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;
     let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32;
@@ -690,11 +720,11 @@ pub fn render_helper_with_scale(
     let bsrcy = 160u32 / w as u32;
     let bsrcx = 160u32 % w as u32 + w as u32;
 
-    // 应用sprite级别的缩放到目标渲染区域
+    // Apply per-sprite scaling to the destination render area
     let scaled_w = (w as f32 / r.x * scale_x) as u32;
     let scaled_h = (h as f32 / r.y * scale_y) as u32;
 
-    // 添加位置缩放：同时缩放symbol尺寸和间距，避免重叠
+    // Apply position scaling: scale both symbol size and spacing to avoid overlaps
     let base_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
     let base_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
 
@@ -716,12 +746,13 @@ pub fn render_helper_with_scale(
             w: w as u32,
             h: h as u32,
         },
-        // dst rect in render texture (with sprite scaling applied to both size and position)
+        // Destination rectangle in the render texture (with sprite scaling applied
+        // to both size and position)
         ARect {
             x: scaled_x as i32 + p.x as i32,
             y: scaled_y as i32 + p.y as i32,
-            w: scaled_w, // 应用X轴缩放
-            h: scaled_h, // 应用Y轴缩放
+            w: scaled_w,
+            h: scaled_h,
         },
         // texture id
         tx,
@@ -820,15 +851,15 @@ where
             );
             let x = i % pw as usize;
             let y = i / pw as usize;
-            // center point for rotation - 匹配缩放后的位置
-            // 既然我们缩放了symbol的位置，旋转中心也需要相应缩放
+    // Center point for rotation — matching the scaled position.
+    // Since we scaled both symbol size and spacing, the rotation center must scale accordingly.
             let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
             let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
 
             let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
             let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
 
-            // 旋转中心偏移也需要按相同比例缩放
+    // Apply the same scaling to the rotation center offset
             let ccp = PointI32 {
                 x: (original_offset_x * s.scale_x) as i32,
                 y: (original_offset_y * s.scale_y) as i32,
@@ -922,7 +953,7 @@ where
     }
 }
 
-/// Window border rendering for windowed display modes
+/// Render window borders (windowed display modes)
 ///
 /// This function renders decorative borders around the game area for SDL and Winit
 /// modes. The border provides visual separation between the game content and the
@@ -995,7 +1026,7 @@ where
     }
 }
 
-/// RustPixel Logo animation rendering with dynamic effects
+/// Render the RustPixel logo animation with dynamic effects
 ///
 /// This function renders the animated RustPixel logo during the startup sequence.
 /// It provides a visually appealing introduction to the framework with dynamic
