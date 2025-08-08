@@ -56,7 +56,7 @@
 //! RustPixel uses a unified symbol texture to render characters and graphic elements:
 
 use crate::{
-    render::{AdapterBase, buffer::Buffer, sprite::Sprites, style::Color},
+    render::{buffer::Buffer, sprite::Sprites, style::Color, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -182,7 +182,7 @@ pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
 /// graphics backends (OpenGL, WGPU, WebGL).
 ///
 /// ## 🔄 Cross-Backend Compatibility
-/// 
+///
 /// ```text
 /// UnifiedColor (RGBA f32)
 ///      │
@@ -209,17 +209,17 @@ impl UnifiedColor {
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
-    
+
     /// Create white color
     pub fn white() -> Self {
         Self::new(1.0, 1.0, 1.0, 1.0)
     }
-    
+
     /// Create black color
     pub fn black() -> Self {
         Self::new(0.0, 0.0, 0.0, 1.0)
     }
-    
+
     /// Convert to array format
     pub fn to_array(&self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
@@ -233,7 +233,7 @@ impl UnifiedColor {
 /// it became the unified transformation representation for all graphics backends.
 ///
 /// ## 📐 Matrix Layout
-/// 
+///
 /// ```text
 /// │m00  m01  m20│   │sx   0   tx│   Translation: (tx, ty)
 /// │m10  m11  m21│ = │0   sy   ty│   Scale:       (sx, sy)  
@@ -241,7 +241,7 @@ impl UnifiedColor {
 /// ```
 ///
 /// ## 🔄 Backend Conversion
-/// 
+///
 /// ```text
 /// UnifiedTransform (2D Matrix)
 ///      │
@@ -258,27 +258,40 @@ impl UnifiedColor {
 /// - **Camera**: View transformation and projection matrices
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UnifiedTransform {
-    pub m00: f32, pub m01: f32,
-    pub m10: f32, pub m11: f32, 
-    pub m20: f32, pub m21: f32,
+    pub m00: f32,
+    pub m01: f32,
+    pub m10: f32,
+    pub m11: f32,
+    pub m20: f32,
+    pub m21: f32,
 }
 
 impl UnifiedTransform {
     /// Create identity transform
     pub fn new() -> Self {
         Self {
-            m00: 1.0, m01: 0.0,
-            m10: 0.0, m11: 1.0,
-            m20: 0.0, m21: 0.0,
+            m00: 1.0,
+            m01: 0.0,
+            m10: 0.0,
+            m11: 1.0,
+            m20: 0.0,
+            m21: 0.0,
         }
     }
-    
+
     /// Create transform with specific values  
     /// Parameters are in same order as field definition: m00, m01, m10, m11, m20, m21
     pub fn new_with_values(m00: f32, m01: f32, m10: f32, m11: f32, m20: f32, m21: f32) -> Self {
-        Self { m00, m01, m10, m11, m20, m21 }
+        Self {
+            m00,
+            m01,
+            m10,
+            m11,
+            m20,
+            m21,
+        }
     }
-    
+
     /// Apply scaling transformation
     pub fn scale(&mut self, x: f32, y: f32) {
         // Correct scaling (matches WGPU behavior)
@@ -287,48 +300,51 @@ impl UnifiedTransform {
         self.m01 *= x;
         self.m11 *= y;
     }
-    
+
     /// Apply translation transformation
     pub fn translate(&mut self, x: f32, y: f32) {
         // Correct matrix multiplication for translation (matches WGPU behavior)
         self.m20 += self.m00 * x + self.m10 * y;
         self.m21 += self.m01 * x + self.m11 * y;
     }
-    
+
     /// Apply rotation (angle in radians)
     pub fn rotate(&mut self, angle: f32) {
         let cos_a = angle.cos();
         let sin_a = angle.sin();
-        
+
         let m00 = self.m00;
         let m01 = self.m01;
         let m10 = self.m10;
         let m11 = self.m11;
-        
+
         // Match WGPU's working rotation calculation:
         self.m00 = m00 * cos_a - m10 * sin_a;
         self.m10 = m00 * sin_a + m10 * cos_a;
         self.m01 = m01 * cos_a - m11 * sin_a;
         self.m11 = m01 * sin_a + m11 * cos_a;
     }
-    
+
     /// Reset to identity matrix
     pub fn identity(&mut self) {
-        self.m00 = 1.0; self.m01 = 0.0;
-        self.m10 = 0.0; self.m11 = 1.0;
-        self.m20 = 0.0; self.m21 = 0.0;
+        self.m00 = 1.0;
+        self.m01 = 0.0;
+        self.m10 = 0.0;
+        self.m11 = 1.0;
+        self.m20 = 0.0;
+        self.m21 = 0.0;
     }
-    
+
     /// Set from another transform
     pub fn set(&mut self, other: &UnifiedTransform) {
         *self = *other;
     }
-    
+
     /// Create a copy of this transform
     pub fn copy(&self) -> Self {
         *self
     }
-    
+
     /// Multiply with another transform
     pub fn multiply(&mut self, other: &UnifiedTransform) {
         let new_m00 = self.m00 * other.m00 + self.m01 * other.m10;
@@ -337,12 +353,15 @@ impl UnifiedTransform {
         let new_m11 = self.m10 * other.m01 + self.m11 * other.m11;
         let new_m20 = self.m20 * other.m00 + self.m21 * other.m10 + other.m20;
         let new_m21 = self.m20 * other.m01 + self.m21 * other.m11 + other.m21;
-        
-        self.m00 = new_m00; self.m01 = new_m01;
-        self.m10 = new_m10; self.m11 = new_m11;
-        self.m20 = new_m20; self.m21 = new_m21;
+
+        self.m00 = new_m00;
+        self.m01 = new_m01;
+        self.m10 = new_m10;
+        self.m11 = new_m11;
+        self.m20 = new_m20;
+        self.m21 = new_m21;
     }
-    
+
     /// Convert to 4x4 matrix for GPU uniforms (column-major order)
     pub fn to_matrix4(&self) -> [[f32; 4]; 4] {
         [
@@ -460,7 +479,6 @@ pub struct Graph {
     /// being directly drawn to screen. Used for external access to
     /// rendering data (e.g., Python FFI, WASM exports).
     pub rbuf: Vec<RenderCell>,
-
     // pixel_renderer field removed - all adapters now use direct renderers
 }
 
@@ -658,8 +676,8 @@ pub fn render_helper_with_scale(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
-    scale_x: f32,  // Sprite X轴缩放
-    scale_y: f32,  // Sprite Y轴缩放
+    scale_x: f32, // Sprite X轴缩放
+    scale_y: f32, // Sprite Y轴缩放
 ) -> (ARect, ARect, ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;
     let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32;
@@ -675,11 +693,11 @@ pub fn render_helper_with_scale(
     // 应用sprite级别的缩放到目标渲染区域
     let scaled_w = (w as f32 / r.x * scale_x) as u32;
     let scaled_h = (h as f32 / r.y * scale_y) as u32;
-    
+
     // 添加位置缩放：同时缩放symbol尺寸和间距，避免重叠
     let base_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
     let base_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
-    
+
     let scaled_x = base_x * scale_x;
     let scaled_y = base_y * scale_y;
 
@@ -702,8 +720,8 @@ pub fn render_helper_with_scale(
         ARect {
             x: scaled_x as i32 + p.x as i32,
             y: scaled_y as i32 + p.y as i32,
-            w: scaled_w,  // 应用X轴缩放
-            h: scaled_h,  // 应用Y轴缩放
+            w: scaled_w, // 应用X轴缩放
+            h: scaled_h, // 应用Y轴缩放
         },
         // texture id
         tx,
@@ -797,8 +815,8 @@ where
                 sh,
                 PointU16 { x: px, y: py },
                 false,
-                s.scale_x,  // 应用sprite的X轴缩放
-                s.scale_y,  // 应用sprite的Y轴缩放
+                s.scale_x, // 应用sprite的X轴缩放
+                s.scale_y, // 应用sprite的Y轴缩放
             );
             let x = i % pw as usize;
             let y = i / pw as usize;
@@ -806,10 +824,10 @@ where
             // 既然我们缩放了symbol的位置，旋转中心也需要相应缩放
             let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
             let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
-            
+
             let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
             let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
-            
+
             // 旋转中心偏移也需要按相同比例缩放
             let ccp = PointI32 {
                 x: (original_offset_x * s.scale_x) as i32,
@@ -1086,69 +1104,67 @@ where
 
 // merge main buffer & pixel sprites to render buffer...
 pub fn generate_render_buffer(
-        cb: &Buffer,
-        _pb: &Buffer,
-        ps: &mut Vec<Sprites>,
-        stage: u32,
-        base: &mut AdapterBase,
-    ) -> Vec<RenderCell> {
-        let mut rbuf = vec![];
-        let width = cb.area.width;
-        let pz = PointI32 { x: 0, y: 0 };
+    cb: &Buffer,
+    _pb: &Buffer,
+    ps: &mut Vec<Sprites>,
+    stage: u32,
+    base: &mut AdapterBase,
+) -> Vec<RenderCell> {
+    let mut rbuf = vec![];
+    let width = cb.area.width;
+    let pz = PointI32 { x: 0, y: 0 };
 
-        // render logo...
-        if stage <= LOGO_FRAME {
-            render_logo(
-                base.gr.ratio_x,
-                base.gr.ratio_y,
-                base.gr.pixel_w,
-                base.gr.pixel_h,
-                &mut base.rd,
-                stage,
-                |fc, _s1, s2, texidx, symidx| {
-                    push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
-                },
-            );
-            return rbuf;
-        }
-
-        let rx = base.gr.ratio_x;
-        let ry = base.gr.ratio_y;
-        let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         bc: &Option<(u8, u8, u8, u8)>,
-                         _s0: ARect,
-                         _s1: ARect,
-                         s2: ARect,
-                         texidx: usize,
-                         symidx: usize| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
-        };
-
-        // render windows border, for sdl, winit and wgpu mode
-        #[cfg(graphics_backend)]
-        render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
-
-        // render main buffer...
-        if stage > LOGO_FRAME {
-            render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
-        }
-
-        // render pixel_sprites...
-        if stage > LOGO_FRAME {
-            for item in ps {
-                if item.is_pixel && !item.is_hidden {
-                    render_pixel_sprites(
-                        item,
-                        rx,
-                        ry,
-                        |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
-                            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
-                        },
-                    );
-                }
-            }
-        }
-        rbuf
+    // render logo...
+    if stage <= LOGO_FRAME {
+        render_logo(
+            base.gr.ratio_x,
+            base.gr.ratio_y,
+            base.gr.pixel_w,
+            base.gr.pixel_h,
+            &mut base.rd,
+            stage,
+            |fc, _s1, s2, texidx, symidx| {
+                push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
+            },
+        );
+        return rbuf;
     }
 
+    let rx = base.gr.ratio_x;
+    let ry = base.gr.ratio_y;
+    let mut rfunc = |fc: &(u8, u8, u8, u8),
+                     bc: &Option<(u8, u8, u8, u8)>,
+                     _s0: ARect,
+                     _s1: ARect,
+                     s2: ARect,
+                     texidx: usize,
+                     symidx: usize| {
+        push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+    };
 
+    // render windows border, for sdl, winit and wgpu mode
+    #[cfg(graphics_backend)]
+    render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
+
+    // render main buffer...
+    if stage > LOGO_FRAME {
+        render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
+    }
+
+    // render pixel_sprites...
+    if stage > LOGO_FRAME {
+        for item in ps {
+            if item.is_pixel && !item.is_hidden {
+                render_pixel_sprites(
+                    item,
+                    rx,
+                    ry,
+                    |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
+                        push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
+                    },
+                );
+            }
+        }
+    }
+    rbuf
+}
