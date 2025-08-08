@@ -617,8 +617,8 @@ pub fn push_render_buffer(
     let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
     let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
     wc.texsym = (y * 16u32 * 8u32 + x) as usize;
-    wc.x = s.x as f32 + PIXEL_SYM_WIDTH.get().expect("lazylock init");
-    wc.y = s.y as f32 + PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+    wc.x = s.x as f32 + s.w as f32;
+    wc.y = s.y as f32 + s.h as f32;
     wc.w = s.w;
     wc.h = s.h;
     if angle == 0.0 {
