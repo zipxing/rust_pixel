@@ -24,7 +24,7 @@ impl Render for UiDemoRender {
     fn init(&mut self, ctx: &mut Context, _model: &mut UiDemoModel) {
         info!("UI Demo render initialized (graphics mode)");
         // Initialize adapter for graphics mode
-        ctx.adapter.init(UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16, 1.0, 1.0, String::new());
+        ctx.adapter.init(UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16, 1.0, 0.5, String::new());
         // Initialize the panel to cover the full screen
         self.panel.init(ctx);
     }
