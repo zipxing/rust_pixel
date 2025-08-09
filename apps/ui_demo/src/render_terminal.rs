@@ -3,6 +3,7 @@ use rust_pixel::{
     context::Context,
     game::Render,
     render::panel::Panel,
+    render::sprite::Sprite,
 };
 use log::info;
 
@@ -27,6 +28,10 @@ impl Render for UiDemoRender {
         ctx.adapter.init(UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16, 1.0, 1.0, String::new());
         // Initialize the panel to cover the full screen
         self.panel.init(ctx);
+        
+        // Add a UI sprite to the main layer (for terminal mode)
+        let ui_sprite = Sprite::new(0, 0, UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16);
+        self.panel.add_layer_sprite(ui_sprite, "main", "UI");
     }
     
     fn handle_event(&mut self, _ctx: &mut Context, _model: &mut UiDemoModel, _dt: f32) {
@@ -47,23 +52,9 @@ impl Render for UiDemoRender {
         let buffer = self.panel.current_buffer_mut();
         buffer.reset();
         
-        // Copy UI buffer to render buffer
-        let ui_buffer = model.ui_app.buffer();
-        let ui_area = ui_buffer.area();
-        
-        // Copy each cell from UI buffer to render buffer
-        for y in 0..ui_area.height.min(UI_DEMO_HEIGHT as u16) {
-            for x in 0..ui_area.width.min(UI_DEMO_WIDTH as u16) {
-                let ui_cell = ui_buffer.get(x, y);
-                if !ui_cell.is_blank() {
-                    buffer.set_string(
-                        x, y,
-                        &ui_cell.symbol,
-                        ui_cell.style(),
-                    );
-                }
-            }
-        }
+        // Get the UI sprite and render UI directly into its content buffer (zero-copy)
+        let ui_sprite = self.panel.get_layer_sprite("main", "UI");
+        let _ = model.ui_app.render_into(&mut ui_sprite.content);
         
         // Draw to screen
         let _ = self.panel.draw(ctx);
