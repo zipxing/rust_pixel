@@ -1,64 +1,88 @@
-use clap::{Arg, Command};
 use fontdue::{Font, FontSettings};
 use image::{ImageBuffer, Rgb, RgbImage};
+use std::env;
 use std::path::Path;
 use ttf_parser::Face;
 
+/// Displays comprehensive usage information for the TTF to PNG converter tool
+fn print_ttf_usage() {
+    println!("TTF to PNG Converter Tool v1.0");
+    println!("Converts TTF font files to PNG character atlas using auto-discovery");
+    println!();
+    println!("USAGE:");
+    println!("    ttf <TTF_FILE> [OUTPUT_FILE] [SIZE] [CHARS_PER_ROW] [VERBOSE]");
+    println!();
+    println!("ARGUMENTS:");
+    println!("    TTF_FILE        Path to input TTF font file (required)");
+    println!("    OUTPUT_FILE     Output PNG file path (default: font_atlas.png)");
+    println!("    SIZE            Character size in pixels (default: 16)");
+    println!("    CHARS_PER_ROW   Number of characters per row (default: 16)");
+    println!("    VERBOSE         Show detailed analysis: 0=false, 1=true (default: 0)");
+    println!();
+    println!("EXAMPLES:");
+    println!("    ttf font.ttf                        # Convert with defaults");
+    println!("    ttf font.ttf output.png             # Specify output file");
+    println!("    ttf font.ttf output.png 8           # 8x8 pixel characters");
+    println!("    ttf font.ttf output.png 8 32        # 8x8 characters, 32 per row");
+    println!("    ttf font.ttf output.png 8 32 1      # With verbose output");
+    println!();
+    println!("FEATURES:");
+    println!("    • Auto-discovers all available characters using cmap table");
+    println!("    • Analyzes maxp table for glyph count information");
+    println!("    • Smart character filtering (includes content + whitespace)");
+    println!("    • No duplicate characters");
+    println!("    • Supports Unicode, extended Latin, symbols, and box drawing");
+}
+
 fn main() {
-    let matches = Command::new("TTF to PNG Converter")
-        .version("0.1.0")
-        .author("RustPixel Team")
-        .about("Converts TTF font files to PNG character atlas")
-        .arg(
-            Arg::new("input")
-                .short('i')
-                .long("input")
-                .value_name("TTF_FILE")
-                .help("Input TTF font file path")
-                .required(true),
-        )
-        .arg(
-            Arg::new("output")
-                .short('o')
-                .long("output")
-                .value_name("PNG_FILE")
-                .help("Output PNG file path")
-                .default_value("font_atlas.png"),
-        )
-        .arg(
-            Arg::new("size")
-                .short('s')
-                .long("size")
-                .value_name("SIZE")
-                .help("Character size in pixels")
-                .default_value("16"),
-        )
-        .arg(
-            Arg::new("chars-per-row")
-                .short('r')
-                .long("chars-per-row")
-                .value_name("COUNT")
-                .help("Number of characters per row")
-                .default_value("16"),
-        )
-        .arg(
-            Arg::new("verbose")
-                .short('v')
-                .long("verbose")
-                .help("Show detailed font analysis and character processing information")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .get_matches();
+    let input_file;
+    let mut output_file = "font_atlas.png".to_string();
+    let mut char_size: u32 = 16;
+    let mut chars_per_row: u32 = 16;
+    let mut verbose = false;
 
-    let input_file = matches.get_one::<String>("input").unwrap();
-    let output_file = matches.get_one::<String>("output").unwrap();
-    let char_size: u32 = matches.get_one::<String>("size").unwrap().parse().expect("Invalid size");
-    let chars_per_row: u32 = matches.get_one::<String>("chars-per-row").unwrap().parse().expect("Invalid chars-per-row");
-    let verbose = matches.get_flag("verbose");
+    let args: Vec<String> = env::args().collect();
 
-    if !Path::new(input_file).exists() {
-        eprintln!("Error: Input file '{}' does not exist", input_file);
+    // Check for help argument
+    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
+        print_ttf_usage();
+        return;
+    }
+
+    if args.len() < 2 {
+        eprintln!("Error: Missing required TTF_FILE argument");
+        eprintln!();
+        print_ttf_usage();
         std::process::exit(1);
+    }
+
+    input_file = &args[1];
+    if !Path::new(input_file).exists() {
+        eprintln!("Error: TTF file '{}' does not exist", input_file);
+        std::process::exit(1);
+    }
+
+    if args.len() > 2 {
+        output_file = args[2].clone();
+    }
+    if args.len() > 3 {
+        char_size = args[3].parse().unwrap_or_else(|_| {
+            eprintln!("Error: Invalid SIZE value '{}'", args[3]);
+            std::process::exit(1);
+        });
+    }
+    if args.len() > 4 {
+        chars_per_row = args[4].parse().unwrap_or_else(|_| {
+            eprintln!("Error: Invalid CHARS_PER_ROW value '{}'", args[4]);
+            std::process::exit(1);
+        });
+    }
+    if args.len() > 5 {
+        let verbose_arg: u32 = args[5].parse().unwrap_or_else(|_| {
+            eprintln!("Error: Invalid VERBOSE value '{}' (use 0 or 1)", args[5]);
+            std::process::exit(1);
+        });
+        verbose = verbose_arg != 0;
     }
 
     println!("Processing TTF font: {}", input_file);
@@ -66,7 +90,7 @@ fn main() {
     println!("Character size: {}x{} pixels", char_size, char_size);
     println!("Characters per row: {}", chars_per_row);
 
-    match convert_ttf_to_png(input_file, output_file, char_size, chars_per_row, verbose) {
+    match convert_ttf_to_png(input_file, &output_file, char_size, chars_per_row, verbose) {
         Ok(()) => println!("✅ Successfully generated {}", output_file),
         Err(e) => {
             eprintln!("❌ Error: {}", e);
