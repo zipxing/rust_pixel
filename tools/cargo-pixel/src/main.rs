@@ -14,7 +14,7 @@
 /// cargo pixel petii image.png 40 25
 /// cargo pixel ssf t . dance.ssf
 /// cargo pixel symbol image.png 8
-/// cargo pixel ttf
+/// cargo pixel ttf font.ttf output.png 8
 ///
 /// shortcut:
 /// cargo pixel r snake t
@@ -26,7 +26,7 @@
 /// cargo pixel p image.png 40 25            # equivalent to: cargo pixel r petii t -r image.png 40 25
 /// cargo pixel sf t . dance.ssf             # equivalent to: cargo pixel r ssf t -r . dance.ssf
 /// cargo pixel sy image.png 8               # equivalent to: cargo pixel r symbol t -r image.png 8
-/// cargo pixel tf                           # equivalent to: cargo pixel r ttf t -r
+/// cargo pixel tf font.ttf output.png 8    # equivalent to: cargo pixel r ttf t -r font.ttf output.png 8
 /// ...
 ///
 use serde::{Deserialize, Serialize};
@@ -547,18 +547,36 @@ fn pixel_symbol(ctx: &PixelContext, sub_m: &ArgMatches) {
 }
 
 /// Handle the ttf subcommand by converting it to a run command
-fn pixel_ttf(ctx: &PixelContext, _sub_m: &ArgMatches) {
-    println!("🎨 Running RustPixel TTF Font Processor...");
-    println!("   Running: cargo pixel r ttf t -r");
-    println!();
+fn pixel_ttf(ctx: &PixelContext, sub_m: &ArgMatches) {
+    println!("🎨 Running RustPixel TTF to PNG Converter...");
     
-    // Create argument list for the run command
-    let run_args = vec![
+    // Build argument list for the run command
+    let mut run_args = vec![
         "run",
         "ttf",
         "t",        // terminal mode (only mode supported)
         "-r",       // release mode
     ];
+    
+    // Add all positional arguments in order
+    if let Some(ttf_file) = sub_m.get_one::<String>("ttf_file") {
+        run_args.push(ttf_file.as_str());
+    }
+    if let Some(output_file) = sub_m.get_one::<String>("output_file") {
+        run_args.push(output_file.as_str());
+    }
+    if let Some(size) = sub_m.get_one::<String>("size") {
+        run_args.push(size.as_str());
+    }
+    if let Some(chars_per_row) = sub_m.get_one::<String>("chars_per_row") {
+        run_args.push(chars_per_row.as_str());
+    }
+    if let Some(verbose) = sub_m.get_one::<String>("verbose") {
+        run_args.push(verbose.as_str());
+    }
+    
+    println!("   Running: cargo pixel r ttf t -r {}", run_args[4..].join(" "));
+    println!();
     
     // Create and execute the run command
     use clap::{Command, Arg, ArgAction};

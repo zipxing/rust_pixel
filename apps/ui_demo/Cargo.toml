@@ -6,6 +6,10 @@ edition = "2021"
 [dependencies]
 rust_pixel = { path = "../..", features = ["term"] }
 log = "0.4"
+wasm-bindgen = "0.2"
+
+[build-dependencies]
+cfg_aliases = { workspace = true }
 
 [features]
 default = ["term"]

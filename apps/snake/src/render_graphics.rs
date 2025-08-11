@@ -37,12 +37,56 @@ impl SnakeRender {
     pub fn new() -> Self {
         let mut t = Panel::new();
 
-        // Test pixel sprite in graphic mode...
+        // Test pixel sprite scaling in graphic mode...
         #[cfg(graphics_mode)]
         {
-            let mut pl = Sprite::new(4, 6, 1, 1);
-            pl.set_graph_sym(0, 0, 1, 20, Color::Indexed(222));
-            t.add_pixel_sprite(pl, "PL1");
+            // 原始正常尺寸的sprite
+            let mut pl1 = Sprite::new(50, 5, 1, 1);
+            pl1.set_graph_sym(0, 0, 1, 21, Color::Indexed(222));
+            pl1.set_scale_x(2.0);
+            pl1.set_scale_y(2.0);
+            t.add_pixel_sprite(pl1, "PL1");
+
+            // // 半宽sprite测试
+            // let mut pl2 = Sprite::new(52, 5, 1, 1);
+            // pl2.set_graph_sym(0, 0, 1, 21, Color::Indexed(10));
+            // pl2.set_scale_x(0.5);  // 半宽
+            // t.add_pixel_sprite(pl2, "PL2_HALF");
+
+
+            // // 双宽sprite测试
+            // let mut pl3 = Sprite::new(54, 5, 1, 1);
+            // pl3.set_graph_sym(0, 0, 1, 22, Color::Indexed(12));
+            // pl3.set_scale_x(2.0);  // 双宽
+            // t.add_pixel_sprite(pl3, "PL3_DOUBLE");
+
+            // // 半高sprite测试
+            // let mut pl4 = Sprite::new(50, 7, 1, 1);
+            // pl4.set_graph_sym(0, 0, 1, 23, Color::Indexed(14));
+            // pl4.set_scale_y(0.5);  // 半高
+            // t.add_pixel_sprite(pl4, "PL4_HALF_HEIGHT");
+
+            // // 完全缩小sprite测试
+            // let mut pl5 = Sprite::new(52, 7, 1, 1);
+            // pl5.set_graph_sym(0, 0, 1, 24, Color::Indexed(9));
+            // pl5.set_scale(0.5);  // 半宽半高
+            // t.add_pixel_sprite(pl5, "PL5_SMALL");
+
+            // // 文字sprite半宽测试
+            // let mut text_sprite = Sprite::new(50, 10, 12, 1);
+            // text_sprite.set_color_str(0, 0, "Half Width:", Color::Yellow, Color::Reset);
+            // text_sprite.set_scale_x(0.5);  // 半宽文字
+            // t.add_pixel_sprite(text_sprite, "TEXT_HALF");
+
+            // // 文字sprite正常宽度对比
+            // let mut text_sprite_normal = Sprite::new(50, 12, 14, 1);
+            // text_sprite_normal.set_color_str(0, 0, "Normal Width:", Color::Cyan, Color::Reset);
+            // t.add_pixel_sprite(text_sprite_normal, "TEXT_NORMAL");
+
+            // // 标签说明
+            // let mut label = Sprite::new(50, 3, 20, 1);
+            // label.set_color_str(0, 0, "Scale Test Area:", Color::White, Color::Reset);
+            // t.add_pixel_sprite(label, "LABEL");
         }
 
         // Main screen sprite...

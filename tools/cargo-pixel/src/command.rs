@@ -232,7 +232,37 @@ fn build_app() -> Command {
         .subcommand(
             Command::new("ttf")
                 .alias("tt")
-                .about("Process TTF fonts"),
+                .about("Convert TTF font files to PNG character atlas")
+                .arg(
+                    Arg::new("ttf_file")
+                        .help("Input TTF font file path")
+                        .required(false)
+                        .index(1),
+                )
+                .arg(
+                    Arg::new("output_file")
+                        .help("Output PNG file path (default: font_atlas.png)")
+                        .required(false)
+                        .index(2),
+                )
+                .arg(
+                    Arg::new("size")
+                        .help("Character size in pixels (default: 16)")
+                        .required(false)
+                        .index(3),
+                )
+                .arg(
+                    Arg::new("chars_per_row")
+                        .help("Number of characters per row (default: 16)")
+                        .required(false)
+                        .index(4),
+                )
+                .arg(
+                    Arg::new("verbose")
+                        .help("Show detailed analysis: 0=false, 1=true (default: 0)")
+                        .required(false)
+                        .index(5),
+                ),
         )
 }
 

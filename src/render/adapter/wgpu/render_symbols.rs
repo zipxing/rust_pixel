@@ -1,17 +1,34 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022～2025
 
-//! WGPU Symbol Renderer Module using Instanced Rendering
-//! 
-//! This module implements instanced rendering for symbols, exactly matching
-//! the OpenGL version's behavior. Each symbol is drawn as an instance of
-//! a base quad geometry with instance-specific transform and color data.
+//! WGPU Symbol Renderer (Instanced Rendering)
+//!
+//! This module implements instanced rendering for symbols and mirrors the
+//! OpenGL renderer's behavior. A single base quad is reused, while per-symbol
+//! data (UVs, color, local transform and world transform) is supplied via
+//! per-instance attributes and a small uniform block.
+//!
+//! Key points:
+//! - Texture atlas: Symbols come from a grid-based atlas defined by
+//!   `PIXEL_SYM_WIDTH/HEIGHT`.
+//! - Transform chain parity: The exact same translate/rotate/translate/scale
+//!   chain is applied here as in the OpenGL backend to ensure pixel-perfect
+//!   parity.
+//! - Ratio handling: Display scaling (`ratio_x`, `ratio_y`) is handled by a
+//!   combination of upstream sizing and per-instance scaling here, matching
+//!   the contract in `graph.rs`.
 
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use crate::render::graph::UnifiedTransform;
 
 /// Symbol instance data for WGPU (matches OpenGL layout exactly)
-/// This corresponds to the per-instance attributes in OpenGL version
+///
+/// This is the per-instance attribute payload consumed by the instanced
+/// vertex shader. The layout mirrors the OpenGL instance buffer:
+/// - `a1`: origin and UV top-left
+/// - `a2`: UV size and first column of the local 2x2 matrix multiplied by frame size
+/// - `a3`: second column of the local 2x2 matrix multiplied by frame size, and translation
+/// - `color`: per-instance color modulation
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct WgpuSymbolInstance {
@@ -29,6 +46,10 @@ unsafe impl bytemuck::Pod for WgpuSymbolInstance {}
 unsafe impl bytemuck::Zeroable for WgpuSymbolInstance {}
 
 /// Transform uniform data (matches OpenGL UBO layout)
+///
+/// The two vec4 values encode a 2x2 matrix and translation (tw/th) along with
+/// canvas size in the w components. This block is kept aligned with the OpenGL
+/// UBO for consistent math in the shader.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct WgpuTransformUniforms {
@@ -44,6 +65,9 @@ unsafe impl bytemuck::Pod for WgpuTransformUniforms {}
 unsafe impl bytemuck::Zeroable for WgpuTransformUniforms {}
 
 /// Base quad vertex for instanced rendering
+///
+/// The base quad spans unit coordinates [0,1] x [0,1]. Local transforms map
+/// this unit quad into screen-space according to the per-instance attributes.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct WgpuQuadVertex {
@@ -68,8 +92,8 @@ pub struct WgpuSymbolFrame {
 }
 
 /// WGPU Symbol Renderer using instanced rendering
-/// 
-/// This renderer exactly matches the OpenGL GlRenderSymbols behavior:
+///
+/// This renderer exactly matches the OpenGL `GlRenderSymbols` behavior:
 /// - Uses a single base quad geometry
 /// - Each symbol is an instance with its own transform and UV data
 /// - Performs the same complex transformation chain in the vertex shader
@@ -103,7 +127,8 @@ pub struct WgpuSymbolRenderer {
 impl WgpuSymbolRenderer {
     pub fn new(canvas_width: u32, canvas_height: u32) -> Self {
         // Initialize transform stack to match OpenGL version exactly:
-        // UnifiedTransform::new_with_values(1.0, 0.0, 0.0, -1.0, 0.0, canvas_height as f32)
+        // Y is flipped (m11 = -1) and translated by canvas height.
+        // Equivalent to: UnifiedTransform::new_with_values(1, 0, 0, -1, 0, canvas_h)
         let transform_stack = UnifiedTransform::new_with_values(
             1.0, 0.0,                    // m00, m01
             0.0, -1.0,                   // m10, m11  
@@ -125,7 +150,10 @@ impl WgpuSymbolRenderer {
         }
     }
     
-    /// Load symbol texture and create symbol frames (equivalent to OpenGL load_texture)
+    /// Load symbol texture and create symbol frames (equivalent to OpenGL `load_texture`)
+    ///
+    /// Splits the texture atlas into uniform frames based on
+    /// `PIXEL_SYM_WIDTH/HEIGHT` and generates UVs for each frame.
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
         let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
         let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
@@ -148,7 +176,9 @@ impl WgpuSymbolRenderer {
         // Symbols loaded successfully (debug output removed for performance)
     }
     
-    /// Create symbol frame (equivalent to OpenGL make_symbols_frame)
+    /// Create a symbol frame (equivalent to OpenGL `make_symbols_frame`)
+    ///
+    /// Packs local width/height, origin, and UV rectangle for a single symbol.
     fn make_symbols_frame(&self, tex_width: f32, tex_height: f32, x: f32, y: f32) -> WgpuSymbolFrame {
         let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
         let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
@@ -172,7 +202,20 @@ impl WgpuSymbolRenderer {
         }
     }
     
-    /// Generate instance data from render cells (equivalent to OpenGL render_rbuf)
+    /// Generate instance data from render cells (equivalent to OpenGL `render_rbuf`)
+    ///
+    /// Applies the same transform chain as OpenGL to ensure parity:
+    /// 1) translate(r.x + r.cx - r.w, r.y + r.cy - r.h)
+    /// 2) if angle != 0 → rotate(angle)
+    /// 3) translate(-r.cx + r.w, -r.cy + r.h)
+    /// 4) scale(cell_size_compensation × ratio_compensation)
+    ///
+    /// Notes:
+    /// - `r.w`/`r.h` (from `RenderCell`) are destination pixel sizes already
+    ///   adjusted by upstream ratio/sprite scaling; here we compute a relative
+    ///   scaling against the default symbol size so that custom sprite scaling
+    ///   is preserved.
+    /// - `ratio_x`/`ratio_y` are applied to keep DPI scaling parity with GL.
     pub fn generate_instances_from_render_cells(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
         self.instance_buffer.clear();
         self.instance_count = 0;
@@ -182,17 +225,25 @@ impl WgpuSymbolRenderer {
             let mut transform = self.transform_stack;
 
             transform.translate(
-                r.x + r.cx - PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-                r.y + r.cy - PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+                r.x + r.cx - r.w as f32,
+                r.y + r.cy - r.h as f32,
             );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x,
-                -r.cy + PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y,
+                -r.cx + r.w as f32,
+                -r.cy + r.h as f32,
             );
-            transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
+            
+            // Apply scaling based on RenderCell dimensions vs default symbol size.
+            // This preserves per-sprite scaling beyond DPI ratio adjustments.
+            let cell_width = r.w as f32;
+            let cell_height = r.h as f32;
+            let default_width = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let default_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+            
+            transform.scale(cell_width / default_width / ratio_x, cell_height / default_height / ratio_y);
             
             // Draw background if it exists
             if let Some(b) = r.bcolor {
@@ -204,7 +255,12 @@ impl WgpuSymbolRenderer {
         }
     }
     
-    /// Add a symbol instance (equivalent to OpenGL draw_symbol)
+    /// Add a symbol instance (equivalent to OpenGL `draw_symbol`)
+    ///
+    /// Packs per-instance attributes into the instance buffer:
+    /// - a1: origin, UV top-left
+    /// - a2: UV size, first column of local 2x2 scaled by frame size
+    /// - a3: second column of local 2x2 scaled by frame size, then translation
     fn draw_symbol_instance(&mut self, sym: usize, transform: &UnifiedTransform, color: [f32; 4]) {
         if self.instance_count >= self.max_instances {
             // Instance limit reached (debug output removed for performance)
