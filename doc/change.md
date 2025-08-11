@@ -1,3 +1,56 @@
+# 1.0.7 - Major Release: RustPixel UI Framework
+
+## 🎨 What's New
+
+### **RustPixel UI Framework** (NEW)
+Complete character-based UI system for building sophisticated applications:
+
+- **7 Core Components**: Label, Button, TextBox, Panel, List, Tree, ScrollBar
+- **Advanced Layout**: Automatic positioning, constraint-based sizing
+- **Event System**: Mouse/keyboard handling with widget-specific events
+- **Theme Support**: Configurable styling and color schemes
+- **Demo App**: `apps/ui_demo` showcasing all features
+
+```rust
+// Quick Start Example
+use rust_pixel::ui::*;
+
+let mut app = UIApp::new(80, 25);
+let mut panel = Panel::new();
+
+panel.add_child(Box::new(Label::new("Hello UI!")));
+panel.add_child(Box::new(Button::new("Click Me")));
+
+app.set_root(Box::new(panel));
+app.run();
+```
+
+### **Enhanced Graphics**
+- **Sprite Scaling**: Independent X/Y scaling with `set_scale_x()`, `set_scale_y()`
+- **TTF Tool Improvements**: Auto-discovery, smart filtering, Unicode support
+
+## 🚀 Use Cases
+- **Editors**: Code editors, text viewers with syntax highlighting
+- **Development Tools**: Debug consoles, file browsers, config panels
+- **Game UI**: Menus, inventory systems, dialogue interfaces
+- **Terminal Apps**: Modern CLI tools with mouse support
+
+## 📁 Key Files
+- `src/ui/` - Complete UI framework module
+- `apps/ui_demo/` - Comprehensive demonstration app
+- Enhanced sprite rendering and TTF processing tools
+
+## 🔄 Migration
+- **100% Backward Compatible** - Existing code unchanged
+- **Additive Features** - New UI framework is optional
+- **Zero Breaking Changes** - All existing apps continue to work
+
+---
+
+**Impact**: This release establishes RustPixel as a complete platform for building sophisticated character-based applications, from simple tools to complex editors and games.
+
+**Note**: The new sprite scaling and TTF tool enhancements are specifically designed to support ASCII half-width font rendering for UI elements in graphics mode, enabling crisp terminal-style interfaces with pixel-perfect scaling.
+
 # 1.0.6
 - Fix winit mouse bug
 
