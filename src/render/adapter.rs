@@ -612,28 +612,28 @@ pub trait Adapter {
     /// │  Background (Clear Color)                                   │
     /// │      ▲                                                      │
     /// │      │                                                      │
-    /// │  ┌───┴─────────────────────┐  ← Layer 1: Main Content      │
-    /// │  │   Render Texture 2      │    - Game buffer              │
-    /// │  │   (Main Game Content)   │    - Sprites                  │
-    /// │  │   - Characters & Tiles  │    - Borders                  │
-    /// │  │   - Sprites & Objects   │    - Logo (during startup)    │
-    /// │  │   - Borders & UI        │                               │
-    /// │  └─────────────────────────┘                               │
+    /// │  ┌───┴─────────────────────┐  ← Layer 1: Main Content       │
+    /// │  │   Render Texture 2      │    - Game buffer               │
+    /// │  │   (Main Game Content)   │    - Sprites                   │
+    /// │  │   - Characters & Tiles  │    - Borders                   │
+    /// │  │   - Sprites & Objects   │    - Logo (during startup)     │
+    /// │  │   - Borders & UI        │                                │
+    /// │  └─────────────────────────┘                                │
     /// │      ▲                                                      │
     /// │      │                                                      │
-    /// │  ┌───┴─────────────────────┐  ← Layer 2: Effects & Trans  │
-    /// │  │   Render Texture 3      │    - Transition effects      │
-    /// │  │   (Transitions & FX)    │    - Overlays                │
-    /// │  │   - Screen transitions  │    - Post-processing         │
-    /// │  │   - Visual effects      │    - Special effects         │
-    /// │  │   - Overlays           │                               │
-    /// │  └─────────────────────────┘                               │
+    /// │  ┌───┴─────────────────────┐  ← Layer 2: Effects & Trans    │
+    /// │  │   Render Texture 3      │    - Transition effects        │
+    /// │  │   (Transitions & FX)    │    - Overlays                  │
+    /// │  │   - Screen transitions  │    - Post-processing           │
+    /// │  │   - Visual effects      │    - Special effects           │
+    /// │  │   - Overlays           │                                 │
+    /// │  └─────────────────────────┘                                │
     /// │      ▲                                                      │
     /// │      │                                                      │
-    /// │  ┌───┴─────────────────────┐  ← Final Output               │
-    /// │  │      Screen Buffer      │                               │
-    /// │  │    (Framebuffer 0)      │                               │
-    /// │  └─────────────────────────┘                               │
+    /// │  ┌───┴─────────────────────┐  ← Final Output                │
+    /// │  │      Screen Buffer      │                                │
+    /// │  │    (Framebuffer 0)      │                                │
+    /// │  └─────────────────────────┘                                │
     /// └─────────────────────────────────────────────────────────────┘
     /// ```
     #[cfg(graphics_mode)]

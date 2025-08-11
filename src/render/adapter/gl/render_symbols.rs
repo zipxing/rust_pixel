@@ -1,6 +1,20 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022～2025
-
+// 
+// OpenGL Symbol Renderer (Instanced Rendering)
+//
+// This module renders symbols using instanced drawing and mirrors the WGPU
+// renderer's behavior. A single base quad is reused while per-instance data
+// (UVs, color, local transform and world transform) are streamed each frame.
+//
+// Key points:
+// - Texture atlas: Symbols come from a grid-based atlas defined by
+//   `PIXEL_SYM_WIDTH/HEIGHT`.
+// - Transform chain parity: The translate/rotate/translate/scale chain is kept
+//   identical to the WGPU backend for pixel-perfect parity.
+// - Ratio handling: Display scaling (`ratio_x`, `ratio_y`) is compensated by
+//   computing a relative scale against the default symbol size and applying the
+//   same ratio terms as WGPU.
 use crate::render::adapter::gl::{
     shader::GlShader,
     shader_source::{FRAGMENT_SRC_SYMBOLS, VERTEX_SRC_SYMBOLS},
@@ -90,6 +104,8 @@ impl GlRender for GlRenderSymbols {
 
             let quad_vbo = gl.create_buffer().unwrap();
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            // Base quad in unit space (TRIANGLE_FAN order):
+            // [0,0], [0,1], [1,1], [1,0]
             let quad_vertices: [f32; 8] = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
@@ -97,6 +113,10 @@ impl GlRender for GlRenderSymbols {
                 glow::STATIC_DRAW,
             );
 
+            // Uniform buffer (matches WGPU transform uniform layout):
+            // tw: [m00, m10, m20, canvas_width]
+            // th: [m01, m11, m21, canvas_height]
+            // color: [1,1,1,1]
             let ubo = gl.create_buffer().unwrap();
             gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
             gl.buffer_data_size(glow::UNIFORM_BUFFER, 48, glow::DYNAMIC_DRAW);
@@ -108,6 +128,7 @@ impl GlRender for GlRenderSymbols {
 
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
 
+            // Per-instance attribute stride: 4 vec4 = 64 bytes
             let stride = 64;
 
             // Attribute 1
@@ -149,6 +170,8 @@ impl GlRender for GlRenderSymbols {
             self.base.textures_binded = true;
         }
 
+        // When the transform stack changes, flush any pending instances,
+        // update the UBO and resume batching.
         if self.transform_dirty {
             self.draw(gl);
             self.send_uniform_buffer(gl);
@@ -160,6 +183,7 @@ impl GlRender for GlRenderSymbols {
             self.base.shader_binded = true;
         }
 
+        // Grow instance buffer when near capacity.
         if (self.instance_buffer_at + size as isize) as usize >= self.instance_buffer_capacity {
             self.instance_buffer_capacity *= 2;
             self.instance_buffer
@@ -208,6 +232,7 @@ impl GlRender for GlRenderSymbols {
 }
 
 impl GlRenderSymbols {
+    /// Load symbol texture and create per-symbol frames (UVs and size)
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
@@ -236,6 +261,7 @@ impl GlRenderSymbols {
         self.base.textures_binded = false;
     }
 
+    /// Upload the current transform stack and canvas size to the UBO
     fn send_uniform_buffer(&mut self, gl: &glow::Context) {
         let transform = self.transform_stack;
         self.ubo_contents[0] = transform.m00;
@@ -260,7 +286,7 @@ impl GlRenderSymbols {
         self.transform_dirty = false;
     }
 
-    // fill instance buffer...
+    // Fill the instance buffer with one symbol's attributes
     fn draw_symbol(
         &mut self,
         gl: &glow::Context,
@@ -287,7 +313,7 @@ impl GlRenderSymbols {
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.uv_height;
 
-        // Transform attributes
+        // Transform attributes (matrix columns multiplied by frame size, then translation)
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = transform.m00 * frame.width;
         self.instance_buffer_at += 1;
@@ -312,6 +338,8 @@ impl GlRenderSymbols {
         instance_buffer[self.instance_buffer_at as usize] = color.a;
     }
 
+    /// Render all `RenderCell` instances by converting them into per-instance
+    /// attributes and issuing a single instanced draw.
     pub fn render_rbuf(
         &mut self,
         gl: &glow::Context,
@@ -319,28 +347,40 @@ impl GlRenderSymbols {
         ratio_x: f32,
         ratio_y: f32,
     ) {
-        // info!("ratiox....{} ratioy....{}", ratio_x, ratio_y);
+        // Transform chain parity with WGPU:
+        // 1) translate(r.x + r.cx - r.w, r.y + r.cy - r.h)
+        // 2) if angle != 0 → rotate(angle)
+        // 3) translate(-r.cx + r.w, -r.cy + r.h)
+        // 4) scale(cell_size_compensation × ratio_compensation)
         for r in rbuf {
             let mut transform = UnifiedTransform::new();
             let w = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
             let h = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
 
             transform.translate(
-                r.x + r.cx - w,
-                r.y + r.cy - h,
+                r.x + r.cx - r.w as f32,
+                r.y + r.cy - r.h as f32,
             );
             if r.angle != 0.0 {
                 transform.rotate(r.angle);
             }
             transform.translate(
-                -r.cx + w,
-                -r.cy + h,
+                -r.cx + r.w as f32,
+                -r.cy + r.h as f32,
             );
-            transform.scale(1.0 / ratio_x, 1.0 / ratio_y);
             
-            // Apply Y-axis flip for OpenGL to match WGPU behavior
-            // This corrects the coordinate system difference
-            // transform.scale(1.0, -1.0);
+            // Apply scaling based on RenderCell dimensions vs default symbol size.
+            // This preserves per-sprite scaling beyond DPI ratio adjustments.
+            let cell_width = r.w as f32;
+            let cell_height = r.h as f32;
+            let default_width = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let default_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+            
+            transform.scale(cell_width / default_width / ratio_x, cell_height / default_height / ratio_y);
+            
+            // Note: If Y-axis coordinate origin differences need correction,
+            // use an additional scale of (1.0, -1.0) here and adjust translation
+            // accordingly. Currently parity is maintained without flipping.
 
             if let Some(b) = r.bcolor {
                 let back_color = UnifiedColor::new(b.0, b.1, b.2, b.3);
