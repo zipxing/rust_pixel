@@ -223,6 +223,8 @@ impl WgpuSymbolRenderer {
         for r in render_cells {
             // Use the same transformation chain as OpenGL using UnifiedTransform methods
             let mut transform = self.transform_stack;
+            let w = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let h = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
 
             transform.translate(
                 r.x + r.cx - r.w as f32,
