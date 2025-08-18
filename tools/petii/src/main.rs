@@ -3,7 +3,7 @@
 
 //! PETSCII Converter Tool
 //!
-//! This tool converts images to ASCII/PETSCII format using character pattern matching.
+//! This tool converts images to PETSCII format using character pattern matching.
 //! It supports configurable block dimensions and provides high-quality character matching
 //! using feature-based algorithms rather than simple pixel comparison.
 
@@ -15,7 +15,8 @@ use rust_pixel::render::symbols::{
     find_best_match, 
     get_petii_block_color, 
     get_block_color,
-    find_best_color
+    find_best_color,
+    BlockGrayImage
 };
 mod c64;
 use c64::{C64LOW, C64UP};
@@ -34,7 +35,7 @@ use std::path::Path;
 /// or when invalid arguments are provided
 fn print_petii_usage() {
     println!("PETSCII Converter Tool v2.0");
-    println!("Converts images to ASCII/PETSCII format with configurable block dimensions");
+    println!("Converts images to PETSCII format with configurable block dimensions");
     println!();
     println!("USAGE:");
     println!("    petii <IMAGE_FILE> [WIDTH] [HEIGHT] [IS_PETSCII] [CROP_X] [CROP_Y] [CROP_WIDTH] [CROP_HEIGHT]");
@@ -43,20 +44,20 @@ fn print_petii_usage() {
     println!("    IMAGE_FILE      Path to input image file (required)");
     println!("    WIDTH           Output width in characters (default: 40)");
     println!("    HEIGHT          Output height in characters (default: 25)");
-    println!("    IS_PETSCII      Use PETSCII character set: 0=false, 1=true (default: 0)");
+    println!("    IS_PETSCII      Character set mode: 0=PETSCII, 1=ExactPETSCII, 2=PETSCII without letters/digits (default: 0)");
     println!("    CROP_X          Crop starting X position in pixels (optional)");
     println!("    CROP_Y          Crop starting Y position in pixels (optional)");
     println!("    CROP_WIDTH      Crop width in pixels (optional)");
     println!("    CROP_HEIGHT     Crop height in pixels (optional)");
     println!();
     println!("EXAMPLES:");
-    println!("    petii image.jpg                     # Convert with defaults (40x25, ASCII)");
+    println!("    petii image.jpg                     # Convert with defaults (40x25, PETSCII)");
     println!("    petii image.jpg 80 50               # Convert to 80x50 characters");
-    println!("    petii image.jpg 40 25 1             # Use PETSCII character set");
+    println!("    petii image.jpg 40 25 1             # Use PETSCII character set Exact match");
+    println!("    petii image.jpg 40 25 2             # Use PETSCII without letters/digits");
     println!("    petii image.jpg 40 25 0 100 100 400 300  # Crop and convert");
     println!();
     println!("OUTPUT FORMAT:");
-    println!("    ASCII mode:   symbol,color,texture");
     println!("    PETSCII mode: symbol,foreground,texture,background");
     println!();
     println!("    First line contains metadata: width=W,height=H,texture=255");
@@ -66,7 +67,6 @@ fn print_petii_usage() {
     println!("    - Feature-based character matching for superior quality");
     println!("    - Delta E 2000 color matching for perceptual accuracy");
     println!("    - Configurable block dimensions (currently 8x8)");
-    println!("    - Support for both ASCII and PETSCII character sets");
     println!("    - Optional image cropping before conversion");
     println!("    - Automatic background color detection for PETSCII mode");
     println!();
@@ -74,13 +74,90 @@ fn print_petii_usage() {
     println!("    - Images are resized to WIDTH*8 x HEIGHT*8 pixels before processing");
     println!("    - Each character block represents an 8x8 pixel area");
     println!("    - PETSCII mode supports 2 colors per character (foreground/background)");
-    println!("    - ASCII mode uses single color per character with transparency");
     println!("    - Color indices refer to the standard 256-color ANSI palette");
+}
+
+/// Generates character images excluding alphanumeric characters (letters and digits)
+/// 
+/// This is a modified version of gen_charset_images that filters out characters
+/// typically representing letters (A-Z, a-z) and digits (0-9) from the character set.
+/// This is useful for artistic ASCII conversion where only symbols and special 
+/// characters are desired.
+/// 
+/// # Character Exclusion:
+/// - ASCII letters: A-Z (65-90), a-z (97-122)  
+/// - ASCII digits: 0-9 (48-57)
+/// - Based on standard C64 character mapping
+/// 
+/// # Arguments:
+/// Same as gen_charset_images
+/// 
+/// # Returns:
+/// Vec<BlockGrayImage> with alphanumeric characters replaced by empty/transparent blocks
+fn gen_charset_images_no_alphanumeric(
+    low_up: bool,
+    block_width: usize,
+    block_height: usize,
+    c64low_data: &[[u8; 8]; 128],
+    c64up_data: &[[u8; 8]; 128],
+) -> Vec<BlockGrayImage> {
+    let data = if low_up { c64low_data } else { c64up_data };
+    let mut vcs = vec![vec![vec![0u8; block_width]; block_height]; 256];
+
+    // Scale factors for converting from 8x8 to target dimensions
+    let scale_x = block_width as f32 / 8.0;
+    let scale_y = block_height as f32 / 8.0;
+
+    // Define ranges to exclude (letters and digits in C64 character set)
+    let exclude_ranges = if low_up {
+        // C64LOW: lowercase letters and digits
+        vec![(1, 26), (48, 57)] // a-z (1-26), 0-9 (48-57)
+    } else {
+        // C64UP: uppercase letters and digits  
+        vec![(1, 26), (48, 57)] // A-Z (1-26), 0-9 (48-57)
+    };
+
+    for i in 0..128 {
+        // Check if character should be excluded (is alphanumeric)
+        let should_exclude = exclude_ranges.iter().any(|(start, end)| i >= *start && i <= *end);
+        
+        if should_exclude {
+            // Create empty blocks for excluded characters
+            for y in 0..block_height {
+                for x in 0..block_width {
+                    vcs[i][y][x] = 0;        // Normal version: empty
+                    vcs[128 + i][y][x] = 0;  // Inverted version: empty
+                }
+            }
+        } else {
+            // Generate normal character blocks for non-alphanumeric characters
+            for y in 0..block_height {
+                for x in 0..block_width {
+                    // Map target coordinates back to original 8x8 pattern
+                    let orig_x = (x as f32 / scale_x) as usize;
+                    let orig_y = (y as f32 / scale_y) as usize;
+                    let orig_x = orig_x.min(7);
+                    let orig_y = orig_y.min(7);
+                    
+                    // Extract bit from original pattern
+                    let bit = 7 - orig_x; // Right-to-left bit order
+                    if data[i][orig_y] >> bit & 1 == 1 {
+                        vcs[i][y][x] = 255;
+                        vcs[128 + i][y][x] = 0;
+                    } else {
+                        vcs[i][y][x] = 0;
+                        vcs[128 + i][y][x] = 255;
+                    }
+                }
+            }
+        }
+    }
+    vcs
 }
 
 /// Main entry point for the PETSCII converter tool
 /// 
-/// This function handles the complete image-to-ASCII/PETSCII conversion pipeline:
+/// This function handles the complete image-to-PETSCII conversion pipeline:
 /// 
 /// # Process Flow:
 /// 1. **Argument parsing**: Validates command line arguments for image path, dimensions, and options
@@ -108,7 +185,7 @@ fn main() {
     let input_image_path;
     let mut width: u32 = 40;
     let mut height: u32 = 25;
-    let mut is_petii: bool = false;
+    let mut is_petii: u32 = 0;
     
     // Character block dimensions (configurable, default 8x8 for compatibility)
     let block_width: u32 = 8;
@@ -148,11 +225,14 @@ fn main() {
         });
     }
     if args.len() > 4 {
-        let petii_flag: u32 = args[4].parse().unwrap_or_else(|_| {
-            eprintln!("Error: Invalid IS_PETSCII value '{}' (use 0 or 1)", args[4]);
+        is_petii = args[4].parse().unwrap_or_else(|_| {
+            eprintln!("Error: Invalid IS_PETSCII value '{}' (use 0, 1, or 2)", args[4]);
             std::process::exit(1);
         });
-        is_petii = petii_flag != 0;
+        if is_petii > 2 {
+            eprintln!("Error: IS_PETSCII value must be 0, 1, or 2");
+            std::process::exit(1);
+        }
     }
 
     // Load and optionally crop the image
@@ -178,8 +258,12 @@ fn main() {
         .save("tmp/out2.png")
         .expect("save tmp/out2.png error");
 
-    // get petscii images...
-    let vcs = gen_charset_images(false, block_width as usize, block_height as usize, &C64LOW, &C64UP);
+    // get character images based on mode...
+    let vcs = if is_petii == 2 {
+        gen_charset_images_no_alphanumeric(false, block_width as usize, block_height as usize, &C64LOW, &C64UP)
+    } else {
+        gen_charset_images(false, block_width as usize, block_height as usize, &C64LOW, &C64UP)
+    };
 
     // find background color...
     let bret = find_background_color(&resized_img, &gray_img, width * block_width, height * block_height);
@@ -192,7 +276,7 @@ fn main() {
             let block_at = get_grayscale_block_at(&gray_img, j, i, block_width, block_height);
 
             // Apply binarization for PETSCII mode before character matching
-            let processed_block = if is_petii {
+            let processed_block = if is_petii == 1 {
                 binarize_grayscale_block(&block_at, back_gray, block_width as usize, block_height as usize)
             } else {
                 block_at
@@ -200,14 +284,14 @@ fn main() {
 
             let bm = find_best_match(&processed_block, &vcs, block_width as usize, block_height as usize);
 
-            if !is_petii {
-                let block_color = get_block_color(&resized_img, j, i, block_width, block_height);
-                let bc = find_best_color(block_color);
-                print!("{},{},1 ", bm, bc,);
-            } else {
+            if is_petii == 1 {
                 let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb, block_width, block_height);
                 // sym, fg, tex, bg
                 print!("{},{},1,{} ", bm, bc.1, bc.0);
+            } else {
+                let block_color = get_block_color(&resized_img, j, i, block_width, block_height);
+                let bc = find_best_color(block_color);
+                print!("{},{},1 ", bm, bc,);
             }
         }
         println!("");
