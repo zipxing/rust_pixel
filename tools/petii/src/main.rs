@@ -22,6 +22,7 @@ mod c64;
 use c64::{C64LOW, C64UP};
 use std::env;
 use std::path::Path;
+use std::fs;
 
 /// Displays comprehensive usage information for the PETSCII converter tool
 /// 
@@ -237,6 +238,11 @@ fn main() {
 
     // Load and optionally crop the image
     let mut img = image::open(input_image_path).expect("Failed to open image");
+
+    // Create tmp directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all("tmp") {
+        eprintln!("Warning: Failed to create tmp directory: {}", e);
+    }
 
     // Handle optional cropping
     if args.len() > 8 {
