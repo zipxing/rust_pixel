@@ -145,7 +145,7 @@ impl AssetManager {
         }
     }
 
-    pub fn get(&mut self, loc: &str) -> Option<&mut Box<(dyn Asset)>> {
+    pub fn get(&mut self, loc: &str) -> Option<&mut Box<dyn Asset>> {
         match self.assets_index.get(loc) {
             Some(idx) => Some(&mut self.assets[*idx - 1]),
             None => None,
