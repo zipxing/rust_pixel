@@ -30,7 +30,6 @@ tower_lib = { path = "./lib" }
 # pixel_macro = { path = "../../pixel_macro" }
 
 [features]
-default = ["rust_pixel/wgpu"]
 sdl = ["rust_pixel/sdl"]
 winit = ["rust_pixel/winit"]
 wgpu = ["rust_pixel/wgpu", "rust_pixel/winit"]

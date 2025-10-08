@@ -48,7 +48,7 @@ keyframe_derive = "1.0.0"
 serde = { version = "1.0.226", features = ["derive"] }
 sdl2 = { version = "0.38.0", optional = true, features = ["image", "gfx", "unsafe_textures"] }
 winit = { version = "0.30", optional = true }
-glutin = { version = "0.32", optional = true }
+glutin = { version = "0.32.3", optional = true }
 glutin-winit = { version = "0.5", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
 image = { version = "0.25.8", optional = true }
