@@ -90,22 +90,6 @@ impl Modal {
         self.children.push(widget);
         self.mark_dirty();
     }
-    
-    fn content_widgets(&self) -> &[Box<dyn Widget>] {
-        &self.children[..self.num_content]
-    }
-    
-    fn content_widgets_mut(&mut self) -> &mut [Box<dyn Widget>] {
-        &mut self.children[..self.num_content]
-    }
-    
-    fn button_widgets(&self) -> &[Box<dyn Widget>] {
-        &self.children[self.num_content..]
-    }
-    
-    fn button_widgets_mut(&mut self) -> &mut [Box<dyn Widget>] {
-        &mut self.children[self.num_content..]
-    }
 
     /// Calculate the dialog rect (centered within bounds)
     fn dialog_rect(&self) -> Rect {
