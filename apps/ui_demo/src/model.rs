@@ -110,14 +110,19 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
     
     left_panel.add_child(Box::new(test_list));
     
-    // Right column: Tree widget
-    let mut right_panel = rust_pixel::ui::Panel::new()
-        .with_bounds(Rect::new(0, 0, 48, 28))
+    // Right column: Tabs + Tree/About
+    let mut tabs = Tabs::new()
+        .with_style(
+            Style::default().fg(Color::Gray).bg(Color::Black),      // inactive tab
+            Style::default().fg(Color::White).bg(Color::Blue)        // active tab
+        );
+    
+    // Page 1: File Tree
+    let mut tree_panel = rust_pixel::ui::Panel::new()
         .with_border(BorderStyle::Single)
         .with_title("File Tree")
         .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
     
-    // Step 5: Tree for hierarchical data
     let mut test_tree = Tree::new()
         .with_lines(true)
         .with_style(Style::default().fg(Color::Magenta).bg(Color::Black))
@@ -129,14 +134,129 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
         .on_node_expanded(|node_id, expanded| {
             println!("Tree node {} {}", node_id, if expanded { "expanded" } else { "collapsed" });
         });
-    
-    // Build sample tree structure
     create_sample_tree(&mut test_tree);
-    right_panel.add_child(Box::new(test_tree));
+    tree_panel.add_child(Box::new(test_tree));
     
-    // Add panels to main layout
+    // Page 2: About with Modal demo
+    let about_panel = rust_pixel::ui::Panel::new()
+        .with_border(BorderStyle::Single)
+        .with_title("About & Modal Demo")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
+    
+    let mut about = about_panel;
+    about.add_child(Box::new(Label::new("UI Components Demo")));
+    
+    // ProgressBar demo
+    let progress = rust_pixel::ui::ProgressBar::new()
+        .with_value(0.65)
+        .with_fill_style(Style::default().fg(Color::White).bg(Color::Green))
+        .with_bar_style(Style::default().fg(Color::Gray).bg(Color::Black));
+    about.add_child(Box::new(progress));
+    
+    // Checkbox demo
+    let checkbox = rust_pixel::ui::Checkbox::new("Enable feature")
+        .with_checked(true)
+        .on_change(|checked| {
+            println!("Checkbox changed: {}", checked);
+        });
+    about.add_child(Box::new(checkbox));
+    
+    // ToggleSwitch demo
+    let toggle = rust_pixel::ui::ToggleSwitch::new("Dark mode")
+        .with_on(false)
+        .on_change(|on| {
+            println!("Toggle changed: {}", on);
+        });
+    about.add_child(Box::new(toggle));
+    
+    // Slider demo
+    let slider = rust_pixel::ui::Slider::new(0.0, 100.0)
+        .with_value(50.0)
+        .with_step(5.0)
+        .on_change(|value| {
+            println!("Slider value: {:.1}", value);
+        });
+    about.add_child(Box::new(slider));
+
+    // Page 3: Modal Demo
+    let mut modal_demo_panel = rust_pixel::ui::Panel::new()
+        .with_border(BorderStyle::Single)
+        .with_title("Modal Demo")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
+    
+    // Create a modal dialog
+    let mut demo_modal = rust_pixel::ui::Modal::new()
+        .with_title("Example Dialog")
+        .with_min_size(40, 12);
+    
+    // Add content to modal
+    demo_modal.add_content(Box::new(Label::new("This is a modal dialog!")));
+    demo_modal.add_content(Box::new(Label::new("It has a backdrop and centered content.")));
+    demo_modal.add_content(Box::new(Label::new("")));
+    demo_modal.add_content(Box::new(Label::new("Press ESC to close (not functional yet)")));
+    
+    // Add buttons to modal
+    let ok_btn = Button::new("  OK  ")
+        .with_style(Style::default().fg(Color::White).bg(Color::Green))
+        .on_click(|| {
+            println!("OK clicked!");
+        });
+    demo_modal.add_button(Box::new(ok_btn));
+    
+    let cancel_btn = Button::new("Cancel")
+        .with_style(Style::default().fg(Color::White).bg(Color::Red))
+        .on_click(|| {
+            println!("Cancel clicked!");
+        });
+    demo_modal.add_button(Box::new(cancel_btn));
+    
+    modal_demo_panel.add_child(Box::new(demo_modal));
+
+    // Page 4: More Components (Radio, Dropdown, Toast)
+    let components_panel = rust_pixel::ui::Panel::new()
+        .with_border(BorderStyle::Single)
+        .with_title("More Components")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
+    
+    let mut components = components_panel;
+    components.add_child(Box::new(Label::new("Radio & Dropdown Demo")));
+    
+    // Radio demo
+    let radio = rust_pixel::ui::RadioGroup::new()
+        .with_options(vec!["Option A".to_string(), "Option B".to_string(), "Option C".to_string()])
+        .with_selected(0)
+        .on_change(|index| {
+            println!("Radio selected: {}", index);
+        });
+    components.add_child(Box::new(radio));
+    
+    // Dropdown demo
+    let dropdown = rust_pixel::ui::Dropdown::new()
+        .with_options(vec!["Apple".to_string(), "Banana".to_string(), "Cherry".to_string(), "Date".to_string()])
+        .with_selected(0)
+        .on_change(|index| {
+            println!("Dropdown selected: {}", index);
+        });
+    components.add_child(Box::new(dropdown));
+    
+    // Toast demo (positioned at top)
+    let toast = rust_pixel::ui::Toast::new("This is a notification!")
+        .with_type(rust_pixel::ui::ToastType::Success)
+        .with_duration(5.0);
+    components.add_child(Box::new(toast));
+
+    // Add pages to tabs
+    tabs.add_tab("Tree", Box::new(tree_panel));
+    tabs.add_tab("About", Box::new(about));
+    tabs.add_tab("Components", Box::new(components));
+    tabs.add_tab("Modal", Box::new(modal_demo_panel));
+
+    // Add to main layout
     main_panel.add_child(Box::new(left_panel));
-    main_panel.add_child(Box::new(right_panel));
+    main_panel.add_child(Box::new(tabs));
+    
+    // Trigger initial layout
+    main_panel.layout();
     
     main_panel
 }

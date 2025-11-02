@@ -223,13 +223,15 @@ impl Container for Panel {
         // Apply layout
         self.layout.layout(&mut self.children, content_area, &self.layout_constraints);
         
-        // Recursively layout child containers (panels)
+        // Recursively layout child containers
         for child in &mut self.children {
             child.mark_dirty();
             
-            // If child is a Panel, recursively layout its children
+            // Try to downcast to known container types and call their layout
             if let Some(child_panel) = child.as_any_mut().downcast_mut::<Panel>() {
                 child_panel.layout();
+            } else if let Some(child_tabs) = child.as_any_mut().downcast_mut::<crate::ui::Tabs>() {
+                child_tabs.layout();
             }
         }
     }

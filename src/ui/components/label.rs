@@ -146,13 +146,19 @@ impl Label {
             return Ok(());
         }
         
+        // Check if position is within buffer bounds
+        let buffer_area = *buffer.area();
+        if bounds.y >= buffer_area.y + buffer_area.height || bounds.x >= buffer_area.x + buffer_area.width {
+            return Ok(());
+        }
+        
         let start_x = match self.align {
             TextAlign::Left => bounds.x,
             TextAlign::Center => bounds.x + (bounds.width.saturating_sub(text_width)) / 2,
             TextAlign::Right => bounds.x + bounds.width.saturating_sub(text_width),
         };
         
-        if start_x < bounds.x + bounds.width {
+        if start_x < bounds.x + bounds.width && start_x < buffer_area.x + buffer_area.width {
             buffer.set_string(start_x, bounds.y, &self.text, style);
         }
         
@@ -163,9 +169,15 @@ impl Label {
         let bounds = self.bounds();
         let lines = self.wrap_text(bounds.width);
         
+        // Check if position is within buffer bounds
+        let buffer_area = *buffer.area();
+        if bounds.y >= buffer_area.y + buffer_area.height || bounds.x >= buffer_area.x + buffer_area.width {
+            return Ok(());
+        }
+        
         for (i, line) in lines.iter().enumerate() {
             let y = bounds.y + i as u16;
-            if y >= bounds.y + bounds.height {
+            if y >= bounds.y + bounds.height || y >= buffer_area.y + buffer_area.height {
                 break;
             }
             
@@ -176,7 +188,7 @@ impl Label {
                 TextAlign::Right => bounds.x + bounds.width.saturating_sub(line_width),
             };
             
-            if start_x < bounds.x + bounds.width {
+            if start_x < bounds.x + bounds.width && start_x < buffer_area.x + buffer_area.width {
                 buffer.set_string(start_x, y, line, style);
             }
         }
