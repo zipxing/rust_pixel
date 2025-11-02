@@ -405,8 +405,11 @@ impl TetrisCell {
                 }
             }
             if fflag {
-                self.core.full_rows[self.core.full_row_count as usize] = cy + m;
-                self.core.full_row_count += 1;
+                let fr = cy + m;
+                if fr >= 0 {
+                    self.core.full_rows[self.core.full_row_count as usize] = cy + m;
+                    self.core.full_row_count += 1;
+                }
             }
         }
 
