@@ -8,7 +8,7 @@
 - [ ] 1.6 确保 TUI 层（Main Buffer）在渲染顺序上位于所有 Pixel Sprites 之后（最上层）
 - [ ] 1.7 更新 UI 组件使用 `column_tui`、`row_tui` 进行鼠标事件处理，确保 TUI 交互正确
 - [ ] 1.8 在 `apps/ui_demo` 中验证 TUI 架构，测试 TUI 界面与游戏精灵的混合渲染和交互
-- [ ] 1.9 添加配置选项允许应用选择启用/禁用 TUI 模式，保持向后兼容
+- [ ] 1.9 确保 TUI 架构始终启用，支持应用自由选择使用 Main Buffer（TUI）或仅使用 Pixel Sprites
 
 ## 2. Testing
 

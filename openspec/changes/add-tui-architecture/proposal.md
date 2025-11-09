@@ -25,6 +25,6 @@
   - `src/event/input.rs` - 扩展 MouseEvent 支持双坐标系统
   - `src/render/adapter/*/render_symbols.rs` - 支持 TUI 符号渲染
   - `assets/pix/symbols_tui.png` - 新增 TUI 专用符号纹理
-- Compatibility: 文本模式完全向后兼容；图形模式需要应用选择性启用 TUI 模式
-- Migration: 现有应用无需迁移，新应用可选择使用 TUI 架构
+- Compatibility: 文本模式完全向后兼容；图形模式 TUI 架构始终启用，现有应用继续使用 Pixel Sprites 无影响
+- Migration: 现有应用无需迁移，可继续仅使用 Pixel Sprites；新应用可选择使用 Main Buffer（TUI）进行界面渲染
 

@@ -163,6 +163,7 @@ pub static PIXEL_TUI_HEIGHT: OnceLock<f32> = OnceLock::new();  // TUI: 16
 3. **多分辨率支持：** 不同 DPI 下，8x16 的 TUI 字符是否需要特殊处理？
    - **建议：** 复用现有的 `ratio_x/ratio_y` 缩放机制
 
-4. **TUI 模式配置：** 应该在编译时还是运行时选择 TUI 模式？
-   - **建议：** 运行时配置，提供 `enable_tui_mode()` API
+4. **TUI 模式配置：** TUI 模式总是启用，无需配置开关。
+   - **决定：** TUI 架构是核心渲染模式，始终支持混合渲染（TUI + Sprites）
+   - **理由：** 简化架构，避免配置复杂度；应用可自由选择是否使用 Main Buffer（TUI）或仅使用 Pixel Sprites
 

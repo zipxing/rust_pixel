@@ -77,22 +77,24 @@ The rendering system SHALL maintain single draw call performance by merging TUI 
 - **THEN** each cell's `w` and `h` fields correctly specify its size
 - **AND** TUI cells (8x16) and Sprite cells (16x16) render correctly in the same pass
 
-### Requirement: TUI Mode Configuration
+### Requirement: TUI Architecture Always Enabled
 
-The system SHALL provide a runtime configuration option to enable or disable TUI mode, maintaining backward compatibility.
+The system SHALL always enable TUI architecture in graphics mode, supporting mixed rendering of TUI (Main Buffer) and game sprites (Pixel Sprites) without requiring configuration.
 
-#### Scenario: TUI mode disabled by default
-- **WHEN** an application starts without explicit TUI configuration
-- **THEN** TUI mode is disabled
-- **AND** rendering behaves exactly as before (all symbols use 16x16)
-- **AND** no TUI texture is loaded
+#### Scenario: TUI architecture initialized on startup
+- **WHEN** the application starts in graphics mode
+- **THEN** both TUI and Sprite symbol textures are loaded
+- **AND** both `PIXEL_TUI_*` and `PIXEL_SYM_*` dimensions are initialized
+- **AND** mouse events include both TUI and Sprite coordinates
+- **AND** the rendering pipeline supports mixed TUI and Sprite rendering
 
-#### Scenario: TUI mode enabled at runtime
-- **WHEN** the application calls `enable_tui_mode()`
-- **THEN** TUI mode is activated
-- **AND** `symbols_tui.png` is loaded
-- **AND** Main Buffer uses TUI dimensions for rendering
-- **AND** mouse events include TUI coordinates
+#### Scenario: Application chooses rendering approach
+- **WHEN** an application uses only Pixel Sprites (no Main Buffer content)
+- **THEN** TUI layer renders as empty (no overhead)
+- **AND** the application works exactly as before
+- **WHEN** an application uses Main Buffer for TUI elements
+- **THEN** TUI elements render with 8x16 thin characters
+- **AND** TUI layer appears on top of all Pixel Sprites
 
 ### Requirement: UI Component TUI Coordinate Support
 
