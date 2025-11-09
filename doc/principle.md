@@ -184,7 +184,7 @@ Features:
 │ │                   RENDER BUFFER                             │ │
 │ │                                                             │ │
 │ │  Vec<RenderCell> {                                          │ │
-│ │    fcolor: (f32, f32, f32, f32),  // Foreground RGBA        │ │
+│ │    fcolor: (f32, f32, f32, f32),   // Foreground RGBA       │ │
 │ │    bcolor: Option<(...)>,          // Background (optional) │ │
 │ │    texsym: usize,                  // Texture symbol index  │ │
 │ │    x, y: f32,                      // Position              │ │
