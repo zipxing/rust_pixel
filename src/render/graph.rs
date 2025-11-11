@@ -699,12 +699,13 @@ pub fn render_helper(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
-) -> (ARect, ARect, ARect, usize, usize) {
+) -> (ARect, usize, usize) {
     render_helper_with_scale(cell_w, r, i, sh, p, is_border, 1.0, 1.0)
 }
 
-/// Enhanced helper that returns texture/background rectangles and a destination
-/// rectangle with per-sprite scaling.
+/// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
+///
+/// Returns: (dest_rect, texture_id, symbol_id)
 pub fn render_helper_with_scale(
     cell_w: u16,
     r: PointF32,
@@ -714,17 +715,13 @@ pub fn render_helper_with_scale(
     is_border: bool,
     scale_x: f32, // Sprite scaling along X (unitless, 1.0 means no scaling)
     scale_y: f32, // Sprite scaling along Y (unitless, 1.0 means no scaling)
-) -> (ARect, ARect, ARect, usize, usize) {
-    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;
-    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32;
+) -> (ARect, usize, usize) {
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;  // 8 pixels
+    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32; // 8 pixels
     let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
-    let tex_count = 64;
-    let tx = if sh.1 < tex_count { sh.1 as usize } else { 1 };
-    let srcy = sh.0 as u32 / w as u32 + (tx as u32 / 2u32) * w as u32;
-    let srcx = sh.0 as u32 % w as u32 + (tx as u32 % 2u32) * w as u32;
-    let bsrcy = 160u32 / w as u32;
-    let bsrcx = 160u32 % w as u32 + w as u32;
+    
+    let tx = sh.1 as usize;
 
     // Apply per-sprite scaling to the destination render area
     let scaled_w = (w as f32 / r.x * scale_x) as u32;
@@ -738,20 +735,6 @@ pub fn render_helper_with_scale(
     let scaled_y = base_y * scale_y;
 
     (
-        // background sym rect in texture(sym=160 tex=1)
-        ARect {
-            x: w * bsrcx as i32,
-            y: h * bsrcy as i32,
-            w: w as u32,
-            h: h as u32,
-        },
-        // sym rect in texture
-        ARect {
-            x: w * srcx as i32,
-            y: h * srcy as i32,
-            w: w as u32,
-            h: h as u32,
-        },
         // Destination rectangle in the render texture (with sprite scaling applied
         // to both size and position)
         ARect {
@@ -762,7 +745,7 @@ pub fn render_helper_with_scale(
         },
         // texture id
         tx,
-        // sym id
+        // sym id (original index, not offset)
         sh.0 as usize,
     )
 }
@@ -781,7 +764,7 @@ pub fn render_helper_with_scale(
 /// - `is_border`: Whether this is a border cell
 ///
 /// # Returns
-/// Tuple of (background_rect, symbol_rect, dest_rect, tex_id, sym_id)
+/// Tuple of (dest_rect, tex_id, sym_id)
 pub fn render_helper_tui(
     cell_w: u16,
     r: PointF32,
@@ -789,28 +772,11 @@ pub fn render_helper_tui(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
-) -> (ARect, ARect, ARect, usize, usize) {
+) -> (ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;  // 8 pixels (same as Sprite)
     let h = (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32; // 16 pixels (double Sprite height)
     let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
-    
-    // TUI region: symbols 0-1023, linear layout (128 chars per row, 8 rows)
-    let symidx = sh.0 as u32;
-    let char_x = symidx % 128;  // Column in TUI region (0-127)
-    let char_y = symidx / 128;  // Row in TUI region (0-7)
-    
-    // Pixel coordinates in the unified texture
-    let pixel_x = char_x * 8;   // 8 pixels per character width
-    let pixel_y = char_y * 16;  // 16 pixels per character height
-    
-    // Source rectangle in texture (TUI region: rows 0-127)
-    let srcx = pixel_x as i32;
-    let srcy = pixel_y as i32;
-    
-    // Background symbol (using a default background from sprite region for now)
-    let bsrcx = 160 % 8;  // Placeholder background
-    let bsrcy = 160 / 8 + 192;  // From sprite region
     
     // Destination rectangle (TUI uses 8x16 cells)
     let dest_w = (w as f32 / r.x) as u32;
@@ -819,20 +785,6 @@ pub fn render_helper_tui(
     let dest_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
     
     (
-        // Background symbol rect in texture
-        ARect {
-            x: w * bsrcx,
-            y: h * bsrcy,
-            w: w as u32,
-            h: h as u32,
-        },
-        // Symbol rect in texture (TUI region)
-        ARect {
-            x: srcx,
-            y: srcy,
-            w: w as u32,
-            h: h as u32,
-        },
         // Destination rectangle in the render texture
         ARect {
             x: dest_x as i32 + p.x as i32,
@@ -898,12 +850,10 @@ pub fn render_helper_tui(
 /// - `f`: Callback function to process each sprite pixel
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
-    // Callback signature: (fg_color, bg_color, bg_rect, sym_rect, dst_rect, tex_idx, sym_idx, angle, center_point)
+    // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
     F: FnMut(
         &(u8, u8, u8, u8),
         &Option<(u8, u8, u8, u8)>,
-        ARect,
-        ARect,
         ARect,
         usize,
         usize,
@@ -925,7 +875,7 @@ where
 
         for (i, cell) in s.content.content.iter().enumerate() {
             let sh = &cell.get_cell_info();
-            let (s0, s1, s2, texidx, symidx) = render_helper_with_scale(
+            let (s2, texidx, symidx) = render_helper_with_scale(
                 pw,
                 PointF32 { x: rx, y: ry },
                 i,
@@ -960,7 +910,7 @@ where
             } else {
                 bc = None;
             }
-            f(&fc, &bc, s0, s1, s2, texidx, symidx, s.angle, ccp);
+            f(&fc, &bc, s2, texidx, symidx, s.angle, ccp);
         }
     }
 }
@@ -1016,12 +966,15 @@ where
 /// - `f`: Callback function to process each character
 pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border: bool, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
 {
     for (i, cell) in buf.content.iter().enumerate() {
         // symidx, texidx, fg, bg
         let sh = cell.get_cell_info();
-        let (s0, s1, s2, texidx, symidx) = render_helper(
+        
+        // Graphics mode: use TUI characters (8x16 pixels, indices 0-1023)
+        #[cfg(graphics_backend)]
+        let (s2, texidx, symidx) = render_helper_tui(
             width,
             PointF32 { x: rx, y: ry },
             i,
@@ -1029,13 +982,25 @@ where
             PointU16 { x: 0, y: 0 },
             border,
         );
+        
+        // Terminal mode: use standard helper (will be ignored in terminal rendering)
+        #[cfg(not(graphics_backend))]
+        let (s2, texidx, symidx) = render_helper(
+            width,
+            PointF32 { x: rx, y: ry },
+            i,
+            &sh,
+            PointU16 { x: 0, y: 0 },
+            border,
+        );
+        
         let fc = sh.2.get_rgba();
         let bc = if sh.3 != Color::Reset {
             Some(sh.3.get_rgba())
         } else {
             None
         };
-        f(&fc, &bc, s0, s1, s2, texidx, symidx);
+        f(&fc, &bc, s2, texidx, symidx);
     }
 }
 
@@ -1076,7 +1041,7 @@ where
 /// - `f`: Callback function to render each border character
 pub fn render_border<F>(cell_w: u16, cell_h: u16, rx: f32, ry: f32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
 {
     let sh_top = (102u8, 1u8, Color::Indexed(7), Color::Reset);
     let sh_other = (24u8, 2u8, Color::Indexed(7), Color::Reset);
@@ -1097,7 +1062,7 @@ where
             } else {
                 rsh = &sh_other;
             }
-            let (s0, s1, s2, texidx, symidx) = render_helper(
+            let (s2, texidx, symidx) = render_helper(
                 cell_w + 2,
                 PointF32 { x: rx, y: ry },
                 n * (cell_w as usize + 2) + m,
@@ -1107,7 +1072,7 @@ where
             );
             let fc = rsh.2.get_rgba();
             let bc = None;
-            f(&fc, &bc, s0, s1, s2, texidx, symidx);
+            f(&fc, &bc, s2, texidx, symidx);
         }
     }
 }
@@ -1162,7 +1127,7 @@ where
 /// - `f`: Callback function to render each logo character
 pub fn render_logo<F>(srx: f32, sry: f32, spw: u32, sph: u32, rd: &mut Rand, stage: u32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), ARect, usize, usize),
 {
     let rx = srx * 1.0;
     let ry = sry * 1.0;
@@ -1172,7 +1137,7 @@ where
             let symw = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
             let symh = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
 
-            let (_s0, s1, mut s2, texidx, symidx) = render_helper(
+            let (mut s2, texidx, symidx) = render_helper(
                 PIXEL_LOGO_WIDTH as u16,
                 PointF32 { x: rx, y: ry },
                 sci,
@@ -1214,7 +1179,7 @@ where
                 b = fc.2.saturating_sub(cc);
                 a = 255;
             }
-            f(&(r, g, b, a), s1, s2, texidx, symidx);
+            f(&(r, g, b, a), s2, texidx, symidx);
         }
     }
 }
@@ -1240,7 +1205,7 @@ pub fn generate_render_buffer(
             base.gr.pixel_h,
             &mut base.rd,
             stage,
-            |fc, _s1, s2, texidx, symidx| {
+            |fc, s2, texidx, symidx| {
                 push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
             },
         );
@@ -1251,8 +1216,6 @@ pub fn generate_render_buffer(
     let ry = base.gr.ratio_y;
     let mut rfunc = |fc: &(u8, u8, u8, u8),
                      bc: &Option<(u8, u8, u8, u8)>,
-                     _s0: ARect,
-                     _s1: ARect,
                      s2: ARect,
                      texidx: usize,
                      symidx: usize| {
@@ -1276,7 +1239,7 @@ pub fn generate_render_buffer(
                     item,
                     rx,
                     ry,
-                    |fc, bc, _s0, _s1, s2, texidx, symidx, angle, ccp| {
+                    |fc, bc, s2, texidx, symidx, angle, ccp| {
                         push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
                     },
                 );

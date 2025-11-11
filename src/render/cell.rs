@@ -48,6 +48,94 @@ lazy_static! {
         }
         sm
     };
+
+    /// Emoji mapping table for pre-rendered Emoji in the unified texture
+    /// 
+    /// Maps common Emoji characters to texture indices in the Emoji region (1024-1279).
+    /// The Emoji region occupies rows 128-191 of the 1024x1024 unified texture,
+    /// with each Emoji being 16x16 pixels in RGBA color format.
+    /// 
+    /// Total capacity: 256 Emoji positions
+    /// - 175 common Emoji (mapped below)
+    /// - 81 reserved for future expansion
+    /// 
+    /// Emoji categories:
+    /// - Emotions & Faces (50): 😀😊😂🤣😍🥰😘😎🤔😭🥺😤😡🤯😱 etc.
+    /// - Symbols & Signs (30): ✅❌⚠️🔥⭐🌟✨💫🎯🚀⚡💡🔔📌🔗🔒 etc.
+    /// - Arrows & Indicators (20): ➡️⬅️⬆️⬇️↗️↘️↙️↖️🔄🔃 etc.
+    /// - Food & Drink (20): 🍕🍔🍟🍿🍩🍪🍰🎂🍭🍫☕🍺🍷 etc.
+    /// - Nature & Animals (20): 🌈🌸🌺🌻🌲🌳🍀🐱🐶🐭🐹🦊🐻 etc.
+    /// - Objects & Tools (20): 📁📂📄📊📈📉🔧🔨⚙️🖥️💻⌨️🖱️ etc.
+    /// - Activities & Sports (15): ⚽🏀🏈⚾🎮🎲🎯🎨🎭🎪 etc.
+    static ref EMOJI_MAP: HashMap<String, u16> = {
+        let mut map = HashMap::new();
+        let mut idx = 1024u16; // Emoji region starts at index 1024
+        
+        // Emotions & Faces (50)
+        let emotions = ["😀", "😊", "😂", "🤣", "😍", "🥰", "😘", "😎", "🤔", "😭",
+                       "🥺", "😤", "😡", "🤯", "😱", "😨", "😰", "😥", "😢", "😓",
+                       "😩", "😫", "🥱", "😴", "😪", "🤐", "😬", "🙄", "😏", "😒",
+                       "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩",
+                       "🥳", "😇", "🤠", "🤡", "🤥", "🤫", "🤭", "🧐", "🤓", "😈"];
+        for emoji in &emotions {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Symbols & Signs (30)
+        let symbols = ["✅", "❌", "⚠️", "🔥", "⭐", "🌟", "✨", "💫", "🎯", "🚀",
+                      "⚡", "💡", "🔔", "📌", "🔗", "🔒", "🔓", "🔑", "🎁", "🎈",
+                      "🎉", "🎊", "💯", "🆕", "🆓", "🆒", "🆗", "🆙", "🔴", "🟢"];
+        for emoji in &symbols {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Arrows & Indicators (20)
+        let arrows = ["➡️", "⬅️", "⬆️", "⬇️", "↗️", "↘️", "↙️", "↖️", "🔄", "🔃",
+                     "⏪", "⏩", "⏫", "⏬", "▶️", "◀️", "🔼", "🔽", "⏸️", "⏹️"];
+        for emoji in &arrows {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Food & Drink (20)
+        let food = ["🍕", "🍔", "🍟", "🍿", "🍩", "🍪", "🍰", "🎂", "🍭", "🍫",
+                   "☕", "🍺", "🍷", "🍹", "🥤", "🍎", "🍌", "🍇", "🍓", "🍉"];
+        for emoji in &food {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Nature & Animals (20)
+        let nature = ["🌈", "🌸", "🌺", "🌻", "🌲", "🌳", "🍀", "🐱", "🐶", "🐭",
+                     "🐹", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸"];
+        for emoji in &nature {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Objects & Tools (20)
+        let objects = ["📁", "📂", "📄", "📊", "📈", "📉", "🔧", "🔨", "⚙️", "🖥️",
+                      "💻", "⌨️", "🖱️", "📱", "☎️", "📞", "📟", "📠", "🔋", "🔌"];
+        for emoji in &objects {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Activities & Sports (15)
+        let activities = ["⚽", "🏀", "🏈", "⚾", "🎮", "🎲", "🎯", "🎨", "🎭", "🎪",
+                         "🎬", "🎤", "🎧", "🎼", "🎹"];
+        for emoji in &activities {
+            map.insert(emoji.to_string(), idx);
+            idx += 1;
+        }
+        
+        // Total: 50 + 30 + 20 + 20 + 20 + 20 + 15 = 175 Emoji
+        // Remaining: 256 - 175 = 81 positions reserved for future use
+        
+        map
+    };
 }
 
 /// sym_index, texture_index, fg_color, bg_color
@@ -66,6 +154,22 @@ pub fn cellsym(idx: u8) -> String {
     // U+E000 + idx
     let codepoint = 0xE000u32 + idx as u32;
     char::from_u32(codepoint).unwrap().to_string()
+}
+
+/// Check if a symbol is a pre-rendered Emoji
+///
+/// Returns true if the symbol exists in the EMOJI_MAP, meaning it has
+/// a pre-rendered 16x16 RGBA image in the Emoji region of the texture.
+pub fn is_prerendered_emoji(symbol: &str) -> bool {
+    EMOJI_MAP.contains_key(symbol)
+}
+
+/// Get the texture index for a pre-rendered Emoji
+///
+/// Returns Some(index) if the Emoji is in the EMOJI_MAP (range 1024-1279),
+/// or None if the Emoji is not pre-rendered.
+pub fn emoji_texidx(symbol: &str) -> Option<u16> {
+    EMOJI_MAP.get(symbol).copied()
 }
 
 /// get index idx from a symbol string

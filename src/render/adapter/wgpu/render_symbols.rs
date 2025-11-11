@@ -150,30 +150,67 @@ impl WgpuSymbolRenderer {
         }
     }
     
-    /// Load symbol texture and create symbol frames (equivalent to OpenGL `load_texture`)
+    /// Load symbol texture and create symbol frames for unified texture layout
     ///
-    /// Splits the texture atlas into uniform frames based on
-    /// `PIXEL_SYM_WIDTH/HEIGHT` and generates UVs for each frame.
+    /// Creates frames for three regions in the 1024x1024 unified texture:
+    /// - TUI region (0-1023): 1024 chars, 8x16 pixels, rows 0-127
+    /// - Emoji region (1024-1279): 256 emoji, 16x16 pixels, rows 128-191
+    /// - Sprite region (1280-14591): 13312 sprites, 8x8 pixels, rows 192-1023
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-        
-        let th = (texh as f32 / sym_height) as usize;
-        let tw = (texw as f32 / sym_width) as usize;
+        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
+        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
         
         self.symbols.clear();
-        for i in 0..th {
-            for j in 0..tw {
-                let frame = self.make_symbols_frame(
-                    texw as f32, texh as f32,
-                    j as f32 * sym_width,
-                    i as f32 * sym_height,
-                );
-                self.symbols.push(frame);
-            }
+        
+        // TUI region: 1024 characters (8x16 pixels), rows 0-127
+        // 128 chars per row, 8 rows total
+        for idx in 0..1024 {
+            let char_x = idx % 128;
+            let char_y = idx / 128;
+            let pixel_x = char_x as f32 * sym_width;      // 8 pixels wide
+            let pixel_y = char_y as f32 * sym_height * 2.0; // 16 pixels high
+            
+            let frame = self.make_symbols_frame_custom(
+                texw as f32, texh as f32,
+                pixel_x, pixel_y,
+                sym_width, sym_height * 2.0, // TUI is 8x16
+            );
+            self.symbols.push(frame);
         }
         
-        // Symbols loaded successfully (debug output removed for performance)
+        // Emoji region: 256 emoji (16x16 pixels), rows 128-191
+        // 64 emoji per row, 4 rows total
+        for idx in 0..256 {
+            let emoji_x = idx % 64;
+            let emoji_y = idx / 64;
+            let pixel_x = emoji_x as f32 * sym_width * 2.0;  // 16 pixels wide
+            let pixel_y = 128.0 * sym_height + emoji_y as f32 * sym_height * 2.0; // Start at row 128, 16 pixels high
+            
+            let frame = self.make_symbols_frame_custom(
+                texw as f32, texh as f32,
+                pixel_x, pixel_y,
+                sym_width * 2.0, sym_height * 2.0, // Emoji is 16x16
+            );
+            self.symbols.push(frame);
+        }
+        
+        // Sprite region: 13312 sprites (8x8 pixels), rows 192-1023
+        // 128 sprites per row, 104 rows total
+        for idx in 0..13312 {
+            let sprite_x = idx % 128;
+            let sprite_y = idx / 128;
+            let pixel_x = sprite_x as f32 * sym_width;      // 8 pixels wide
+            let pixel_y = 192.0 * sym_height + sprite_y as f32 * sym_height; // Start at row 192, 8 pixels high
+            
+            let frame = self.make_symbols_frame_custom(
+                texw as f32, texh as f32,
+                pixel_x, pixel_y,
+                sym_width, sym_height, // Sprite is 8x8
+            );
+            self.symbols.push(frame);
+        }
+        
+        // Total symbols: 1024 + 256 + 13312 = 14592
     }
     
     /// Create a symbol frame (equivalent to OpenGL `make_symbols_frame`)
@@ -183,16 +220,23 @@ impl WgpuSymbolRenderer {
         let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
         let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
         
+        self.make_symbols_frame_custom(tex_width, tex_height, x, y, sym_width, sym_height)
+    }
+    
+    /// Create a symbol frame with custom dimensions
+    ///
+    /// Used for TUI (8x16), Emoji (16x16), and Sprite (8x8) regions.
+    fn make_symbols_frame_custom(&self, tex_width: f32, tex_height: f32, x: f32, y: f32, width: f32, height: f32) -> WgpuSymbolFrame {
         let origin_x = 1.0;
         let origin_y = 1.0;
         let uv_left = x / tex_width;
         let uv_top = y / tex_height;
-        let uv_width = sym_width / tex_width;
-        let uv_height = sym_height / tex_height;
+        let uv_width = width / tex_width;
+        let uv_height = height / tex_height;
         
         WgpuSymbolFrame {
-            width: sym_width,
-            height: sym_height,
+            width,
+            height,
             origin_x,
             origin_y,
             uv_left,

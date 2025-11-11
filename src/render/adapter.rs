@@ -572,12 +572,10 @@ pub trait Adapter {
         let ry = self.get_base().gr.ratio_y;
         let pz = PointI32 { x: 0, y: 0 };
         let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         bc: &Option<(u8, u8, u8, u8)>,
-                         _s0: ARect,
-                         _s1: ARect,
-                         s2: ARect,
-                         texidx: usize,
-                         symidx: usize| {
+                        bc: &Option<(u8, u8, u8, u8)>,
+                        s2: ARect,
+                        texidx: usize,
+                        symidx: usize| {
             push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
 
