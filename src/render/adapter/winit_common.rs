@@ -440,7 +440,7 @@ where
 
     info!("Loaded texture: {}", texture_path);
     info!(
-        "Symbol dimensions: {}x{}",
+        "Symbol dimensions: {}x{} (Sprite: 8x8, TUI: 8x16)",
         PIXEL_SYM_WIDTH.get().expect("lazylock init"),
         PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
     );

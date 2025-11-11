@@ -194,23 +194,29 @@
 
 ### Requirement: TUI 符号尺寸配置
 
-系统 SHALL为 TUI 和 Sprite 符号尺寸提供独立的全局配置。
+系统 MUST 使用统一的符号尺寸配置，TUI 高度为 Sprite 高度的 2 倍。
 
-#### 场景：TUI 尺寸初始化
-- **当** 启用 TUI 模式时
-- **则** `PIXEL_TUI_WIDTH` 设置为 8.0 像素
-- **且** `PIXEL_TUI_HEIGHT` 设置为 16.0 像素
-- **且** 这些值用于 Main Buffer 渲染
+#### 场景：统一尺寸配置
+- **当** 系统初始化时
+- **则** `PIXEL_SYM_WIDTH` 设置为 8.0 像素（Sprite 和 TUI 共享）
+- **且** `PIXEL_SYM_HEIGHT` 设置为 8.0 像素（Sprite 基准高度）
+- **且** TUI 宽度 = `PIXEL_SYM_WIDTH`（8 像素）
+- **且** TUI 高度 = `PIXEL_SYM_HEIGHT * 2`（16 像素）
 
-#### 场景：Sprite 尺寸保持不变
+#### 场景：TUI 渲染使用派生尺寸
+- **当** 渲染 Main Buffer（TUI 层）时
+- **则** 宽度直接使用 `PIXEL_SYM_WIDTH`
+- **且** 高度使用 `PIXEL_SYM_HEIGHT * 2.0`
+- **且** 无需额外的全局变量
+
+#### 场景：Sprite 渲染使用基准尺寸
 - **当** 渲染 Pixel Sprite 时
-- **则** `PIXEL_SYM_WIDTH` 保持为 8.0 像素
-- **且** `PIXEL_SYM_HEIGHT` 保持为 8.0 像素
+- **则** 直接使用 `PIXEL_SYM_WIDTH` 和 `PIXEL_SYM_HEIGHT`
 - **且** 现有的精灵渲染不受影响
 
 ### Requirement: 单次绘制调用性能
 
-渲染系统 SHALL通过将 TUI 和 Sprite 渲染单元合并到统一的 RenderCell 数组中，保持单次绘制调用的性能。
+渲染系统 MUST 通过将 TUI 和 Sprite 渲染单元合并到统一的 RenderCell 数组中，保持单次绘制调用的性能。
 
 #### 场景：统一渲染管线
 - **当** 渲染同时包含 TUI 和 Sprite 的帧时

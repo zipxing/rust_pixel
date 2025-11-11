@@ -87,16 +87,22 @@ use std::sync::OnceLock;
 /// ```
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
-/// Symbol width (in pixels) resolved from the symbol atlas
+/// Symbol width (in pixels) resolved from the symbol atlas (8 pixels)
 ///
 /// Initialized exactly once during adapter initialization. Accessing this
 /// before initialization will panic with "lazylock init".
+///
+/// Note: Both Sprite and TUI layers use the same width (8 pixels).
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
-/// Symbol height (in pixels) resolved from the symbol atlas
+/// Symbol height (in pixels) resolved from the symbol atlas (8 pixels for Sprite)
 ///
 /// Initialized exactly once during adapter initialization. Accessing this
 /// before initialization will panic with "lazylock init".
+///
+/// Note: 
+/// - Sprite layer: uses this value directly (8 pixels)
+/// - TUI layer: uses double this value (16 pixels = PIXEL_SYM_HEIGHT * 2)
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
 /// Calculate the width of a single symbol (in pixels) based on the full texture width
@@ -757,6 +763,86 @@ pub fn render_helper_with_scale(
         // texture id
         tx,
         // sym id
+        sh.0 as usize,
+    )
+}
+
+/// TUI-specific render helper for Main Buffer rendering
+///
+/// This function calculates texture coordinates for TUI characters (8x16 pixels)
+/// from the unified texture. TUI characters are stored in rows 0-127 of the texture.
+///
+/// # Parameters
+/// - `cell_w`: Width of the buffer in cells
+/// - `r`: Ratio for scaling (x, y)
+/// - `i`: Linear cell index in the buffer
+/// - `sh`: Cell info tuple (symbol_index, tex_index, fg_color, bg_color)
+/// - `p`: Position offset (x, y)
+/// - `is_border`: Whether this is a border cell
+///
+/// # Returns
+/// Tuple of (background_rect, symbol_rect, dest_rect, tex_id, sym_id)
+pub fn render_helper_tui(
+    cell_w: u16,
+    r: PointF32,
+    i: usize,
+    sh: &(u8, u8, Color, Color),
+    p: PointU16,
+    is_border: bool,
+) -> (ARect, ARect, ARect, usize, usize) {
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;  // 8 pixels (same as Sprite)
+    let h = (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32; // 16 pixels (double Sprite height)
+    let dstx = i as u16 % cell_w;
+    let dsty = i as u16 / cell_w;
+    
+    // TUI region: symbols 0-1023, linear layout (128 chars per row, 8 rows)
+    let symidx = sh.0 as u32;
+    let char_x = symidx % 128;  // Column in TUI region (0-127)
+    let char_y = symidx / 128;  // Row in TUI region (0-7)
+    
+    // Pixel coordinates in the unified texture
+    let pixel_x = char_x * 8;   // 8 pixels per character width
+    let pixel_y = char_y * 16;  // 16 pixels per character height
+    
+    // Source rectangle in texture (TUI region: rows 0-127)
+    let srcx = pixel_x as i32;
+    let srcy = pixel_y as i32;
+    
+    // Background symbol (using a default background from sprite region for now)
+    let bsrcx = 160 % 8;  // Placeholder background
+    let bsrcy = 160 / 8 + 192;  // From sprite region
+    
+    // Destination rectangle (TUI uses 8x16 cells)
+    let dest_w = (w as f32 / r.x) as u32;
+    let dest_h = (h as f32 / r.y) as u32;
+    let dest_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
+    let dest_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
+    
+    (
+        // Background symbol rect in texture
+        ARect {
+            x: w * bsrcx,
+            y: h * bsrcy,
+            w: w as u32,
+            h: h as u32,
+        },
+        // Symbol rect in texture (TUI region)
+        ARect {
+            x: srcx,
+            y: srcy,
+            w: w as u32,
+            h: h as u32,
+        },
+        // Destination rectangle in the render texture
+        ARect {
+            x: dest_x as i32 + p.x as i32,
+            y: dest_y as i32 + p.y as i32,
+            w: dest_w,
+            h: dest_h,
+        },
+        // Texture id (always 0 for unified texture)
+        sh.1 as usize,
+        // Symbol id
         sh.0 as usize,
     )
 }

@@ -178,9 +178,10 @@ impl Adapter for SdlAdapter {
         PIXEL_SYM_HEIGHT
             .set(init_sym_height(texheight))
             .expect("lazylock init");
+        
         info!("gl_pixel load texture...{}", texture_path);
         info!(
-            "symbol_w={} symbol_h={}",
+            "symbol_w={} symbol_h={} (Sprite: 8x8, TUI: 8x16)",
             PIXEL_SYM_WIDTH.get().expect("lazylock init"),
             PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
         );

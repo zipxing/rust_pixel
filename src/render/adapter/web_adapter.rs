@@ -45,6 +45,7 @@ impl WebAdapter {
         PIXEL_SYM_HEIGHT
             .set(init_sym_height(texheight as u32))
             .expect("lazylock init");
+        
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
         
         // Create direct OpenGL pixel renderer - no more trait objects!

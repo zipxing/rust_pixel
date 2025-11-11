@@ -123,20 +123,24 @@ sprite_row = row       // 直接使用
 
 ### Decision 4: 符号尺寸配置
 
-**选择：** 扩展为两套全局配置：
+**选择：** 使用统一的全局配置，TUI 高度为 Sprite 的 2 倍：
 ```rust
-pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();   // Sprite: 8
-pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();  // Sprite: 8
-pub static PIXEL_TUI_WIDTH: OnceLock<f32> = OnceLock::new();   // TUI: 8
-pub static PIXEL_TUI_HEIGHT: OnceLock<f32> = OnceLock::new();  // TUI: 16
+pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();   // 8 pixels (both Sprite and TUI)
+pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();  // 8 pixels (Sprite)
+
+// TUI dimensions derived from Sprite:
+// TUI_WIDTH = PIXEL_SYM_WIDTH        // 8 pixels (same as Sprite)
+// TUI_HEIGHT = PIXEL_SYM_HEIGHT * 2  // 16 pixels (double Sprite height)
 ```
 
 **理由：**
-- 清晰区分 TUI 和 Sprite 的符号尺寸
-- 保持现有代码对 `PIXEL_SYM_*` 的使用不变
-- 允许未来支持其他宽高比（如 2:3）
+- 简化配置：TUI 宽度与 Sprite 相同，高度固定为 2 倍关系
+- 减少全局变量：无需额外的 `PIXEL_TUI_WIDTH/HEIGHT`
+- 关系明确：TUI 高度 = Sprite 高度 × 2，直观易懂
+- 代码简洁：在需要时直接计算 `PIXEL_SYM_HEIGHT * 2.0`
 
 **替代方案：**
+- 独立的 `PIXEL_TUI_WIDTH/HEIGHT` → 增加全局变量，关系不够明确
 - 单一尺寸 + 缩放因子 → 不够直观，容易混淆
 - 运行时查表 → 性能开销，不必要的复杂度
 
