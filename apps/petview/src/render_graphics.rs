@@ -113,7 +113,7 @@ fn process_buffer_transition(
     // Add random noise symbols
     for _ in 0..transbuf_stage / 2 {
         tbuf.content[ctx.rand.rand() as usize % clen]
-            .set_symbol(cellsym((ctx.rand.rand() % 255) as u8))
+            .set_symbol(&cellsym((ctx.rand.rand() % 255) as u8))
             .set_fg(Color::Rgba(155, 155, 155, 155));
     }
 

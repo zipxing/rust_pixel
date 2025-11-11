@@ -1,187 +1,259 @@
-## ADDED Requirements
+## 新增需求
 
-### Requirement: TUI Symbol Texture Support
+### 需求：Sprite 符号使用 Unicode 私有使用区
 
-The rendering system SHALL support loading and using a separate TUI symbol texture (`symbols_tui.png`) with 8x16 pixel cells for terminal-style character rendering in graphics mode.
+渲染系统必须使用 Unicode 私有使用区 (U+E000~U+E0FF) 作为 Sprite 符号的索引映射，避免与标准 Unicode 字符冲突。
 
-#### Scenario: TUI texture loading in graphics mode
-- **WHEN** the application enables TUI mode in graphics mode
-- **THEN** the system loads `symbols_tui.png` with 128x128 symbols at 8x16 pixels each
-- **AND** the TUI texture is used for rendering Main Buffer content
-- **AND** the standard `symbols.png` (16x16) is used for Pixel Sprites
+#### 场景：Sprite 符号映射
+- **当** 系统生成 Sprite 符号字符时
+- **则** 使用 `cellsym(idx)` 生成 U+E000 + idx 的 Unicode 字符
+- **且** UTF-8 编码为 3 字节：`0xEE 0x80~0x83 0x80~0xBF`
 
-#### Scenario: Text mode remains unchanged
-- **WHEN** the application runs in text mode
-- **THEN** no TUI texture is loaded
-- **AND** all rendering uses terminal character cells as before
+#### 场景：Sprite 符号解析
+- **当** 系统解析字符串中的 Sprite 符号时
+- **则** 使用 `symidx(symbol)` 识别私有使用区字符
+- **且** 检测 UTF-8 第一个字节为 `0xEE`，第二个字节高 6 位为 `0x20`
+- **且** 从后两个字节提取 8 位索引：`((byte[1] & 3) << 6) + (byte[2] & 0x3F)`
 
-### Requirement: Dual Coordinate System for Mouse Events
+#### 场景：避免 Unicode 字符冲突
+- **当** 用户在 TUI 模式显示数学公式如 "∀x ∈ ℝ: x² ≥ 0"
+- **则** 数学符号正常显示，不会被错误映射到 Sprite 纹理
+- **当** 用户在 TUI 模式显示箭头符号如 "→ ↑ ↓ ←"
+- **则** 箭头符号正常显示，不会被错误映射到 Sprite 纹理
 
-The input system SHALL provide two coordinate systems in mouse events: TUI coordinates for thin characters (1:2 aspect ratio) and Sprite coordinates for square characters (1:1 aspect ratio).
+#### 场景：符号集扩展性
+- **当** 未来需要扩展 Sprite 符号数量时
+- **则** 可以使用 U+E100~U+E1FF, U+E200~U+E2FF 等连续区域
+- **且** BMP 私有使用区提供 6400 个码点 (U+E000~U+F8FF)
+- **且** 扩展无需修改 UTF-8 编码逻辑（仍为 3 字节）
 
-#### Scenario: Mouse event with dual coordinates
-- **WHEN** a mouse event occurs in graphics mode with TUI enabled
-- **THEN** the `MouseEvent` contains `column_tui` and `row_tui` calculated using 8-pixel width
-- **AND** the `MouseEvent` contains `column` and `row` calculated using 16-pixel width
-- **AND** both coordinate pairs are independently accurate for their respective rendering layers
+### 需求：统一符号纹理与 TUI 区域
 
-#### Scenario: Backward compatibility for existing code
-- **WHEN** existing code accesses `MouseEvent.column` and `MouseEvent.row`
-- **THEN** the values are calculated using the standard Sprite coordinate system (16x16)
-- **AND** no changes are required to existing mouse handling code
+渲染系统必须支持统一的 2048x2048 符号纹理（`symbols.png`），上部区域包含 TUI 符号（8x16 像素），下部区域包含 Sprite 符号（8x8 像素）。
 
-### Requirement: TUI Layer Rendering Priority
+#### 场景：统一纹理布局
+- **当** 系统加载符号纹理时
+- **则** 纹理尺寸为 2048x2048 像素
+- **且** 顶部 256 像素（行 0-255）包含 TUI 符号，每个字符 8x16 像素
+- **且** 剩余 1792 像素（行 256-2047）包含 Sprite 符号，每个字符 8x8 像素
 
-The rendering system SHALL ensure that the TUI layer (Main Buffer) is always rendered on top of all Pixel Sprite layers in graphics mode.
+#### 场景：TUI 符号区域布局
+- **当** 解析 TUI 区域（顶部 256 像素）时
+- **则** 该区域包含 16 个水平区块，每个区块 16x16 个字符
+- **且** 每个字符占用 8 像素宽 × 16 像素高
+- **且** TUI 字符总数为 16 × 16 × 16 = 4096 个字符
+- **且** TUI 符号在统一符号数组中占用索引 0-4095
 
-#### Scenario: TUI overlay on game sprites
-- **WHEN** the scene contains both Pixel Sprites and TUI elements
-- **THEN** all Pixel Sprites are rendered first
-- **AND** the TUI layer (Main Buffer) is rendered last
-- **AND** TUI elements appear on top of all game objects
+#### 场景：Sprite 符号区域布局
+- **当** 解析 Sprite 区域（行 256-2047，高 1792 像素）时
+- **则** 该区域包含 16 列 × 14 行区块
+- **且** 每个区块包含 16x16 个字符，每个字符 8x8 像素
+- **且** Sprite 字符总数为 16 × 14 × 16 × 16 = 57,344 个字符
+- **且** Sprite 符号在统一符号数组中占用索引 4096-61439
 
-#### Scenario: Rendering order in RenderCell array
-- **WHEN** generating the RenderCell array
-- **THEN** Pixel Sprite cells are added first
-- **AND** Main Buffer (TUI) cells are added last
-- **AND** the GPU renders in array order, ensuring correct layering
+#### 场景：文本模式保持不变
+- **当** 应用在文本模式运行时
+- **则** 加载相同的纹理但只使用 Sprite 符号
+- **且** 所有渲染使用终端字符单元，与之前相同
 
-### Requirement: TUI Symbol Dimensions Configuration
+### 需求：区域感知的符号索引计算
 
-The system SHALL provide separate global configuration for TUI and Sprite symbol dimensions.
+渲染系统必须根据渲染层（TUI 或 Sprite）自动计算正确的纹理符号索引，确保从统一纹理的正确区域采样。
 
-#### Scenario: TUI dimensions initialization
-- **WHEN** TUI mode is enabled
-- **THEN** `PIXEL_TUI_WIDTH` is set to 8.0 pixels
-- **AND** `PIXEL_TUI_HEIGHT` is set to 16.0 pixels
-- **AND** these values are used for Main Buffer rendering
+#### 场景：TUI 层符号索引计算
+- **当** 渲染 Main Buffer（TUI 层）的字符时
+- **则** 使用 TUI 区域的索引计算公式
+- **且** 计算公式为：`pixel_y = char_y * 16, pixel_x = block_x * 128 + char_x * 8`
+- **且** 符号索引 = `(pixel_y / 16) * 256 + (pixel_x / 8)`
+- **且** 最终索引范围为 0-4095
 
-#### Scenario: Sprite dimensions remain unchanged
-- **WHEN** rendering Pixel Sprites
-- **THEN** `PIXEL_SYM_WIDTH` remains 16.0 pixels
-- **AND** `PIXEL_SYM_HEIGHT` remains 16.0 pixels
-- **AND** existing sprite rendering is unaffected
+#### 场景：Sprite 层符号索引计算
+- **当** 渲染 Pixel Sprites 的字符时
+- **则** 使用 Sprite 区域的索引计算公式
+- **且** 计算公式为：`pixel_y = 256 + block_y * 128 + char_y * 8, pixel_x = block_x * 128 + char_x * 8`
+- **且** 符号索引 = `4096 + ((pixel_y - 256) / 8) * 256 + (pixel_x / 8)`
+- **且** 最终索引范围为 4096-61439
 
-### Requirement: Single Draw Call Performance
+#### 场景：渲染层自动区分
+- **当** `render_main_buffer` 生成 RenderCell 时
+- **则** 自动使用 TUI 区域索引计算
+- **当** `render_pixel_sprites` 生成 RenderCell 时
+- **则** 自动使用 Sprite 区域索引计算
+- **且** 应用层代码无需关心区域差异
 
-The rendering system SHALL maintain single draw call performance by merging TUI and Sprite render cells into a unified RenderCell array.
+#### 场景：Cell 数据结构保持不变
+- **当** Cell 存储字符信息时
+- **则** 仍使用 `symbol`（字符串）、`tex`（区块索引 0-255）、`fg`、`bg` 字段
+- **且** 不需要添加新的区域标识字段
+- **且** 现有的 `Cell::get_cell_info()` 方法保持不变
+- **且** 区域逻辑完全在渲染层处理
 
-#### Scenario: Unified rendering pipeline
-- **WHEN** rendering a frame with both TUI and Sprites
-- **THEN** all RenderCells (TUI and Sprite) are in a single array
-- **AND** the GPU processes all cells in one instanced draw call
-- **AND** rendering performance is equivalent to the current system
+### 需求：鼠标事件的双坐标系统
 
-#### Scenario: Variable cell dimensions in shader
-- **WHEN** the shader processes RenderCells with different dimensions
-- **THEN** each cell's `w` and `h` fields correctly specify its size
-- **AND** TUI cells (8x16) and Sprite cells (16x16) render correctly in the same pass
+输入系统必须在鼠标事件中提供两套坐标系统：用于瘦字符（8x16 宽高比）的 TUI 坐标和用于方形字符（8x8 宽高比）的 Sprite 坐标。
 
-### Requirement: TUI Architecture Always Enabled
+#### 场景：包含双坐标的鼠标事件
+- **当** 在启用 TUI 的图形模式下发生鼠标事件时
+- **则** `MouseEvent` 包含使用 8×16 像素单元计算的 `column_tui` 和 `row_tui`
+- **且** `MouseEvent` 包含使用 8×8 像素单元计算的 `column` 和 `row`
+- **且** 两套坐标对各自的渲染层都是独立准确的
 
-The system SHALL always enable TUI architecture in graphics mode, supporting mixed rendering of TUI (Main Buffer) and game sprites (Pixel Sprites) without requiring configuration.
+#### 场景：现有代码的向后兼容性
+- **当** 现有代码访问 `MouseEvent.column` 和 `MouseEvent.row` 时
+- **则** 这些值使用标准的 Sprite 坐标系统（8×8）计算
+- **且** 现有的鼠标处理代码无需修改
 
-#### Scenario: TUI architecture initialized on startup
-- **WHEN** the application starts in graphics mode
-- **THEN** both TUI and Sprite symbol textures are loaded
-- **AND** both `PIXEL_TUI_*` and `PIXEL_SYM_*` dimensions are initialized
-- **AND** mouse events include both TUI and Sprite coordinates
-- **AND** the rendering pipeline supports mixed TUI and Sprite rendering
+### 需求：TUI 层渲染优先级
 
-#### Scenario: Application chooses rendering approach
-- **WHEN** an application uses only Pixel Sprites (no Main Buffer content)
-- **THEN** TUI layer renders as empty (no overhead)
-- **AND** the application works exactly as before
-- **WHEN** an application uses Main Buffer for TUI elements
-- **THEN** TUI elements render with 8x16 thin characters
-- **AND** TUI layer appears on top of all Pixel Sprites
+渲染系统必须确保在图形模式下，TUI 层（Main Buffer）始终渲染在所有 Pixel Sprite 层之上。
 
-### Requirement: UI Component TUI Coordinate Support
+#### 场景：TUI 覆盖在游戏精灵之上
+- **当** 场景同时包含 Pixel Sprite 和 TUI 元素时
+- **则** 所有 Pixel Sprite 首先渲染
+- **且** TUI 层（Main Buffer）最后渲染
+- **且** TUI 元素显示在所有游戏对象之上
 
-UI components SHALL use TUI coordinates (`column_tui`, `row_tui`) for mouse event handling when rendering in the Main Buffer.
+#### 场景：RenderCell 数组中的渲染顺序
+- **当** 生成 RenderCell 数组时
+- **则** Pixel Sprite 单元首先添加
+- **且** Main Buffer（TUI）单元最后添加
+- **且** GPU 按数组顺序渲染，确保正确的分层
 
-#### Scenario: UI component mouse hit testing
-- **WHEN** a UI component (e.g., Button) receives a mouse event
-- **THEN** it uses `mouse_event.column_tui` and `mouse_event.row_tui` for hit testing
-- **AND** the hit test correctly identifies clicks on TUI-rendered components
-- **AND** the component responds to user interaction accurately
+### 需求：TUI 符号尺寸配置
 
-#### Scenario: Game sprite mouse handling unchanged
-- **WHEN** game code handles mouse events for Pixel Sprites
-- **THEN** it continues to use `mouse_event.column` and `mouse_event.row`
-- **AND** sprite interaction remains accurate and unchanged
+系统必须为 TUI 和 Sprite 符号尺寸提供独立的全局配置。
 
-### Requirement: TUI Style Modifier Support
+#### 场景：TUI 尺寸初始化
+- **当** 启用 TUI 模式时
+- **则** `PIXEL_TUI_WIDTH` 设置为 8.0 像素
+- **且** `PIXEL_TUI_HEIGHT` 设置为 16.0 像素
+- **且** 这些值用于 Main Buffer 渲染
 
-The TUI rendering system SHALL support text style modifiers (bold, italic, underlined, dim, reversed, crossed-out, hidden) in graphics mode, providing visual parity with text mode styling capabilities.
+#### 场景：Sprite 尺寸保持不变
+- **当** 渲染 Pixel Sprite 时
+- **则** `PIXEL_SYM_WIDTH` 保持为 8.0 像素
+- **且** `PIXEL_SYM_HEIGHT` 保持为 8.0 像素
+- **且** 现有的精灵渲染不受影响
 
-#### Scenario: RenderCell modifier field support
-- **WHEN** converting Cell to RenderCell for TUI rendering
-- **THEN** the `RenderCell` includes a `modifier` field containing the Cell's modifier bitflags
-- **AND** the modifier information is preserved through the rendering pipeline
-- **AND** the GPU shader receives modifier data for each character
+### 需求：单次绘制调用性能
 
-#### Scenario: Bold text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::BOLD)`
-- **THEN** the text appears with increased visual weight in graphics mode
-- **AND** the bold effect is achieved through color intensity adjustment in the rendering pipeline
-- **AND** the RGB values are multiplied by 1.3 (clamped to 1.0) before creating RenderCell
-- **AND** the styling provides clear visual distinction from normal text
+渲染系统必须通过将 TUI 和 Sprite 渲染单元合并到统一的 RenderCell 数组中，保持单次绘制调用的性能。
 
-#### Scenario: Italic text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::ITALIC)`
-- **THEN** the text appears with italic slant in graphics mode
-- **AND** the italic effect is achieved through vertex transformation in the shader
-- **AND** the slant angle provides clear visual distinction from normal text
+#### 场景：统一渲染管线
+- **当** 渲染同时包含 TUI 和 Sprite 的帧时
+- **则** 所有 RenderCell（TUI 和 Sprite）位于单个数组中
+- **且** GPU 在一次实例化绘制调用中处理所有单元
+- **且** 渲染性能与当前系统相当
 
-#### Scenario: Underlined text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::UNDERLINED)`
-- **THEN** the text appears with an underline in graphics mode
-- **AND** the underline is rendered as a horizontal line below the character
-- **AND** the underline color matches the foreground color
+#### 场景：着色器中的可变单元尺寸
+- **当** 着色器处理不同尺寸的 RenderCell 时
+- **则** 每个单元的 `w` 和 `h` 字段正确指定其大小
+- **且** TUI 单元（8x16）和 Sprite 单元（8x8）在同一遍中正确渲染
 
-#### Scenario: Dim text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::DIM)`
-- **THEN** the text appears with reduced opacity in graphics mode
-- **AND** the dim effect is achieved through alpha channel adjustment in the rendering pipeline
-- **AND** the alpha value is multiplied by 0.6 before creating RenderCell
-- **AND** the text remains readable but visually de-emphasized
+### 需求：TUI 架构始终启用
 
-#### Scenario: Reversed text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::REVERSED)`
-- **THEN** the foreground and background colors are swapped in graphics mode
-- **AND** the color swap is handled in the rendering pipeline before creating RenderCell
-- **AND** the original foreground color becomes the background color
-- **AND** the original background color becomes the foreground color
-- **AND** the visual effect matches terminal reverse video
+系统必须在图形模式下始终启用 TUI 架构，支持 TUI（Main Buffer）和游戏精灵（Pixel Sprites）的混合渲染，无需配置。
 
-#### Scenario: Crossed-out text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::CROSSED_OUT)`
-- **THEN** the text appears with a horizontal line through the middle in graphics mode
-- **AND** the strikethrough line is rendered in the fragment shader
-- **AND** the line color matches the foreground color
+#### 场景：启动时初始化 TUI 架构
+- **当** 应用在图形模式下启动时
+- **则** 统一纹理加载，包含 TUI 和 Sprite 符号区域
+- **且** `PIXEL_TUI_*` 和 `PIXEL_SYM_*` 尺寸都被初始化
+- **且** 鼠标事件包含 TUI 和 Sprite 两套坐标
+- **且** 渲染管线支持 TUI 和 Sprite 混合渲染
 
-#### Scenario: Hidden text rendering
-- **WHEN** TUI content uses `Style::default().add_modifier(Modifier::HIDDEN)`
-- **THEN** the text is completely transparent in graphics mode
-- **AND** the hidden effect is achieved by setting alpha to 0.0 in the rendering pipeline
-- **AND** the character space is preserved but content is invisible
+#### 场景：应用选择渲染方式
+- **当** 应用仅使用 Pixel Sprite（无 Main Buffer 内容）时
+- **则** TUI 层渲染为空（无额外开销）
+- **且** 应用的工作方式与之前完全相同
+- **当** 应用使用 Main Buffer 渲染 TUI 元素时
+- **则** TUI 元素使用 8x16 瘦字符渲染
+- **且** TUI 层显示在所有 Pixel Sprite 之上
 
-#### Scenario: Multiple modifier combination
-- **WHEN** TUI content combines multiple modifiers (e.g., BOLD + ITALIC + UNDERLINED)
-- **THEN** all specified effects are applied simultaneously in graphics mode
-- **AND** the combined effects do not interfere with each other
-- **AND** the visual result matches the expected terminal appearance
+### 需求：UI 组件 TUI 坐标支持
 
-#### Scenario: Text mode compatibility maintained
-- **WHEN** the application runs in text mode
-- **THEN** all modifier effects continue to use crossterm ANSI sequences
-- **AND** no changes are made to existing text mode styling behavior
-- **AND** the visual appearance remains identical to current implementation
+UI 组件必须在 Main Buffer 中渲染时，使用 TUI 坐标（`column_tui`、`row_tui`）进行鼠标事件处理。
 
-#### Scenario: Blink modifiers ignored
-- **WHEN** TUI content uses `Modifier::SLOW_BLINK` or `Modifier::RAPID_BLINK`
-- **THEN** the blink modifiers are ignored in graphics mode
-- **AND** the text renders as normal without blinking animation
-- **AND** no error or warning is generated for unsupported blink effects
+#### 场景：UI 组件鼠标命中测试
+- **当** UI 组件（如 Button）接收鼠标事件时
+- **则** 它使用 `mouse_event.column_tui` 和 `mouse_event.row_tui` 进行命中测试
+- **且** 命中测试正确识别 TUI 渲染组件上的点击
+- **且** 组件准确响应用户交互
 
+#### 场景：游戏精灵鼠标处理保持不变
+- **当** 游戏代码处理 Pixel Sprite 的鼠标事件时
+- **则** 它继续使用 `mouse_event.column` 和 `mouse_event.row`
+- **且** 精灵交互保持准确且不变
+
+### 需求：TUI 样式修饰符支持
+
+TUI 渲染系统必须在图形模式下支持文本样式修饰符（粗体、斜体、下划线、暗淡、反转、删除线、隐藏），提供与文本模式样式能力的视觉一致性。
+
+#### 场景：RenderCell 修饰符字段支持
+- **当** 将 Cell 转换为 RenderCell 进行 TUI 渲染时
+- **则** `RenderCell` 包含一个 `modifier` 字段，其中包含 Cell 的修饰符位标志
+- **且** 修饰符信息在渲染管线中保留
+- **且** GPU 着色器接收每个字符的修饰符数据
+
+#### 场景：粗体文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::BOLD)` 时
+- **则** 文本在图形模式下以增加的视觉重量显示
+- **且** 粗体效果通过渲染管线中的颜色强度调整实现
+- **且** RGB 值乘以 1.3（限制在 1.0 以内）后创建 RenderCell
+- **且** 样式提供与普通文本清晰的视觉区分
+
+#### 场景：斜体文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::ITALIC)` 时
+- **则** 文本在图形模式下以斜体倾斜显示
+- **且** 斜体效果通过着色器中的顶点变换实现
+- **且** 倾斜角度提供与普通文本清晰的视觉区分
+
+#### 场景：下划线文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::UNDERLINED)` 时
+- **则** 文本在图形模式下显示下划线
+- **且** 下划线渲染为字符下方的水平线
+- **且** 下划线颜色与前景色匹配
+
+#### 场景：暗淡文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::DIM)` 时
+- **则** 文本在图形模式下以降低的不透明度显示
+- **且** 暗淡效果通过渲染管线中的 alpha 通道调整实现
+- **且** alpha 值乘以 0.6 后创建 RenderCell
+- **且** 文本保持可读但视觉上不那么突出
+
+#### 场景：反转文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::REVERSED)` 时
+- **则** 前景色和背景色在图形模式下交换
+- **且** 颜色交换在创建 RenderCell 前在渲染管线中处理
+- **且** 原前景色成为背景色
+- **且** 原背景色成为前景色
+- **且** 视觉效果与终端反转视频匹配
+
+#### 场景：删除线文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::CROSSED_OUT)` 时
+- **则** 文本在图形模式下显示中间的水平线
+- **且** 删除线在片段着色器中渲染
+- **且** 线条颜色与前景色匹配
+
+#### 场景：隐藏文本渲染
+- **当** TUI 内容使用 `Style::default().add_modifier(Modifier::HIDDEN)` 时
+- **则** 文本在图形模式下完全透明
+- **且** 隐藏效果通过在渲染管线中将 alpha 设置为 0.0 实现
+- **且** 字符空间保留但内容不可见
+
+#### 场景：多修饰符组合
+- **当** TUI 内容组合多个修饰符（如 BOLD + ITALIC + UNDERLINED）时
+- **则** 所有指定的效果在图形模式下同时应用
+- **且** 组合效果不会相互干扰
+- **且** 视觉结果与预期的终端外观匹配
+
+#### 场景：文本模式兼容性保持
+- **当** 应用在文本模式运行时
+- **则** 所有修饰符效果继续使用 crossterm ANSI 序列
+- **且** 不对现有文本模式样式行为进行更改
+- **且** 视觉外观与当前实现相同
+
+#### 场景：闪烁修饰符被忽略
+- **当** TUI 内容使用 `Modifier::SLOW_BLINK` 或 `Modifier::RAPID_BLINK` 时
+- **则** 闪烁修饰符在图形模式下被忽略
+- **且** 文本作为普通文本渲染，无闪烁动画
+- **且** 对于不支持的闪烁效果不会生成错误或警告

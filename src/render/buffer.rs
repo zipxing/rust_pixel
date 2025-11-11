@@ -18,9 +18,12 @@
 //!
 //! In graphics mode,
 //! 256 unicode chars mark the index of a symbol in a SDL texture
-//! unicode: 0x2200 ~ 0x22FF
-//! maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
+//! unicode: 0xE000 ~ 0xE0FF (Private Use Area)
+//! maps to a 3 byte UTF8: 11101110 100000xx 10xxxxxx
 //! an 8-digits index gets from the UTF8 code is used to mark the offset in its texture
+//! 
+//! Using Private Use Area avoids conflicts with standard Unicode characters,
+//! allowing TUI mode to display mathematical symbols and other special characters.
 //!
 //! tex field is used to indicate texture
 //! 0: assets/c64l.png small case c64 char
@@ -127,7 +130,7 @@ impl Buffer {
         for i in 0..h {
             for j in 0..w {
                 self.content[(i * w + j) as usize]
-                    .set_symbol(cellsym(dat[idx]))
+                    .set_symbol(&cellsym(dat[idx]))
                     .set_texture(dat[idx + 1])
                     .set_fg(Color::Indexed(dat[idx + 2]))
                     .set_bg(Color::Indexed(dat[idx + 3]));

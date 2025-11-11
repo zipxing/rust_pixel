@@ -25,7 +25,7 @@ lazy_static! {
     /// For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/pix/symbols.png
     /// instead of using unicode chars
     /// Some common chars a-Z and tabs are preset in SDL_SYM_MAP,
-    /// for easier set of latin letters using set_str in SDL mode
+    /// for easier set of latin letters using set_str in GRAPH mode
     /// refer to comments for more details
     static ref CELL_SYM_MAP: HashMap<String, u8> = {
         let syms = "@abcdefghijklmnopqrstuvwxyz[£]↑← !\"#$%&'()*+,-./0123456789:;<=>?─ABCDEFGHIJKLMNOPQRSTUVWXYZ┼";
@@ -55,42 +55,32 @@ pub type CellInfo = (u8, u8, Color, Color);
 
 /// returns a cellsym string by index
 /// 256 unicode chars mark the index of a symbol in a SDL texture
-/// unicode: 0x2200 ~ 0x22FF
-/// maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
+/// unicode: 0xE000 ~ 0xE0FF (Private Use Area)
+/// maps to a 3 byte UTF8: 11101110 100000xx 10xxxxxx
 /// an 8-bits index gets from the UTF8 code is used to mark the offset in its texture
-pub fn cellsym(idx: u8) -> &'static str {
-    const SSYM: [&str; 256] = [
-        "∀", "∁", "∂", "∃", "∄", "∅", "∆", "∇", "∈", "∉", "∊", "∋", "∌", "∍", "∎", "∏", "∐", "∑",
-        "−", "∓", "∔", "∕", "∖", "∗", "∘", "∙", "√", "∛", "∜", "∝", "∞", "∟", "∠", "∡", "∢", "∣",
-        "∤", "∥", "∦", "∧", "∨", "∩", "∪", "∫", "∬", "∭", "∮", "∯", "∰", "∱", "∲", "∳", "∴", "∵",
-        "∶", "∷", "∸", "∹", "∺", "∻", "∼", "∽", "∾", "∿", "≀", "≁", "≂", "≃", "≄", "≅", "≆", "≇",
-        "≈", "≉", "≊", "≋", "≌", "≍", "≎", "≏", "≐", "≑", "≒", "≓", "≔", "≕", "≖", "≗", "≘", "≙",
-        "≚", "≛", "≜", "≝", "≞", "≟", "≠", "≡", "≢", "≣", "≤", "≥", "≦", "≧", "≨", "≩", "≪", "≫",
-        "≬", "≭", "≮", "≯", "≰", "≱", "≲", "≳", "≴", "≵", "≶", "≷", "≸", "≹", "≺", "≻", "≼", "≽",
-        "≾", "≿", "⊀", "⊁", "⊂", "⊃", "⊄", "⊅", "⊆", "⊇", "⊈", "⊉", "⊊", "⊋", "⊌", "⊍", "⊎", "⊏",
-        "⊐", "⊑", "⊒", "⊓", "⊔", "⊕", "⊖", "⊗", "⊘", "⊙", "⊚", "⊛", "⊜", "⊝", "⊞", "⊟", "⊠", "⊡",
-        "⊢", "⊣", "⊤", "⊥", "⊦", "⊧", "⊨", "⊩", "⊪", "⊫", "⊬", "⊭", "⊮", "⊯", "⊰", "⊱", "⊲", "⊳",
-        "⊴", "⊵", "⊶", "⊷", "⊸", "⊹", "⊺", "⊻", "⊼", "⊽", "⊾", "⊿", "⋀", "⋁", "⋂", "⋃", "⋄", "⋅",
-        "⋆", "⋇", "⋈", "⋉", "⋊", "⋋", "⋌", "⋍", "⋎", "⋏", "⋐", "⋑", "⋒", "⋓", "⋔", "⋕", "⋖", "⋗",
-        "⋘", "⋙", "⋚", "⋛", "⋜", "⋝", "⋞", "⋟", "⋠", "⋡", "⋢", "⋣", "⋤", "⋥", "⋦", "⋧", "⋨", "⋩",
-        "⋪", "⋫", "⋬", "⋭", "⋮", "⋯", "⋰", "⋱", "⋲", "⋳", "⋴", "⋵", "⋶", "⋷", "⋸", "⋹", "⋺", "⋻",
-        "⋼", "⋽", "⋾", "⋿",
-    ];
-    SSYM[idx as usize]
+/// 
+/// Using Private Use Area ensures no conflict with standard Unicode characters,
+/// allowing applications to display mathematical symbols (∀∃∈∞≈≤≥⊕⊗) or other
+/// special characters in TUI mode without interference.
+pub fn cellsym(idx: u8) -> String {
+    // U+E000 + idx
+    let codepoint = 0xE000u32 + idx as u32;
+    char::from_u32(codepoint).unwrap().to_string()
 }
 
 /// get index idx from a symbol string
-/// return idx, if it is a unicode char
+/// return idx, if it is a unicode char in Private Use Area (U+E000~U+E0FF)
 /// otherwise get index from CELL_SYM_MAP
 fn symidx(symbol: &String) -> u8 {
     let sbts = symbol.as_bytes();
-    // unicode graphics symbol
-    if sbts.len() == 3 && sbts[0] == 0xe2 && (sbts[1] >> 2 == 0x22) {
+    // Private Use Area: U+E000~U+E0FF
+    // UTF-8: 11101110 100000xx 10xxxxxx (0xEE 0x80~0x83 0x80~0xBF)
+    if sbts.len() == 3 && sbts[0] == 0xEE && (sbts[1] >> 2 == 0x20) {
         let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
         return idx;
     }
     let mut ret = 0u8;
-    // search in CELL_SYM_MAP
+    // search in CELL_SYM_MAP for common ASCII chars
     if let Some(idx) = CELL_SYM_MAP.get(symbol) {
         ret = *idx;
     }
