@@ -33,29 +33,43 @@ rust_pixel 目前支持文本模式（终端）和图形模式（SDL/OpenGL/WGPU
 
 ### Decision 1: 统一符号纹理与区域划分
 
-**选择：** 使用统一的 2048x2048 `symbols.png` 纹理，上部256像素存储 TUI 符号（8x16），下部1792像素存储 Sprite 符号（8x8）
+**选择：** 使用统一的 2048x2048 `symbols.png` 纹理，包含三个区域：TUI 符号（8x16）、Emoji（16x16 彩色）、Sprite 符号（8x8）
 
 **布局规划：**
 ```
-2048x2048 纹理布局：
+2048x2048 纹理布局（三区域）：
 ┌────────────────────────────────────────┐
 │ TUI 区域（行 0-255）                    │ 256px 高
 │ - 16个水平区块                          │
 │ - 每区块 16x16 字符，每字符 8x16 像素   │
 │ - 总计 4096 个 TUI 字符                 │
+│ - 符号索引：0-4095                      │
 ├────────────────────────────────────────┤
-│ Sprite 区域（行 256-2047）              │ 1792px 高
-│ - 16列 × 14行 区块                      │
+│ Emoji 区域（行 256-511）                │ 256px 高
+│ - 每行 128 个 Emoji (2048/16)          │
+│ - 每个 Emoji: 16x16 像素（彩色 RGBA）  │
+│ - 16行，总计 2048 个 Emoji 位置        │
+│ - 符号索引：4096-6143                   │
+├────────────────────────────────────────┤
+│ Sprite 区域（行 512-2047）              │ 1536px 高
+│ - 16列 × 12行 区块                      │
 │ - 每区块 16x16 字符，每字符 8x8 像素    │
-│ - 总计 57,344 个 Sprite 字符            │
+│ - 总计 49,152 个 Sprite 字符            │
+│ - 符号索引：6144-55295                  │
 └────────────────────────────────────────┘
+
+符号索引分配总结：
+- 0-4095:     TUI 文本字符（8x16，单色）
+- 4096-6143:  预制 Emoji（16x16，彩色，最多 2048 个）
+- 6144-55295: Sprite 游戏精灵（8x8，单色）
 ```
 
 **理由：**
 - 单个纹理简化纹理管理，无需多个纹理绑定
-- 区域明确分离，避免符号索引冲突
-- 充分利用 2048x2048 纹理空间
+- 三个区域明确分离，避免符号索引冲突
+- Emoji 区域容量充足（2048 个位置，远超常用需求）
 - TUI 区域位于顶部，便于快速访问常用字符
+- Emoji 紧随 TUI，方便 TUI 模式下的混合渲染
 - 保持高效的 GPU 纹理采样性能
 
 **替代方案：**
@@ -242,6 +256,139 @@ pixel_y = 256 + block_y * 128 + char_y * 8
 - ✅ 零迁移成本：现有代码完全兼容
 - ✅ 自动区域识别：渲染层自动计算正确索引
 - ✅ 性能无损：索引计算仅在渲染时执行
+
+### Decision 8: 预制 Emoji 支持
+
+**选择：** 使用预制 Emoji 图集 + HashMap 映射，而不是动态字体渲染
+
+**核心思想：**
+- 预先渲染 200-500 个最常用 Emoji 到纹理图集
+- 使用 `EMOJI_MAP: HashMap<String, u16>` 将 Emoji 字符映射到纹理索引
+- 未映射的 Emoji 显示为空白或占位符
+- 复用现有的预制纹理渲染管线
+
+**实现方案：**
+
+```rust
+// cell.rs
+lazy_static! {
+    static ref EMOJI_MAP: HashMap<String, u16> = {
+        let mut map = HashMap::new();
+        // Emoji 索引从 4096 开始（TUI 区域占 0-4095）
+        map.insert("😀".to_string(), 4096);
+        map.insert("😊".to_string(), 4097);
+        map.insert("😂".to_string(), 4098);
+        map.insert("✅".to_string(), 4099);
+        map.insert("❌".to_string(), 4100);
+        map.insert("🔥".to_string(), 4101);
+        // ... 添加 200-500 个常用 Emoji
+        map
+    };
+}
+
+pub fn is_prerendered_emoji(symbol: &str) -> bool {
+    EMOJI_MAP.contains_key(symbol)
+}
+
+pub fn emoji_texidx(symbol: &str) -> Option<u16> {
+    EMOJI_MAP.get(symbol).copied()
+}
+```
+
+**wcwidth=2 处理：**
+```rust
+// buffer.rs - set_stringn
+for grapheme in graphemes {
+    let width = UnicodeWidthStr::width(grapheme);
+    
+    if width == 2 && is_prerendered_emoji(grapheme) {
+        // Emoji：设置到当前 Cell
+        self.get_mut(x, y).unwrap().set_symbol(grapheme);
+        // 下一个 Cell 设为空白（Emoji 占 2 格）
+        if x + 1 < max_offset.0 + max_offset.2 {
+            self.get_mut(x + 1, y).unwrap().set_symbol(" ");
+        }
+        x += 2;
+    } else if width == 2 && !is_prerendered_emoji(grapheme) {
+        // 未预制的双宽字符：用占位符替代
+        self.get_mut(x, y).unwrap().set_symbol(" ");
+        x += 1;
+    } else {
+        // 普通字符
+        self.get_mut(x, y).unwrap().set_symbol(grapheme);
+        x += width as u16;
+    }
+}
+```
+
+**Emoji 纹理坐标计算：**
+```rust
+// graph.rs
+fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
+    let relative_idx = emoji_idx - 4096;  // Emoji 区域基址
+    
+    // 每个 Emoji: 16x16 像素
+    // 每行 128 个 Emoji (2048 / 16)
+    let emoji_x = (relative_idx % 128) * 16;
+    let emoji_y = 256 + (relative_idx / 128) * 16;  // 从行 256 开始
+    
+    // Destination: Emoji 占 2 格宽度
+    let dest = ARect {
+        x: cell_x,
+        y: cell_y,
+        w: cell_width * 2.0,  // 2 倍宽度
+        h: cell_height,
+    };
+    
+    // Source: 16x16 在 2048x2048 纹理中
+    let src = ARect {
+        x: emoji_x as f32,
+        y: emoji_y as f32,
+        w: 16.0,
+        h: 16.0,
+    };
+    
+    // 返回渲染数据...
+}
+```
+
+**理由：**
+1. **实现简单** - 复用现有预制纹理机制，无需引入字体渲染库
+2. **性能最优** - 预制纹理性能最好，无运行时光栅化开销
+3. **纹理可控** - 固定 256px 高度（2048 个 Emoji 位置），纹理大小可预测
+4. **风格统一** - 可以使用统一风格的 Emoji 集（如 Twemoji, Noto Emoji）
+5. **足够实用** - 200-500 个常用 Emoji 覆盖 95%+ 的使用场景
+6. **易于扩展** - 未来可以通过加载额外纹理支持更多 Emoji
+
+**Emoji 选择标准：**
+- **表情与情感**（50 个）：😀😊😂🤣😍🥰😘😎🤔😭🥺😤😡🤯😱 等
+- **符号与标志**（30 个）：✅❌⚠️🔥⭐🌟✨💫🎯🚀⚡💡🔔📌🔗🔒 等
+- **箭头与指示**（20 个）：➡️⬅️⬆️⬇️↗️↘️↙️↖️🔄🔃 等
+- **食物与饮料**（30 个）：🍕🍔🍟🍿🍩🍪🍰🎂🍭🍫☕🍺🍷 等
+- **自然与动物**（30 个）：🌈🌸🌺🌻🌲🌳🍀🐱🐶🐭🐹🦊🐻 等
+- **对象与工具**（30 个）：📁📂📄📊📈📉🔧🔨⚙️🖥️💻⌨️🖱️ 等
+- **活动与运动**（20 个）：⚽🏀🏈⚾🎮🎲🎯🎨🎭🎪 等
+
+**替代方案及弊端：**
+
+**方案 A：动态字体渲染（终端模拟器方法）**
+- ✅ 支持无限 Emoji
+- ✅ 自动使用系统 Emoji 字体
+- ❌ 需要集成 FreeType/fontdue/rusttype
+- ❌ 需要实现字形缓存系统
+- ❌ 实现复杂度高
+- ❌ 运行时光栅化有性能开销
+
+**方案 B：完全不支持 Emoji**
+- ✅ 实现最简单
+- ❌ 用户体验差
+- ❌ 无法在 TUI 中使用 Emoji（文本模式可以）
+
+**方案 C：预制 Emoji（当前选择）**
+- ✅ 简单、高效、实用
+- ✅ 覆盖 95%+ 使用场景
+- ⚠️ 仅支持预定义的 Emoji 集
+- ⚠️ 需要手工维护 EMOJI_MAP
 
 ## Risks / Trade-offs
 
