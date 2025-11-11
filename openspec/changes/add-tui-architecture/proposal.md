@@ -10,10 +10,10 @@
 - **文本模式保持不变**：所有精灵和 UI 组件合并到 main buffer，使用统一的瘦高字符和坐标系统
 - **图形模式分层架构**：
   - Main Buffer 专用于 TUI 渲染，使用瘦高字符（1:2，8x16 像素）
-  - Pixel Sprites 用于游戏对象，使用正方形字符（1:1，16x16 像素）
+  - Pixel Sprites 用于游戏对象，使用正方形字符（1:1，8x8 像素）
   - TUI 层永远渲染在最上层，确保界面始终可见
-- **独立符号纹理**：新增 `symbols_tui.png`，布局与 `symbols.png` 相同，但每个 cell 为 8x16 像素
-- **双坐标系统**：鼠标事件同时提供 TUI 坐标（瘦字符）和 Sprite 坐标（胖字符）
+- **统一坐标系统**：鼠标事件按 8 像素宽度计算，水平方向通用，TUI 层垂直方向除以 2
+- **统一符号纹理**：使用 1024x1024 `symbols.png` 包含 TUI（8x16）、Emoji（16x16 彩色）、Sprite（8x8）三个区域
 - **统一渲染管线**：Main Buffer 和 Pixel Sprites 仍合并到 RenderBuffer，保持单次 draw call 性能
 
 ## Impact
@@ -24,7 +24,7 @@
   - `src/render/adapter.rs` - 扩展渲染管线支持分层和 TUI 优先级
   - `src/event/input.rs` - 扩展 MouseEvent 支持双坐标系统
   - `src/render/adapter/*/render_symbols.rs` - 支持 TUI 符号渲染
-  - `assets/pix/symbols_tui.png` - 新增 TUI 专用符号纹理
+  - `assets/pix/symbols.png` - 扩展为 1024x1024 统一纹理（TUI + Emoji + Sprite）
 - Compatibility: 文本模式完全向后兼容；图形模式 TUI 架构始终启用，现有应用继续使用 Pixel Sprites 无影响
 - Migration: 现有应用无需迁移，可继续仅使用 Pixel Sprites；新应用可选择使用 Main Buffer（TUI）进行界面渲染
 

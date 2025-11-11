@@ -20,9 +20,10 @@ pub enum Event {
 pub struct MouseEvent {
     /// The kind of mouse event that was caused.
     pub kind: MouseEventKind,
-    /// The column that the event occurred on.
+    /// The column that the event occurred on (8 pixel width, shared by TUI and Sprite).
     pub column: u16,
-    /// The row that the event occurred on.
+    /// The row that the event occurred on (8 pixel height, Sprite coordinate system).
+    /// For TUI layer, use `row / 2` to convert to 16 pixel height coordinates.
     pub row: u16,
     /// The key modifiers active when the event occurred.
     pub modifiers: KeyModifiers,
