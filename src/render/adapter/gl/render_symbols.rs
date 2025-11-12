@@ -245,24 +245,20 @@ impl GlRenderSymbols {
         let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
         let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
         
-        // Load sprites in block layout (old format)
-        // 8x8 blocks, each block has 16x16 symbols
-        for block_y in 0..8 {
-            for block_x in 0..8 {
-                for sym_y in 0..16 {
-                    for sym_x in 0..16 {
-                        // Calculate absolute pixel position in texture
-                        let pixel_x = (block_x * 16 + sym_x) as f32 * sym_width;
-                        let pixel_y = (block_y * 16 + sym_y) as f32 * sym_height;
-                        
-                        let symbol = self.make_symbols_frame_custom(
-                            &mut sprite_sheet,
-                            pixel_x, pixel_y,
-                            sym_width, sym_height, // All sprites are 8x8
-                        );
-                        self.symbols.push(symbol);
-                    }
-                }
+        // Load sprites in linear row-major order to match push_render_buffer indexing
+        // Texture is 128x128 symbols (each 8x8 pixels)
+        // Total: 16384 symbols in 1024x1024 texture
+        for y in 0..128 {
+            for x in 0..128 {
+                let pixel_x = x as f32 * sym_width;
+                let pixel_y = y as f32 * sym_height;
+                
+                let symbol = self.make_symbols_frame_custom(
+                    &mut sprite_sheet,
+                    pixel_x, pixel_y,
+                    sym_width, sym_height, // All sprites are 8x8
+                );
+                self.symbols.push(symbol);
             }
         }
         
