@@ -627,13 +627,21 @@ impl Graph {
 /// - `rbuf`: Target RenderCell vector to append to
 /// - `fc`: Foreground color as (R,G,B,A) in 0-255 range
 /// - `bgc`: Optional background color
-/// - `texidx`: Texture index in the texture atlas
-/// - `symidx`: Symbol index within the texture
+/// - `texidx`: Texture region identifier (0=TUI, 255=Emoji, 1-254=Sprite)
+/// - `symidx`: Symbol index within the region (0-255 for most, 0-1023 for TUI)
 /// - `s`: Destination rectangle in screen space (pixels). The helper functions
 ///        already apply ratio-based sizing and spacing; this function may derive
 ///        an offset from it to cooperate with backend transform chain.
 /// - `angle`: Rotation angle in degrees (will be converted to radians internally)
 /// - `ccp`: Center point for rotation
+///
+/// # Unified Texture Layout (1024x1024)
+/// - **TUI Region** (rows 0-127): 128 cols × 8 rows = 1024 chars (8x16 pixels each)
+///   - Index range: 0-1023 (linear)
+/// - **Emoji Region** (rows 128-191): 64 cols × 4 rows = 256 emojis (16x16 pixels each)
+///   - Index range: 1024-1279 (linear)
+/// - **Sprite Region** (rows 192-1023): 128 cols × 104 rows = 13312 chars (8x8 pixels each)
+///   - Index range: 1280-14591 (linear)
 pub fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
     fc: &(u8, u8, u8, u8),
@@ -663,6 +671,12 @@ pub fn push_render_buffer(
     } else {
         wc.bcolor = None;
     }
+    
+    // Calculate final texture symbol index based on region
+    //
+    // NOTE: Currently using OLD block-based layout for Sprite region
+    // because symbols.png texture content is still in block layout.
+    // TODO: Update to linear layout once texture is reorganized.
     let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
     let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
     wc.texsym = (y * 16u32 * 8u32 + x) as usize;
@@ -755,6 +769,12 @@ pub fn render_helper_with_scale(
 /// This function calculates texture coordinates for TUI characters (8x16 pixels)
 /// from the unified texture. TUI characters are stored in rows 0-127 of the texture.
 ///
+/// # Unified Texture Layout - TUI Region
+/// - **Location**: Rows 0-127 (top 128 rows)
+/// - **Size**: 128 columns × 8 rows = 1024 characters
+/// - **Character Size**: 8x16 pixels each
+/// - **Index Range**: 0-1023 (linear, row-major order)
+///
 /// # Parameters
 /// - `cell_w`: Width of the buffer in cells
 /// - `r`: Ratio for scaling (x, y)
@@ -764,7 +784,9 @@ pub fn render_helper_with_scale(
 /// - `is_border`: Whether this is a border cell
 ///
 /// # Returns
-/// Tuple of (dest_rect, tex_id, sym_id)
+/// Tuple of (dest_rect, tex_id=0, sym_id)
+/// - tex_id is always 0 to indicate TUI region
+/// - sym_id is the linear index in TUI region (0-1023)
 pub fn render_helper_tui(
     cell_w: u16,
     r: PointF32,
@@ -784,6 +806,28 @@ pub fn render_helper_tui(
     let dest_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
     let dest_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
     
+    // Calculate linear index in TUI region
+    // For compatibility, map old (texidx, symidx) to new linear index
+    let old_texidx = sh.1 as usize;
+    let old_symidx = sh.0 as usize;
+    
+    // If old texidx is 0 or 1 (default texture), use simple mapping
+    // Otherwise, calculate position in the old symbol grid and map to TUI region
+    let linear_idx = if old_texidx <= 1 {
+        // Simple case: first 256 characters map directly to 0-255
+        old_symidx
+    } else {
+        // Complex case: convert old block-based layout to linear
+        let block_x = old_texidx % 8;
+        let block_y = old_texidx / 8;
+        let sym_x = old_symidx % 16;
+        let sym_y = old_symidx / 16;
+        let old_x = block_x * 16 + sym_x;
+        let old_y = block_y * 16 + sym_y;
+        // Map to TUI region (linear index, capped at 1023)
+        (old_y * 128 + old_x).min(1023)
+    };
+    
     (
         // Destination rectangle in the render texture
         ARect {
@@ -792,10 +836,10 @@ pub fn render_helper_tui(
             w: dest_w,
             h: dest_h,
         },
-        // Texture id (always 0 for unified texture)
-        sh.1 as usize,
-        // Symbol id
-        sh.0 as usize,
+        // Texture region id: 0 = TUI region
+        0,
+        // Linear symbol index in TUI region (0-1023)
+        linear_idx,
     )
 }
 

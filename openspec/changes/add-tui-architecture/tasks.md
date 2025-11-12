@@ -8,8 +8,8 @@
   - `column = pixel_x / 8`（8 像素宽度，TUI 和 Sprite 共享）
   - `row = pixel_y / 8`（8 像素高度，Sprite 坐标系）
   - TUI 层使用时：`column_tui = column`, `row_tui = row / 2`
-- [x] 1.4 修改纹理加载逻辑，解析统一纹理（1024x1024），初始化 `PIXEL_SYM_WIDTH=8.0/HEIGHT=8.0`（TUI 使用 WIDTH 和 HEIGHT*2）
-- [x] 1.5 在 `render_helper_tui` 中实现 TUI 区域索引计算（符号索引 0-1023，对应行 0-127）
+- [ ] 1.4 修改纹理加载逻辑，解析统一纹理（1024x1024），初始化 `PIXEL_SYM_WIDTH=8.0/HEIGHT=8.0`（TUI 使用 WIDTH 和 HEIGHT*2）
+- [ ] 1.5 在 `render_helper_tui` 中实现 TUI 区域索引计算（符号索引 0-1023，对应行 0-127）
   - 使用 `PIXEL_SYM_WIDTH` (8px) 和 `PIXEL_SYM_HEIGHT * 2` (16px)
   - 计算公式：`char_x = symidx % 128`, `char_y = symidx / 128`, `pixel_x = char_x * 8`, `pixel_y = char_y * 16`
   - 符号索引 = `symidx`（直接线性索引）

@@ -232,12 +232,12 @@ impl GlRender for GlRenderSymbols {
 }
 
 impl GlRenderSymbols {
-    /// Load symbol texture and create per-symbol frames for unified texture layout
+    /// Load symbol texture and create per-symbol frames
     ///
-    /// Creates frames for three regions in the 1024x1024 unified texture:
-    /// - TUI region (0-1023): 1024 chars, 8x16 pixels, rows 0-127
-    /// - Emoji region (1024-1279): 256 emoji, 16x16 pixels, rows 128-191
-    /// - Sprite region (1280-14591): 13312 sprites, 8x8 pixels, rows 192-1023
+    /// Current layout: 8x8 blocks, each containing 16x16 symbols (8x8 pixels each)
+    /// Total: 128x128 = 16384 sprites in 1024x1024 texture
+    ///
+    /// TODO: Migrate to unified layout with TUI/Emoji/Sprite regions
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
@@ -245,56 +245,29 @@ impl GlRenderSymbols {
         let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
         let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
         
-        // TUI region: 1024 characters (8x16 pixels), rows 0-127
-        // 128 chars per row, 8 rows total
-        for idx in 0..1024 {
-            let char_x = idx % 128;
-            let char_y = idx / 128;
-            let pixel_x = char_x as f32 * sym_width;      // 8 pixels wide
-            let pixel_y = char_y as f32 * sym_height * 2.0; // 16 pixels high
-            
-            let symbol = self.make_symbols_frame_custom(
-                &mut sprite_sheet,
-                pixel_x, pixel_y,
-                sym_width, sym_height * 2.0, // TUI is 8x16
-            );
-            self.symbols.push(symbol);
-        }
-        
-        // Emoji region: 256 emoji (16x16 pixels), rows 128-191
-        // 64 emoji per row, 4 rows total
-        for idx in 0..256 {
-            let emoji_x = idx % 64;
-            let emoji_y = idx / 64;
-            let pixel_x = emoji_x as f32 * sym_width * 2.0;  // 16 pixels wide
-            let pixel_y = 128.0 * sym_height + emoji_y as f32 * sym_height * 2.0; // Start at row 128, 16 pixels high
-            
-            let symbol = self.make_symbols_frame_custom(
-                &mut sprite_sheet,
-                pixel_x, pixel_y,
-                sym_width * 2.0, sym_height * 2.0, // Emoji is 16x16
-            );
-            self.symbols.push(symbol);
-        }
-        
-        // Sprite region: 13312 sprites (8x8 pixels), rows 192-1023
-        // 128 sprites per row, 104 rows total
-        for idx in 0..13312 {
-            let sprite_x = idx % 128;
-            let sprite_y = idx / 128;
-            let pixel_x = sprite_x as f32 * sym_width;      // 8 pixels wide
-            let pixel_y = 192.0 * sym_height + sprite_y as f32 * sym_height; // Start at row 192, 8 pixels high
-            
-            let symbol = self.make_symbols_frame_custom(
-                &mut sprite_sheet,
-                pixel_x, pixel_y,
-                sym_width, sym_height, // Sprite is 8x8
-            );
-            self.symbols.push(symbol);
+        // Load sprites in block layout (old format)
+        // 8x8 blocks, each block has 16x16 symbols
+        for block_y in 0..8 {
+            for block_x in 0..8 {
+                for sym_y in 0..16 {
+                    for sym_x in 0..16 {
+                        // Calculate absolute pixel position in texture
+                        let pixel_x = (block_x * 16 + sym_x) as f32 * sym_width;
+                        let pixel_y = (block_y * 16 + sym_y) as f32 * sym_height;
+                        
+                        let symbol = self.make_symbols_frame_custom(
+                            &mut sprite_sheet,
+                            pixel_x, pixel_y,
+                            sym_width, sym_height, // All sprites are 8x8
+                        );
+                        self.symbols.push(symbol);
+                    }
+                }
+            }
         }
         
         info!(
-            "symbols loaded: {} total (1024 TUI + 256 Emoji + 13312 Sprite)",
+            "symbols loaded: {} sprites (8x8 block layout)",
             self.symbols.len()
         );
         self.base.textures.clear();
@@ -426,11 +399,13 @@ impl GlRenderSymbols {
             if let Some(b) = r.bcolor {
                 let back_color = UnifiedColor::new(b.0, b.1, b.2, b.3);
                 // fill instance buffer for opengl instance rendering
+                // Background uses a solid fill symbol (index 1280 would be a filled block in old layout)
                 self.draw_symbol(gl, 1280, &transform, &back_color);
             }
 
             let color = UnifiedColor::new(r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3);
             // fill instance buffer for opengl instance rendering
+            // r.texsym is calculated by push_render_buffer using block layout formula
             self.draw_symbol(gl, r.texsym, &transform, &color);
         }
         self.draw(gl);
