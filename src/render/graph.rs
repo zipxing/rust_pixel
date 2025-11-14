@@ -937,8 +937,6 @@ where
         // symidx, texidx, fg, bg
         let sh = cell.get_cell_info();
         
-        // Graphics mode: use TUI characters (8x16 pixels, indices 0-1023)
-        #[cfg(graphics_backend)]
         let (s2, texidx, symidx) = render_helper(
             width,
             PointF32 { x: rx, y: ry },
