@@ -672,14 +672,17 @@ pub fn push_render_buffer(
         wc.bcolor = None;
     }
     
-    // Calculate final texture symbol index based on region
+    // Calculate final texture symbol index
     //
-    // NOTE: Currently using OLD block-based layout for Sprite region
-    // because symbols.png texture content is still in block layout.
-    // TODO: Update to linear layout once texture is reorganized.
+    // The texture is traversed in row-major order (128 cols × 128 rows):
+    // - Rows 0-95 (indices 0-12287): 8×8 Sprites (block-based layout)
+    // - Rows 96-127, Cols 0-79 (indices 12288-16383): 8×16 TUI characters
+    // - Rows 96-127, Cols 80-127 (indices 16384-17919): 16×16 Emoji
+    //
+    // For Sprite region (block-based layout for backward compatibility):
     let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
     let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
-    wc.texsym = (y * 16u32 * 8u32 + x) as usize;
+    wc.texsym = (y * 128u32 + x) as usize;
     // Derive the instance anchor from the destination rectangle produced by helper functions.
     //
     // The backend transform chain applies additional translation and ratio-compensation.
@@ -713,8 +716,9 @@ pub fn render_helper(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
+    use_tui: bool,
 ) -> (ARect, usize, usize) {
-    render_helper_with_scale(cell_w, r, i, sh, p, is_border, 1.0, 1.0)
+    render_helper_with_scale(cell_w, r, i, sh, p, is_border, use_tui, 1.0, 1.0)
 }
 
 /// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
@@ -727,11 +731,20 @@ pub fn render_helper_with_scale(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
-    scale_x: f32, // Sprite scaling along X (unitless, 1.0 means no scaling)
-    scale_y: f32, // Sprite scaling along Y (unitless, 1.0 means no scaling)
+    use_tui: bool, // Use TUI characters (8×16) instead of Sprite characters (8×8)
+    scale_x: f32,  // Sprite scaling along X (unitless, 1.0 means no scaling)
+    scale_y: f32,  // Sprite scaling along Y (unitless, 1.0 means no scaling)
 ) -> (ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;  // 8 pixels
-    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32; // 8 pixels
+    // Height depends on character type:
+    // - Sprite: 8 pixels
+    // - TUI: 16 pixels (double height)
+    let h = if use_tui {
+        (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32 // TUI: 16 pixels
+    } else {
+        *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32 // Sprite: 8 pixels
+    };
+    
     let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
     
@@ -847,6 +860,7 @@ where
                 sh,
                 PointU16 { x: px, y: py },
                 false,
+                false,    // Pixel sprites use Sprite characters (8×8)
                 s.scale_x, // 应用sprite的X轴缩放
                 s.scale_y, // 应用sprite的Y轴缩放
             );
@@ -928,8 +942,9 @@ where
 /// - `rx`: Horizontal scaling ratio for display adaptation
 /// - `ry`: Vertical scaling ratio for display adaptation
 /// - `border`: Include border rendering (for windowed modes)
+/// - `use_tui`: Use TUI characters (8×16) instead of Sprite characters (8×8)
 /// - `f`: Callback function to process each character
-pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border: bool, mut f: F)
+pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border: bool, use_tui: bool, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
 {
@@ -937,6 +952,9 @@ where
         // symidx, texidx, fg, bg
         let sh = cell.get_cell_info();
         
+        // Pass use_tui flag directly to render_helper
+        // - false: 8×8 Sprite characters (for pixel sprites, backward compatibility)
+        // - true: 8×16 TUI characters (for UI components)
         let (s2, texidx, symidx) = render_helper(
             width,
             PointF32 { x: rx, y: ry },
@@ -944,6 +962,7 @@ where
             &sh,
             PointU16 { x: 0, y: 0 },
             border,
+            use_tui,
         );
         
         let fc = sh.2.get_rgba();
@@ -1021,6 +1040,7 @@ where
                 rsh,
                 PointU16 { x: 0, y: 0 },
                 true,
+                false, // Border uses Sprite characters (8×8)
             );
             let fc = rsh.2.get_rgba();
             let bc = None;
@@ -1104,6 +1124,7 @@ where
                     y: sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,
                 },
                 false,
+                false, // Logo uses Sprite characters (8×8)
             );
             let fc = Color::Indexed(PIXEL_LOGO[sci * 3 + 1]).get_rgba();
 
@@ -1180,7 +1201,7 @@ pub fn generate_render_buffer(
 
     // render main buffer...
     if stage > LOGO_FRAME {
-        render_main_buffer(cb, width, rx, ry, false, &mut rfunc);
+        render_main_buffer(cb, width, rx, ry, false, false, &mut rfunc);
     }
 
     // render pixel_sprites...
