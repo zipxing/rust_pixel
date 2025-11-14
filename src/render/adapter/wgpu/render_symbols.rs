@@ -150,18 +150,42 @@ impl WgpuSymbolRenderer {
         }
     }
     
+    /// Load symbol texture with support for TUI (8x16) and Emoji (16x16)
+    ///
+    /// Maintains original row-major order for backward compatibility:
+    /// - Indices 0-12287: Rows 0-95, all 8x8 Sprites (original layout preserved)
+    /// - Indices 12288+: Rows 96-127, TUI (8x16) and Emoji (16x16) mixed
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
         self.symbols.clear();
         
-        let th = (texh as f32 / PIXEL_SYM_HEIGHT.get().expect("lazylock init")) as usize;
-        let tw = (texw as f32 / PIXEL_SYM_WIDTH.get().expect("lazylock init")) as usize;
+        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
+        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
         
+        let th = (texh as f32 / sym_height) as usize;  // 128 rows
+        let tw = (texw as f32 / sym_width) as usize;   // 128 cols
+        
+        // Traverse in row-major order (same as original code)
         for i in 0..th {
             for j in 0..tw {
-                let frame = self.make_symbols_frame(
+                let pixel_x = j as f32 * sym_width;
+                let pixel_y = i as f32 * sym_height;
+                
+                // Determine symbol size based on row position
+                let (width, height) = if i < 96 {
+                    // Rows 0-95: Standard 8x8 sprites (indices 0-12287)
+                    (sym_width, sym_height)
+                } else if j < 80 {
+                    // Rows 96-127, Cols 0-79: TUI 8x16 characters
+                    (sym_width, sym_height * 2.0)
+                } else {
+                    // Rows 96-127, Cols 80-127: Emoji 16x16
+                    (sym_width * 2.0, sym_height * 2.0)
+                };
+                
+                let frame = self.make_symbols_frame_custom(
                     texw as f32, texh as f32,
-                    j as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-                    i as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+                    pixel_x, pixel_y,
+                    width, height,
                 );
                 self.symbols.push(frame);
             }
@@ -171,12 +195,12 @@ impl WgpuSymbolRenderer {
     /// Create a symbol frame (equivalent to OpenGL `make_symbols_frame`)
     ///
     /// Packs local width/height, origin, and UV rectangle for a single symbol.
-    fn make_symbols_frame(&self, tex_width: f32, tex_height: f32, x: f32, y: f32) -> WgpuSymbolFrame {
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+    // fn make_symbols_frame(&self, tex_width: f32, tex_height: f32, x: f32, y: f32) -> WgpuSymbolFrame {
+    //     let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+    //     let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
         
-        self.make_symbols_frame_custom(tex_width, tex_height, x, y, sym_width, sym_height)
-    }
+    //     self.make_symbols_frame_custom(tex_width, tex_height, x, y, sym_width, sym_height)
+    // }
     
     /// Create a symbol frame with custom dimensions
     ///
