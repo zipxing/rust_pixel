@@ -150,67 +150,22 @@ impl WgpuSymbolRenderer {
         }
     }
     
-    /// Load symbol texture and create symbol frames for unified texture layout
-    ///
-    /// Creates frames for three regions in the 1024x1024 unified texture:
-    /// - TUI region (0-1023): 1024 chars, 8x16 pixels, rows 0-127
-    /// - Emoji region (1024-1279): 256 emoji, 16x16 pixels, rows 128-191
-    /// - Sprite region (1280-14591): 13312 sprites, 8x8 pixels, rows 192-1023
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
-        
         self.symbols.clear();
         
-        // TUI region: 1024 characters (8x16 pixels), rows 0-127
-        // 128 chars per row, 8 rows total
-        for idx in 0..1024 {
-            let char_x = idx % 128;
-            let char_y = idx / 128;
-            let pixel_x = char_x as f32 * sym_width;      // 8 pixels wide
-            let pixel_y = char_y as f32 * sym_height * 2.0; // 16 pixels high
-            
-            let frame = self.make_symbols_frame_custom(
-                texw as f32, texh as f32,
-                pixel_x, pixel_y,
-                sym_width, sym_height * 2.0, // TUI is 8x16
-            );
-            self.symbols.push(frame);
-        }
+        let th = (texh as f32 / PIXEL_SYM_HEIGHT.get().expect("lazylock init")) as usize;
+        let tw = (texw as f32 / PIXEL_SYM_WIDTH.get().expect("lazylock init")) as usize;
         
-        // Emoji region: 256 emoji (16x16 pixels), rows 128-191
-        // 64 emoji per row, 4 rows total
-        for idx in 0..256 {
-            let emoji_x = idx % 64;
-            let emoji_y = idx / 64;
-            let pixel_x = emoji_x as f32 * sym_width * 2.0;  // 16 pixels wide
-            let pixel_y = 128.0 * sym_height + emoji_y as f32 * sym_height * 2.0; // Start at row 128, 16 pixels high
-            
-            let frame = self.make_symbols_frame_custom(
-                texw as f32, texh as f32,
-                pixel_x, pixel_y,
-                sym_width * 2.0, sym_height * 2.0, // Emoji is 16x16
-            );
-            self.symbols.push(frame);
+        for i in 0..th {
+            for j in 0..tw {
+                let frame = self.make_symbols_frame(
+                    texw as f32, texh as f32,
+                    j as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+                    i as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+                );
+                self.symbols.push(frame);
+            }
         }
-        
-        // Sprite region: 13312 sprites (8x8 pixels), rows 192-1023
-        // 128 sprites per row, 104 rows total
-        for idx in 0..13312 {
-            let sprite_x = idx % 128;
-            let sprite_y = idx / 128;
-            let pixel_x = sprite_x as f32 * sym_width;      // 8 pixels wide
-            let pixel_y = 192.0 * sym_height + sprite_y as f32 * sym_height; // Start at row 192, 8 pixels high
-            
-            let frame = self.make_symbols_frame_custom(
-                texw as f32, texh as f32,
-                pixel_x, pixel_y,
-                sym_width, sym_height, // Sprite is 8x8
-            );
-            self.symbols.push(frame);
-        }
-        
-        // Total symbols: 1024 + 256 + 13312 = 14592
     }
     
     /// Create a symbol frame (equivalent to OpenGL `make_symbols_frame`)

@@ -232,39 +232,31 @@ impl GlRender for GlRenderSymbols {
 }
 
 impl GlRenderSymbols {
-    /// Load symbol texture and create per-symbol frames
-    ///
-    /// Current layout: 8x8 blocks, each containing 16x16 symbols (8x8 pixels each)
-    /// Total: 128x128 = 16384 sprites in 1024x1024 texture
-    ///
-    /// TODO: Migrate to unified layout with TUI/Emoji/Sprite regions
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
         
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
+        let th = (texh as f32 / PIXEL_SYM_HEIGHT.get().expect("lazylock init")) as usize;
+        let tw = (texw as f32 / PIXEL_SYM_WIDTH.get().expect("lazylock init")) as usize;
         
-        // Load sprites in linear row-major order to match push_render_buffer indexing
-        // Texture is 128x128 symbols (each 8x8 pixels)
-        // Total: 16384 symbols in 1024x1024 texture
-        for y in 0..128 {
-            for x in 0..128 {
-                let pixel_x = x as f32 * sym_width;
-                let pixel_y = y as f32 * sym_height;
-                
-                let symbol = self.make_symbols_frame_custom(
+        for i in 0..th {
+            for j in 0..tw {
+                let symbol = self.make_symbols_frame(
                     &mut sprite_sheet,
-                    pixel_x, pixel_y,
-                    sym_width, sym_height, // All sprites are 8x8
+                    j as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init"),
+                    i as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
                 );
                 self.symbols.push(symbol);
             }
         }
         
         info!(
-            "symbols loaded: {} sprites (8x8 block layout)",
-            self.symbols.len()
+            "symbols len...{}, texh={} texw={} th={} tw={}",
+            self.symbols.len(),
+            texh,
+            texw,
+            th,
+            tw
         );
         self.base.textures.clear();
         self.base.textures.push(self.symbols[0].texture);

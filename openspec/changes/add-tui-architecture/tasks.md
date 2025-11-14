@@ -1,21 +1,26 @@
 ## 1. Implementation
 
-- [ ] 1.1 创建或扩展符号纹理为 1024x1024 (`assets/pix/symbols.png`)，包含三个区域：
-  - 行 0-127（128px）：TUI 符号（8x16 瘦高字符，1024 个）
-  - 行 128-191（64px）：预制 Emoji（16x16 彩色图像，256 个）
-  - 行 192-1023（832px）：Sprite 符号（8x8 方形字符，13,312 个）
-- [ ] 1.2 保持所有 adapter 的鼠标事件处理不变（已按 8 像素计算）
+- [ ] 1.1 创建或扩展符号纹理为 1024x1024 (`assets/pix/symbols.png`)，使用 block-based 布局（向后兼容）：
+  - 行 0-767（768px）：Sprite 符号（8x8 方形字符，48 blocks，12,288 个）
+  - 行 768-1023（256px）：TUI + Emoji 符号
+    - Blocks 48-52：TUI（8x16 瘦高字符，5 blocks，1280 个，active: 1024）
+    - Blocks 53-55：Emoji（16x16 彩色图像，3 blocks，384 个，active: 256）
+- [x] 1.2 保持所有 adapter 的鼠标事件处理不变（已按 8 像素计算）
   - `column = pixel_x / 8`（8 像素宽度，TUI 和 Sprite 共享）
   - `row = pixel_y / 8`（8 像素高度，Sprite 坐标系）
   - TUI 层使用时：`column_tui = column`, `row_tui = row / 2`
-- [ ] 1.4 修改纹理加载逻辑，解析统一纹理（1024x1024），初始化 `PIXEL_SYM_WIDTH=8.0/HEIGHT=8.0`（TUI 使用 WIDTH 和 HEIGHT*2）
-- [ ] 1.5 在 `render_helper_tui` 中实现 TUI 区域索引计算（符号索引 0-1023，对应行 0-127）
+- [x] 1.4 修改纹理加载逻辑，解析统一纹理（1024x1024），初始化 `PIXEL_SYM_WIDTH=8.0/HEIGHT=8.0`（TUI 使用 WIDTH 和 HEIGHT*2）
+  - WGPU 和 OpenGL 渲染器的 `load_texture` 已更新为 block-based 布局
+  - Sprite 区域（Block 0-47）：12288 个符号
+  - TUI 区域（Block 48-52）：1280 个符号
+  - Emoji 区域（Block 53-55）：384 个符号
+- [x] 1.5 在 `render_helper_tui` 中实现 TUI 区域索引计算（线性索引 12288-13567，Block 48-52）
   - 使用 `PIXEL_SYM_WIDTH` (8px) 和 `PIXEL_SYM_HEIGHT * 2` (16px)
-  - 计算公式：`char_x = symidx % 128`, `char_y = symidx / 128`, `pixel_x = char_x * 8`, `pixel_y = char_y * 16`
-  - 符号索引 = `symidx`（直接线性索引）
-- [ ] 1.6 在 `cell.rs` 中创建 `EMOJI_MAP: HashMap<String, u16>`，映射常用 Emoji 到纹理索引
-  - 选择 175 个最常用 Emoji（表情、符号、食物、自然、对象等）+ 81 个预留空间
-  - Emoji 索引范围：1024-1279（Emoji 区域）
+  - 线性索引计算：`linear_index = 12288 + (texidx - 48) * 256 + symidx`
+  - 纹理坐标：`pixel_x = (texidx - 48) * 128 + (symidx % 16) * 8`, `pixel_y = 768 + (symidx / 16) * 16`
+- [x] 1.6 在 `cell.rs` 中创建 `EMOJI_MAP: HashMap<String, u16>`，映射常用 Emoji 到纹理索引
+  - 选择 256 个最常用 Emoji（表情、符号、食物、自然、对象等）+ 128 个预留空间
+  - Emoji 索引范围：13568-13951（Emoji 区域，Block 53-55）
   - 实现 `is_prerendered_emoji(symbol: &str) -> bool`
   - 实现 `emoji_texidx(symbol: &str) -> Option<u16>`
 - [ ] 1.7 在 `buffer.rs` 的 `set_stringn` 中实现 Emoji 双宽字符（wcwidth=2）处理
@@ -23,12 +28,14 @@
   - 预制 Emoji：第一格存储 Emoji，第二格设为空白
   - 未预制 Emoji：显示空白占位符，占 2 格
 - [ ] 1.8 在 `graph.rs` 中实现 `render_helper_emoji` 函数
-  - 计算公式：`relative_idx = emoji_idx - 1024`, `emoji_x = (relative_idx % 64) * 16`, `emoji_y = 128 + (relative_idx / 64) * 16`
+  - 线性索引计算：`linear_index = 13568 + (texidx - 53) * 128 + symidx`
+  - 纹理坐标：`pixel_x = (5 + (texidx - 53)) * 128 + (symidx % 8) * 16`, `pixel_y = 768 + (symidx / 8) * 16`
   - Destination 宽度为 `cell_width * 2.0`（占 2 格）
   - Source 尺寸为 16x16 像素
-- [ ] 1.9 在 `render_helper` 中实现 Sprite 区域索引计算（符号索引 1280-14591，对应行 192-1023）
-  - 计算公式：`relative_idx = symidx - 1280`, `char_x = relative_idx % 128`, `char_y = relative_idx / 128`, `pixel_x = char_x * 8`, `pixel_y = 192 + char_y * 8`
-  - 符号索引 = `symidx`（直接线性索引）
+- [x] 1.9 在 `render_helper` 中实现 Sprite 区域索引计算（线性索引 0-12287，Block 0-47，保持不变）
+  - 线性索引计算：`linear_index = texidx * 256 + symidx`（texidx: 0-47）
+  - 纹理坐标：`pixel_x = (texidx % 8) * 128 + (symidx % 16) * 8`, `pixel_y = (texidx / 8) * 128 + (symidx / 16) * 8`
+  - 向后兼容，现有 Sprite 代码无需修改
 - [ ] 1.10 确保 TUI 层（Main Buffer）在渲染顺序上位于所有 Pixel Sprites 之后（最上层）
 - [ ] 1.11 修改 `Cell.get_cell_info()` 方法，将 `Cell.modifier` 信息传递到渲染管线
 - [ ] 1.12 在渲染管线中实现 BOLD 效果（RGB 值乘以 1.3，限制在 1.0 以内）
@@ -52,7 +59,7 @@
 - [ ] 2.5 验证 TUI 字符显示为 8x16 瘦高形状，Sprite 字符显示为 8x8 方形
 - [ ] 2.6 验证预制 Emoji 正确渲染为 16x16 彩色图像，占 2 格宽度
 - [ ] 2.7 验证未预制 Emoji 显示为空白占位符，占 2 格宽度
-- [ ] 2.8 验证 Emoji 映射表正确识别常用 Emoji（175 个 + 81 个预留）
+- [ ] 2.8 验证 Emoji 映射表正确识别常用 Emoji（256 个 active + 128 个预留）
 - [ ] 2.9 验证单次 draw call 性能保持不变
 - [ ] 2.10 验证 BOLD 修饰符在图形模式下正确渲染（颜色强度增强）
 - [ ] 2.11 验证 ITALIC 修饰符在图形模式下正确渲染（字符倾斜）
@@ -68,9 +75,11 @@
 ## 3. Documentation
 
 - [ ] 3.1 更新 `README_UI_FRAMEWORK.md` 说明 TUI 架构设计
-- [ ] 3.2 添加统一符号纹理布局规范文档（TUI、Emoji、Sprite 三区域）
+- [ ] 3.2 添加统一符号纹理布局规范文档（Block-Based 布局：Sprite、TUI、Emoji 三区域）
+  - 说明 Sprite 区域保持不变（向后兼容）
+  - 说明 Block-based 管理的优势（便于编辑器 UI）
 - [ ] 3.3 创建 Emoji 使用指南文档
-  - 说明预制 Emoji 的选择标准（175 个常用 Emoji + 81 个预留）
+  - 说明预制 Emoji 的选择标准（256 个 active + 128 个预留）
   - 列出所有支持的 Emoji 及其分类
   - 说明如何在 TUI 中使用 Emoji
   - 说明未预制 Emoji 的显示行为

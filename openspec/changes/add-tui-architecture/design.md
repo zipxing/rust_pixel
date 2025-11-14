@@ -35,42 +35,48 @@ rust_pixel 目前支持文本模式（终端）和图形模式（SDL/OpenGL/WGPU
 
 **选择：** 使用统一的 1024x1024 `symbols.png` 纹理，包含三个区域：TUI 符号（8x16）、Emoji（16x16 彩色）、Sprite 符号（8x8）
 
-**布局规划：**
+**布局规划（向后兼容设计）：**
 ```
-1024x1024 纹理布局（三区域）：
+1024x1024 纹理布局（Block-Based，Sprite 在前）：
 ┌────────────────────────────────────────┐
-│ TUI 区域（行 0-127）                    │ 128px 高
-│ - 每行 128 个字符 (1024/8)             │
-│ - 8 行，每字符 8x16 像素                │
-│ - 总计 1024 个 TUI 字符                 │
-│ - 符号索引：0-1023                      │
+│ Sprite 区域（行 0-767）                 │ 768px 高
+│ - 6 rows × 8 blocks/row = 48 blocks   │
+│ - 每 block: 16×16 chars, 8×8px each    │
+│ - Block 0-47: 12,288 sprites           │
+│ - 线性索引：0-12287                     │
 ├────────────────────────────────────────┤
-│ Emoji 区域（行 128-191）                │ 64px 高
-│ - 每行 64 个 Emoji (1024/16)           │
-│ - 4 行，每个 Emoji 16x16 像素          │
-│ - 总计 256 个 Emoji                     │
-│ - 符号索引：1024-1279                   │
-├────────────────────────────────────────┤
-│ Sprite 区域（行 192-1023）              │ 832px 高
-│ - 每行 128 个字符 (1024/8)             │
-│ - 104 行，每字符 8x8 像素               │
-│ - 总计 13,312 个 Sprite 字符            │
-│ - 符号索引：1280-14591                  │
+│ TUI + Emoji 区域（行 768-1023）         │ 256px 高
+│ - 8 blocks horizontally                │
+│ - Block 48-51: TUI active (1024 chars) │
+│ - Block 52: TUI reserved (256 chars)   │
+│ - Block 53-54: Emoji active (256 emoji)│
+│ - Block 55: Emoji reserved (128 emoji) │
+│ - TUI 线性索引：12288-13567             │
+│ - Emoji 线性索引：13568-13951           │
 └────────────────────────────────────────┘
 
+Block 规格：
+- Sprite blocks (0-47):  16×16 chars/block, 8×8px each, 256 chars/block
+- TUI blocks (48-52):    16×16 chars/block, 8×16px each, 256 chars/block
+- Emoji blocks (53-55):  8×16 chars/block, 16×16px each, 128 chars/block
+
 符号索引分配总结：
-- 0-1023:      TUI 文本字符（8x16，单色）    - 1024 个
-- 1024-1279:   预制 Emoji（16x16，彩色）     - 256 个
-- 1280-14591:  Sprite 游戏精灵（8x8，单色）  - 13,312 个
+- 0-12287:     Sprite 游戏精灵（8x8，单色）  - 12,288 个（保持不变）
+- 12288-13311: TUI 文本字符（8x16，单色）    - 1024 个（active）
+- 13312-13567: TUI 预留（8x16）              - 256 个（reserved）
+- 13568-13823: 预制 Emoji（16x16，彩色）     - 256 个（active）
+- 13824-13951: Emoji 预留（16x16）           - 128 个（reserved）
 ```
 
 **理由：**
+- **向后兼容**：Sprite 区域保持原有布局不变（索引 0-12287），现有游戏无需修改
 - 单个纹理简化纹理管理，无需多个纹理绑定
+- Block-based 管理便于编辑器 UI 按块选择和管理符号
 - 三个区域明确分离，避免符号索引冲突
-- Emoji 区域容量充足（256 个位置，覆盖常用需求）
+- Emoji 和 TUI 都有预留空间，便于未来扩展
 - 1024x1024 纹理大小适中（1MB），加载快，所有 GPU 都支持
-- TUI 区域位于顶部，便于快速访问常用字符
-- Emoji 紧随 TUI，方便 TUI 模式下的混合渲染
+- Sprite 区域容量充足（12,288 个），满足大型游戏需求
+- TUI + Emoji 放在底部，不影响现有 Sprite 布局
 - 保持高效的 GPU 纹理采样性能
 
 **替代方案：**
@@ -227,37 +233,43 @@ Cell.tex    → 区块索引 (TUI: 0-15, Sprite: 0-223)
            RenderCell.texsym
 ```
 
-**索引计算公式：**
+**索引计算公式（Block-Based）：**
 
-TUI 区域（行 0-127）：
+Sprite 区域（Block 0-47，行 0-767）：
 ```rust
-// 直接线性索引，无需区块概念
-// symidx: 0-1023
-char_x = symidx % 128
-char_y = symidx / 128
-pixel_x = char_x * 8
-pixel_y = char_y * 16
-符号索引 = symidx  // 0-1023
+// 线性索引: 0-12287
+// Block-based layout: 6 rows × 8 blocks/row
+if texidx <= 47 {
+    linear_index = texidx * 256 + symidx
+    block_x = (texidx % 8)
+    block_y = (texidx / 8)
+    pixel_x = block_x * 128 + (symidx % 16) * 8
+    pixel_y = block_y * 128 + (symidx / 16) * 8
+}
 ```
 
-Emoji 区域（行 128-191）：
+TUI 区域（Block 48-52，行 768-1023）：
 ```rust
-// emoji_idx: 1024-1279
-relative_idx = emoji_idx - 1024
-emoji_x = (relative_idx % 64) * 16
-emoji_y = 128 + (relative_idx / 64) * 16
-符号索引 = emoji_idx  // 1024-1279
+// 线性索引: 12288-13567
+// Block-based layout: 5 blocks horizontally
+if texidx >= 48 && texidx <= 52 {
+    linear_index = 12288 + (texidx - 48) * 256 + symidx
+    block_num = texidx - 48  // 0-4
+    pixel_x = block_num * 128 + (symidx % 16) * 8
+    pixel_y = 768 + (symidx / 16) * 16  // TUI is 8x16
+}
 ```
 
-Sprite 区域（行 192-1023）：
+Emoji 区域（Block 53-55，行 768-1023）：
 ```rust
-// symidx: 1280-14591
-relative_idx = symidx - 1280
-char_x = relative_idx % 128
-char_y = relative_idx / 128
-pixel_x = char_x * 8
-pixel_y = 192 + char_y * 8
-符号索引 = symidx  // 1280-14591
+// 线性索引: 13568-13951
+// Block-based layout: 3 blocks horizontally
+if texidx >= 53 && texidx <= 55 {
+    linear_index = 13568 + (texidx - 53) * 128 + symidx
+    block_num = texidx - 53  // 0-2
+    pixel_x = (5 + block_num) * 128 + (symidx % 8) * 16
+    pixel_y = 768 + (symidx / 8) * 16  // Emoji is 16x16
+}
 ```
 
 **理由：**
