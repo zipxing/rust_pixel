@@ -764,85 +764,6 @@ pub fn render_helper_with_scale(
     )
 }
 
-/// TUI-specific render helper for Main Buffer rendering
-///
-/// This function calculates texture coordinates for TUI characters (8x16 pixels)
-/// from the unified texture. TUI characters are stored in rows 0-127 of the texture.
-///
-/// # Unified Texture Layout - TUI Region
-/// - **Location**: Rows 0-127 (top 128 rows)
-/// - **Size**: 128 columns × 8 rows = 1024 characters
-/// - **Character Size**: 8x16 pixels each
-/// - **Index Range**: 0-1023 (linear, row-major order)
-///
-/// # Parameters
-/// - `cell_w`: Width of the buffer in cells
-/// - `r`: Ratio for scaling (x, y)
-/// - `i`: Linear cell index in the buffer
-/// - `sh`: Cell info tuple (symbol_index, tex_index, fg_color, bg_color)
-/// - `p`: Position offset (x, y)
-/// - `is_border`: Whether this is a border cell
-///
-/// # Returns
-/// Tuple of (dest_rect, tex_id=0, sym_id)
-/// - tex_id is always 0 to indicate TUI region
-/// - sym_id is the linear index in TUI region (0-1023)
-pub fn render_helper_tui(
-    cell_w: u16,
-    r: PointF32,
-    i: usize,
-    sh: &(u8, u8, Color, Color),
-    p: PointU16,
-    is_border: bool,
-) -> (ARect, usize, usize) {
-    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;  // 8 pixels (same as Sprite)
-    let h = (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32; // 16 pixels (double Sprite height)
-    let dstx = i as u16 % cell_w;
-    let dsty = i as u16 / cell_w;
-    
-    // Destination rectangle (TUI uses 8x16 cells)
-    let dest_w = (w as f32 / r.x) as u32;
-    let dest_h = (h as f32 / r.y) as u32;
-    let dest_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
-    let dest_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
-    
-    // Calculate linear index in TUI region
-    // For compatibility, map old (texidx, symidx) to new linear index
-    let old_texidx = sh.1 as usize;
-    let old_symidx = sh.0 as usize;
-    
-    // If old texidx is 0 or 1 (default texture), use simple mapping
-    // Otherwise, calculate position in the old symbol grid and map to TUI region
-    let linear_idx = if old_texidx <= 1 {
-        // Simple case: first 256 characters map directly to 0-255
-        old_symidx
-    } else {
-        // Complex case: convert old block-based layout to linear
-        let block_x = old_texidx % 8;
-        let block_y = old_texidx / 8;
-        let sym_x = old_symidx % 16;
-        let sym_y = old_symidx / 16;
-        let old_x = block_x * 16 + sym_x;
-        let old_y = block_y * 16 + sym_y;
-        // Map to TUI region (linear index, capped at 1023)
-        (old_y * 128 + old_x).min(1023)
-    };
-    
-    (
-        // Destination rectangle in the render texture
-        ARect {
-            x: dest_x as i32 + p.x as i32,
-            y: dest_y as i32 + p.y as i32,
-            w: dest_w,
-            h: dest_h,
-        },
-        // Texture region id: 0 = TUI region
-        0,
-        // Linear symbol index in TUI region (0-1023)
-        linear_idx,
-    )
-}
-
 /// Render pixel sprites with rotation and transformation support
 ///
 /// This function processes individual sprite objects and converts them to renderable
@@ -1018,17 +939,6 @@ where
         
         // Graphics mode: use TUI characters (8x16 pixels, indices 0-1023)
         #[cfg(graphics_backend)]
-        let (s2, texidx, symidx) = render_helper_tui(
-            width,
-            PointF32 { x: rx, y: ry },
-            i,
-            &sh,
-            PointU16 { x: 0, y: 0 },
-            border,
-        );
-        
-        // Terminal mode: use standard helper (will be ignored in terminal rendering)
-        #[cfg(not(graphics_backend))]
         let (s2, texidx, symidx) = render_helper(
             width,
             PointF32 { x: rx, y: ry },
