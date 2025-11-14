@@ -1200,8 +1200,9 @@ pub fn generate_render_buffer(
     render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
     // render main buffer...
+    // Use TUI characters (8×16) for UI components in graphics mode
     if stage > LOGO_FRAME {
-        render_main_buffer(cb, width, rx, ry, false, false, &mut rfunc);
+        render_main_buffer(cb, width, rx, ry, false, true, &mut rfunc);
     }
 
     // render pixel_sprites...
