@@ -136,6 +136,7 @@ def detect_grid_and_draw_boxes(img_path, output_path, config):
             
             # 绘制红框
             draw.rectangle([left, top, right, bottom], outline="red", width=1)
+            print([left, top, right, bottom])
     
     # 保存输出
     img.save(output_path)

@@ -9,9 +9,9 @@ import numpy as np
 import os
 
 # ---------------- 配置（只需改这里） ----------------
-BASE_DIR = "./data"
-IMG_PATH = f"{BASE_DIR}/source.png"      # 原始整张字符表
-OUTPUT_PATH = f"{BASE_DIR}/debug_boxes.png"
+BASE_DIR = "./"
+IMG_PATH = f"{BASE_DIR}/tui.png"      # 原始整张字符表
+OUTPUT_PATH = f"{BASE_DIR}/tui_debug_boxes.png"
 
 # 列检测参数（亮度最亮的竖线作为分隔）
 BAR_PERCENTILE = 1.0
@@ -104,7 +104,7 @@ for (L, R) in columns:
         # clamp
         t = max(0, t)
         b = min(H - 1, b)
-        # print([L + XADJ, t, R - XADJ, b])
+        print([L + XADJ, t, R - XADJ, b])
         draw.rectangle([L + XADJ, t, R - XADJ, b], outline="red", width=1)
         # break
 
