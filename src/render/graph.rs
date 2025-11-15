@@ -112,8 +112,12 @@ pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 ///
 /// # Returns
 /// Width of a single symbol
+///
+/// Calculates the width of a single 8x8 sprite cell based on texture dimensions.
+/// The texture is organized as a 128x128 grid (128 columns × 128 rows).
 pub fn init_sym_width(width: u32) -> f32 {
-    width as f32 / (16.0 * 8.0)
+    const TEXTURE_GRID_SIZE: f32 = 128.0;
+    width as f32 / TEXTURE_GRID_SIZE
 }
 
 /// Calculate the height of a single symbol (in pixels) based on the full texture height
@@ -123,8 +127,12 @@ pub fn init_sym_width(width: u32) -> f32 {
 ///
 /// # Returns
 /// Height of a single symbol
+///
+/// Calculates the height of a single 8x8 sprite cell based on texture dimensions.
+/// The texture is organized as a 128x128 grid (128 columns × 128 rows).
 pub fn init_sym_height(height: u32) -> f32 {
-    height as f32 / (16.0 * 8.0)
+    const TEXTURE_GRID_SIZE: f32 = 128.0;
+    height as f32 / TEXTURE_GRID_SIZE
 }
 
 /// Logo display width (in characters)

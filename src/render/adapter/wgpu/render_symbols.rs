@@ -161,8 +161,12 @@ impl WgpuSymbolRenderer {
         let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
         let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
         
-        let th = (texh as f32 / sym_height) as usize;  // 128 rows
-        let tw = (texw as f32 / sym_width) as usize;   // 128 cols
+        let th = (texh as f32 / sym_height) as usize;  // Grid rows (e.g., 128)
+        let tw = (texw as f32 / sym_width) as usize;   // Grid cols (e.g., 128)
+        
+        // Layout constants (based on 1024x1024 texture with 128x128 grid)
+        const SPRITE_ROWS: usize = 96;  // Rows 0-95 for sprites
+        const TUI_COLS: usize = 80;     // Cols 0-79 for TUI in rows 96+
         
         // Traverse in row-major order (same as original code)
         for i in 0..th {
@@ -171,10 +175,10 @@ impl WgpuSymbolRenderer {
                 let pixel_y = i as f32 * sym_height;
                 
                 // Determine symbol size based on row position
-                let (width, height) = if i < 96 {
+                let (width, height) = if i < SPRITE_ROWS {
                     // Rows 0-95: Standard 8x8 sprites (indices 0-12287)
                     (sym_width, sym_height)
-                } else if j < 80 {
+                } else if j < TUI_COLS {
                     // Rows 96-127, Cols 0-79: TUI 8x16 characters
                     (sym_width, sym_height * 2.0)
                 } else {
