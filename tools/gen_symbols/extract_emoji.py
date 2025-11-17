@@ -20,6 +20,8 @@ EMOJI2_PATH = os.path.join(SCRIPT_DIR, "emoji2.png")
 # 输出路径
 OUTPUT1_PATH = os.path.join(SCRIPT_DIR, "emoji1_debug_boxes.png")
 OUTPUT2_PATH = os.path.join(SCRIPT_DIR, "emoji2_debug_boxes.png")
+OUTPUT1_DIR = os.path.join(SCRIPT_DIR, "emoji1")
+OUTPUT2_DIR = os.path.join(SCRIPT_DIR, "emoji2")
 
 # ============ Emoji1 参数 ============
 EMOJI1_CONFIG = {
@@ -91,13 +93,14 @@ def get_cell_bounds(row, col, config):
     return left, top, right, bottom
 
 
-def detect_grid_and_draw_boxes(img_path, output_path, config):
+def detect_grid_and_draw_boxes(img_path, output_path, output_dir, config):
     """
-    使用参数化配置绘制红框网格
+    使用参数化配置绘制红框网格并提取 emoji
     
     Args:
         img_path: 输入图片路径
-        output_path: 输出图片路径
+        output_path: 调试图输出路径
+        output_dir: emoji 输出目录
         config: 配置字典
     """
     print(f"\n处理图片: {os.path.basename(img_path)}")
@@ -115,10 +118,16 @@ def detect_grid_and_draw_boxes(img_path, output_path, config):
     print(f"    间距: 列={config['COL_GAP']}, 行={config['ROW_GAP']}")
     print(f"    内边距: {config['INNER_PADDING']}")
     
+    # 创建输出目录
+    os.makedirs(output_dir, exist_ok=True)
+    
     # 创建绘图对象
     draw = ImageDraw.Draw(img)
     
-    # 绘制每个单元格的红框
+    emoji_id = 0
+    skipped_count = 0
+    
+    # 先行后列遍历
     for row in range(config['NUM_ROWS']):
         for col in range(config['NUM_COLS']):
             left, top, right, bottom = get_cell_bounds(row, col, config)
@@ -132,17 +141,31 @@ def detect_grid_and_draw_boxes(img_path, output_path, config):
             # 确保边界有效（clamp 后可能导致问题）
             if right < left or bottom < top:
                 print(f"  警告: 跳过无效单元格 ({row}, {col}): [{left}, {top}, {right}, {bottom}]")
+                skipped_count += 1
                 continue
             
-            # 绘制红框
-            draw.rectangle([left, top, right, bottom], outline="red", width=1)
-            print([left, top, right, bottom])
+            print(f"[{emoji_id:04d}] 行={row+1}, 列={col+1}, 边界=[{left}, {top}, {right}, {bottom}]")
+            
+            # 提取这个矩形区域的图像
+            emoji_img = img.crop((left, top, right + 1, bottom + 1))
+            
+            # 保存为单独的文件
+            emoji_output = os.path.join(output_dir, f"{emoji_id:04d}.png")
+            emoji_img.save(emoji_output)
+            
+            # 绘制绿框
+            draw.rectangle([left, top, right, bottom], outline="green", width=1)
+            
+            emoji_id += 1
     
-    # 保存输出
+    # 保存调试图
     img.save(output_path)
-    print(f"  ✓ 已保存: {output_path}")
+    print(f"  ✓ 调试图已保存: {output_path}")
+    print(f"  ✓ 提取了 {emoji_id} 个 emoji 到: {output_dir}/")
+    if skipped_count > 0:
+        print(f"  ✓ 跳过了 {skipped_count} 个无效单元格")
     
-    return config['CELL_WIDTH'], config['CELL_HEIGHT']
+    return config['CELL_WIDTH'], config['CELL_HEIGHT'], emoji_id
 
 
 def main():
@@ -160,16 +183,18 @@ def main():
         return
     
     # 处理 emoji1.png
-    cell_w1, cell_h1 = detect_grid_and_draw_boxes(
+    cell_w1, cell_h1, count1 = detect_grid_and_draw_boxes(
         EMOJI1_PATH, 
-        OUTPUT1_PATH, 
+        OUTPUT1_PATH,
+        OUTPUT1_DIR,
         EMOJI1_CONFIG
     )
     
     # 处理 emoji2.png
-    cell_w2, cell_h2 = detect_grid_and_draw_boxes(
+    cell_w2, cell_h2, count2 = detect_grid_and_draw_boxes(
         EMOJI2_PATH, 
-        OUTPUT2_PATH, 
+        OUTPUT2_PATH,
+        OUTPUT2_DIR,
         EMOJI2_CONFIG
     )
     
@@ -177,18 +202,22 @@ def main():
     print("✓ 完成！")
     print("="*60)
     print(f"\n生成的文件:")
-    print(f"  - {OUTPUT1_PATH}")
-    print(f"  - {OUTPUT2_PATH}")
+    print(f"  - {OUTPUT1_PATH} (调试图)")
+    print(f"  - {OUTPUT2_PATH} (调试图)")
+    print(f"  - {OUTPUT1_DIR}/ (提取的 emoji)")
+    print(f"  - {OUTPUT2_DIR}/ (提取的 emoji)")
     print(f"\n单元格尺寸:")
     print(f"  emoji1.png: {cell_w1} x {cell_h1}")
     print(f"  emoji2.png: {cell_w2} x {cell_h2}")
-    print(f"\n请检查红框是否正确对齐 emoji 符号。")
-    print(f"如果不对齐，请调整脚本顶部的配置参数：")
+    print(f"\n提取统计:")
+    print(f"  emoji1: {count1} 个")
+    print(f"  emoji2: {count2} 个")
+    print(f"  总计: {count1 + count2} 个")
+    print(f"\n如果绿框不对齐，请调整脚本顶部的配置参数：")
     print(f"  - START_X, START_Y: 左上角起始坐标")
     print(f"  - CELL_WIDTH, CELL_HEIGHT: 单元格尺寸")
     print(f"  - COL_GAP, ROW_GAP: 列间距、行间距")
     print(f"  - INNER_PADDING: 内边距（红框内缩）")
-    print(f"\n对齐正确后，可以使用这些参数来提取 emoji。")
 
 
 if __name__ == "__main__":
