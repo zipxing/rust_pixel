@@ -21,7 +21,7 @@ OUTPUT_DIR = os.path.join(SCRIPT_DIR, "tui")
 TUI_CONFIG = {
     'NUM_ROWS': 16,           # 总行数
     'NUM_COLS': 18,           # 总列数
-    'START_X': 11,            # 左上角起始 X 坐标
+    'START_X': 12,            # 左上角起始 X 坐标
     'START_Y': 5,             # 左上角起始 Y 坐标
     'CELL_WIDTH': 42,         # 单元格宽度
     'CELL_HEIGHT': 82,        # 单元格高度
