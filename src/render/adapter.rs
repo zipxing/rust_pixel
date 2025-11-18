@@ -33,8 +33,8 @@
 //! ### 📁 Improved Code Organization
 //!
 //! ```text
+//! src/render/adapter.rs         # This file - adapter definitions
 //! src/render/adapter/
-//! ├── mod.rs                    # This file - adapter definitions
 //! ├── cross_adapter.rs          # Terminal rendering (crossterm)
 //! ├── sdl_adapter.rs            # SDL2 + OpenGL desktop rendering  
 //! ├── web_adapter.rs            # WebGL browser rendering
@@ -47,7 +47,7 @@
 //!
 //! ## 🔄 Unified Rendering Pipeline
 //!
-//! All graphics adapters now share a common rendering flow:
+//! All rendering adapters now share a common rendering flow:
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
@@ -306,12 +306,7 @@ impl AdapterBase {
             cell_w: 0,
             cell_h: 0,
             rd: Rand::new(),
-            #[cfg(any(
-                feature = "sdl",
-                feature = "winit",
-                feature = "wgpu",
-                target_arch = "wasm32"
-            ))]
+            #[cfg(graphics_mode)]
             gr: Graph::new(),
         }
     }
@@ -625,7 +620,7 @@ pub trait Adapter {
     /// │  │   (Transitions & FX)    │    - Overlays                  │
     /// │  │   - Screen transitions  │    - Post-processing           │
     /// │  │   - Visual effects      │    - Special effects           │
-    /// │  │   - Overlays           │                                 │
+    /// │  │   - Overlays            │                                │
     /// │  └─────────────────────────┘                                │
     /// │      ▲                                                      │
     /// │      │                                                      │
