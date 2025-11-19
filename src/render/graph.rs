@@ -874,15 +874,15 @@ where
             );
             let x = i % pw as usize;
             let y = i / pw as usize;
-    // Center point for rotation — matching the scaled position.
-    // Since we scaled both symbol size and spacing, the rotation center must scale accordingly.
+            // Center point for rotation — matching the scaled position.
+            // Since we scaled both symbol size and spacing, the rotation center must scale accordingly.
             let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
             let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
 
             let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
             let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
 
-    // Apply the same scaling to the rotation center offset
+            // Apply the same scaling to the rotation center offset
             let ccp = PointI32 {
                 x: (original_offset_x * s.scale_x) as i32,
                 y: (original_offset_y * s.scale_y) as i32,

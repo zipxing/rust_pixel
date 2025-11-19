@@ -8,9 +8,12 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_exdata, timer_stage},
     game::Render,
-    render::panel::Panel,
-    render::sprite::Sprite,
-    render::style::Color,
+    render::{
+        adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
+        panel::Panel,
+        sprite::Sprite,
+        style::Color,
+    },
 };
 
 pub struct TetrisRender {
@@ -22,19 +25,19 @@ impl TetrisRender {
         let mut t = Panel::new();
 
         let tsback = Sprite::new(0, 0, 35, 24);
-        t.add_sprite(tsback, "back");
+        t.add_pixel_sprite(tsback, "back");
 
-        let l0 = Sprite::new(1, 2, HENG, ZONG);
-        t.add_sprite(l0, "grid0");
+        let l0 = Sprite::new(0, 0, HENG, ZONG);
+        t.add_pixel_sprite(l0, "grid0");
 
-        let l1 = Sprite::new(24, 2, HENG, ZONG);
-        t.add_sprite(l1, "grid1");
+        let l1 = Sprite::new(0, 0, HENG, ZONG);
+        t.add_pixel_sprite(l1, "grid1");
 
-        let l2 = Sprite::new(13, 8, 4, 4);
-        t.add_sprite(l2, "next");
+        let l2 = Sprite::new(0, 0, 4, 4);
+        t.add_pixel_sprite(l2, "next");
 
-        let l3 = Sprite::new(17, 8, 4, 4);
-        t.add_sprite(l3, "hold");
+        let l3 = Sprite::new(0, 0, 4, 4);
+        t.add_pixel_sprite(l3, "hold");
 
         event_register("Tetris.RedrawNext", "redraw_next");
         event_register("Tetris.RedrawHold", "redraw_hold");
@@ -60,7 +63,7 @@ impl TetrisRender {
 
         let fg: Color;
 
-        let l = self.panel.get_sprite(sname);
+        let l = self.panel.get_pixel_sprite(sname);
 
         match c {
             0 => {
@@ -195,9 +198,39 @@ impl Render for TetrisRender {
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context.adapter.init(35, 24, 0.5, 0.5, "tetris".to_string());
         self.panel.init(context);
-        let l = self.panel.get_sprite("back");
+        let l = self.panel.get_pixel_sprite("back");
         let bp = "back.pix";
         asset2sprite!(l, context, &bp);
+
+        // Init sprites position
+        let rx = context.adapter.get_base().gr.ratio_x;
+        let ry = context.adapter.get_base().gr.ratio_y;
+        let sym_w = PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_h = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+
+        let l0 = self.panel.get_pixel_sprite("grid0");
+        l0.set_pos(
+            (1.0 * sym_w / rx) as u16,
+            (2.0 * sym_h / ry) as u16,
+        );
+
+        let l1 = self.panel.get_pixel_sprite("grid1");
+        l1.set_pos(
+            (24.0 * sym_w / rx) as u16,
+            (2.0 * sym_h / ry) as u16,
+        );
+
+        let l2 = self.panel.get_pixel_sprite("next");
+        l2.set_pos(
+            (13.0 * sym_w / rx) as u16,
+            (8.0 * sym_h / ry) as u16,
+        );
+
+        let l3 = self.panel.get_pixel_sprite("hold");
+        l3.set_pos(
+            (17.0 * sym_w / rx) as u16,
+            (8.0 * sym_h / ry) as u16,
+        );
     }
 
     fn draw(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
