@@ -200,7 +200,7 @@ impl Render for PetviewRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
-            .init(PETW + 2, PETH, 0.4, 0.4, "petview".to_string());
+            .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
 
         let p1 = self.panel.get_pixel_sprite("petimg1");

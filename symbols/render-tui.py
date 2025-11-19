@@ -27,9 +27,9 @@ TUI_HEIGHT = 80
 TUI_FONT_NAME = "DroidSansMono Nerd Font"
 TUI_FONT_SIZE = 64  # 调整以适应 8x16
 
-EMOJI_SIZE = 80
+EMOJI_SIZE = 64
 EMOJI_FONT_NAME = "Apple Color Emoji"
-EMOJI_FONT_SIZE = 80  # 调整以适应 16x16
+EMOJI_FONT_SIZE = 64  # 调整以适应 16x16
 # ------------------------------------------
 
 
