@@ -60,6 +60,7 @@ use crate::{
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
+use log::info;
 use std::sync::OnceLock;
 
 /// Symbol texture file path
@@ -998,7 +999,18 @@ pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border:
 where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
 {
+    let mut skip_next = false;
     for (i, cell) in buf.content.iter().enumerate() {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        // Skip rendering blank cells (optimization for empty buffers)
+        // if cell.is_blank() {
+        //     continue;
+        // }
+
         // symidx, texidx, fg, bg
         let mut sh = cell.get_cell_info();
         
@@ -1017,12 +1029,15 @@ where
                 sh.1 = 48;
                 sh.0 = 0;
             }
+            if cell.is_blank() {
+                info!("sh....{} {}", sh.0, sh.1);
+            }
         }
         
         // Pass use_tui flag directly to render_helper
         // - false: 8×8 Sprite characters (for pixel sprites, backward compatibility)
         // - true: 8×16 TUI characters (for UI components)
-        let (s2, texidx, symidx) = render_helper(
+        let (mut s2, texidx, symidx) = render_helper(
             width,
             PointF32 { x: rx, y: ry },
             i,
@@ -1031,6 +1046,20 @@ where
             border,
             use_tui,
         );
+
+        // Handle Emoji rendering in TUI mode
+        // Emoji (Block >= 53) are 16x16 source (32x32 in 2048 texture),
+        // while TUI chars are 8x16 source (16x32 in 2048 texture).
+        // render_helper calculated s2 based on TUI height (32px) and width (16px).
+        // For Emoji, we need double width (32px) to maintain 1:1 aspect ratio.
+        // We also skip the next cell rendering to avoid overlap/artifacts.
+        if use_tui && texidx >= 53 {
+            s2.w *= 2;
+            // Only skip next if we are not at the end of a row
+            if (i + 1) % width as usize != 0 {
+                skip_next = true;
+            }
+        }
         
         let fc = sh.2.get_rgba();
         let bc = if sh.3 != Color::Reset {

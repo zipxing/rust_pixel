@@ -193,7 +193,7 @@ lazy_static! {
             "♣♥♦░▒▓▙▟▛▜⚆⚇⚈⚉",
             "◐◑◓◒▴▾◂▸←↑→↓⭠⭡⭢⭣",
             "⠁⠂⠄⠈⠐⠠⡀⢀█▉▊▋▌▍▎▏",
-            "█▇▆▅▄▃▂ │║┃─═━┐╮",
+            "█▇▆▅▄▃▂▁│║┃─═━┐╮",
             "╗┓┌╭╔┏┘╯╝┛└╰╚┗┤╣",
             "┫├╠┣┬╦┳┴╩┻┼╬╋≋"
         );
@@ -294,10 +294,22 @@ impl Cell {
     ///
     /// sym_index, texture_index, fg_color, bg_color
     pub fn get_cell_info(&self) -> CellInfo {
+        //// Handle empty symbol (should be treated as space)
+        // if self.symbol.is_empty() {
+        //     return (32, 0, self.fg, self.bg); // Space character
+        // }
+        
         // Check for Emoji first
         if let Some((block, idx)) = EMOJI_MAP.get(&self.symbol) {
             return (*idx, *block, self.fg, self.bg);
         }
+        
+        // For Sprite texture (tex=0), handle space character specially
+        // CELL_SYM_MAP maps space to index 33, but in Sprite texture it should be 32
+        if self.tex == 0 && self.symbol == " " {
+            return (32, 0, self.fg, self.bg);
+        }
+        
         (symidx(&self.symbol), self.tex, self.fg, self.bg)
     }
 
