@@ -23,11 +23,11 @@
   - Emoji 索引范围：13568-13951（Emoji 区域，Block 53-55）
   - 实现 `is_prerendered_emoji(symbol: &str) -> bool`
   - 实现 `emoji_texidx(symbol: &str) -> Option<u16>`
-- [ ] 1.7 在 `buffer.rs` 的 `set_stringn` 中实现 Emoji 双宽字符（wcwidth=2）处理
+- [x] 1.7 在 `buffer.rs` 的 `set_stringn` 中实现 Emoji 双宽字符（wcwidth=2）处理
   - 使用 `unicode-width` 检测字符宽度
   - 预制 Emoji：第一格存储 Emoji，第二格设为空白
   - 未预制 Emoji：显示空白占位符，占 2 格
-- [ ] 1.8 在 `graph.rs` 中实现 `render_helper_emoji` 函数
+- [x] 1.8 在 `graph.rs` 中实现 `render_helper_emoji` 函数
   - 线性索引计算：`linear_index = 13568 + (texidx - 53) * 128 + symidx`
   - 纹理坐标：`pixel_x = (5 + (texidx - 53)) * 128 + (symidx % 8) * 16`, `pixel_y = 768 + (symidx / 8) * 16`
   - Destination 宽度为 `cell_width * 2.0`（占 2 格）
@@ -36,7 +36,7 @@
   - 线性索引计算：`linear_index = texidx * 256 + symidx`（texidx: 0-47）
   - 纹理坐标：`pixel_x = (texidx % 8) * 128 + (symidx % 16) * 8`, `pixel_y = (texidx / 8) * 128 + (symidx / 16) * 8`
   - 向后兼容，现有 Sprite 代码无需修改
-- [ ] 1.10 确保 TUI 层（Main Buffer）在渲染顺序上位于所有 Pixel Sprites 之后（最上层）
+- [x] 1.10 确保 TUI 层（Main Buffer）在渲染顺序上位于所有 Pixel Sprites 之后（最上层）
 - [ ] 1.11 修改 `Cell.get_cell_info()` 方法，将 `Cell.modifier` 信息传递到渲染管线
 - [ ] 1.12 在渲染管线中实现 BOLD 效果（RGB 值乘以 1.3，限制在 1.0 以内）
 - [ ] 1.13 在渲染管线中实现 DIM 效果（Alpha 值乘以 0.6）
@@ -47,8 +47,8 @@
 - [ ] 1.18 在顶点着色器中实现 ITALIC 效果（倾斜变换）
 - [ ] 1.19 在片段着色器中实现 UNDERLINED（底部线条）、CROSSED_OUT（中间线条）效果
 - [ ] 1.20 验证 UI 组件鼠标事件处理（水平直接使用 column，垂直使用 row / 2）
-- [ ] 1.21 在 `apps/ui_demo` 中验证 TUI 架构，测试 TUI 界面、Emoji 和游戏精灵的混合渲染和交互
-- [ ] 1.22 确保 TUI 架构始终启用，支持应用自由选择使用 Main Buffer（TUI）或仅使用 Pixel Sprites
+- [x] 1.21 在 `apps/ui_demo` 中验证 TUI 架构，测试 TUI 界面、Emoji 和游戏精灵的混合渲染和交互
+- [x] 1.22 确保 TUI 架构始终启用，支持应用自由选择使用 Main Buffer（TUI）或仅使用 Pixel Sprites
 
 ## 2. Testing
 

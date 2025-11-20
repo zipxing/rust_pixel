@@ -1,6 +1,6 @@
 use crate::model::{UiDemoModel, UI_DEMO_HEIGHT, UI_DEMO_WIDTH};
 use log::info;
-use rust_pixel::{context::Context, game::Render, render::panel::Panel, render::sprite::Sprite};
+use rust_pixel::{context::Context, game::Render, render::panel::Panel};
 
 pub struct UiDemoRender {
     pub panel: Panel,
@@ -31,12 +31,6 @@ impl Render for UiDemoRender {
 
         // Initialize the panel to cover the full screen
         self.panel.init(ctx);
-
-        // Add a UI sprite to the pixel layer
-        let mut ui_sprite = Sprite::new(0, 0, UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16);
-        // Test UI scaling - you can change this scale factor to test different scales
-        ui_sprite.set_scale(0.5); // Scale UI to 150%
-        self.panel.add_layer_sprite(ui_sprite, "pixel", "UI");
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _model: &mut UiDemoModel, _dt: f32) {
@@ -57,9 +51,8 @@ impl Render for UiDemoRender {
         let buffer = self.panel.current_buffer_mut();
         buffer.reset();
 
-        // Get the UI sprite and render UI directly into its content buffer (zero-copy)
-        let ui_sprite = self.panel.get_layer_sprite("pixel", "UI");
-        let _ = model.ui_app.render_into(&mut ui_sprite.content);
+        // Render UI directly into the main buffer (TUI mode)
+        let _ = model.ui_app.render_into(buffer);
 
         // Draw to screen
         let _ = self.panel.draw(ctx);

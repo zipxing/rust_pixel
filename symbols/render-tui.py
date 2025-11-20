@@ -64,21 +64,20 @@ def parse_tui_txt(filepath):
     tui_lines = lines[start_idx:separator_idx]
     emoji_lines = lines[separator_idx + 1:]
     
-    # 解析 TUI 字符（用 | 分隔）
-    # 注意：连续的 || 表示 | 字符本身
+    # 解析 TUI 字符
+    # 之前用 | 分隔，现在紧密排列
     tui_chars = []
+    
+    # 强制在第一个位置添加空格 (Index 0)
+    tui_chars.append(' ')
+    
     for line in tui_lines:
         line = line.strip()
         if line:
-            # 按 | 分割
-            parts = line.split('|')
-            for i, part in enumerate(parts):
-                if part:  # 非空字符串
-                    tui_chars.append(part)
-                elif i > 0 and i < len(parts) - 1:
-                    # 空字符串且不在开头/结尾，说明是 || 表示的 | 字符
-                    tui_chars.append('|')
-    
+            # 直接按字符解析
+            for char in line:
+                tui_chars.append(char)
+                
     print(f"  ✓ 解析到 {len(tui_chars)} 个 TUI 字符")
     
     # 解析 Emoji

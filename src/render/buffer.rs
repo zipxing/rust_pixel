@@ -51,7 +51,7 @@
 //!
 #[allow(unused_imports)]
 use crate::{
-    render::cell::{cellsym, Cell},
+    render::cell::{cellsym, is_prerendered_emoji, Cell},
     render::style::{Color, Style},
     util::Rect,
 };
@@ -262,16 +262,37 @@ impl Buffer {
                 break;
             }
 
+            // Handle Emoji (which might be single width in unicode-width but we want double width for rendering)
+            // OR handle actual double width characters.
+            // Our Emoji are pre-rendered as 16x16 (2x1 grid cells).
+            // We check if it's a pre-rendered Emoji.
+            let is_emoji = is_prerendered_emoji(s);
+            
             self.content[index].set_symbol(s);
             self.content[index].set_style(style);
             self.content[index].set_texture(tex);
 
+            // If it's an Emoji, it occupies 2 cells visually (16px width).
+            // Even if `unicode-width` says it's width 1 (some emojis are), we force it to take 2 cells
+            // if it is in our pre-rendered map.
+            // However, `unicode-width` usually reports 2 for emojis.
+            // The critical part is clearing the *next* cell so it doesn't overlap.
+            
             // Reset following cells if multi-width (they would be hidden by the grapheme),
-            for i in index + 1..index + width {
-                self.content[i].reset();
+            // For Emoji, we ensure it clears at least one extra cell if it's width 1 but we treat as 2?
+            // Actually, let's stick to `width` from unicode-width for now, assuming it's correct (usually 2 for Emoji).
+            // BUT, if `is_emoji` is true, we might want to enforce width=2 behavior for our grid.
+            
+            let effective_width = if is_emoji { 2 } else { width };
+
+            for i in index + 1..index + effective_width {
+                if i < self.content.len() {
+                    self.content[i].reset();
+                }
             }
-            index += width;
-            x_offset += width;
+            
+            index += effective_width;
+            x_offset += effective_width;
         }
         (x_offset as u16, y)
     }

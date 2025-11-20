@@ -56,7 +56,7 @@
 //! RustPixel uses a unified symbol texture to render characters and graphic elements:
 
 use crate::{
-    render::{buffer::Buffer, sprite::Sprites, style::Color, AdapterBase},
+    render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -688,9 +688,51 @@ pub fn push_render_buffer(
     // - Rows 96-127, Cols 80-127 (indices 16384-17919): 16×16 Emoji
     //
     // For Sprite region (block-based layout for backward compatibility):
-    let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
-    let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
-    wc.texsym = (y * 128u32 + x) as usize;
+    if texidx >= 53 {
+        // Emoji blocks (53-55)
+        // Block 53: Cols 80-95
+        // Block 54: Cols 96-111
+        // Block 55: Cols 112-127
+        // Base row is 96
+        let col_offset = 80 + (texidx - 53) * 16;
+        let row_offset = 96;
+        
+        // Each Emoji is 16x16px (2x2 grid units of 8x8px)
+        // symidx is 0-127 (128 chars per block)
+        // In block: 8 cols * 16 rows
+        let r = symidx / 8;
+        let c = symidx % 8;
+        
+        let grid_col = col_offset + c * 2;
+        let grid_row = row_offset + r * 2;
+        
+        wc.texsym = grid_row * 128 + grid_col;
+    } else if texidx >= 48 {
+        // TUI blocks (48-52)
+        // Block 48: Cols 0-15
+        // ...
+        // Block 52: Cols 64-79
+        // Base row is 96
+        let col_offset = (texidx - 48) * 16;
+        let row_offset = 96;
+        
+        // Each TUI char is 8x16px (1x2 grid units)
+        // symidx is 0-255 (256 chars per block)
+        // In block: 16 cols * 16 rows
+        let r = symidx / 16;
+        let c = symidx % 16;
+        
+        let grid_col = col_offset + c;
+        let grid_row = row_offset + r * 2;
+        
+        wc.texsym = grid_row * 128 + grid_col;
+    } else {
+        // Sprite blocks (0-47)
+        // 16x16 chars/block, 8x8px each (1x1 grid unit)
+        let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
+        let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
+        wc.texsym = (y * 128u32 + x) as usize;
+    }
     // Derive the instance anchor from the destination rectangle produced by helper functions.
     //
     // The backend transform chain applies additional translation and ratio-compensation.
@@ -958,7 +1000,24 @@ where
 {
     for (i, cell) in buf.content.iter().enumerate() {
         // symidx, texidx, fg, bg
-        let sh = cell.get_cell_info();
+        let mut sh = cell.get_cell_info();
+        
+        // If we are in TUI mode (use_tui = true) and the texture is set to 0 (default),
+        // redirect it to the TUI block (Block 48).
+        // Texture 0 is normally the first block of Sprites.
+        // Texture 48 is the first block of TUI characters (which includes ASCII).
+        if use_tui && sh.1 == 0 {
+            // Use TUI specific mapping
+            // Because TUI texture layout is different from standard ASCII or Sprite layout
+            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
+                sh.1 = block;
+                sh.0 = idx;
+            } else {
+                // Fallback to Block 48, Index 0 (Space) if not found
+                sh.1 = 48;
+                sh.0 = 0;
+            }
+        }
         
         // Pass use_tui flag directly to render_helper
         // - false: 8×8 Sprite characters (for pixel sprites, backward compatibility)
