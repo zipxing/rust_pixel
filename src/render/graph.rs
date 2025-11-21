@@ -88,22 +88,22 @@ use std::sync::OnceLock;
 /// ```
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
-/// Symbol width (in pixels) resolved from the symbol atlas (8 pixels)
+/// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
 ///
 /// Initialized exactly once during adapter initialization. Accessing this
 /// before initialization will panic with "lazylock init".
 ///
-/// Note: Both Sprite and TUI layers use the same width (8 pixels).
+/// Note: Both Sprite and TUI layers use the same width (16 pixels).
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
-/// Symbol height (in pixels) resolved from the symbol atlas (8 pixels for Sprite)
+/// Symbol height (in pixels) resolved from the symbol atlas (16 pixels for Sprite)
 ///
 /// Initialized exactly once during adapter initialization. Accessing this
 /// before initialization will panic with "lazylock init".
 ///
-/// Note: 
-/// - Sprite layer: uses this value directly (8 pixels)
-/// - TUI layer: uses double this value (16 pixels = PIXEL_SYM_HEIGHT * 2)
+/// Note:
+/// - Sprite layer: uses this value directly (16 pixels)
+/// - TUI layer: uses double this value (32 pixels = PIXEL_SYM_HEIGHT * 2)
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
 /// Calculate the width of a single symbol (in pixels) based on the full texture width
@@ -514,7 +514,6 @@ pub struct Graph {
     /// being directly drawn to screen. Used for external access to
     /// rendering data (e.g., Python FFI, WASM exports).
     pub rbuf: Vec<RenderCell>,
-    // pixel_renderer field removed - all adapters now use direct renderers
 }
 
 impl Graph {
@@ -530,7 +529,6 @@ impl Graph {
             ratio_y: 1.0,
             rflag: true,
             rbuf: Vec::new(),
-            // pixel_renderer field removed - all adapters now use direct renderers
         }
     }
 
@@ -680,7 +678,7 @@ pub fn push_render_buffer(
     } else {
         wc.bcolor = None;
     }
-    
+
     // Calculate final texture symbol index
     //
     // The texture is traversed in row-major order (128 cols × 128 rows):
@@ -697,16 +695,16 @@ pub fn push_render_buffer(
         // Base row is 96
         let col_offset = 80 + (texidx - 53) * 16;
         let row_offset = 96;
-        
+
         // Each Emoji is 16x16px (2x2 grid units of 8x8px)
         // symidx is 0-127 (128 chars per block)
         // In block: 8 cols * 16 rows
         let r = symidx / 8;
         let c = symidx % 8;
-        
+
         let grid_col = col_offset + c * 2;
         let grid_row = row_offset + r * 2;
-        
+
         wc.texsym = grid_row * 128 + grid_col;
     } else if texidx >= 48 {
         // TUI blocks (48-52)
@@ -716,16 +714,16 @@ pub fn push_render_buffer(
         // Base row is 96
         let col_offset = (texidx - 48) * 16;
         let row_offset = 96;
-        
+
         // Each TUI char is 8x16px (1x2 grid units)
         // symidx is 0-255 (256 chars per block)
         // In block: 16 cols * 16 rows
         let r = symidx / 16;
         let c = symidx % 16;
-        
+
         let grid_col = col_offset + c;
         let grid_row = row_offset + r * 2;
-        
+
         wc.texsym = grid_row * 128 + grid_col;
     } else {
         // Sprite blocks (0-47)
@@ -782,23 +780,23 @@ pub fn render_helper_with_scale(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     is_border: bool,
-    use_tui: bool, // Use TUI characters (8×16) instead of Sprite characters (8×8)
+    use_tui: bool, // Use TUI characters (16×32) instead of Sprite characters (16×16)
     scale_x: f32,  // Sprite scaling along X (unitless, 1.0 means no scaling)
     scale_y: f32,  // Sprite scaling along Y (unitless, 1.0 means no scaling)
 ) -> (ARect, usize, usize) {
-    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;  // 8 pixels
-    // Height depends on character type:
-    // - Sprite: 8 pixels
-    // - TUI: 16 pixels (double height)
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32; // 16 pixels
+                                                                   // Height depends on character type:
+                                                                   // - Sprite: 16 pixels
+                                                                   // - TUI: 32 pixels (double height)
     let h = if use_tui {
-        (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32 // TUI: 16 pixels
+        (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32 // TUI: 32 pixels
     } else {
-        *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32 // Sprite: 8 pixels
+        *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32 // Sprite: 16 pixels
     };
-    
+
     let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
-    
+
     let tx = sh.1 as usize;
 
     // Apply per-sprite scaling to the destination render area
@@ -880,15 +878,7 @@ pub fn render_helper_with_scale(
 pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
 where
     // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
-    F: FnMut(
-        &(u8, u8, u8, u8),
-        &Option<(u8, u8, u8, u8)>,
-        ARect,
-        usize,
-        usize,
-        f64,
-        PointI32,
-    ),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32),
 {
     // sort by render_weight...
     pixel_spt.update_render_index();
@@ -911,7 +901,7 @@ where
                 sh,
                 PointU16 { x: px, y: py },
                 false,
-                false,    // Pixel sprites use Sprite characters (8×8)
+                false,     // Pixel sprites use Sprite characters (8×8)
                 s.scale_x, // 应用sprite的X轴缩放
                 s.scale_y, // 应用sprite的Y轴缩放
             );
@@ -995,8 +985,15 @@ where
 /// - `border`: Include border rendering (for windowed modes)
 /// - `use_tui`: Use TUI characters (8×16) instead of Sprite characters (8×8)
 /// - `f`: Callback function to process each character
-pub fn render_main_buffer<F>(buf: &Buffer, width: u16, rx: f32, ry: f32, border: bool, use_tui: bool, mut f: F)
-where
+pub fn render_main_buffer<F>(
+    buf: &Buffer,
+    width: u16,
+    rx: f32,
+    ry: f32,
+    border: bool,
+    use_tui: bool,
+    mut f: F,
+) where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
 {
     let mut skip_next = false;
@@ -1006,14 +1003,9 @@ where
             continue;
         }
 
-        // Skip rendering blank cells (optimization for empty buffers)
-        // if cell.is_blank() {
-        //     continue;
-        // }
-
         // symidx, texidx, fg, bg
         let mut sh = cell.get_cell_info();
-        
+
         // If we are in TUI mode (use_tui = true) and the texture is set to 0 (default),
         // redirect it to the TUI block (Block 48).
         // Texture 0 is normally the first block of Sprites.
@@ -1029,11 +1021,11 @@ where
                 sh.1 = 48;
                 sh.0 = 0;
             }
-            if cell.is_blank() {
-                info!("sh....{} {}", sh.0, sh.1);
-            }
+            // if cell.is_blank() {
+            //     info!("sh....{} {}", sh.0, sh.1);
+            // }
         }
-        
+
         // Pass use_tui flag directly to render_helper
         // - false: 8×8 Sprite characters (for pixel sprites, backward compatibility)
         // - true: 8×16 TUI characters (for UI components)
@@ -1060,8 +1052,15 @@ where
                 skip_next = true;
             }
         }
+
+        // For Emoji, use white color (no color modulation) to preserve original colors
+        // For TUI/Sprite characters, use the cell's foreground color
+        let fc = if use_tui && texidx >= 53 {
+            (255, 255, 255, 255)  // White - no color modulation for Emoji
+        } else {
+            sh.2.get_rgba()
+        };
         
-        let fc = sh.2.get_rgba();
         let bc = if sh.3 != Color::Reset {
             Some(sh.3.get_rgba())
         } else {
@@ -1305,14 +1304,9 @@ pub fn generate_render_buffer(
     if stage > LOGO_FRAME {
         for item in ps {
             if item.is_pixel && !item.is_hidden {
-                render_pixel_sprites(
-                    item,
-                    rx,
-                    ry,
-                    |fc, bc, s2, texidx, symidx, angle, ccp| {
-                        push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
-                    },
-                );
+                render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
+                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
+                });
             }
         }
     }

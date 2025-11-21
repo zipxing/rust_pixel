@@ -158,11 +158,11 @@ impl WgpuSymbolRenderer {
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
         self.symbols.clear();
         
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
+        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
         
-        let th = (texh as f32 / sym_height) as usize;  // Grid rows (e.g., 128)
-        let tw = (texw as f32 / sym_width) as usize;   // Grid cols (e.g., 128)
+        let th = (texh as f32 / sym_height) as usize;  // Grid rows (e.g., 128 for 2048/16)
+        let tw = (texw as f32 / sym_width) as usize;   // Grid cols (e.g., 128 for 2048/16)
         
         // Layout constants (based on 1024x1024 texture with 128x128 grid)
         const SPRITE_ROWS: usize = 96;  // Rows 0-95 for sprites
@@ -265,14 +265,22 @@ impl WgpuSymbolRenderer {
                 -r.cy + r.h as f32,
             );
             
-            // Apply scaling based on RenderCell dimensions vs default symbol size.
+            // Apply scaling based on RenderCell dimensions vs actual frame size.
             // This preserves per-sprite scaling beyond DPI ratio adjustments.
+            // IMPORTANT: Use frame dimensions (not PIXEL_SYM_WIDTH/HEIGHT) because
+            // TUI (16x32) and Emoji (32x32) have different sizes than Sprite (16x16).
             let cell_width = r.w as f32;
             let cell_height = r.h as f32;
-            let default_width = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let default_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
             
-            transform.scale(cell_width / default_width / ratio_x, cell_height / default_height / ratio_y);
+            // Get the actual frame to determine its dimensions
+            let frame = &self.symbols[r.texsym];
+            let frame_width = frame.width / ratio_x;
+            let frame_height = frame.height / ratio_y;
+            
+            let scale_x = cell_width / frame_width / ratio_x;
+            let scale_y = cell_height / frame_height / ratio_y;
+            
+            transform.scale(scale_x, scale_y);
             
             // Draw background if it exists
             if let Some(b) = r.bcolor {
@@ -307,17 +315,19 @@ impl WgpuSymbolRenderer {
             // a1: [origin_x, origin_y, uv_left, uv_top]
             a1: [frame.origin_x, frame.origin_y, frame.uv_left, frame.uv_top],
             
-            // a2: [uv_width, uv_height, m00*width, m10*height]
+            // a2: [uv_width, uv_height, m00*width, m10*width]
+            // Matrix column 1: both m00 and m10 multiply by width
             a2: [
                 frame.uv_width, 
                 frame.uv_height,
                 transform.m00 * frame.width,
-                transform.m10 * frame.height
+                transform.m10 * frame.width  // Fixed: was * frame.height
             ],
             
-            // a3: [m01*width, m11*height, m20, m21]
+            // a3: [m01*height, m11*height, m20, m21]
+            // Matrix column 2: both m01 and m11 multiply by height
             a3: [
-                transform.m01 * frame.width,
+                transform.m01 * frame.height,  // Fixed: was * frame.width
                 transform.m11 * frame.height,
                 transform.m20,
                 transform.m21

@@ -207,8 +207,8 @@ struct VertexInput {
 // Instance input (per-symbol data, matches OpenGL layout)
 struct InstanceInput {
     @location(1) a1: vec4<f32>,  // origin_x, origin_y, uv_left, uv_top
-    @location(2) a2: vec4<f32>,  // uv_width, uv_height, m00*width, m10*height
-    @location(3) a3: vec4<f32>,  // m01*width, m11*height, m20, m21
+    @location(2) a2: vec4<f32>,  // uv_width, uv_height, m00*width, m10*width
+    @location(3) a3: vec4<f32>,  // m01*height, m11*height, m20, m21
     @location(4) color: vec4<f32>, // r, g, b, a
 }
 

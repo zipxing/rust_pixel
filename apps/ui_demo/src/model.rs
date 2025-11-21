@@ -73,7 +73,7 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
         .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
     
     // Step 1: Label (working)
-    let test_label = Label::new("Hello RustPixel UI Framework!")
+    let test_label = Label::new("│─llo RustPixel UI Framework!")
         .with_style(Style::default().fg(Color::Yellow).bg(Color::Black));
     left_panel.add_child(Box::new(test_label));
     

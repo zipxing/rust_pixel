@@ -347,9 +347,9 @@ impl GlRenderSymbols {
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = transform.m00 * frame.width;
         self.instance_buffer_at += 1;
-        instance_buffer[self.instance_buffer_at as usize] = transform.m10 * frame.height;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m10 * frame.width;  // Fixed: was * frame.height
         self.instance_buffer_at += 1;
-        instance_buffer[self.instance_buffer_at as usize] = transform.m01 * frame.width;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m01 * frame.height;  // Fixed: was * frame.width
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = transform.m11 * frame.height;
         self.instance_buffer_at += 1;
@@ -399,14 +399,19 @@ impl GlRenderSymbols {
                 -r.cy + r.h as f32,
             );
             
-            // Apply scaling based on RenderCell dimensions vs default symbol size.
+            // Apply scaling based on RenderCell dimensions vs actual frame size.
             // This preserves per-sprite scaling beyond DPI ratio adjustments.
+            // IMPORTANT: Use frame dimensions (not PIXEL_SYM_WIDTH/HEIGHT) because
+            // TUI (16x32) and Emoji (32x32) have different sizes than Sprite (16x16).
             let cell_width = r.w as f32;
             let cell_height = r.h as f32;
-            let default_width = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let default_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
             
-            transform.scale(cell_width / default_width / ratio_x, cell_height / default_height / ratio_y);
+            // Get the actual frame to determine its dimensions
+            let frame = &self.symbols[r.texsym];
+            let frame_width = frame.width / ratio_x;
+            let frame_height = frame.height / ratio_y;
+            
+            transform.scale(cell_width / frame_width / ratio_x, cell_height / frame_height / ratio_y);
             
             // Note: If Y-axis coordinate origin differences need correction,
             // use an additional scale of (1.0, -1.0) here and adjust translation
