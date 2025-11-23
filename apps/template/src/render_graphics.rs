@@ -106,7 +106,7 @@ impl Render for TemplateRender {
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context
             .adapter
-            .init(TEMPLATEW + 2, TEMPLATEH, 0.5, 0.5, "template".to_string());
+            .init(TEMPLATEW, TEMPLATEH, 0.5, 0.5, "template".to_string());
         self.create_sprites(context, data);
         self.panel.init(context);
     }

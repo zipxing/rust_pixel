@@ -60,7 +60,7 @@ use crate::{
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
-use log::info;
+// use log::info;
 use std::sync::OnceLock;
 
 /// Symbol texture file path
@@ -502,6 +502,12 @@ pub struct Graph {
     /// across different screen resolutions.
     pub ratio_y: f32,
 
+    /// Whether to use TUI character height (32px) instead of Sprite height (16px)
+    ///
+    /// - true: Use TUI characters for UI components (double height)
+    /// - false: Use Sprite characters for pixel art (single height)
+    pub use_tui_height: bool,
+
     /// Render flag controlling immediate vs buffered rendering
     ///
     /// - true: Direct rendering to screen (normal mode)
@@ -521,12 +527,14 @@ impl Graph {
     ///
     /// Initializes all graphics mode related data structures and rendering state.
     /// Render flag defaults to true (direct rendering to screen).
+    /// TUI height mode defaults to false (using Sprite character height).
     pub fn new() -> Self {
         Self {
             pixel_w: 0,
             pixel_h: 0,
             ratio_x: 1.0,
             ratio_y: 1.0,
+            use_tui_height: false,
             rflag: true,
             rbuf: Vec::new(),
         }
@@ -554,6 +562,17 @@ impl Graph {
         self.ratio_y = ry;
     }
 
+    /// Set whether to use TUI character height mode
+    ///
+    /// TUI mode uses double height characters (32px) suitable for UI components.
+    /// Non-TUI mode uses standard sprite height (16px) suitable for pixel art.
+    ///
+    /// # Parameters
+    /// - `use_tui`: true for TUI mode (double height), false for Sprite mode (standard height)
+    pub fn set_use_tui_height(&mut self, use_tui: bool) {
+        self.use_tui_height = use_tui;
+    }
+
     /// Calculate and set pixel dimensions based on current settings
     ///
     /// Calculates actual pixel width and height based on cell count, symbol dimensions
@@ -565,15 +584,23 @@ impl Graph {
     ///
     /// # Calculation Formula
     /// ```text
-    /// pixel_w = (cell_w + 2) * symbol_width / ratio_x
-    /// pixel_h = (cell_h + 2) * symbol_height / ratio_y
+    /// pixel_w = cell_w * symbol_width / ratio_x
+    /// pixel_h = cell_h * symbol_height * height_multiplier / ratio_y
     /// ```
-    /// Where +2 reserves space for borders
+    /// Where:
+    /// - No border space is added (uses OS window decoration instead)
+    /// - height_multiplier = 2.0 for TUI mode (32px), 1.0 for Sprite mode (16px)
     pub fn set_pixel_size(&mut self, cell_w: u16, cell_h: u16) {
-        self.pixel_w = ((cell_w + 2) as f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init")
-            / self.ratio_x) as u32;
-        self.pixel_h = ((cell_h + 2) as f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init")
-            / self.ratio_y) as u32;
+        let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+        
+        // Calculate window size without border space
+        self.pixel_w = (cell_w as f32 * sym_width / self.ratio_x) as u32;
+        
+        // Use TUI character height (double sprite height) if use_tui_height is true
+        // Otherwise use standard Sprite character height
+        let height_multiplier = if self.use_tui_height { 2.0 } else { 1.0 };
+        self.pixel_h = (cell_h as f32 * sym_height * height_multiplier / self.ratio_y) as u32;
     }
 
     /// Get single character cell width (pixels)
@@ -764,10 +791,9 @@ pub fn render_helper(
     i: usize,
     sh: &(u8, u8, Color, Color),
     p: PointU16,
-    is_border: bool,
     use_tui: bool,
 ) -> (ARect, usize, usize) {
-    render_helper_with_scale(cell_w, r, i, sh, p, is_border, use_tui, 1.0, 1.0)
+    render_helper_with_scale(cell_w, r, i, sh, p, use_tui, 1.0, 1.0)
 }
 
 /// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
@@ -779,7 +805,6 @@ pub fn render_helper_with_scale(
     i: usize,
     sh: &(u8, u8, Color, Color),
     p: PointU16,
-    is_border: bool,
     use_tui: bool, // Use TUI characters (16×32) instead of Sprite characters (16×16)
     scale_x: f32,  // Sprite scaling along X (unitless, 1.0 means no scaling)
     scale_y: f32,  // Sprite scaling along Y (unitless, 1.0 means no scaling)
@@ -804,8 +829,9 @@ pub fn render_helper_with_scale(
     let scaled_h = (h as f32 / r.y * scale_y) as u32;
 
     // Apply position scaling: scale both symbol size and spacing to avoid overlaps
-    let base_x = (dstx + if is_border { 0 } else { 1 }) as f32 * (w as f32 / r.x);
-    let base_y = (dsty + if is_border { 0 } else { 1 }) as f32 * (h as f32 / r.y);
+    // No border offset needed - content starts at (0,0)
+    let base_x = dstx as f32 * (w as f32 / r.x);
+    let base_y = dsty as f32 * (h as f32 / r.y);
 
     let scaled_x = base_x * scale_x;
     let scaled_y = base_y * scale_y;
@@ -900,7 +926,6 @@ where
                 i,
                 sh,
                 PointU16 { x: px, y: py },
-                false,
                 false,     // Pixel sprites use Sprite characters (8×8)
                 s.scale_x, // 应用sprite的X轴缩放
                 s.scale_y, // 应用sprite的Y轴缩放
@@ -990,7 +1015,6 @@ pub fn render_main_buffer<F>(
     width: u16,
     rx: f32,
     ry: f32,
-    border: bool,
     use_tui: bool,
     mut f: F,
 ) where
@@ -1035,7 +1059,6 @@ pub fn render_main_buffer<F>(
             i,
             &sh,
             PointU16 { x: 0, y: 0 },
-            border,
             use_tui,
         );
 
@@ -1134,7 +1157,6 @@ where
                 n * (cell_w as usize + 2) + m,
                 rsh,
                 PointU16 { x: 0, y: 0 },
-                true,
                 false, // Border uses Sprite characters (8×8)
             );
             let fc = rsh.2.get_rgba();
@@ -1218,7 +1240,6 @@ where
                     x: spw as u16 / 2 - (PIXEL_LOGO_WIDTH as f32 / 2.0 * symw) as u16,
                     y: sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,
                 },
-                false,
                 false, // Logo uses Sprite characters (8×8)
             );
             let fc = Color::Indexed(PIXEL_LOGO[sci * 3 + 1]).get_rgba();
@@ -1290,14 +1311,14 @@ pub fn generate_render_buffer(
         push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
     };
 
-    // render windows border, for sdl, winit and wgpu mode
-    #[cfg(graphics_backend)]
-    render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
+    // No custom border rendering - use OS window decoration instead
+    // #[cfg(graphics_backend)]
+    // render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
     // render main buffer...
     // Use TUI characters (8×16) for UI components in graphics mode
     if stage > LOGO_FRAME {
-        render_main_buffer(cb, width, rx, ry, false, true, &mut rfunc);
+        render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
     }
 
     // render pixel_sprites...

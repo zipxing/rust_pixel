@@ -207,7 +207,8 @@ impl Adapter for SdlAdapter {
             .window(&self.base.title, self.base.gr.pixel_w, self.base.gr.pixel_h)
             .opengl()
             .position_centered()
-            .borderless()
+            // Use OS window decoration (title bar, etc.) instead of borderless
+            // .borderless()
             // .fullscreen()
             .build()
             .map_err(|e| e.to_string())
@@ -276,10 +277,15 @@ impl Adapter for SdlAdapter {
                 }
             }
             for event in ses {
-                // sdl window is borderless, we draw the title and border ourselves
-                // processing mouse events such as dragging of borders, close, etc.
-                if self.drag_window(&event) {
-                    return true;
+                // Using OS window decoration, no need for custom drag/close handling
+                // Just check for quit events
+                match event {
+                    SEvent::Quit { .. } => return true,
+                    SEvent::KeyDown {
+                        keycode: Some(SKeycode::Q),
+                        ..
+                    } => return true,
+                    _ => {}
                 }
             }
             ::std::thread::sleep(timeout);
@@ -294,13 +300,13 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Sprites>,
         stage: u32,
     ) -> Result<(), String> {
-        // process window draging move...
-        sdl_move_win(
-            &mut self.drag.need,
-            self.sdl_window.as_mut().unwrap(),
-            self.drag.dx,
-            self.drag.dy,
-        );
+        // No custom window dragging needed (using OS window decoration)
+        // sdl_move_win(
+        //     &mut self.drag.need,
+        //     self.sdl_window.as_mut().unwrap(),
+        //     self.drag.dx,
+        //     self.drag.dy,
+        // );
 
         self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
         self.post_draw();
@@ -499,14 +505,10 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> 
         _ => {}
     }
     if let Some(mut mc) = mcte {
+        // Convert pixel coordinates to cell coordinates
+        // No border offset needed (using OS window decoration)
         mc.column /= (sym_width / adjx) as u16;
         mc.row /= (sym_height / adjy) as u16;
-        if mc.column >= 1 {
-            mc.column -= 1;
-        }
-        if mc.row >= 1 {
-            mc.row -= 1;
-        }
         return Some(Event::Mouse(mc));
     }
     None

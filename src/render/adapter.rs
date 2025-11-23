@@ -575,7 +575,7 @@ pub trait Adapter {
         };
 
         // Use Sprite characters (8×8) for pixel sprite buffers (backward compatibility)
-        render_main_buffer(cb, cb.area.width, rx, ry, false, false, &mut rfunc);
+        render_main_buffer(cb, cb.area.width, rx, ry, false, &mut rfunc);
 
         rbuf
     }

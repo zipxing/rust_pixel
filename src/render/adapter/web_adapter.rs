@@ -302,16 +302,12 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
         }
     }
     if let Some(mut mc) = mcte {
+        // Convert pixel coordinates to cell coordinates
+        // No border offset needed (using OS window decoration)
         mc.column /= (sym_width / ratiox) as u16;
         // adjust row by upper space
         mc.row -= 800 - pixel_h as u16;
         mc.row /= (sym_height / ratioy) as u16;
-        if mc.column >= 1 {
-            mc.column -= 1;
-        }
-        if mc.row >= 1 {
-            mc.row -= 1;
-        }
         return Some(Event::Mouse(mc));
     }
     None

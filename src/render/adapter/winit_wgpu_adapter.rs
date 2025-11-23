@@ -479,7 +479,7 @@ impl WinitWgpuAdapter {
         let window_attributes = winit::window::Window::default_attributes()
             .with_title(&params.title)
             .with_inner_size(window_size)
-            .with_decorations(false) // No border, consistent with SDL version
+            .with_decorations(true) // Use OS window decoration (title bar, etc.)
             .with_resizable(false);
 
         let window = Arc::new(

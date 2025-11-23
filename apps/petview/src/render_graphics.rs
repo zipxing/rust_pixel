@@ -199,8 +199,9 @@ impl Render for PetviewRender {
     type Model = PetviewModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
+        // No border space needed (using OS window decoration)
         ctx.adapter
-            .init(PETW + 2, PETH, 1.0, 1.0, "petview".to_string());
+            .init(PETW, PETH, 1.0, 1.0, "petview".to_string());
         self.panel.init(ctx);
 
         let p1 = self.panel.get_pixel_sprite("petimg1");

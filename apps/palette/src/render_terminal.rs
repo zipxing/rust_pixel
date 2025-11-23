@@ -643,7 +643,7 @@ impl Render for PaletteRender {
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context
             .adapter
-            .init(PALETTEW + 2, PALETTEH, 1.0, 1.0, "palette".to_string());
+            .init(PALETTEW, PALETTEH, 1.0, 1.0, "palette".to_string());
         self.panel.init(context);
         self.draw_menu(context, data);
 

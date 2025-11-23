@@ -99,7 +99,7 @@ impl Render for ColorblkRender {
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context
             .adapter
-            .init(COLORBLKW + 2, COLORBLKH, 0.5, 0.5, "colorblk".to_string());
+            .init(COLORBLKW, COLORBLKH, 0.5, 0.5, "colorblk".to_string());
         self.create_sprites(context, data);
         self.panel.init(context);
     }
