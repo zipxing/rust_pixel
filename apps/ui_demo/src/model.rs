@@ -6,8 +6,8 @@ use rust_pixel::render::style::{Color, Style};
 use rust_pixel::util::Rect;
 use log::info;
 
-pub const UI_DEMO_WIDTH: usize = 100;
-pub const UI_DEMO_HEIGHT: usize = 30;
+pub const UI_DEMO_WIDTH: usize = 80;
+pub const UI_DEMO_HEIGHT: usize = 24;
 
 // Model - handles UI state and logic
 pub struct UiDemoModel {

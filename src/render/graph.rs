@@ -825,16 +825,17 @@ pub fn render_helper_with_scale(
     let tx = sh.1 as usize;
 
     // Apply per-sprite scaling to the destination render area
-    let scaled_w = (w as f32 / r.x * scale_x) as u32;
-    let scaled_h = (h as f32 / r.y * scale_y) as u32;
+    // Use round() to align to pixel boundaries and avoid sub-pixel rendering artifacts
+    let scaled_w = (w as f32 / r.x * scale_x).round() as u32;
+    let scaled_h = (h as f32 / r.y * scale_y).round() as u32;
 
     // Apply position scaling: scale both symbol size and spacing to avoid overlaps
     // No border offset needed - content starts at (0,0)
     let base_x = dstx as f32 * (w as f32 / r.x);
     let base_y = dsty as f32 * (h as f32 / r.y);
 
-    let scaled_x = base_x * scale_x;
-    let scaled_y = base_y * scale_y;
+    let scaled_x = (base_x * scale_x).round();
+    let scaled_y = (base_y * scale_y).round();
 
     (
         // Destination rectangle in the render texture (with sprite scaling applied

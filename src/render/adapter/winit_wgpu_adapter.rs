@@ -206,21 +206,25 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                 }
 
                 // Convert keyboard events to RustPixel events
-                let winit_event = WinitEvent::WindowEvent {
-                    window_id: _window_id,
-                    event: WindowEvent::KeyboardInput {
-                        device_id: winit::event::DeviceId::dummy(),
-                        event: key_event,
-                        is_synthetic: false,
-                    },
-                };
-                if let Some(pixel_event) = input_events_from_winit(
-                    &winit_event,
-                    self.ratio_x,
-                    self.ratio_y,
-                    &mut self.cursor_position,
-                ) {
-                    self.pending_events.push(pixel_event);
+                unsafe {
+                    let adapter = &*self.adapter_ref;
+                    let winit_event = WinitEvent::WindowEvent {
+                        window_id: _window_id,
+                        event: WindowEvent::KeyboardInput {
+                            device_id: winit::event::DeviceId::dummy(),
+                            event: key_event,
+                            is_synthetic: false,
+                        },
+                    };
+                    if let Some(pixel_event) = input_events_from_winit(
+                        &winit_event,
+                        self.ratio_x,
+                        self.ratio_y,
+                        adapter.base.gr.use_tui_height,
+                        &mut self.cursor_position,
+                    ) {
+                        self.pending_events.push(pixel_event);
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -267,6 +271,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                             &winit_event,
                             self.ratio_x,
                             self.ratio_y,
+                            adapter.base.gr.use_tui_height,
                             &mut self.cursor_position,
                         ) {
                             self.pending_events.push(pixel_event);
@@ -307,6 +312,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                                         &winit_event,
                                         self.ratio_x,
                                         self.ratio_y,
+                                        adapter.base.gr.use_tui_height,
                                         &mut self.cursor_position,
                                     ) {
                                         self.pending_events.push(pixel_event);
@@ -335,6 +341,7 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                                     &winit_event,
                                     self.ratio_x,
                                     self.ratio_y,
+                                    adapter.base.gr.use_tui_height,
                                     &mut self.cursor_position,
                                 ) {
                                     self.pending_events.push(pixel_event);
@@ -344,38 +351,46 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                     }
                     _ => {
                         // Convert other mouse input events
-                        let winit_event = WinitEvent::WindowEvent {
-                            window_id: _window_id,
-                            event: WindowEvent::MouseInput {
-                                device_id: winit::event::DeviceId::dummy(),
-                                state,
-                                button,
-                            },
-                        };
-                        if let Some(pixel_event) = input_events_from_winit(
-                            &winit_event,
-                            self.ratio_x,
-                            self.ratio_y,
-                            &mut self.cursor_position,
-                        ) {
-                            self.pending_events.push(pixel_event);
+                        unsafe {
+                            let adapter = &*self.adapter_ref;
+                            let winit_event = WinitEvent::WindowEvent {
+                                window_id: _window_id,
+                                event: WindowEvent::MouseInput {
+                                    device_id: winit::event::DeviceId::dummy(),
+                                    state,
+                                    button,
+                                },
+                            };
+                            if let Some(pixel_event) = input_events_from_winit(
+                                &winit_event,
+                                self.ratio_x,
+                                self.ratio_y,
+                                adapter.base.gr.use_tui_height,
+                                &mut self.cursor_position,
+                            ) {
+                                self.pending_events.push(pixel_event);
+                            }
                         }
                     }
                 }
             }
             _ => {
                 // Convert other winit events to RustPixel events
-                let winit_event = WinitEvent::WindowEvent {
-                    window_id: _window_id,
-                    event,
-                };
-                if let Some(pixel_event) = input_events_from_winit(
-                    &winit_event,
-                    self.ratio_x,
-                    self.ratio_y,
-                    &mut self.cursor_position,
-                ) {
-                    self.pending_events.push(pixel_event);
+                unsafe {
+                    let adapter = &*self.adapter_ref;
+                    let winit_event = WinitEvent::WindowEvent {
+                        window_id: _window_id,
+                        event,
+                    };
+                    if let Some(pixel_event) = input_events_from_winit(
+                        &winit_event,
+                        self.ratio_x,
+                        self.ratio_y,
+                        adapter.base.gr.use_tui_height,
+                        &mut self.cursor_position,
+                    ) {
+                        self.pending_events.push(pixel_event);
+                    }
                 }
             }
         }

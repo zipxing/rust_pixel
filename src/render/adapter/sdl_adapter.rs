@@ -269,7 +269,7 @@ impl Adapter for SdlAdapter {
                 ses.push(event.clone());
                 // convert sdl events to pixel events, providing a unified processing interfaces
                 if let Some(et) =
-                    input_events_from_sdl(&event, self.base.gr.ratio_x, self.base.gr.ratio_y)
+                    input_events_from_sdl(&event, self.base.gr.ratio_x, self.base.gr.ratio_y, self.base.gr.use_tui_height)
                 {
                     if !self.drag.draging {
                         es.push(et);
@@ -446,7 +446,7 @@ macro_rules! sdl_event {
 
 /// Convert sdl input events to RustPixel event, for the sake of unified event processing
 /// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
-pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> {
+pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32, use_tui_height: bool) -> Option<Event> {
     let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
     let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
     let mut mcte: Option<MouseEvent> = None;
@@ -507,8 +507,14 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32) -> Option<Event> 
     if let Some(mut mc) = mcte {
         // Convert pixel coordinates to cell coordinates
         // No border offset needed (using OS window decoration)
+        // Account for TUI mode: double height (32px) vs sprite height (16px)
+        let cell_height = if use_tui_height {
+            sym_height * 2.0
+        } else {
+            sym_height
+        };
         mc.column /= (sym_width / adjx) as u16;
-        mc.row /= (sym_height / adjy) as u16;
+        mc.row /= (cell_height / adjy) as u16;
         return Some(Event::Mouse(mc));
     }
     None

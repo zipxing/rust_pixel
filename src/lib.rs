@@ -152,7 +152,7 @@ macro_rules! pixel_game {
                         .downcast_ref::<WebAdapter>()
                         .unwrap()
                         .base;
-                    if let Some(pe) = input_events_from_web(t, e, abase.gr.pixel_h, abase.gr.ratio_x, abase.gr.ratio_y) {
+                    if let Some(pe) = input_events_from_web(t, e, abase.gr.pixel_h, abase.gr.ratio_x, abase.gr.ratio_y, abase.gr.use_tui_height) {
                         self.g.context.input_events.push(pe);
                     }
                 }

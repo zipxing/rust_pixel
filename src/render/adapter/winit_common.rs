@@ -142,6 +142,7 @@ pub fn input_events_from_winit(
     event: &WinitEvent<()>,
     adjx: f32,
     adjy: f32,
+    use_tui_height: bool,
     cursor_pos: &mut (f64, f64),
 ) -> Option<Event> {
     use crate::event::{
@@ -300,8 +301,14 @@ pub fn input_events_from_winit(
 
                     // Convert pixel coordinates to cell coordinates
                     // No border offset needed (using OS window decoration)
+                    // Account for TUI mode: double height (32px) vs sprite height (16px)
+                    let cell_height = if use_tui_height {
+                        *sym_height * 2.0
+                    } else {
+                        *sym_height
+                    };
                     let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
-                    let py = (cursor_pos.1 / (*sym_height as f64 / adjy as f64)) as u16;
+                    let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
 
                     return Some(Event::Mouse(MouseEvent {
                         kind: Moved,
@@ -311,11 +318,18 @@ pub fn input_events_from_winit(
                     }));
                 }
                 WindowEvent::MouseInput { state, button, .. } => {
+                    // Account for TUI mode: double height (32px) vs sprite height (16px)
+                    let cell_height = if use_tui_height {
+                        *sym_height * 2.0
+                    } else {
+                        *sym_height
+                    };
+                    
                     if *state == winit::event::ElementState::Pressed {
                         // Convert pixel coordinates to cell coordinates
                         // No border offset needed (using OS window decoration)
                         let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
-                        let py = (cursor_pos.1 / (*sym_height as f64 / adjy as f64)) as u16;
+                        let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
 
                         let mouse_button = match button {
                             winit::event::MouseButton::Left => Left,
@@ -334,7 +348,7 @@ pub fn input_events_from_winit(
                         // Convert pixel coordinates to cell coordinates
                         // No border offset needed (using OS window decoration)
                         let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
-                        let py = (cursor_pos.1 / (*sym_height as f64 / adjy as f64)) as u16;
+                        let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
 
                         let mouse_button = match button {
                             winit::event::MouseButton::Left => Left,
