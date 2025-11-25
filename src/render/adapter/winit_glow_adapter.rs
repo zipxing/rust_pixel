@@ -152,6 +152,8 @@ pub struct WinitGlowAppHandler {
     pub ratio_x: f32,
     /// Y-axis scaling coefficient
     pub ratio_y: f32,
+    /// Whether to use TUI character height (32px) for mouse coordinate calculation
+    pub use_tui_height: bool,
     /// Whether to exit
     pub should_exit: bool,
 
@@ -217,25 +219,22 @@ impl ApplicationHandler for WinitGlowAppHandler {
                 }
 
                 // Convert keyboard events to pixel events
-                unsafe {
-                    let adapter = &*self.adapter_ref;
-                    let winit_event = WinitEvent::WindowEvent {
-                        window_id: _window_id,
-                        event: WindowEvent::KeyboardInput {
-                            device_id: winit::event::DeviceId::dummy(),
-                            event: key_event,
-                            is_synthetic: false,
-                        },
-                    };
-                    if let Some(pixel_event) = input_events_from_winit(
-                        &winit_event,
-                        self.ratio_x,
-                        self.ratio_y,
-                        adapter.base.gr.use_tui_height,
-                        &mut self.cursor_position,
-                    ) {
-                        self.pending_events.push(pixel_event);
-                    }
+                let winit_event = WinitEvent::WindowEvent {
+                    window_id: _window_id,
+                    event: WindowEvent::KeyboardInput {
+                        device_id: winit::event::DeviceId::dummy(),
+                        event: key_event,
+                        is_synthetic: false,
+                    },
+                };
+                if let Some(pixel_event) = input_events_from_winit(
+                    &winit_event,
+                    self.ratio_x,
+                    self.ratio_y,
+                    self.use_tui_height,
+                    &mut self.cursor_position,
+                ) {
+                    self.pending_events.push(pixel_event);
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -380,21 +379,18 @@ impl ApplicationHandler for WinitGlowAppHandler {
             }
             _ => {
                 // Convert other winit events to RustPixel events
-                unsafe {
-                    let adapter = &*self.adapter_ref;
-                    let winit_event = WinitEvent::WindowEvent {
-                        window_id: _window_id,
-                        event,
-                    };
-                    if let Some(pixel_event) = input_events_from_winit(
-                        &winit_event,
-                        self.ratio_x,
-                        self.ratio_y,
-                        adapter.base.gr.use_tui_height,
-                        &mut self.cursor_position,
-                    ) {
-                        self.pending_events.push(pixel_event);
-                    }
+                let winit_event = WinitEvent::WindowEvent {
+                    window_id: _window_id,
+                    event,
+                };
+                if let Some(pixel_event) = input_events_from_winit(
+                    &winit_event,
+                    self.ratio_x,
+                    self.ratio_y,
+                    self.use_tui_height,
+                    &mut self.cursor_position,
+                ) {
+                    self.pending_events.push(pixel_event);
                 }
             }
         }
@@ -465,6 +461,7 @@ impl WinitGlowAdapter {
             cursor_position: (0.0, 0.0),
             ratio_x: self.base.gr.ratio_x,
             ratio_y: self.base.gr.ratio_y,
+            use_tui_height: self.base.gr.use_tui_height,
             should_exit: false,
             adapter_ref: self as *mut WinitGlowAdapter,
         });
