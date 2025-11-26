@@ -162,8 +162,8 @@ pub struct Sprite {
     pub content: Buffer,
     pub angle: f64,
     pub alpha: u8,
-    pub scale_x: f32,  // X轴缩放倍数，1.0 = 正常，0.5 = 半宽
-    pub scale_y: f32,  // Y轴缩放倍数，1.0 = 正常
+    pub scale_x: f32,  // X-axis scaling factor: 1.0 = normal, 0.5 = half width
+    pub scale_y: f32,  // Y-axis scaling factor: 1.0 = normal, 2.0 = double height
     pub asset_request: Option<(AssetType, String, usize, u16, u16)>,
     render_weight: i32,
 }
@@ -187,8 +187,8 @@ impl Sprite {
             content: buffer,
             angle: 0.0,
             alpha: 255,
-            scale_x: 1.0,  // 默认正常缩放
-            scale_y: 1.0,  // 默认正常缩放
+            scale_x: 1.0,  // Default: normal scaling
+            scale_y: 1.0,  // Default: normal scaling
             asset_request: None,
             render_weight: 1,
         }
@@ -198,26 +198,26 @@ impl Sprite {
         self.alpha = a;
     }
 
-    /// 设置X轴缩放 (0.5 = 半宽, 1.0 = 正常, 2.0 = 双宽)
+    /// Set X-axis scaling (0.5 = half width, 1.0 = normal, 2.0 = double width)
     pub fn set_scale_x(&mut self, scale: f32) {
         self.scale_x = scale;
     }
 
-    /// 设置Y轴缩放 (0.5 = 半高, 1.0 = 正常, 2.0 = 双高)
+    /// Set Y-axis scaling (0.5 = half height, 1.0 = normal, 2.0 = double height)
     pub fn set_scale_y(&mut self, scale: f32) {
         self.scale_y = scale;
     }
 
-    /// 设置统一缩放
+    /// Set uniform scaling for both X and Y axes
     pub fn set_scale(&mut self, scale: f32) {
         self.scale_x = scale;
         self.scale_y = scale;
     }
 
-    /// 创建半宽sprite (快捷方法)
+    /// Create a half-width sprite (convenience method)
     pub fn new_half_width(x: u16, y: u16, width: u16, height: u16) -> Self {
         let mut sprite = Self::new(x, y, width, height);
-        sprite.set_scale_x(0.5);  // 半宽
+        sprite.set_scale_x(0.5);  // Half width
         sprite
     }
 

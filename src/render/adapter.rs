@@ -150,8 +150,8 @@
 //!
 //! ### Cross-Platform Input
 //! Unified input handling via `winit_common` module:
-//! - **Window dragging** for borderless windows
-//! - **Mouse and keyboard** event translation
+//! - **Mouse and keyboard** event translation with TUI height support
+//! - **Accurate coordinate conversion** accounting for TUI double-height characters
 //! - **Custom cursor** support
 //!
 //! ## 🔧 Configuration & Compilation
@@ -224,7 +224,8 @@ pub mod cross_adapter;
 // Re-export graph rendering functions and data structures
 #[cfg(graphics_mode)]
 pub use crate::render::graph::{
-    generate_render_buffer, init_sym_height, init_sym_width, push_render_buffer, render_border,
+    generate_render_buffer, init_sym_height, init_sym_width, push_render_buffer,
+    render_border,  // Deprecated: Kept for backward compatibility, use OS window decoration instead
     render_logo, render_main_buffer, render_pixel_sprites, Graph, RenderCell, PIXEL_LOGO,
     PIXEL_LOGO_HEIGHT, PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
 };
@@ -248,7 +249,7 @@ pub use crate::render::graph::{
 /// │  │ 0,1 │ 1,1 │ 2,1 │ 3,1 │ 4,1 │ 5,1 │ 6,1 │ 7,1 │         │
 /// │  │16×16│16×16│16×16│16×16│16×16│16×16│16×16│16×16│         │
 /// │  ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤         │
-/// │  │  ⋮  │  ⋮  │  ⋮  │  ⋮  │  ⋮  │  ⋮  │  ⋮  │  ⋮  │         │
+/// │  │  ⋮  │  ⋮   │  ⋮  │  ⋮  │  ⋮   │  ⋮  │  ⋮  │  ⋮   │         │
 /// │  └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘         │
 /// └────────────────────────────────────────────────────────────┘
 /// ```
@@ -499,9 +500,9 @@ pub trait Adapter {
     /// ```
     ///
     /// ## Render Targets
-    /// - **Render Texture 2**: Main game content (characters, sprites, borders)
+    /// - **Render Texture 2**: Main game content (characters, sprites)
     /// - **Render Texture 3**: Transition effects and overlays
-    /// - **Screen Buffer**: Final composite output
+    /// - **Screen Buffer**: Final composite output (uses OS window decoration)
     ///
     /// ## Rendering Modes
     /// - **rflag=true**: Normal rendering directly to screen
@@ -609,9 +610,9 @@ pub trait Adapter {
     /// │  ┌───┴─────────────────────┐  ← Layer 1: Main Content       │
     /// │  │   Render Texture 2      │    - Game buffer               │
     /// │  │   (Main Game Content)   │    - Sprites                   │
-    /// │  │   - Characters & Tiles  │    - Borders                   │
-    /// │  │   - Sprites & Objects   │    - Logo (during startup)     │
-    /// │  │   - Borders & UI        │                                │
+    /// │  │   - Characters & Tiles  │    - Logo (during startup)     │
+    /// │  │   - Sprites & Objects   │    - UI components (TUI mode)  │
+    /// │  │   - UI Components       │                                │
     /// │  └─────────────────────────┘                                │
     /// │      ▲                                                      │
     /// │      │                                                      │

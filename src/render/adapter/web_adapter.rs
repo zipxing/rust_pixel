@@ -250,8 +250,22 @@ macro_rules! web_event {
     };
 }
 
-/// Convert web I/O events to RustPixel event, for the sake of unified event processing
-/// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
+/// Convert Web I/O events to RustPixel event for unified event processing
+///
+/// For keyboard and mouse event handling examples, refer to the handle_input method in game/unblock/model.rs
+///
+/// # Parameters
+/// - `t`: Event type identifier
+/// - `e`: Web event reference (KeyboardEvent, MouseEvent, etc.)
+/// - `pixel_h`: Window pixel height
+/// - `ratiox`: X-axis scaling ratio
+/// - `ratioy`: Y-axis scaling ratio
+/// - `use_tui_height`: If true, uses TUI character height (32px) for mouse coordinate conversion;
+///                     if false, uses Sprite character height (16px)
+///
+/// # Mouse Coordinate Conversion
+/// Mouse pixel coordinates are converted to character cell coordinates.
+/// The conversion accounts for TUI double-height mode to ensure accurate click detection.
 pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32, ratioy: f32, use_tui_height: bool) -> Option<Event> {
     let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
     let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;

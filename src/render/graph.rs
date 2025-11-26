@@ -53,7 +53,25 @@
 //!
 //! ## 📊 Symbol Texture System
 //!
-//! RustPixel uses a unified symbol texture to render characters and graphic elements:
+//! RustPixel uses a unified symbol texture to render characters and graphic elements.
+//!
+//! ### Character Types and Heights
+//! - **Sprite Characters**: 16x16 pixels - for pixel art and sprites
+//! - **TUI Characters**: 16x32 pixels - for UI components and text (double height)
+//! - **Emoji**: 32x32 pixels - for emoji rendering
+//!
+//! ### Window Decoration
+//! RustPixel now uses **OS native window decoration** (title bar, borders) instead of
+//! custom-drawn borders. This provides better desktop integration and reduces rendering overhead.
+//!
+//! ### TUI Height Mode
+//! Applications can enable TUI height mode for UI-focused rendering:
+//! ```rust
+//! ctx.adapter.get_base().gr.set_use_tui_height(true);
+//! ```
+//! This affects:
+//! - Window height calculation (uses 32px per row instead of 16px)
+//! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
     render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, AdapterBase},
@@ -622,7 +640,11 @@ impl Graph {
     /// for precise position calculation and rendering layout.
     ///
     /// # Returns
-    /// Pixel height of a single character cell
+    /// Pixel height of a single character cell (base Sprite height: 16px / ratio_y)
+    ///
+    /// # Note
+    /// This returns the base Sprite character height. For TUI mode window height calculation,
+    /// see `set_pixel_size` which applies the `use_tui_height` flag to double the height.
     pub fn cell_height(&self) -> f32 {
         PIXEL_SYM_HEIGHT.get().expect("lazylock init") / self.ratio_y
     }
@@ -1008,9 +1030,8 @@ where
 /// - `width`: Buffer width in characters
 /// - `rx`: Horizontal scaling ratio for display adaptation
 /// - `ry`: Vertical scaling ratio for display adaptation
-/// - `border`: Include border rendering (for windowed modes)
-/// - `use_tui`: Use TUI characters (8×16) instead of Sprite characters (8×8)
-/// - `f`: Callback function to process each character
+/// - `use_tui`: Use TUI characters (16×32) instead of Sprite characters (16×16)
+/// - `f`: Callback function to process each character (RenderCell)
 pub fn render_main_buffer<F>(
     buf: &Buffer,
     width: u16,
@@ -1094,13 +1115,13 @@ pub fn render_main_buffer<F>(
     }
 }
 
-/// Render window borders (windowed display modes)
+/// Render window borders (DEPRECATED - Not used in current implementation)
 ///
-/// This function renders decorative borders around the game area for SDL and Winit
-/// modes. The border provides visual separation between the game content and the
-/// desktop environment, creating a more polished windowed gaming experience.
+/// **Note**: This function is kept for backward compatibility but is no longer used.
+/// RustPixel now uses OS native window decoration (title bar, border) instead of
+/// custom-drawn borders for better integration with the desktop environment.
 ///
-/// ## Border Layout
+/// ## Previous Border Layout (Historical Reference)
 /// ```text
 /// ┌───────────────────────────────────────────────────────┐
 /// │                      Window Border                    │
@@ -1129,6 +1150,11 @@ pub fn render_main_buffer<F>(
 /// - `rx`: Horizontal scaling ratio
 /// - `ry`: Vertical scaling ratio
 /// - `f`: Callback function to render each border character
+///
+/// # Deprecation Notice
+/// This function is no longer called in the rendering pipeline. Applications now
+/// use OS window decoration for better native integration.
+#[allow(dead_code)]
 pub fn render_border<F>(cell_w: u16, cell_h: u16, rx: f32, ry: f32, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
@@ -1274,7 +1300,27 @@ where
     }
 }
 
-// merge main buffer & pixel sprites to render buffer...
+/// Generate unified render buffer from main buffer and sprite layers
+///
+/// This is the main rendering pipeline entry point that merges multiple rendering sources
+/// into a unified GPU-ready buffer. It handles:
+/// - Main character buffer rendering
+/// - Sprite layer composition
+/// - Logo animation during startup
+///
+/// # Parameters
+/// - `cb`: Current main buffer containing character grid data
+/// - `_pb`: Previous buffer (unused, kept for API compatibility)
+/// - `ps`: Vector of sprite layers to render
+/// - `stage`: Current animation stage (for logo animation, 0 = game content)
+/// - `base`: Adapter base containing graphics context and scaling information
+///
+/// # Returns
+/// Vector of RenderCell ready for GPU rendering
+///
+/// # Rendering Order
+/// 1. If stage > 0: Render animated logo (startup sequence)
+/// 2. If stage == 0: Render main buffer + sprite layers (normal game rendering)
 pub fn generate_render_buffer(
     cb: &Buffer,
     _pb: &Buffer,

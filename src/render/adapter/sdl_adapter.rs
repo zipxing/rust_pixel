@@ -28,7 +28,11 @@ use sdl2::{
 use std::any::Any;
 use std::time::Duration;
 
-// data for drag window...
+/// DEPRECATED: Window dragging state for custom borderless windows
+///
+/// This struct is no longer used as RustPixel now uses OS window decoration
+/// with native window dragging. Kept for backward compatibility.
+#[allow(dead_code)]
 #[derive(Default)]
 struct Drag {
     need: bool,
@@ -56,10 +60,15 @@ pub struct SdlAdapter {
     // custom cursor
     pub cursor: Option<Cursor>,
 
-    // data for dragging the window
+    // DEPRECATED: Window dragging state (no longer used with OS decoration)
     drag: Drag,
 }
 
+/// DEPRECATED: Border area detection for custom window borders
+///
+/// This enum is no longer used as RustPixel now uses OS window decoration.
+/// Kept for backward compatibility.
+#[allow(dead_code)]
 pub enum SdlBorderArea {
     NOPE,
     CLOSE,
@@ -93,6 +102,11 @@ impl SdlAdapter {
         self.sdl_context.mouse().show_cursor(true);
     }
 
+    /// DEPRECATED: Check if mouse position is in custom border area
+    ///
+    /// This method is no longer used as RustPixel now uses OS window decoration
+    /// instead of custom borders. Kept for backward compatibility.
+    #[allow(dead_code)]
     fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
         let w = self.base.gr.cell_width();
         let h = self.base.gr.cell_height();
@@ -110,6 +124,11 @@ impl SdlAdapter {
         SdlBorderArea::OTHER
     }
 
+    /// DEPRECATED: Handle custom window dragging for borderless windows
+    ///
+    /// This method is no longer used as RustPixel now uses OS window decoration
+    /// with native window dragging. Kept for backward compatibility.
+    #[allow(dead_code)]
     fn drag_window(&mut self, event: &SEvent) -> bool {
         match *event {
             SEvent::Quit { .. }
@@ -444,8 +463,20 @@ macro_rules! sdl_event {
     };
 }
 
-/// Convert sdl input events to RustPixel event, for the sake of unified event processing
-/// For keyboard and mouse event, please refer to the handle_input method in game/unblock/model.rs
+/// Convert SDL input events to RustPixel event for unified event processing
+///
+/// For keyboard and mouse event handling examples, refer to the handle_input method in game/unblock/model.rs
+///
+/// # Parameters
+/// - `e`: SDL event reference
+/// - `adjx`: X-axis adjustment factor (for high DPI displays)
+/// - `adjy`: Y-axis adjustment factor (for high DPI displays)
+/// - `use_tui_height`: If true, uses TUI character height (32px) for mouse coordinate conversion;
+///                     if false, uses Sprite character height (16px)
+///
+/// # Mouse Coordinate Conversion
+/// Mouse pixel coordinates are converted to character cell coordinates.
+/// The conversion accounts for TUI double-height mode to ensure accurate click detection.
 pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32, use_tui_height: bool) -> Option<Event> {
     let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
     let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
@@ -509,9 +540,9 @@ pub fn input_events_from_sdl(e: &SEvent, adjx: f32, adjy: f32, use_tui_height: b
         // No border offset needed (using OS window decoration)
         // Account for TUI mode: double height (32px) vs sprite height (16px)
         let cell_height = if use_tui_height {
-            sym_height * 2.0
+            *sym_height * 2.0
         } else {
-            sym_height
+            *sym_height
         };
         mc.column /= (sym_width / adjx) as u16;
         mc.row /= (cell_height / adjy) as u16;

@@ -23,12 +23,12 @@
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                   Window Management                         │
 //! │  ┌─────────────┬─────────────┬─────────────────────────────┐ │
-//! │  │    Drag     │WindowInit   │        Movement             │ │
-//! │  │   System    │ Params      │       Handler               │ │
+//! │  │ WindowInit  │   Event     │    OS Integration           │ │
+//! │  │   Params    │  Handling   │                             │ │
 //! │  │             │             │                             │ │
-//! │  │ - State     │ - Size      │ - Position Update           │ │
-//! │  │ - Coords    │ - Title     │ - Drag Detection            │ │
-//! │  │ - Flags     │ - Ratios    │ - Border Area Check         │ │
+//! │  │ - Size      │ - Input     │ - Native Decoration         │ │
+//! │  │ - Title     │ - Mouse     │ - Native Dragging           │ │
+//! │  │ - Ratios    │ - TUI Mode  │ - Resizable Control         │ │
 //! │  └─────────────┴─────────────┴─────────────────────────────┘ │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
@@ -43,7 +43,7 @@
 //! │  ┌─────────────┐ │  ┌─────────────┐  │ ┌─────────────────┐ │
 //! │  │ Keyboard    │─┼─→│   Common    │──┼→│ Unified Events  │ │
 //! │  │ Mouse       │ │  │ Translation │  │ │ (Key, Mouse)    │ │
-//! │  │ Window      │─┘  │   Logic     │  └→│ (Drag-aware)    │ │
+//! │  │ Window      │─┘  │   Logic     │  └→│ (TUI-aware)     │ │
 //! │  └─────────────┘    └─────────────┘    └─────────────────┘ │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
@@ -56,8 +56,9 @@
 //! - **Maintenance burden halved** - only need to maintain one copy of logic
 //!
 //! ### Consistency Guarantee
-//! - **Same drag behavior** across all winit backends
-//! - **Unified event handling** logic and response
+//! - **Unified event handling** logic and response across all winit backends
+//! - **Consistent coordinate calculations** for high-DPI and TUI mode displays
+//! - **Accurate mouse conversion** accounting for character height modes
 //! - **Consistent error handling** and edge cases
 
 use crate::event::Event;
@@ -134,7 +135,13 @@ pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy
 /// - `event`: Winit event reference
 /// - `adjx`: X-axis adjustment factor (for high DPI displays)
 /// - `adjy`: Y-axis adjustment factor (for high DPI displays)
+/// - `use_tui_height`: If true, uses TUI character height (32px) for mouse coordinate conversion;
+///                     if false, uses Sprite character height (16px)
 /// - `cursor_pos`: Mutable reference to current cursor position
+///
+/// # Mouse Coordinate Conversion
+/// Mouse pixel coordinates are converted to character cell coordinates.
+/// The conversion accounts for TUI double-height mode to ensure accurate click detection.
 ///
 /// # Returns
 /// Returns Some(Event) if event can be converted, otherwise returns None

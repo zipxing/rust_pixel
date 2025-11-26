@@ -281,6 +281,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                             &winit_event,
                             self.ratio_x,
                             self.ratio_y,
+                            self.use_tui_height,
                             &mut self.cursor_position,
                         ) {
                             self.pending_events.push(pixel_event);
@@ -321,6 +322,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                                         &winit_event,
                                         self.ratio_x,
                                         self.ratio_y,
+                                        self.use_tui_height,
                                         &mut self.cursor_position,
                                     ) {
                                         self.pending_events.push(pixel_event);
@@ -349,6 +351,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                                     &winit_event,
                                     self.ratio_x,
                                     self.ratio_y,
+                                    self.use_tui_height,
                                     &mut self.cursor_position,
                                 ) {
                                     self.pending_events.push(pixel_event);
@@ -370,6 +373,7 @@ impl ApplicationHandler for WinitGlowAppHandler {
                             &winit_event,
                             self.ratio_x,
                             self.ratio_y,
+                            self.use_tui_height,
                             &mut self.cursor_position,
                         ) {
                             self.pending_events.push(pixel_event);
