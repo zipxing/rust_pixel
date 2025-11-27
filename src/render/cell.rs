@@ -362,24 +362,14 @@ impl Cell {
         self.modifier = Modifier::empty();
     }
 
-    #[cfg(any(
-        target_arch = "wasm32",
-        feature = "sdl",
-        feature = "wgpu",
-        feature = "glow"
-    ))]
+    #[cfg(graphics_mode)]
     pub fn is_blank(&self) -> bool {
         (self.symbol == " " || self.symbol == cellsym(32))
             && (self.tex == 0 || self.tex == 1)
             && self.bg == Color::Reset
     }
 
-    #[cfg(all(
-        not(target_arch = "wasm32"),
-        not(feature = "sdl"),
-        not(feature = "wgpu"),
-        not(feature = "glow")
-    ))]
+    #[cfg(not(graphics_mode))]
     pub fn is_blank(&self) -> bool {
         self.symbol == " " && self.fg == Color::Reset && self.bg == Color::Reset
     }
