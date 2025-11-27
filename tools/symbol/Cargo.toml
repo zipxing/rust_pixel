@@ -41,7 +41,7 @@ sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
 
 # Winit-based rendering (cross-platform windowing with OpenGL)
-winit = ["rust_pixel/winit"]
+glow = ["rust_pixel/glow"]
 
 # WGPU-based rendering (modern GPU API, WebGPU standard)
 wgpu = ["rust_pixel/wgpu"]

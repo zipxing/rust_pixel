@@ -17,7 +17,7 @@ use crate::render::adapter::cross_adapter::CrosstermAdapter;
 #[cfg(sdl_backend)]
 use crate::render::adapter::sdl_adapter::SdlAdapter;
 
-#[cfg(winit_backend)]
+#[cfg(glow_backend)]
 use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
 
 #[cfg(wgpu_backend)]
@@ -51,7 +51,7 @@ impl Context {
             adapter: Box::new(WebAdapter::new(name, project_path)),
             #[cfg(sdl_backend)]
             adapter: Box::new(SdlAdapter::new(name, project_path)),
-            #[cfg(winit_backend)]
+            #[cfg(glow_backend)]
             adapter: Box::new(WinitGlowAdapter::new(name, project_path)),
             #[cfg(wgpu_backend)]
             adapter: Box::new(WinitWgpuAdapter::new(name, project_path)),

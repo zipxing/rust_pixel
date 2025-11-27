@@ -82,7 +82,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 .join(" ")
         )),
         "glow" | "g" => cmds.push(format!(
-            "cargo {} -p {} --features winit {} {}",
+            "cargo {} -p {} --features glow {} {}",
             subcmd, // build or run
             mod_name,
             release,

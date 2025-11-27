@@ -38,8 +38,8 @@ https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
 - Event/Timer messaging mechanism (event.rs)
 - Unified render adapter trait for text & graphics mode( adapter.rs ) 
 - Support text render mode (crossterm) (cross_adapter.rs)
-- OpenGL mode supports sdl and wasm (glow & sdl2 | winit) (sdl_adapter.rs, winit_glow_adapter.rs, web_adapter.rs)
-- Wgpu drawing mode (winit & wgpu) (winit_wgpu_adapter.rs)
+- OpenGL mode supports sdl and wasm (glow & sdl2 | glow) (sdl_adapter.rs, winit_glow_adapter.rs, web_adapter.rs)
+- Wgpu drawing mode (wgpu) (winit_wgpu_adapter.rs)
 - 3 core OpenGl shaders for gl & web graphics mode: (gl/) 
 - 3 core Wgpu shaders for wgpu graphics mode: (wgpu/) 
     - instance rendering shader for draw mainbuffer (render_symbols.rs) 
@@ -98,8 +98,8 @@ cargo pixel r tetris s                #Run the Tetris game in SDL window mode
 cargo pixel r tower w                 #Run tower in web,visit http://localhost:8080/ in your browser
 cargo pixel r tower w --webport 8081  #Change web server port
 cargo pixel r tower w -r              #Run with release mode
-cargo pixel r petview g -r            #Run the petview game in winit+glow mode
-cargo pixel r petview wg -r           #Run the petview game in winit+wgpu mode
+cargo pixel r petview g -r            #Run the petview game in glow mode (winit+opengl)
+cargo pixel r petview wg -r           #Run the petview game in wgpu mode (winit+wgpu)
 ``` 
 
 You can also use cargo pixel to create your own game or app:

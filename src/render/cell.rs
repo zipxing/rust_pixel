@@ -366,7 +366,7 @@ impl Cell {
         target_arch = "wasm32",
         feature = "sdl",
         feature = "wgpu",
-        feature = "winit"
+        feature = "glow"
     ))]
     pub fn is_blank(&self) -> bool {
         (self.symbol == " " || self.symbol == cellsym(32))
@@ -378,7 +378,7 @@ impl Cell {
         not(target_arch = "wasm32"),
         not(feature = "sdl"),
         not(feature = "wgpu"),
-        not(feature = "winit")
+        not(feature = "glow")
     ))]
     pub fn is_blank(&self) -> bool {
         self.symbol == " " && self.fg == Color::Reset && self.bg == Color::Reset

@@ -107,7 +107,7 @@ default = ["log4rs", "crossterm", "rodio", "image"]
 web = ["image"]
 term = ["log4rs", "crossterm", "rodio", "image"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
-winit = ["log4rs", "rodio", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
+glow = ["log4rs", "rodio", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
 wgpu = ["log4rs", "rodio", "dep:wgpu", "dep:bytemuck", "dep:pollster", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
 base = ["log4rs"]
 
@@ -134,5 +134,5 @@ exclude = [
 
 [workspace.package]
 authors = ["zipxing@hotmail.com"]
-description = "2d pixel art game engine & rapid prototype tools support terminal, sdl2, and web..."
+description = "2d pixel art game engine support terminal, wgpu, sdl2, and wasm..."
 

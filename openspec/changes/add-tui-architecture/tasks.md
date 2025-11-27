@@ -1,26 +1,19 @@
 ## 1. Implementation
 
-- [ ] 1.1 创建或扩展符号纹理为 1024x1024 (`assets/pix/symbols.png`)，使用 block-based 布局（向后兼容）：
-  - 行 0-767（768px）：Sprite 符号（8x8 方形字符，48 blocks，12,288 个）
-  - 行 768-1023（256px）：TUI + Emoji 符号
-    - Blocks 48-52：TUI（8x16 瘦高字符，5 blocks，1280 个，active: 1024）
-    - Blocks 53-55：Emoji（16x16 彩色图像，3 blocks，384 个，active: 256）
-- [x] 1.2 保持所有 adapter 的鼠标事件处理不变（已按 8 像素计算）
-  - `column = pixel_x / 8`（8 像素宽度，TUI 和 Sprite 共享）
-  - `row = pixel_y / 8`（8 像素高度，Sprite 坐标系）
+- [x] 1.1 创建符号纹理 2048x2048 (`assets/pix/symbols.png`)，使用 block-based 布局：
+  - Sprite 符号：16x16 方形字符
+  - TUI 符号：16x32 瘦高字符
+  - Emoji 符号：32x32 彩色图像
+- [x] 1.2 保持所有 adapter 的鼠标事件处理不变（已按 16 像素计算）
+  - `column = pixel_x / 16`（16 像素宽度，TUI 和 Sprite 共享）
+  - `row = pixel_y / 16`（16 像素高度，Sprite 坐标系）
   - TUI 层使用时：`column_tui = column`, `row_tui = row / 2`
-- [x] 1.4 修改纹理加载逻辑，解析统一纹理（1024x1024），初始化 `PIXEL_SYM_WIDTH=8.0/HEIGHT=8.0`（TUI 使用 WIDTH 和 HEIGHT*2）
+- [x] 1.4 修改纹理加载逻辑，解析统一纹理（2048x2048），初始化 `PIXEL_SYM_WIDTH=16.0/HEIGHT=16.0`（TUI 使用 WIDTH 和 HEIGHT*2）
   - WGPU 和 OpenGL 渲染器的 `load_texture` 已更新为 block-based 布局
-  - Sprite 区域（Block 0-47）：12288 个符号
-  - TUI 区域（Block 48-52）：1280 个符号
-  - Emoji 区域（Block 53-55）：384 个符号
-- [x] 1.5 在 `render_helper_tui` 中实现 TUI 区域索引计算（线性索引 12288-13567，Block 48-52）
-  - 使用 `PIXEL_SYM_WIDTH` (8px) 和 `PIXEL_SYM_HEIGHT * 2` (16px)
-  - 线性索引计算：`linear_index = 12288 + (texidx - 48) * 256 + symidx`
-  - 纹理坐标：`pixel_x = (texidx - 48) * 128 + (symidx % 16) * 8`, `pixel_y = 768 + (symidx / 16) * 16`
+- [x] 1.5 在 `render_helper_tui` 中实现 TUI 区域索引计算
+  - 使用 `PIXEL_SYM_WIDTH` (16px) 和 `PIXEL_SYM_HEIGHT * 2` (32px)
 - [x] 1.6 在 `cell.rs` 中创建 `EMOJI_MAP: HashMap<String, u16>`，映射常用 Emoji 到纹理索引
   - 选择 256 个最常用 Emoji（表情、符号、食物、自然、对象等）+ 128 个预留空间
-  - Emoji 索引范围：13568-13951（Emoji 区域，Block 53-55）
   - 实现 `is_prerendered_emoji(symbol: &str) -> bool`
   - 实现 `emoji_texidx(symbol: &str) -> Option<u16>`
 - [x] 1.7 在 `buffer.rs` 的 `set_stringn` 中实现 Emoji 双宽字符（wcwidth=2）处理
@@ -28,13 +21,9 @@
   - 预制 Emoji：第一格存储 Emoji，第二格设为空白
   - 未预制 Emoji：显示空白占位符，占 2 格
 - [x] 1.8 在 `graph.rs` 中实现 `render_helper_emoji` 函数
-  - 线性索引计算：`linear_index = 13568 + (texidx - 53) * 128 + symidx`
-  - 纹理坐标：`pixel_x = (5 + (texidx - 53)) * 128 + (symidx % 8) * 16`, `pixel_y = 768 + (symidx / 8) * 16`
   - Destination 宽度为 `cell_width * 2.0`（占 2 格）
-  - Source 尺寸为 16x16 像素
-- [x] 1.9 在 `render_helper` 中实现 Sprite 区域索引计算（线性索引 0-12287，Block 0-47，保持不变）
-  - 线性索引计算：`linear_index = texidx * 256 + symidx`（texidx: 0-47）
-  - 纹理坐标：`pixel_x = (texidx % 8) * 128 + (symidx % 16) * 8`, `pixel_y = (texidx / 8) * 128 + (symidx / 16) * 8`
+  - Source 尺寸为 32x32 像素
+- [x] 1.9 在 `render_helper` 中实现 Sprite 区域索引计算
   - 向后兼容，现有 Sprite 代码无需修改
 - [x] 1.10 确保 TUI 层（Main Buffer）在渲染顺序上位于所有 Pixel Sprites 之后（最上层）
 - [ ] 1.11 修改 `Cell.get_cell_info()` 方法，将 `Cell.modifier` 信息传递到渲染管线
@@ -56,8 +45,8 @@
 - [ ] 2.2 验证图形模式下 TUI 层始终在最上层
 - [ ] 2.3 验证统一坐标系统正确性（水平通用，TUI 垂直除以 2，Sprite 直接使用）
 - [ ] 2.4 验证统一纹理的三个区域（TUI、Emoji、Sprite）正确加载和渲染
-- [ ] 2.5 验证 TUI 字符显示为 8x16 瘦高形状，Sprite 字符显示为 8x8 方形
-- [ ] 2.6 验证预制 Emoji 正确渲染为 16x16 彩色图像，占 2 格宽度
+- [ ] 2.5 验证 TUI 字符显示为 16x32 瘦高形状，Sprite 字符显示为 16x16 方形
+- [ ] 2.6 验证预制 Emoji 正确渲染为 32x32 彩色图像，占 2 格宽度
 - [ ] 2.7 验证未预制 Emoji 显示为空白占位符，占 2 格宽度
 - [ ] 2.8 验证 Emoji 映射表正确识别常用 Emoji（256 个 active + 128 个预留）
 - [ ] 2.9 验证单次 draw call 性能保持不变

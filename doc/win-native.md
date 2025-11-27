@@ -49,8 +49,8 @@ cd %USERPROFILE%\rust_pixel_work
 # Test WGPU mode (recommended for best performance)
 cargo pixel r petview wgpu
 
-# Test Winit-OpenGL mode
-cargo pixel r petview winit
+# Test Glow-OpenGL mode
+cargo pixel r petview glow
 
 # Test Terminal mode
 cargo pixel r petview term
@@ -171,7 +171,7 @@ cargo pixel build mygame web
 
 # Build with specific features
 cargo build --features "wgpu"
-cargo build --features "winit"
+cargo build --features "glow"
 cargo build --features "sdl"
 ```
 

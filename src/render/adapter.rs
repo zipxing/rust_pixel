@@ -164,20 +164,15 @@
 //! # SDL desktop mode  
 //! rust_pixel = { version = "0.1", features = ["sdl"] }
 //!
-//! # Winit + OpenGL mode
-//! rust_pixel = { version = "0.1", features = ["winit"] }
+//! # Winit + OpenGL mode (glow)
+//! rust_pixel = { version = "0.1", features = ["glow"] }
 //!
 //! # Winit + WGPU mode (cutting-edge)
 //! rust_pixel = { version = "0.1", features = ["wgpu"] }
 //! ```
 
 #![allow(unused_variables)]
-#[cfg(any(
-    feature = "sdl",
-    feature = "winit",
-    feature = "wgpu",
-    target_arch = "wasm32"
-))]
+#[cfg(graphics_mode)]
 use crate::util::{ARect, PointI32};
 use crate::{
     event::Event,
@@ -189,8 +184,8 @@ use std::any::Any;
 use std::time::Duration;
 // use log::info;
 
-/// OpenGL rendering subsystem for winit, SDL and web modes
-#[cfg(any(sdl_backend, winit_backend, wasm))]
+/// OpenGL rendering subsystem for glow, SDL and web modes
+#[cfg(any(sdl_backend, glow_backend, wasm))]
 pub mod gl;
 
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering
@@ -206,11 +201,11 @@ pub mod sdl_adapter;
 pub mod web_adapter;
 
 /// Winit common module - Shared code between winit_glow and winit_wgpu adapters
-#[cfg(any(winit_backend, wgpu_backend))]
+#[cfg(any(glow_backend, wgpu_backend))]
 pub mod winit_common;
 
 /// Winit + Glow adapter module - OpenGL backend with winit window management
-#[cfg(winit_backend)]
+#[cfg(glow_backend)]
 pub mod winit_glow_adapter;
 
 /// Winit + WGPU adapter module - Modern GPU backend with winit window management  
@@ -224,10 +219,22 @@ pub mod cross_adapter;
 // Re-export graph rendering functions and data structures
 #[cfg(graphics_mode)]
 pub use crate::render::graph::{
-    generate_render_buffer, init_sym_height, init_sym_width, push_render_buffer,
-    render_border,  // Deprecated: Kept for backward compatibility, use OS window decoration instead
-    render_logo, render_main_buffer, render_pixel_sprites, Graph, RenderCell, PIXEL_LOGO,
-    PIXEL_LOGO_HEIGHT, PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+    generate_render_buffer,
+    init_sym_height,
+    init_sym_width,
+    push_render_buffer,
+    render_border, // Deprecated: Kept for backward compatibility, use OS window decoration instead
+    render_logo,
+    render_main_buffer,
+    render_pixel_sprites,
+    Graph,
+    RenderCell,
+    PIXEL_LOGO,
+    PIXEL_LOGO_HEIGHT,
+    PIXEL_LOGO_WIDTH,
+    PIXEL_SYM_HEIGHT,
+    PIXEL_SYM_WIDTH,
+    PIXEL_TEXTURE_FILE,
 };
 
 /// Path to the symbols texture file
@@ -568,10 +575,10 @@ pub trait Adapter {
         let ry = self.get_base().gr.ratio_y;
         let pz = PointI32 { x: 0, y: 0 };
         let mut rfunc = |fc: &(u8, u8, u8, u8),
-                        bc: &Option<(u8, u8, u8, u8)>,
-                        s2: ARect,
-                        texidx: usize,
-                        symidx: usize| {
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize| {
             push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
         };
 

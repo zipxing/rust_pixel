@@ -201,7 +201,7 @@ impl Adapter for CrosstermAdapter {
     /// Crossterm adapter - no graphics support for advanced rendering methods
     #[cfg(any(
         feature = "sdl",
-        feature = "winit", 
+        feature = "glow", 
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
@@ -211,7 +211,7 @@ impl Adapter for CrosstermAdapter {
 
     #[cfg(any(
         feature = "sdl",
-        feature = "winit",
+        feature = "glow",
         feature = "wgpu", 
         target_arch = "wasm32"
     ))]
@@ -221,7 +221,7 @@ impl Adapter for CrosstermAdapter {
 
     #[cfg(any(
         feature = "sdl",
-        feature = "winit",
+        feature = "glow",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
@@ -231,7 +231,7 @@ impl Adapter for CrosstermAdapter {
 
     #[cfg(any(
         feature = "sdl",
-        feature = "winit",
+        feature = "glow",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]

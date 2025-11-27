@@ -21,7 +21,7 @@ cargo pixel r pixel_ssf wg -r . sdq/fire.ssf           # (will auto-add "assets/
 
 # Other rendering modes
 cargo pixel r pixel_ssf sdl -r . sdq/fire.ssf          # SDL graphics mode
-cargo pixel r pixel_ssf winit -r . sdq/fire.ssf        # Winit graphics mode  
+cargo pixel r pixel_ssf glow -r . sdq/fire.ssf         # Glow graphics mode  
 cargo pixel r pixel_ssf term -r . sdq/fire.ssf         # Terminal mode
 ```
 
@@ -33,7 +33,7 @@ cargo run -p pixel_ssf --features wgpu --release -- sdq/fire.ssf
 
 # Build for different modes
 cargo run -p pixel_ssf --features sdl -- sdq/fire.ssf     # SDL graphics mode
-cargo run -p pixel_ssf --features winit -- sdq/fire.ssf   # Winit graphics mode  
+cargo run -p pixel_ssf --features glow -- sdq/fire.ssf    # Glow graphics mode  
 cargo run -p pixel_ssf --features wgpu -- sdq/fire.ssf    # WGPU graphics mode
 cargo run -p pixel_ssf --features term -- sdq/fire.ssf    # Terminal mode (default)
 ```
@@ -70,7 +70,7 @@ cargo build -p pixel_ssf --features term
 
 # Graphics modes
 cargo build -p pixel_ssf --features sdl
-cargo build -p pixel_ssf --features winit  
+cargo build -p pixel_ssf --features glow  
 cargo build -p pixel_ssf --features wgpu
 ```
 

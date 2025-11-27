@@ -219,7 +219,7 @@ impl Render for PetviewRender {
             // Set render texture 3 visible - unified interface replaces all downcast code
             #[cfg(any(
                 feature = "sdl",
-                feature = "winit", 
+                feature = "glow", 
                 feature = "wgpu",
                 target_arch = "wasm32"
             ))]
@@ -275,7 +275,7 @@ impl Render for PetviewRender {
                     // Simple transition - unified interface replaces all downcast code
                     #[cfg(any(
                         feature = "sdl",
-                        feature = "winit", 
+                        feature = "glow", 
                         feature = "wgpu",
                         target_arch = "wasm32"
                     ))]
@@ -289,7 +289,7 @@ impl Render for PetviewRender {
                     // Buffer transition - unified interface replaces all downcast code
                     #[cfg(any(
                         feature = "sdl",
-                        feature = "winit", 
+                        feature = "glow", 
                         feature = "wgpu",
                         target_arch = "wasm32"
                     ))]
@@ -309,7 +309,7 @@ impl Render for PetviewRender {
                     // Advanced transition - unified interface replaces all downcast code
                     #[cfg(any(
                         feature = "sdl",
-                        feature = "winit", 
+                        feature = "glow", 
                         feature = "wgpu",
                         target_arch = "wasm32"
                     ))]

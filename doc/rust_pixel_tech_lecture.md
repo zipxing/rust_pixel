@@ -306,7 +306,7 @@ rust_pixel/
   - `exclude` 大型子目录，缩短 crates.io 发布体积与编译时间。
 
 - Feature 组合的工程影响：
-  - `term/sdl/winit/wgpu/web/base` 彼此排斥或组合，决定依赖图（如 `sdl2`、`winit`、`wgpu`）。
+  - `term/sdl/glow/wgpu/web/base` 彼此排斥或组合，决定依赖图（如 `sdl2`、`winit`、`wgpu`）。
   - `base` 降依赖路径用于 FFI/WASM 仅算法导出；保持统一 API 以便切换。
 
 - 构建剖面与体积优化：
@@ -948,7 +948,7 @@ pub mod audio {
 default = ["log4rs", "crossterm", "rodio"]
 term = ["log4rs", "crossterm", "rodio"]
 sdl = ["log4rs", "rodio", "sdl2", "image"]
-winit = ["log4rs", "rodio", "winit", "glutin"]
+glow = ["log4rs", "rodio", "winit", "glutin"]
 wgpu = ["log4rs", "rodio", "wgpu", "bytemuck"]
 web = ["image"]
 base = ["log4rs"]  # 最小依赖模式
@@ -984,12 +984,12 @@ fn main() {
         // 渲染后端别名
         cross_backend: { feature = "crossterm" },
         sdl_backend: { feature = "sdl" },
-        winit_backend: { feature = "winit" },
+        glow_backend: { feature = "glow" },
         wgpu_backend: { feature = "wgpu" },
         wasm: { target_arch = "wasm32" },
         
         // 渲染模式
-        graphics_mode: { any(sdl_backend, winit_backend, wgpu_backend, wasm) },
+        graphics_mode: { any(sdl_backend, glow_backend, wgpu_backend, wasm) },
     }
 }
 
@@ -1003,7 +1003,7 @@ pub mod render_terminal;
 
 ## 6.4 深度扩展：多后端矩阵的维护与测试
 
-- 后端组合矩阵：`term/sdl/winit/wgpu/web` × 平台（macOS/Linux/Windows/WASM）。
+- 后端组合矩阵：`term/sdl/glow/wgpu/web` × 平台（macOS/Linux/Windows/WASM）。
   - 以 `cfg_aliases` 收敛组合，避免到处堆砌 `#[cfg(any(...))]`。
   - 将最小可运行子集（如 `base`）作为 CI 常驻任务，完整矩阵用 nightly/周构建降低成本。
 
@@ -3143,9 +3143,9 @@ pub struct Context {
 cfg_aliases! {
     wasm: { target_arch = "wasm32" },
     mobile: { any(target_os = "android", target_os = "ios") },
-    graphics_backend: { any(feature = "sdl", feature = "winit", feature = "wgpu") },
+    graphics_backend: { any(feature = "sdl", feature = "glow", feature = "wgpu") },
     sdl_backend: { all(feature = "sdl", not(wasm)) },
-    winit_backend: { all(feature = "winit", not(wasm), not(feature = "wgpu")) },
+    glow_backend: { all(feature = "glow", not(wasm), not(feature = "wgpu")) },
     wgpu_backend: { all(feature = "wgpu", not(wasm)) },
     graphics_mode: { any(graphics_backend, wasm) },
     cross_backend: { not(graphics_mode) },

@@ -187,7 +187,7 @@ impl Adapter for WebAdapter {
     /// Web adapter implementation of render texture visibility control
     #[cfg(any(
         feature = "sdl",
-        feature = "winit", 
+        feature = "glow", 
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
@@ -200,7 +200,7 @@ impl Adapter for WebAdapter {
     /// Web adapter implementation of simple transition rendering
     #[cfg(any(
         feature = "sdl",
-        feature = "winit",
+        feature = "glow",
         feature = "wgpu", 
         target_arch = "wasm32"
     ))]
@@ -213,7 +213,7 @@ impl Adapter for WebAdapter {
     /// Web adapter implementation of advanced transition rendering
     #[cfg(any(
         feature = "sdl",
-        feature = "winit",
+        feature = "glow",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
@@ -226,7 +226,7 @@ impl Adapter for WebAdapter {
     /// Web adapter implementation of buffer transition setup
     #[cfg(any(
         feature = "sdl",
-        feature = "winit",
+        feature = "glow",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]

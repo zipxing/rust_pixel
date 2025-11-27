@@ -97,10 +97,10 @@ cargo pixel
 # 1.0.0
 - Added wgpu render backend
 ```
-cargo pixel r petview wg -r   # winit + wgpu
-cargo pixel r petview g -r    # winit + glow
-cargo pixel r petview s -r    # sdl + glow
-cargo pixel r petview w -r    # wasm with glow
+cargo pixel r petview wg -r   # wgpu backend (winit + wgpu)
+cargo pixel r petview g -r    # glow backend (winit + opengl)
+cargo pixel r petview s -r    # sdl backend (sdl2 + opengl)
+cargo pixel r petview w -r    # web backend (wasm + webgl)
 ```
 - Remove pixel_macro crate,move to lib.rs
 

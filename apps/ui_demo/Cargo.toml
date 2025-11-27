@@ -15,6 +15,6 @@ cfg_aliases = { workspace = true }
 default = ["term"]
 term = ["rust_pixel/term"]
 sdl = ["rust_pixel/sdl"]
-winit = ["rust_pixel/winit"]
+glow = ["rust_pixel/glow"]
 wgpu = ["rust_pixel/wgpu"]
 web = ["rust_pixel/web"]

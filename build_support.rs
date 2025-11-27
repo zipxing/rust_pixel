@@ -13,11 +13,11 @@ fn setup_rust_pixel_cfg_aliases() {
         mobile: { any(target_os = "android", target_os = "ios") },
         
         // Rendering backend aliases
-        graphics_backend: { any(feature = "sdl", feature = "winit", feature = "wgpu") },
+        graphics_backend: { any(feature = "sdl", feature = "glow", feature = "wgpu") },
         
         // Specific backend aliases
         sdl_backend: { all(feature = "sdl", not(wasm)) },
-        winit_backend: { all(feature = "winit", not(wasm), not(feature = "wgpu")) },
+        glow_backend: { all(feature = "glow", not(wasm), not(feature = "wgpu")) },
         wgpu_backend: { all(feature = "wgpu", not(wasm)) },
         cross_backend: { not(graphics_mode) },
         

@@ -31,6 +31,6 @@ tower_lib = { path = "./lib" }
 
 [features]
 sdl = ["rust_pixel/sdl"]
-winit = ["rust_pixel/winit"]
-wgpu = ["rust_pixel/wgpu", "rust_pixel/winit"]
+glow = ["rust_pixel/glow"]
+wgpu = ["rust_pixel/wgpu"]
 term = ["rust_pixel/term"]
