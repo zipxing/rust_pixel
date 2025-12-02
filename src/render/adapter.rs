@@ -6,7 +6,7 @@
 //! This module defines the render adapter architecture for RustPixel, providing unified
 //! rendering interfaces across different platforms and rendering backends.
 //!
-//! ## 🏗️ Architecture Overview (Post-WGPU Refactor)
+//! ## 🏗️ Architecture Overview 
 //!
 //! After the major WGPU refactor, RustPixel now uses a **direct concrete type architecture**
 //! instead of trait objects, providing better performance and clearer code organization.
@@ -20,7 +20,7 @@
 //! - **SdlAdapter**: Desktop platform based on SDL2 + OpenGL
 //! - **WinitGlowAdapter**: Cross-platform OpenGL rendering (winit + glutin + glow)
 //! - **WinitWgpuAdapter**: Modern GPU rendering (winit + wgpu)
-//! - **WebAdapter**: WebGL-based browser rendering
+//! - **WebAdapter**: WebGL-based browser rendering (webgl2 + glow)
 //!
 //! ### 🚀 Performance Improvements
 //!
