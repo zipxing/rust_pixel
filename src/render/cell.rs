@@ -214,8 +214,9 @@ pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
     TUI_CELL_SYM_MAP.get(symbol).copied()
 }
 
-/// sym_index, texture_index, fg_color, bg_color
-pub type CellInfo = (u8, u8, Color, Color);
+/// sym_index, texture_index, fg_color, bg_color, modifier
+/// modifier 字段用于传递样式修饰符到渲染管线
+pub type CellInfo = (u8, u8, Color, Color, Modifier);
 
 /// returns a cellsym string by index
 /// 256 unicode chars mark the index of a symbol in a SDL texture
@@ -285,32 +286,32 @@ impl Cell {
     }
 
     /// refers to the comments in buffer.rs, works in graphics mode
-    /// returns offset and texture id
+    /// returns offset, texture id, colors, and modifier
     ///
     /// maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
     /// an 8-digits index gets from the UTF8 code is used to mark the offset in its texture
     ///
     /// refers to the flush method in panel.rs
     ///
-    /// sym_index, texture_index, fg_color, bg_color
+    /// sym_index, texture_index, fg_color, bg_color, modifier
     pub fn get_cell_info(&self) -> CellInfo {
         //// Handle empty symbol (should be treated as space)
         // if self.symbol.is_empty() {
-        //     return (32, 0, self.fg, self.bg); // Space character
+        //     return (32, 0, self.fg, self.bg, self.modifier); // Space character
         // }
         
         // Check for Emoji first
         if let Some((block, idx)) = EMOJI_MAP.get(&self.symbol) {
-            return (*idx, *block, self.fg, self.bg);
+            return (*idx, *block, self.fg, self.bg, self.modifier);
         }
         
         // For Sprite texture (tex=0), handle space character specially
         // CELL_SYM_MAP maps space to index 33, but in Sprite texture it should be 32
         if self.tex == 0 && self.symbol == " " {
-            return (32, 0, self.fg, self.bg);
+            return (32, 0, self.fg, self.bg, self.modifier);
         }
         
-        (symidx(&self.symbol), self.tex, self.fg, self.bg)
+        (symidx(&self.symbol), self.tex, self.fg, self.bg, self.modifier)
     }
 
     pub fn set_char(&mut self, ch: char) -> &mut Cell {

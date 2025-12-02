@@ -244,15 +244,90 @@ impl WgpuSymbolRenderer {
     ///   is preserved.
     /// - `ratio_x`/`ratio_y` are applied to keep DPI scaling parity with GL.
     pub fn generate_instances_from_render_cells(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
+        // Modifier bit flags (matching Modifier enum in style.rs)
+        // 样式修饰符位标志（与 style.rs 中的 Modifier 枚举匹配）
+        const MOD_BOLD: u16 = 0x0001;
+        const MOD_DIM: u16 = 0x0002;
+        // const MOD_ITALIC: u16 = 0x0004;      // Handled by shader
+        // const MOD_UNDERLINED: u16 = 0x0008;  // Handled by shader
+        const MOD_REVERSED: u16 = 0x0040;
+        const MOD_HIDDEN: u16 = 0x0080;
+        // const MOD_CROSSED_OUT: u16 = 0x0100; // Handled by shader
+        
         self.instance_buffer.clear();
         self.instance_count = 0;
         
         for r in render_cells {
-            // Use the same transformation chain as OpenGL using UnifiedTransform methods
+            let cell_width = r.w as f32;
+            let cell_height = r.h as f32;
+            
+            // Apply modifier effects to colors
+            // 应用样式修饰符效果到颜色
+            let modifier = r.modifier;
+            
+            // Get base colors (may be swapped if REVERSED)
+            // 获取基础颜色（如果设置了 REVERSED 则交换）
+            let (mut fg_color, bg_color) = if modifier & MOD_REVERSED != 0 {
+                // REVERSED: swap foreground and background colors
+                // REVERSED: 交换前景色和背景色
+                let bg = r.bcolor.unwrap_or((0.0, 0.0, 0.0, 0.0));
+                let fg = r.fcolor;
+                (bg, Some(fg))
+            } else {
+                (r.fcolor, r.bcolor)
+            };
+            
+            // Apply BOLD effect: multiply RGB by 1.3, clamp to 1.0
+            // BOLD 效果：RGB 值乘以 1.3，限制在 1.0 以内
+            if modifier & MOD_BOLD != 0 {
+                fg_color.0 = (fg_color.0 * 1.3).min(1.0);
+                fg_color.1 = (fg_color.1 * 1.3).min(1.0);
+                fg_color.2 = (fg_color.2 * 1.3).min(1.0);
+            }
+            
+            // Apply DIM effect: multiply alpha by 0.6
+            // DIM 效果：Alpha 值乘以 0.6
+            if modifier & MOD_DIM != 0 {
+                fg_color.3 *= 0.6;
+            }
+            
+            // Apply HIDDEN effect: set alpha to 0.0
+            // HIDDEN 效果：Alpha 值设为 0.0
+            if modifier & MOD_HIDDEN != 0 {
+                fg_color.3 = 0.0;
+            }
+            
+            // Background rendering - needs separate transform calculation
+            // Background使用独立的transform，因为background symbol (1280) 的frame尺寸
+            // 与foreground symbol可能不同（如TUI字符是16x32，而填充符号是16x16）
+            if let Some(b) = bg_color {
+                let mut bg_transform = self.transform_stack;
+                bg_transform.translate(
+                    r.x + r.cx - r.w as f32,
+                    r.y + r.cy - r.h as f32,
+                );
+                if r.angle != 0.0 {
+                    bg_transform.rotate(r.angle);
+                }
+                bg_transform.translate(
+                    -r.cx + r.w as f32,
+                    -r.cy + r.h as f32,
+                );
+                
+                // Background symbol 1280 has its own frame size, scale to match cell size
+                // 背景符号1280有自己的frame尺寸，需要缩放以匹配cell尺寸
+                let bg_frame = &self.symbols[1280];
+                let bg_frame_width = bg_frame.width / ratio_x;
+                let bg_frame_height = bg_frame.height / ratio_y;
+                let bg_scale_x = cell_width / bg_frame_width / ratio_x;
+                let bg_scale_y = cell_height / bg_frame_height / ratio_y;
+                bg_transform.scale(bg_scale_x, bg_scale_y);
+                
+                self.draw_symbol_instance(1280, &bg_transform, [b.0, b.1, b.2, b.3]);
+            }
+            
+            // Foreground rendering
             let mut transform = self.transform_stack;
-            let w = PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let h = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
-
             transform.translate(
                 r.x + r.cx - r.w as f32,
                 r.y + r.cy - r.h as f32,
@@ -269,10 +344,6 @@ impl WgpuSymbolRenderer {
             // This preserves per-sprite scaling beyond DPI ratio adjustments.
             // IMPORTANT: Use frame dimensions (not PIXEL_SYM_WIDTH/HEIGHT) because
             // TUI (16x32) and Emoji (32x32) have different sizes than Sprite (16x16).
-            let cell_width = r.w as f32;
-            let cell_height = r.h as f32;
-            
-            // Get the actual frame to determine its dimensions
             let frame = &self.symbols[r.texsym];
             let frame_width = frame.width / ratio_x;
             let frame_height = frame.height / ratio_y;
@@ -282,13 +353,8 @@ impl WgpuSymbolRenderer {
             
             transform.scale(scale_x, scale_y);
             
-            // Draw background if it exists
-            if let Some(b) = r.bcolor {
-                self.draw_symbol_instance(1280, &transform, [b.0, b.1, b.2, b.3]);
-            }
-            
-            // Draw foreground symbol
-            self.draw_symbol_instance(r.texsym, &transform, [r.fcolor.0, r.fcolor.1, r.fcolor.2, r.fcolor.3]);
+            // Draw foreground symbol with modified color
+            self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
         }
     }
     

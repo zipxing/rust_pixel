@@ -499,6 +499,21 @@ pub struct RenderCell {
     ///
     /// Defines the pivot point for rotation.
     pub cy: f32,
+
+    /// Style modifier flags for text rendering effects
+    /// 样式修饰符标志，用于文本渲染效果
+    ///
+    /// Bit flags matching Modifier enum:
+    /// - 0x0001: BOLD (increase color intensity)
+    /// - 0x0002: DIM (reduce alpha)
+    /// - 0x0004: ITALIC (shader slant effect)
+    /// - 0x0008: UNDERLINED (shader bottom line)
+    /// - 0x0010: SLOW_BLINK (ignored in graphics mode)
+    /// - 0x0020: RAPID_BLINK (ignored in graphics mode)
+    /// - 0x0040: REVERSED (swap fg/bg colors)
+    /// - 0x0080: HIDDEN (set alpha to 0)
+    /// - 0x0100: CROSSED_OUT (shader middle line)
+    pub modifier: u16,
 }
 
 pub struct Graph {
@@ -690,6 +705,7 @@ impl Graph {
 ///        an offset from it to cooperate with backend transform chain.
 /// - `angle`: Rotation angle in degrees (will be converted to radians internally)
 /// - `ccp`: Center point for rotation
+/// - `modifier`: Style modifier flags (see Modifier enum in style.rs)
 ///
 /// # Unified Texture Layout (1024x1024)
 /// - **TUI Region** (rows 0-127): 128 cols × 8 rows = 1024 chars (8x16 pixels each)
@@ -707,6 +723,7 @@ pub fn push_render_buffer(
     s: ARect,
     angle: f64,
     ccp: &PointI32,
+    modifier: u16,
 ) {
     let mut wc = RenderCell {
         fcolor: (
@@ -715,6 +732,7 @@ pub fn push_render_buffer(
             fc.2 as f32 / 255.0,
             fc.3 as f32 / 255.0,
         ),
+        modifier,
         ..Default::default()
     };
     if let Some(bc) = bgc {
@@ -807,6 +825,8 @@ pub fn push_render_buffer(
     rbuf.push(wc);
 }
 
+/// Position calculation helper for rendering
+/// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
 pub fn render_helper(
     cell_w: u16,
     r: PointF32,
@@ -819,6 +839,7 @@ pub fn render_helper(
 }
 
 /// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
+/// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
 ///
 /// Returns: (dest_rect, texture_id, symbol_id)
 pub fn render_helper_with_scale(
@@ -942,12 +963,15 @@ where
         let ph = s.content.area.height;
 
         for (i, cell) in s.content.content.iter().enumerate() {
-            let sh = &cell.get_cell_info();
+            // Extract CellInfo (now includes modifier)
+            // CellInfo 现在包含 modifier，但 render_helper 只需要前 4 个元素
+            let cell_info = cell.get_cell_info();
+            let sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
             let (s2, texidx, symidx) = render_helper_with_scale(
                 pw,
                 PointF32 { x: rx, y: ry },
                 i,
-                sh,
+                &sh,
                 PointU16 { x: px, y: py },
                 false,     // Pixel sprites use Sprite characters (8×8)
                 s.scale_x, // 应用sprite的X轴缩放
@@ -1032,6 +1056,7 @@ where
 /// - `ry`: Vertical scaling ratio for display adaptation
 /// - `use_tui`: Use TUI characters (16×32) instead of Sprite characters (16×16)
 /// - `f`: Callback function to process each character (RenderCell)
+///   Signature: (fg_color, bg_color, dest_rect, tex_idx, sym_idx, modifier)
 pub fn render_main_buffer<F>(
     buf: &Buffer,
     width: u16,
@@ -1040,7 +1065,7 @@ pub fn render_main_buffer<F>(
     use_tui: bool,
     mut f: F,
 ) where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, u16),
 {
     let mut skip_next = false;
     for (i, cell) in buf.content.iter().enumerate() {
@@ -1049,8 +1074,11 @@ pub fn render_main_buffer<F>(
             continue;
         }
 
-        // symidx, texidx, fg, bg
-        let mut sh = cell.get_cell_info();
+        // Extract CellInfo: symidx, texidx, fg, bg, modifier
+        // CellInfo 现在包含 modifier
+        let cell_info = cell.get_cell_info();
+        let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
+        let modifier = cell_info.4.bits();  // Convert Modifier to u16
 
         // If we are in TUI mode (use_tui = true) and the texture is set to 0 (default),
         // redirect it to the TUI block (Block 48).
@@ -1111,7 +1139,7 @@ pub fn render_main_buffer<F>(
         } else {
             None
         };
-        f(&fc, &bc, s2, texidx, symidx);
+        f(&fc, &bc, s2, texidx, symidx, modifier);
     }
 }
 
@@ -1342,7 +1370,9 @@ pub fn generate_render_buffer(
             &mut base.rd,
             stage,
             |fc, s2, texidx, symidx| {
-                push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz);
+                // Logo uses no modifier (0)
+                // Logo 不使用样式修饰符
+                push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz, 0);
             },
         );
         return rbuf;
@@ -1354,8 +1384,9 @@ pub fn generate_render_buffer(
                      bc: &Option<(u8, u8, u8, u8)>,
                      s2: ARect,
                      texidx: usize,
-                     symidx: usize| {
-        push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz);
+                     symidx: usize,
+                     modifier: u16| {
+        push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
     };
 
     // No custom border rendering - use OS window decoration instead
@@ -1373,7 +1404,9 @@ pub fn generate_render_buffer(
         for item in ps {
             if item.is_pixel && !item.is_hidden {
                 render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
-                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp);
+                    // Pixel sprites currently don't use modifier (0)
+                    // 像素精灵当前不使用样式修饰符
+                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);
                 });
             }
         }
