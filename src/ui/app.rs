@@ -88,8 +88,9 @@ impl UIApp {
     }
     
     pub fn update(&mut self, dt: f32) -> UIResult<()> {
-        // Create a temporary context for updates
-        let mut ctx = Context::new("ui_app", ".");
+        // Create a temporary context for updates (uses default GAME_CONFIG if not set)
+        // 创建临时上下文（如果未设置则使用默认 GAME_CONFIG）
+        let mut ctx = Context::new();
         
         // Process events
         let events = self.event_dispatcher.drain_events();
@@ -119,8 +120,9 @@ impl UIApp {
         // Clear buffer
         self.clear_buffer();
         
-        // Create rendering context
-        let ctx = Context::new("ui_app", ".");
+        // Create rendering context (uses default GAME_CONFIG if not set)
+        // 创建渲染上下文（如果未设置则使用默认 GAME_CONFIG）
+        let ctx = Context::new();
         
         // Render root widget to the appropriate buffer
         if let Some(ref root) = self.root_widget {
@@ -149,8 +151,9 @@ impl UIApp {
             }
         }
         
-        // Create rendering context
-        let ctx = Context::new("ui_app", ".");
+        // Create rendering context (uses default GAME_CONFIG if not set)
+        // 创建渲染上下文（如果未设置则使用默认 GAME_CONFIG）
+        let ctx = Context::new();
         
         // Render root widget directly to target buffer
         if let Some(ref root) = self.root_widget {

@@ -77,9 +77,9 @@ pub enum SdlBorderArea {
 }
 
 impl SdlAdapter {
-    pub fn new(gn: &str, project_path: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            base: AdapterBase::new(gn, project_path),
+            base: AdapterBase::new(),
             sdl_context: sdl2::init().unwrap(),
             event_pump: None,
             cursor: None,
@@ -177,10 +177,12 @@ impl SdlAdapter {
 
 impl Adapter for SdlAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
-        // load texture file...
+        // load texture file using global GAME_CONFIG
+        // 使用全局 GAME_CONFIG 加载纹理文件
+        let project_path = &crate::get_game_config().project_path;
         let texture_path = format!(
             "{}{}{}",
-            self.base.project_path,
+            project_path,
             std::path::MAIN_SEPARATOR,
             PIXEL_TEXTURE_FILE
         );
@@ -260,15 +262,17 @@ impl Adapter for SdlAdapter {
 
         info!("Window & gl init ok...");
 
-        // custom mouse cursor image
-        let surface = Surface::from_file(format!(
+        // custom mouse cursor image using global GAME_CONFIG
+        // 使用全局 GAME_CONFIG 加载自定义鼠标光标图像
+        let cursor_path = format!(
             "{}{}{}",
-            self.base.project_path,
+            project_path,
             std::path::MAIN_SEPARATOR,
             "assets/pix/cursor.png"
-        ))
-        .map_err(|err| format!("failed to load cursor image: {}", err))
-        .unwrap();
+        );
+        let surface = Surface::from_file(&cursor_path)
+            .map_err(|err| format!("failed to load cursor image: {}", err))
+            .unwrap();
         self.set_mouse_cursor(&surface);
 
         // init event_pump

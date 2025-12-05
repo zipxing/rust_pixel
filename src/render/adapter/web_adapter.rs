@@ -30,9 +30,9 @@ pub struct WebAdapter {
 }
 
 impl WebAdapter {
-    pub fn new(gn: &str, project_path: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            base: AdapterBase::new(gn, project_path),
+            base: AdapterBase::new(),
             gl_pixel_renderer: None,
             gl: None,
         }

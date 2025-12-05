@@ -180,8 +180,8 @@ lazy_static! {
         
         let syms = concat!(
             " !#$%&()*+,-./01",
-            "23456789:;\"'<>?",
-            "@[\\]^_`{||}~⌐¬½¼¡",
+            "23456789:;\"'<=>?",  
+            "@[\\]^_`{|}~⌐¬½¼¡",  
             "«»∙·※⦿ABCDEFGHIJ",
             "KLMNOPQRSTUVWXYZ",
             "abcdefghijklmnop",
@@ -215,7 +215,6 @@ pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
 }
 
 /// sym_index, texture_index, fg_color, bg_color, modifier
-/// modifier 字段用于传递样式修饰符到渲染管线
 pub type CellInfo = (u8, u8, Color, Color, Modifier);
 
 /// returns a cellsym string by index
@@ -295,11 +294,6 @@ impl Cell {
     ///
     /// sym_index, texture_index, fg_color, bg_color, modifier
     pub fn get_cell_info(&self) -> CellInfo {
-        //// Handle empty symbol (should be treated as space)
-        // if self.symbol.is_empty() {
-        //     return (32, 0, self.fg, self.bg, self.modifier); // Space character
-        // }
-        
         // Check for Emoji first
         if let Some((block, idx)) = EMOJI_MAP.get(&self.symbol) {
             return (*idx, *block, self.fg, self.bg, self.modifier);

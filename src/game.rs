@@ -78,14 +78,24 @@ where
     M: Model,
     R: Render<Model = M>,
 {
-    pub fn new(m: M, r: R, name: &str, project_path: &str) -> Self {
-        let ap = project_path.to_string();
-        let ctx = Context::new(name, &ap);
+    /// Create a new Game instance
+    /// 创建新的 Game 实例
+    /// 
+    /// Note: Must call `rust_pixel::init_game_config()` before calling this function.
+    /// 注意：必须在调用此函数之前调用 `rust_pixel::init_game_config()`。
+    pub fn new(m: M, r: R) -> Self {
+        // Get game name and project path from global GAME_CONFIG
+        // 从全局 GAME_CONFIG 获取游戏名称和项目路径
+        let config = crate::get_game_config();
+        let name = &config.game_name;
+        let project_path = &config.project_path;
+        
+        let ctx = Context::new();
         init_log(
             log::LevelFilter::Info,
             &format!("log{}{}.log", std::path::MAIN_SEPARATOR, name),
         );
-        info!("{}(rust_pixel) start...{:?}", name, &ap);
+        info!("{}(rust_pixel) start...{:?}", name, project_path);
         Self {
             context: ctx,
             model: m,

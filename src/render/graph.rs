@@ -115,10 +115,6 @@ pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
 /// Symbol height (in pixels) resolved from the symbol atlas (16 pixels for Sprite)
-///
-/// Initialized exactly once during adapter initialization. Accessing this
-/// before initialization will panic with "lazylock init".
-///
 /// Note:
 /// - Sprite layer: uses this value directly (16 pixels)
 /// - TUI layer: uses double this value (32 pixels = PIXEL_SYM_HEIGHT * 2)
@@ -964,7 +960,6 @@ where
 
         for (i, cell) in s.content.content.iter().enumerate() {
             // Extract CellInfo (now includes modifier)
-            // CellInfo 现在包含 modifier，但 render_helper 只需要前 4 个元素
             let cell_info = cell.get_cell_info();
             let sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
             let (s2, texidx, symidx) = render_helper_with_scale(
@@ -1405,7 +1400,6 @@ pub fn generate_render_buffer(
             if item.is_pixel && !item.is_hidden {
                 render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
                     // Pixel sprites currently don't use modifier (0)
-                    // 像素精灵当前不使用样式修饰符
                     push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);
                 });
             }

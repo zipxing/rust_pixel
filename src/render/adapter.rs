@@ -6,11 +6,6 @@
 //! This module defines the render adapter architecture for RustPixel, providing unified
 //! rendering interfaces across different platforms and rendering backends.
 //!
-//! ## 🏗️ Architecture Overview 
-//!
-//! After the major WGPU refactor, RustPixel now uses a **direct concrete type architecture**
-//! instead of trait objects, providing better performance and clearer code organization.
-//!
 //! ### Supported Rendering Backends
 //!
 //! #### TextMode
@@ -21,16 +16,6 @@
 //! - **WinitGlowAdapter**: Cross-platform OpenGL rendering (winit + glutin + glow)
 //! - **WinitWgpuAdapter**: Modern GPU rendering (winit + wgpu)
 //! - **WebAdapter**: WebGL-based browser rendering (webgl2 + glow)
-//!
-//! ### 🚀 Performance Improvements
-//!
-//! The refactor eliminated trait object overhead by:
-//! - **Direct method calls** instead of dynamic dispatch
-//! - **Compile-time polymorphism** via conditional compilation
-//! - **Zero-cost abstractions** for better performance
-//! - **Unified rendering interface** (`draw_all_graph`) across all backends
-//!
-//! ### 📁 Improved Code Organization
 //!
 //! ```text
 //! src/render/adapter.rs         # This file - adapter definitions
@@ -281,13 +266,14 @@ pub use crate::render::graph::{
 /// │  └─────────────┴─────────────┴─────────────┴─────────────┘  │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
+/// Base data structure shared by all rendering adapters
+/// 所有渲染适配器共享的基础数据结构
+/// 
+/// Note: `game_name` and `project_path` are now stored in the global `GAME_CONFIG`.
+/// Use `rust_pixel::get_game_config()` to access them from anywhere.
+/// 注意：`game_name` 和 `project_path` 现在存储在全局 `GAME_CONFIG` 中。
+/// 使用 `rust_pixel::get_game_config()` 可以在任何地方访问它们。
 pub struct AdapterBase {
-    /// Game name identifier
-    pub game_name: String,
-
-    /// Project root path for asset loading
-    pub project_path: String,
-
     /// Window title displayed in graphics mode
     pub title: String,
 
@@ -306,10 +292,8 @@ pub struct AdapterBase {
 }
 
 impl AdapterBase {
-    pub fn new(gn: &str, project_path: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            game_name: gn.to_string(),
-            project_path: project_path.to_string(),
             title: "".to_string(),
             cell_w: 0,
             cell_h: 0,

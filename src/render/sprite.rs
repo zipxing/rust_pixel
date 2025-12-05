@@ -82,9 +82,11 @@ macro_rules! asset2sprite {
             _ => {},
         }
         
+        // Use global GAME_CONFIG for project path
+        // 使用全局 GAME_CONFIG 获取项目路径
         let nl = if cfg!(not(target_arch = "wasm32")) {
             &format!("{}{}assets{}{}",
-                $ctx.project_path,
+                rust_pixel::get_game_config().project_path,
                 std::path::MAIN_SEPARATOR,
                 std::path::MAIN_SEPARATOR,
                 $loc)

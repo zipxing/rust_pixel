@@ -8,6 +8,9 @@
 //! A render adapter is also provided
 //! to make it compatible with web, SDL, or terminal modes.
 //! Finally, an asset_manager is included as well.
+//!
+//! Note: `game_name` and `project_path` are now stored in the global `GAME_CONFIG`.
+//! Use `rust_pixel::get_game_config()` to access them from anywhere.
 
 use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::Rand};
 
@@ -27,8 +30,6 @@ use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
 use crate::render::adapter::web_adapter::WebAdapter;
 
 pub struct Context {
-    pub game_name: String,
-    pub project_path: String,
     pub stage: u32,
     pub state: u8,
     pub rand: Rand,
@@ -38,30 +39,24 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(name: &str, project_path: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            game_name: name.to_string(),
-            project_path: project_path.to_string(),
             stage: 0,
             state: 0,
             rand: Rand::new(),
             asset_manager: AssetManager::new(),
             input_events: vec![],
             #[cfg(wasm)]
-            adapter: Box::new(WebAdapter::new(name, project_path)),
+            adapter: Box::new(WebAdapter::new()),
             #[cfg(sdl_backend)]
-            adapter: Box::new(SdlAdapter::new(name, project_path)),
+            adapter: Box::new(SdlAdapter::new()),
             #[cfg(glow_backend)]
-            adapter: Box::new(WinitGlowAdapter::new(name, project_path)),
+            adapter: Box::new(WinitGlowAdapter::new()),
             #[cfg(wgpu_backend)]
-            adapter: Box::new(WinitWgpuAdapter::new(name, project_path)),
+            adapter: Box::new(WinitWgpuAdapter::new()),
             #[cfg(cross_backend)]
-            adapter: Box::new(CrosstermAdapter::new(name, project_path)),
+            adapter: Box::new(CrosstermAdapter::new()),
         }
-    }
-
-    pub fn set_asset_path(&mut self, project_path: &str) {
-        self.project_path = project_path.to_string();
     }
 
     pub fn cell_width(&mut self) -> f32 {

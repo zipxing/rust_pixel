@@ -11,9 +11,6 @@
 //! https://docs.rs/rodio
 
 #[cfg(audio_support)]
-use crate::util::get_project_path;
-
-#[cfg(audio_support)]
 use rodio::{Decoder, OutputStreamBuilder, Source};
 #[cfg(audio_support)]
 use std::fs::File;
@@ -54,7 +51,8 @@ impl Audio {
     pub fn play_file(&self, fpath: &str, is_loop: bool) {
         #[cfg(audio_support)]
         {
-            let project_path = get_project_path();
+            // Use global GAME_CONFIG for project path
+            let project_path = &crate::get_game_config().project_path;
             let path = format!("{}/assets/{}", project_path, fpath);
             log::info!("Attempting to play audio file: {}", path);
 

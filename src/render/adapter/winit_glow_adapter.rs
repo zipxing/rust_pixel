@@ -404,16 +404,14 @@ impl ApplicationHandler for WinitGlowAppHandler {
 impl WinitGlowAdapter {
     /// Create a new Winit + Glow adapter instance
     ///
-    /// # Parameters
-    /// - `gn`: Game name identifier
-    /// - `project_path`: Project root path for resource loading
-    ///
     /// # Returns
     /// Returns the initialized WinitGlowAdapter instance, all OpenGL related components are None,
     /// and need to be used normally after calling the init() method.
-    pub fn new(gn: &str, project_path: &str) -> Self {
+    /// 返回初始化的 WinitGlowAdapter 实例，所有 OpenGL 相关组件都是 None，
+    /// 需要调用 init() 方法后才能正常使用。
+    pub fn new() -> Self {
         Self {
-            base: AdapterBase::new(gn, project_path),
+            base: AdapterBase::new(),
             window: None,
             event_loop: None,
             drag: Drag::default(),
@@ -618,10 +616,12 @@ impl WinitGlowAdapter {
     /// - Hotspot position set to (0, 0)
     /// - Handles transparency and pre-multiplied alpha
     fn set_mouse_cursor(&mut self) {
-        // Build cursor image file path
+        // Build cursor image file path using global GAME_CONFIG
+        // 使用全局 GAME_CONFIG 构建光标图像文件路径
+        let project_path = &crate::get_game_config().project_path;
         let cursor_path = format!(
             "{}{}{}",
-            self.base.project_path,
+            project_path,
             std::path::MAIN_SEPARATOR,
             "assets/pix/cursor.png"
         );

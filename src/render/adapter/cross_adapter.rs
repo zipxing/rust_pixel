@@ -41,11 +41,11 @@ pub struct CrosstermAdapter {
 
 #[cfg(cross_backend)]
 impl CrosstermAdapter {
-    pub fn new(gn: &str, project_path: &str) -> Self {
+    pub fn new() -> Self {
         let stdout = io::stdout();
         Self {
             writer: Box::new(stdout),
-            base: AdapterBase::new(gn, project_path),
+            base: AdapterBase::new(),
             rd: Rand::new(),
         }
     }
