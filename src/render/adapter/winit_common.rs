@@ -429,8 +429,6 @@ where
     info!("Initializing Winit adapter common components...");
 
     // 1. Load texture file and set symbol dimensions
-    // Use global GAME_CONFIG instead of adapter.base.project_path
-    // 使用全局 GAME_CONFIG 而不是 adapter.base.project_path
     let project_path = &crate::get_game_config().project_path;
     let texture_path = format!(
         "{}{}{}",

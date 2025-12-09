@@ -2,7 +2,7 @@ use rust_pixel::game::Model;
 use rust_pixel::context::Context;
 use rust_pixel::ui::*;
 use rust_pixel::ui::layout::Alignment;
-use rust_pixel::render::style::{Color, Style};
+use rust_pixel::render::style::{Color, Modifier, Style};
 use rust_pixel::util::Rect;
 use log::info;
 
@@ -245,11 +245,15 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
         .with_duration(5.0);
     components.add_child(Box::new(toast));
 
+    // Page 5: Modifier Effects Demo
+    let modifiers_panel = create_modifiers_demo();
+
     // Add pages to tabs
     tabs.add_tab("Tree", Box::new(tree_panel));
     tabs.add_tab("About", Box::new(about));
     tabs.add_tab("Components", Box::new(components));
     tabs.add_tab("Modal", Box::new(modal_demo_panel));
+    tabs.add_tab("Modifiers", Box::new(modifiers_panel));
 
     // Add to main layout
     main_panel.add_child(Box::new(left_panel));
@@ -289,4 +293,107 @@ fn create_sample_tree(tree: &mut Tree) {
     tree.add_child_node(docs_id, "📝 notes.md");
     tree.add_child_node(docs_id, "📊 report.pdf");
     tree.add_child_node(docs_id, "📋 todo.txt");
+}
+
+// Helper function to create modifier effects demo panel
+fn create_modifiers_demo() -> rust_pixel::ui::Panel {
+    let mut panel = rust_pixel::ui::Panel::new()
+        .with_border(BorderStyle::Single)
+        .with_title("Style Modifier Effects Test")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
+    
+    // Normal text (baseline)
+    let normal = Label::new("Normal Text - No modifier")
+        .with_style(Style::default().fg(Color::White).bg(Color::Black));
+    panel.add_child(Box::new(normal));
+    
+    // BOLD effect (RGB * 1.3)
+    let bold = Label::new("BOLD Text - RGB intensity +30%")
+        .with_style(Style::default()
+            .fg(Color::Cyan)
+            .bg(Color::Black)
+            .add_modifier(Modifier::BOLD));
+    panel.add_child(Box::new(bold));
+    
+    // ITALIC effect (skew transform)
+    let italic = Label::new("ITALIC Text - Slanted 12 degrees")
+        .with_style(Style::default()
+            .fg(Color::Yellow)
+            .bg(Color::Black)
+            .add_modifier(Modifier::ITALIC));
+    panel.add_child(Box::new(italic));
+    
+    // UNDERLINED effect (bottom line)
+    let underlined = Label::new("UNDERLINED Text - Line at bottom")
+        .with_style(Style::default()
+            .fg(Color::Green)
+            .bg(Color::Black)
+            .add_modifier(Modifier::UNDERLINED));
+    panel.add_child(Box::new(underlined));
+    
+    // DIM effect (alpha * 0.6)
+    let dim = Label::new("DIM Text - Alpha reduced to 60%")
+        .with_style(Style::default()
+            .fg(Color::Magenta)
+            .bg(Color::Black)
+            .add_modifier(Modifier::DIM));
+    panel.add_child(Box::new(dim));
+    
+    // REVERSED effect (swap fg/bg)
+    let reversed = Label::new("REVERSED Text - FG/BG swapped")
+        .with_style(Style::default()
+            .fg(Color::White)
+            .bg(Color::Blue)
+            .add_modifier(Modifier::REVERSED));
+    panel.add_child(Box::new(reversed));
+    
+    // CROSSED_OUT effect (strikethrough)
+    let crossed = Label::new("CROSSED_OUT Text - Strikethrough")
+        .with_style(Style::default()
+            .fg(Color::Red)
+            .bg(Color::Black)
+            .add_modifier(Modifier::CROSSED_OUT));
+    panel.add_child(Box::new(crossed));
+    
+    // HIDDEN effect (alpha = 0, invisible)
+    let hidden = Label::new("HIDDEN Text - Should be invisible!")
+        .with_style(Style::default()
+            .fg(Color::White)
+            .bg(Color::Black)
+            .add_modifier(Modifier::HIDDEN));
+    panel.add_child(Box::new(hidden));
+    
+    // Combination: BOLD + ITALIC
+    let bold_italic = Label::new("BOLD+ITALIC - Combined effect")
+        .with_style(Style::default()
+            .fg(Color::Cyan)
+            .bg(Color::Black)
+            .add_modifier(Modifier::BOLD | Modifier::ITALIC));
+    panel.add_child(Box::new(bold_italic));
+    
+    // Combination: BOLD + UNDERLINED
+    let bold_underlined = Label::new("BOLD+UNDERLINED - Combined")
+        .with_style(Style::default()
+            .fg(Color::Yellow)
+            .bg(Color::Black)
+            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED));
+    panel.add_child(Box::new(bold_underlined));
+    
+    // Combination: ITALIC + UNDERLINED + CROSSED_OUT
+    let triple = Label::new("ITALIC+UNDERLINE+CROSSED - Triple")
+        .with_style(Style::default()
+            .fg(Color::Green)
+            .bg(Color::Black)
+            .add_modifier(Modifier::ITALIC | Modifier::UNDERLINED | Modifier::CROSSED_OUT));
+    panel.add_child(Box::new(triple));
+    
+    // BLINK effect (should be ignored in graphics mode)
+    let blink = Label::new("SLOW_BLINK - Ignored in graphics")
+        .with_style(Style::default()
+            .fg(Color::White)
+            .bg(Color::Black)
+            .add_modifier(Modifier::SLOW_BLINK));
+    panel.add_child(Box::new(blink));
+    
+    panel
 }

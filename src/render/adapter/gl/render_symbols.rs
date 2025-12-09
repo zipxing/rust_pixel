@@ -381,11 +381,15 @@ impl GlRenderSymbols {
         // 样式修饰符位标志（与 style.rs 中的 Modifier 枚举匹配）
         const MOD_BOLD: u16 = 0x0001;
         const MOD_DIM: u16 = 0x0002;
-        // const MOD_ITALIC: u16 = 0x0004;      // Handled by shader
-        // const MOD_UNDERLINED: u16 = 0x0008;  // Handled by shader
+        const MOD_ITALIC: u16 = 0x0004;
+        const MOD_UNDERLINED: u16 = 0x0008;
         const MOD_REVERSED: u16 = 0x0040;
         const MOD_HIDDEN: u16 = 0x0080;
-        // const MOD_CROSSED_OUT: u16 = 0x0100; // Handled by shader
+        const MOD_CROSSED_OUT: u16 = 0x0100;
+        
+        // ITALIC slant factor: tan(12°) ≈ 0.21
+        // ITALIC 倾斜因子：tan(12°) ≈ 0.21
+        const ITALIC_SKEW: f32 = 0.21;
         
         // Transform chain parity with WGPU:
         // 1) translate(r.x + r.cx - r.w, r.y + r.cy - r.h)
@@ -474,6 +478,12 @@ impl GlRenderSymbols {
                 -r.cy + r.h as f32,
             );
             
+            // Apply ITALIC effect: horizontal skew transformation
+            // ITALIC 效果：水平倾斜变换
+            if modifier & MOD_ITALIC != 0 {
+                transform.skew_x(ITALIC_SKEW);
+            }
+            
             // Apply scaling based on RenderCell dimensions vs actual frame size.
             // This preserves per-sprite scaling beyond DPI ratio adjustments.
             // IMPORTANT: Use frame dimensions (not PIXEL_SYM_WIDTH/HEIGHT) because
@@ -488,6 +498,51 @@ impl GlRenderSymbols {
             // fill instance buffer for opengl instance rendering
             // r.texsym is calculated by push_render_buffer using block layout formula
             self.draw_symbol(gl, r.texsym, &transform, &color);
+            
+            // Draw UNDERLINED effect: a line at the bottom of the cell
+            // UNDERLINED 效果：在单元格底部绘制线条
+            // Uses symbol 1280 (background fill) scaled to line thickness
+            if modifier & MOD_UNDERLINED != 0 {
+                let mut line_transform = UnifiedTransform::new();
+                // Position at bottom of cell (90% down)
+                let line_y = r.y + r.cy - r.h as f32 + cell_height * 0.9;
+                line_transform.translate(r.x + r.cx - r.w as f32, line_y);
+                if r.angle != 0.0 {
+                    line_transform.rotate(r.angle);
+                }
+                line_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                
+                // Scale to full width, thin height (8% of cell height)
+                let line_frame = &self.symbols[1280];
+                let line_scale_x = cell_width / (line_frame.width / ratio_x) / ratio_x;
+                let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
+                line_transform.scale(line_scale_x, line_scale_y);
+                
+                let line_color = UnifiedColor::new(fg_color.0, fg_color.1, fg_color.2, fg_color.3);
+                self.draw_symbol(gl, 1280, &line_transform, &line_color);
+            }
+            
+            // Draw CROSSED_OUT effect: a line through the middle of the cell
+            // CROSSED_OUT 效果：在单元格中间绘制删除线
+            if modifier & MOD_CROSSED_OUT != 0 {
+                let mut line_transform = UnifiedTransform::new();
+                // Position at middle of cell (50% down, adjusted for line thickness)
+                let line_y = r.y + r.cy - r.h as f32 + cell_height * 0.46;
+                line_transform.translate(r.x + r.cx - r.w as f32, line_y);
+                if r.angle != 0.0 {
+                    line_transform.rotate(r.angle);
+                }
+                line_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                
+                // Scale to full width, thin height (8% of cell height)
+                let line_frame = &self.symbols[1280];
+                let line_scale_x = cell_width / (line_frame.width / ratio_x) / ratio_x;
+                let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
+                line_transform.scale(line_scale_x, line_scale_y);
+                
+                let line_color = UnifiedColor::new(fg_color.0, fg_color.1, fg_color.2, fg_color.3);
+                self.draw_symbol(gl, 1280, &line_transform, &line_color);
+            }
         }
         self.draw(gl);
     }

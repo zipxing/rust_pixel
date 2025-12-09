@@ -26,16 +26,31 @@
 - [x] 1.9 在 `render_helper` 中实现 Sprite 区域索引计算
   - 向后兼容，现有 Sprite 代码无需修改
 - [x] 1.10 确保 TUI 层（Main Buffer）在渲染顺序上位于所有 Pixel Sprites 之后（最上层）
-- [ ] 1.11 修改 `Cell.get_cell_info()` 方法，将 `Cell.modifier` 信息传递到渲染管线
-- [ ] 1.12 在渲染管线中实现 BOLD 效果（RGB 值乘以 1.3，限制在 1.0 以内）
-- [ ] 1.13 在渲染管线中实现 DIM 效果（Alpha 值乘以 0.6）
-- [ ] 1.14 在渲染管线中实现 HIDDEN 效果（Alpha 值设为 0.0）
-- [ ] 1.15 在渲染管线中实现 REVERSED 效果（前景色和背景色交换）
-- [ ] 1.16 扩展 `RenderCell` 结构添加 `modifier: u16` 字段，用于需要着色器支持的效果（ITALIC、UNDERLINED、CROSSED_OUT）
-- [ ] 1.17 更新所有图形后端的着色器（OpenGL、WGPU），添加 modifier 字段支持
-- [ ] 1.18 在顶点着色器中实现 ITALIC 效果（倾斜变换）
-- [ ] 1.19 在片段着色器中实现 UNDERLINED（底部线条）、CROSSED_OUT（中间线条）效果
-- [ ] 1.20 验证 UI 组件鼠标事件处理（水平直接使用 column，垂直使用 row / 2）
+- [x] 1.11 修改 `Cell.get_cell_info()` 方法，将 `Cell.modifier` 信息传递到渲染管线
+  - `CellInfo` 类型已包含 modifier 字段
+- [x] 1.12 在渲染管线中实现 BOLD 效果（RGB 值乘以 1.3，限制在 1.0 以内）
+  - 在 `render_symbols.rs` 中实现（WGPU 和 OpenGL）
+- [x] 1.13 在渲染管线中实现 DIM 效果（Alpha 值乘以 0.6）
+  - 在 `render_symbols.rs` 中实现（WGPU 和 OpenGL）
+- [x] 1.14 在渲染管线中实现 HIDDEN 效果（Alpha 值设为 0.0）
+  - 在 `render_symbols.rs` 中实现（WGPU 和 OpenGL）
+- [x] 1.15 在渲染管线中实现 REVERSED 效果（前景色和背景色交换）
+  - 在 `render_symbols.rs` 中实现（WGPU 和 OpenGL）
+- [x] 1.16 扩展 `RenderCell` 结构添加 `modifier: u16` 字段，用于需要着色器支持的效果（ITALIC、UNDERLINED、CROSSED_OUT）
+  - `RenderCell.modifier` 字段已存在并被使用
+- [x] 1.17 更新所有图形后端添加 modifier 字段支持（在 CPU 端实现，无需修改着色器）
+  - WGPU: `render_symbols.rs` 中处理所有 modifier 效果
+  - OpenGL: `render_symbols.rs` 中处理所有 modifier 效果
+- [x] 1.18 实现 ITALIC 效果（通过 `UnifiedTransform::skew_x()` 倾斜变换实现）
+  - 添加 `skew_x()` 方法到 `UnifiedTransform`
+  - 倾斜角度约 12°（shear factor ≈ 0.21）
+- [x] 1.19 实现 UNDERLINED（底部线条）、CROSSED_OUT（中间线条）效果
+  - 使用符号 1280（背景填充）绘制线条
+  - UNDERLINED: 在单元格底部 90% 位置绘制
+  - CROSSED_OUT: 在单元格中间 46% 位置绘制
+- [x] 1.20 验证 UI 组件鼠标事件处理（水平直接使用 column，垂直使用 row / 2）
+  - `winit_common.rs` 中已正确处理 TUI 模式坐标转换
+  - 所有 UI 组件使用 `mouse_event.column` 和 `mouse_event.row` 进行事件处理
 - [x] 1.21 在 `apps/ui_demo` 中验证 TUI 架构，测试 TUI 界面、Emoji 和游戏精灵的混合渲染和交互
 - [x] 1.22 确保 TUI 架构始终启用，支持应用自由选择使用 Main Buffer（TUI）或仅使用 Pixel Sprites
 

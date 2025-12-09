@@ -360,6 +360,24 @@ impl UnifiedTransform {
         self.m11 = m01 * sin_a + m11 * cos_a;
     }
 
+    /// Apply horizontal skew/shear transformation (for ITALIC effect)
+    /// 
+    /// This transforms coordinates as: x' = x + y * shear_x
+    /// A positive shear_x value slants the top of the character to the right.
+    /// Typical italic angle is about 12-15 degrees, which corresponds to
+    /// a shear factor of approximately 0.2-0.27 (tan(12°) ≈ 0.21)
+    /// 
+    /// # Parameters
+    /// - `shear_x`: The horizontal shear factor (tan of the slant angle)
+    pub fn skew_x(&mut self, shear_x: f32) {
+        // Skew matrix: [1, shear_x; 0, 1]
+        // Multiplying current matrix M by skew matrix S:
+        // [m00, m10]   [1, shear_x]   [m00, m00*shear_x + m10]
+        // [m01, m11] * [0, 1      ] = [m01, m01*shear_x + m11]
+        self.m10 += self.m00 * shear_x;
+        self.m11 += self.m01 * shear_x;
+    }
+
     /// Reset to identity matrix
     pub fn identity(&mut self) {
         self.m00 = 1.0;
@@ -1375,27 +1393,23 @@ pub fn generate_render_buffer(
 
     let rx = base.gr.ratio_x;
     let ry = base.gr.ratio_y;
-    let mut rfunc = |fc: &(u8, u8, u8, u8),
-                     bc: &Option<(u8, u8, u8, u8)>,
-                     s2: ARect,
-                     texidx: usize,
-                     symidx: usize,
-                     modifier: u16| {
-        push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
-    };
 
     // No custom border rendering - use OS window decoration instead
     // #[cfg(graphics_backend)]
     // render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
-    // render main buffer...
-    // Use TUI characters (8×16) for UI components in graphics mode
-    if stage > LOGO_FRAME {
-        render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
-    }
+    // Rendering order (back to front):
+    // 1. Pixel Sprites (game objects, backgrounds)
+    // 2. Main Buffer (TUI layer - always on top)
+    //
+    // This ensures TUI layer is rendered last and appears on top of all sprites.
+    // 渲染顺序（从后到前）：
+    // 1. 像素精灵（游戏对象、背景）
+    // 2. 主缓冲区（TUI 层 - 始终在最上层）
 
-    // render pixel_sprites...
     if stage > LOGO_FRAME {
+        // render pixel_sprites first (bottom layer)
+        // 先渲染像素精灵（底层）
         for item in ps {
             if item.is_pixel && !item.is_hidden {
                 render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
@@ -1404,6 +1418,20 @@ pub fn generate_render_buffer(
                 });
             }
         }
+
+        // render main buffer last (TUI layer - top layer)
+        // 最后渲染主缓冲区（TUI 层 - 最上层）
+        // Use TUI characters (8×16) for UI components in graphics mode
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize,
+                         modifier: u16| {
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
+        };
+        render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
     }
+
     rbuf
 }
