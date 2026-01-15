@@ -8,8 +8,8 @@ use crate::render::Buffer;
 
 use crate::util::Rect;
 use crate::ui::{
-    Widget, Container, UIEvent, UIResult, UIError, EventDispatcher, ThemeManager,
-    AppEvent, WidgetId, Panel
+    Widget, WidgetId, UIEvent, UIResult, UIError, EventDispatcher, ThemeManager,
+    AppEvent
 };
 use crate::event::Event as InputEvent;
 use std::time::{Duration, Instant};
@@ -20,7 +20,6 @@ pub struct UIApp {
     event_dispatcher: EventDispatcher,
     theme_manager: ThemeManager,
     buffer: Buffer,
-    external_buffer: Option<*mut Buffer>, // Pointer to external buffer for zero-copy rendering
     running: bool,
     frame_time: Duration,
     last_frame: Instant,
@@ -33,22 +32,6 @@ impl UIApp {
             event_dispatcher: EventDispatcher::new(),
             theme_manager: ThemeManager::new(),
             buffer: Buffer::empty(Rect::new(0, 0, width, height)),
-            external_buffer: None,
-            running: false,
-            frame_time: Duration::from_millis(16), // ~60 FPS
-            last_frame: Instant::now(),
-        }
-    }
-    
-    /// Create UIApp that renders directly to an external buffer (zero-copy)
-    pub fn with_external_buffer(external_buffer: &mut Buffer) -> Self {
-        let area = *external_buffer.area();
-        Self {
-            root_widget: None,
-            event_dispatcher: EventDispatcher::new(),
-            theme_manager: ThemeManager::new(),
-            buffer: Buffer::empty(area), // Fallback buffer, not used when external_buffer is set
-            external_buffer: Some(external_buffer as *mut Buffer),
             running: false,
             frame_time: Duration::from_millis(16), // ~60 FPS
             last_frame: Instant::now(),
@@ -119,64 +102,45 @@ impl UIApp {
     pub fn render(&mut self) -> UIResult<()> {
         // Clear buffer
         self.clear_buffer();
-        
+
         // Create rendering context (uses default GAME_CONFIG if not set)
         // 创建渲染上下文（如果未设置则使用默认 GAME_CONFIG）
         let ctx = Context::new();
-        
-        // Render root widget to the appropriate buffer
+
+        // Render root widget to internal buffer
         if let Some(ref root) = self.root_widget {
-            if let Some(external_buf_ptr) = self.external_buffer {
-                // Render directly to external buffer (zero-copy)
-                unsafe {
-                    root.render(&mut *external_buf_ptr, &ctx)?;
-                }
-            } else {
-                // Render to internal buffer
-                root.render(&mut self.buffer, &ctx)?;
-            }
+            root.render(&mut self.buffer, &ctx)?;
         }
-        
+
         Ok(())
     }
     
     /// Render UI directly into the provided buffer (zero-copy)
-    /// This is safer than using external_buffer pointer approach
+    /// This is the recommended way to integrate UI rendering with the main game loop
     pub fn render_into(&mut self, target_buffer: &mut Buffer) -> UIResult<()> {
-        // Clear target buffer
-        let bounds = *target_buffer.area();
-        for y in bounds.y..bounds.y + bounds.height {
-            for x in bounds.x..bounds.x + bounds.width {
-                target_buffer.get_mut(x, y).reset();
-            }
-        }
-        
+        // Clear target buffer using optimized method
+        target_buffer.reset();
+
         // Create rendering context (uses default GAME_CONFIG if not set)
         // 创建渲染上下文（如果未设置则使用默认 GAME_CONFIG）
         let ctx = Context::new();
-        
+
         // Render root widget directly to target buffer
         if let Some(ref root) = self.root_widget {
             root.render(target_buffer, &ctx)?;
         }
-        
+
         Ok(())
     }
     
     pub fn layout(&mut self) {
         if let Some(ref mut root) = self.root_widget {
-            // Set root widget bounds to appropriate buffer area
-            let area = if let Some(external_buf_ptr) = self.external_buffer {
-                unsafe { *(*external_buf_ptr).area() }
-            } else {
-                *self.buffer.area()
-            };
+            // Set root widget bounds to buffer area
+            let area = *self.buffer.area();
             root.set_bounds(area);
-            
-            // Try to cast to Container and call layout
-            if let Some(container) = root.as_any_mut().downcast_mut::<Panel>() {
-                container.layout();
-            }
+
+            // Recursively layout all containers using the new polymorphic mechanism
+            root.layout_children();
         }
     }
     
@@ -246,25 +210,8 @@ impl UIApp {
     }
     
     fn clear_buffer(&mut self) {
-        if let Some(external_buf_ptr) = self.external_buffer {
-            // Clear external buffer
-            unsafe {
-                let bounds = *(*external_buf_ptr).area();
-                for y in bounds.y..bounds.y + bounds.height {
-                    for x in bounds.x..bounds.x + bounds.width {
-                        (*external_buf_ptr).get_mut(x, y).reset();
-                    }
-                }
-            }
-        } else {
-            // Clear internal buffer
-            let bounds = *self.buffer.area();
-            for y in bounds.y..bounds.y + bounds.height {
-                for x in bounds.x..bounds.x + bounds.width {
-                    self.buffer.get_mut(x, y).reset();
-                }
-            }
-        }
+        // Use the optimized clear_area method
+        self.buffer.reset();
     }
     
     fn find_widget_at_point(&self, widget: &dyn Widget, x: u16, y: u16) -> Option<WidgetId> {

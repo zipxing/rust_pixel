@@ -120,7 +120,12 @@ impl Panel {
 
 impl Widget for Panel {
     impl_widget_base!(Panel, base);
-    
+
+    fn layout_children(&mut self) {
+        // Panel is a container, so delegate to Container's layout_recursive
+        Container::layout_recursive(self);
+    }
+
     fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
         if !self.state().visible {
             return Ok(());
@@ -214,25 +219,18 @@ impl Container for Panel {
     
     fn layout(&mut self) {
         let content_area = self.content_area();
-        
+
         // Ensure we have constraints for all children
         while self.layout_constraints.len() < self.children.len() {
             self.layout_constraints.push(LayoutConstraints::default());
         }
-        
-        // Apply layout
+
+        // Apply layout to position and size children
         self.layout.layout(&mut self.children, content_area, &self.layout_constraints);
-        
-        // Recursively layout child containers
+
+        // Mark all children as dirty to trigger re-render
         for child in &mut self.children {
             child.mark_dirty();
-            
-            // Try to downcast to known container types and call their layout
-            if let Some(child_panel) = child.as_any_mut().downcast_mut::<Panel>() {
-                child_panel.layout();
-            } else if let Some(child_tabs) = child.as_any_mut().downcast_mut::<crate::ui::Tabs>() {
-                child_tabs.layout();
-            }
         }
     }
 }

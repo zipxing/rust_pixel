@@ -111,6 +111,12 @@ pub trait Widget: Any {
     
     /// Get mutable widget as Any for downcasting
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// Layout children if this widget is a container
+    /// Default implementation does nothing, containers should override this
+    fn layout_children(&mut self) {
+        // Default: no children to layout
+    }
 }
 
 /// Container widget trait for widgets that can contain children
@@ -145,6 +151,19 @@ pub trait Container: Widget {
     
     /// Layout children according to layout strategy
     fn layout(&mut self);
+
+    /// Recursively layout this container and all child containers
+    /// This provides a default implementation that calls layout() and then
+    /// recursively calls layout_children() on all children
+    fn layout_recursive(&mut self) {
+        // First layout this container's children
+        self.layout();
+
+        // Then recursively layout any child containers
+        for child in self.children_mut() {
+            child.layout_children();
+        }
+    }
 }
 
 /// Base widget implementation with common functionality
@@ -176,15 +195,13 @@ impl BaseWidget {
     }
 }
 
-/// Widget ID generator
-static mut WIDGET_ID_COUNTER: WidgetId = 1;
+/// Widget ID generator (thread-safe)
+use std::sync::atomic::{AtomicU32, Ordering};
+
+static WIDGET_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 pub fn next_widget_id() -> WidgetId {
-    unsafe {
-        let id = WIDGET_ID_COUNTER;
-        WIDGET_ID_COUNTER += 1;
-        id
-    }
+    WIDGET_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Helper macro for widget boilerplate

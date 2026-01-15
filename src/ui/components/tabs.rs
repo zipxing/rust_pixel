@@ -141,6 +141,11 @@ impl Tabs {
 impl Widget for Tabs {
     impl_widget_base!(Tabs, base);
 
+    fn layout_children(&mut self) {
+        // Tabs is a container, so delegate to Container's layout_recursive
+        Container::layout_recursive(self);
+    }
+
     fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
         if !self.state().visible { return Ok(()); }
         let b = self.bounds();

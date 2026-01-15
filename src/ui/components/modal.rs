@@ -215,6 +215,11 @@ impl Modal {
 impl Widget for Modal {
     impl_widget_base!(Modal, base);
 
+    fn layout_children(&mut self) {
+        // Modal is a container, so delegate to Container's layout_recursive
+        Container::layout_recursive(self);
+    }
+
     fn render(&self, buffer: &mut Buffer, ctx: &Context) -> UIResult<()> {
         if !self.state().visible { return Ok(()); }
         let b = self.bounds();

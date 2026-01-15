@@ -321,6 +321,22 @@ impl Buffer {
         }
     }
 
+    /// Clear a specific rectangular area in the buffer
+    /// More efficient than calling reset() on individual cells
+    pub fn clear_area(&mut self, area: Rect) {
+        let x_start = area.x.max(self.area.x);
+        let y_start = area.y.max(self.area.y);
+        let x_end = (area.x + area.width).min(self.area.x + self.area.width);
+        let y_end = (area.y + area.height).min(self.area.y + self.area.height);
+
+        for y in y_start..y_end {
+            for x in x_start..x_end {
+                let idx = self.index_of(x, y);
+                self.content[idx].reset();
+            }
+        }
+    }
+
     pub fn set_fg(&mut self, color: Color) {
         for c in &mut self.content {
             c.set_fg(color);

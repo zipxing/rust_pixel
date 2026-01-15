@@ -5,6 +5,7 @@
 
 use crate::event::{Event as InputEvent, KeyEvent, MouseEvent, MouseEventKind, MouseButton};
 use crate::ui::WidgetId;
+use std::collections::VecDeque;
 
 /// UI-specific events extending the base input events
 #[derive(Debug, Clone, PartialEq)]
@@ -98,7 +99,7 @@ pub trait EventHandler {
 pub struct EventDispatcher {
     focused_widget: Option<WidgetId>,
     hovered_widget: Option<WidgetId>,
-    event_queue: Vec<UIEvent>,
+    event_queue: VecDeque<UIEvent>,
 }
 
 impl Default for EventDispatcher {
@@ -106,7 +107,7 @@ impl Default for EventDispatcher {
         Self {
             focused_widget: None,
             hovered_widget: None,
-            event_queue: Vec::new(),
+            event_queue: VecDeque::new(),
         }
     }
 }
@@ -158,7 +159,7 @@ impl EventDispatcher {
     
     /// Emit an event
     pub fn emit_event(&mut self, event: UIEvent) {
-        self.event_queue.push(event);
+        self.event_queue.push_back(event);
     }
     
     /// Process input event and convert to UI events
@@ -196,18 +197,14 @@ impl EventDispatcher {
         // Key events are handled directly by focused widgets
     }
     
-    /// Get next event from queue
+    /// Get next event from queue (O(1) operation)
     pub fn next_event(&mut self) -> Option<UIEvent> {
-        if self.event_queue.is_empty() {
-            None
-        } else {
-            Some(self.event_queue.remove(0))
-        }
+        self.event_queue.pop_front()
     }
     
     /// Get all events and clear queue
     pub fn drain_events(&mut self) -> Vec<UIEvent> {
-        std::mem::take(&mut self.event_queue)
+        self.event_queue.drain(..).collect()
     }
     
     /// Check if there are pending events
