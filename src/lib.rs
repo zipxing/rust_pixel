@@ -260,8 +260,8 @@ pub mod asset;
 /// Event system for input, timers, and custom user events.
 pub mod event;
 
-/// Alternative event implementation used for benchmarking and mutex‑based comparisons.
-pub mod event_mutex;
+// /// Alternative event implementation used for benchmarking and mutex‑based comparisons.
+// pub mod event_mutex;
 
 /// Common utilities and data structures such as object pools, RNG, matrices, circles, and dots.
 pub mod util;
