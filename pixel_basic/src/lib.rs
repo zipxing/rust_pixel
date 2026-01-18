@@ -8,10 +8,10 @@
 // BASIC interpreter core (from BASIC-M6502.rs)
 pub mod basic;
 
-// Game integration modules (to be implemented)
-// pub mod game_context;
-// pub mod game_bridge;
-// pub mod extensions;
+// Game integration modules
+pub mod game_context;
+pub mod game_bridge;
+// pub mod extensions;   // TODO: implement game extension functions
 
 // Re-export core types
 pub use basic::{
@@ -24,3 +24,9 @@ pub use basic::{
     variables::{Variables, Value, Array},
     executor::{Executor, DataValue},
 };
+
+// Re-export game context
+pub use game_context::{GameContext, NullGameContext};
+
+// Re-export game bridge
+pub use game_bridge::{GameBridge, ON_INIT_LINE, ON_TICK_LINE, ON_DRAW_LINE};

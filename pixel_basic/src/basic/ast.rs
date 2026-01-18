@@ -188,31 +188,40 @@ pub enum Statement {
         address: Expr,
         value: Expr,
     },
-    
-    // WAIT 等待
-    Wait {
-        address: Expr,
-        mask: Expr,
-        value: Option<Expr>,
-    },
-    
+
     // GET 读取单字符
     Get {
         variable: String,
     },
-    
+
     // NULL 空语句
     Null,
-    
+
     // LOAD 加载程序
     Load {
         filename: String,
     },
-    
+
     // SAVE 保存程序
     Save {
         filename: String,
     },
+
+    // ========== 协程扩展语句（游戏引擎专用） ==========
+
+    // WAIT seconds - 等待指定秒数（协程）
+    Wait {
+        seconds: Expr,
+    },
+
+    // YIELD - 让出执行到下一帧
+    Yield,
+
+    // WAITKEY - 等待按键
+    WaitKey,
+
+    // WAITCLICK - 等待鼠标点击
+    WaitClick,
 }
 
 /// THEN 部分（行号或语句）

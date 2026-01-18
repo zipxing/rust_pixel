@@ -24,6 +24,8 @@ pub struct Executor {
     data_pointer: usize,
     /// 输入回调函数（用于测试）
     input_callback: Option<InputCallback>,
+    /// 游戏时间累加器（秒）- 用于协程 WAIT 语句
+    game_time: f64,
 }
 
 /// DATA 值类型
@@ -44,6 +46,7 @@ impl Executor {
             data_values: Vec::new(),
             data_pointer: 0,
             input_callback: None,
+            game_time: 0.0,
         }
     }
     
@@ -1031,7 +1034,41 @@ impl Executor {
                 self.execute_def_fn(name, param, body)?;
                 Ok(())
             }
-            
+
+            // ========== 协程扩展语句 ==========
+
+            Statement::Wait { seconds } => {
+                // 计算等待的秒数
+                let wait_time = self.eval_expr(seconds)?.as_number()?;
+                if wait_time < 0.0 {
+                    return Err(BasicError::IllegalQuantity(
+                        "WAIT time must be non-negative".to_string()
+                    ));
+                }
+                // 使用内部游戏时间累加器计算恢复时间
+                let resume_at = self.game_time + wait_time;
+                self.runtime.enter_wait(resume_at);
+                Ok(())
+            }
+
+            Statement::Yield => {
+                // 让出执行到下一帧
+                self.runtime.enter_yield();
+                Ok(())
+            }
+
+            Statement::WaitKey => {
+                // 等待按键
+                self.runtime.enter_wait_for(super::runtime::WaitEvent::KeyPress);
+                Ok(())
+            }
+
+            Statement::WaitClick => {
+                // 等待鼠标点击
+                self.runtime.enter_wait_for(super::runtime::WaitEvent::MouseClick);
+                Ok(())
+            }
+
             _ => {
                 // 其他语句暂未实现
                 Err(BasicError::SyntaxError(
@@ -1430,8 +1467,8 @@ impl Executor {
     /// 执行 LOAD 命令 - 从文件加载程序
     fn execute_load(&mut self, filename: &str) -> Result<()> {
         use std::fs;
-        use super::tokenizer::Tokenizer;
-        use super::parser::Parser;
+        use crate::basic::tokenizer::Tokenizer;
+        use crate::basic::parser::Parser;
         
         // 读取文件内容
         let content = fs::read_to_string(filename).map_err(|e| {
@@ -1464,8 +1501,8 @@ impl Executor {
                             for value in values {
                                 // 转换 ast::DataValue 到 executor::DataValue
                                 let exec_value = match value {
-                                    super::ast::DataValue::Number(n) => DataValue::Number(*n),
-                                    super::ast::DataValue::String(s) => DataValue::String(s.clone()),
+                                    crate::basic::ast::DataValue::Number(n) => DataValue::Number(*n),
+                                    crate::basic::ast::DataValue::String(s) => DataValue::String(s.clone()),
                                 };
                                 self.add_data_value(exec_value);
                             }
@@ -1551,6 +1588,92 @@ impl Executor {
             }
         }
         Ok(())
+    }
+
+    // ========== 协程单步执行 ==========
+
+    /// 单步执行（协程支持）
+    ///
+    /// 参数：
+    /// - dt: delta time - 距离上一帧的时间增量（秒）
+    ///
+    /// 返回：
+    /// - Ok(true): 程序仍在运行，需要继续调用 step()
+    /// - Ok(false): 程序已结束
+    /// - Err(_): 执行出错
+    pub fn step(&mut self, dt: f32) -> Result<bool> {
+        // 0. 累加游戏时间
+        self.game_time += dt as f64;
+
+        // 1. 检查程序是否已结束
+        if matches!(self.runtime.get_state(), super::runtime::ExecutionState::Ended) {
+            return Ok(false);
+        }
+
+        // 2. 检查是否在协程等待状态
+        if self.runtime.is_coroutine_waiting() {
+            // 检查是否可以从等待状态恢复
+            if self.runtime.can_resume(self.game_time) {
+                self.runtime.resume_from_wait()?;
+            } else {
+                // 仍在等待中，不执行任何语句
+                return Ok(true);
+            }
+        }
+
+        // 3. 获取并执行下一条语句
+        if let Some(stmt) = self.runtime.get_next_statement() {
+            self.execute_statement(&stmt)?;
+
+            // 检查执行后是否进入了协程等待状态
+            // 如果是，立即返回，不继续执行
+            if self.runtime.is_coroutine_waiting() {
+                return Ok(true);
+            }
+
+            Ok(true)
+        } else {
+            // 没有更多语句，程序结束
+            Ok(false)
+        }
+    }
+
+    /// 运行程序直到结束（非协程模式）
+    ///
+    /// 这是传统的一次性运行模式，会一直执行直到程序结束。
+    /// 不支持协程功能（WAIT/YIELD 等语句会立即返回错误）。
+    pub fn run(&mut self) -> Result<()> {
+        loop {
+            if let Some(stmt) = self.runtime.get_next_statement() {
+                self.execute_statement(&stmt)?;
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    /// 运行程序直到遇到协程等待或结束（混合模式）
+    ///
+    /// 参数：
+    /// - dt: delta time - 距离上一帧的时间增量（秒）
+    /// - max_steps: 最大执行步数，防止无限循环
+    ///
+    /// 返回：程序是否仍在运行
+    pub fn run_until_wait(&mut self, dt: f32, max_steps: usize) -> Result<bool> {
+        for _ in 0..max_steps {
+            if !self.step(dt)? {
+                return Ok(false);
+            }
+
+            // 如果进入协程等待状态，暂停执行
+            if self.runtime.is_coroutine_waiting() {
+                return Ok(true);
+            }
+        }
+
+        // 达到最大步数限制，仍在运行
+        Ok(true)
     }
 }
 
@@ -3280,8 +3403,8 @@ mod tests {
     #[test]
     fn test_run_test_bas_file() {
         use std::fs;
-        use super::tokenizer::Tokenizer;
-        use super::parser::Parser;
+        use crate::basic::tokenizer::Tokenizer;
+        use crate::basic::parser::Parser;
         
         let mut exec = Executor::new();
         
@@ -3326,8 +3449,8 @@ mod tests {
                         if let Statement::Data { values } = stmt {
                             for value in values {
                                 let exec_value = match value {
-                                    super::ast::DataValue::Number(n) => DataValue::Number(*n),
-                                    super::ast::DataValue::String(s) => DataValue::String(s.clone()),
+                                    crate::basic::ast::DataValue::Number(n) => DataValue::Number(*n),
+                                    crate::basic::ast::DataValue::String(s) => DataValue::String(s.clone()),
                                 };
                                 exec.add_data_value(exec_value);
                             }

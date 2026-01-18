@@ -153,9 +153,22 @@ impl Parser {
             }
             Token::Load => self.parse_load(),
             Token::Save => self.parse_save(),
+            // 协程扩展语句
+            Token::Yield => {
+                self.advance();
+                Ok(Statement::Yield)
+            }
+            Token::WaitKey => {
+                self.advance();
+                Ok(Statement::WaitKey)
+            }
+            Token::WaitClick => {
+                self.advance();
+                Ok(Statement::WaitClick)
+            }
             // 隐式 LET（赋值语句没有 LET 关键字）
             Token::Identifier(_) => {
-                // 检查后面是否是 =, ( 或 , 
+                // 检查后面是否是 =, ( 或 ,
                 self.parse_implicit_let()
             }
             _ => Err(BasicError::InvalidStatement(self.position)),
@@ -580,22 +593,13 @@ impl Parser {
         Ok(Statement::Poke { address, value })
     }
 
-    /// 解析 WAIT 语句
+    /// 解析 WAIT 语句（协程等待）
+    /// 语法: WAIT seconds
+    /// 例如: WAIT 0.5  等待 0.5 秒
     fn parse_wait(&mut self) -> Result<Statement> {
         self.expect(&Token::Wait)?;
-        
-        let address = self.parse_expression()?;
-        self.expect(&Token::Comma)?;
-        let mask = self.parse_expression()?;
-        
-        let value = if self.current() == &Token::Comma {
-            self.advance();
-            Some(self.parse_expression()?)
-        } else {
-            None
-        };
-        
-        Ok(Statement::Wait { address, mask, value })
+        let seconds = self.parse_expression()?;
+        Ok(Statement::Wait { seconds })
     }
 
     /// 解析 GET 语句
@@ -954,7 +958,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::tokenizer::Tokenizer;
+    use crate::basic::tokenizer::Tokenizer;
 
     fn parse_line_helper(input: &str) -> Result<Option<ProgramLine>> {
         let mut tokenizer = Tokenizer::new(input);

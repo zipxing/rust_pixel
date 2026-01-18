@@ -38,6 +38,32 @@ pub enum ExecutionState {
         line: u16,
         stmt: usize,
     },
+    /// 等待指定时间后恢复（协程）
+    Waiting {
+        line: u16,
+        stmt: usize,
+        resume_at: f64,  // 游戏时间，单位：秒
+    },
+    /// 让出执行，下一帧恢复（协程）
+    Yielded {
+        line: u16,
+        stmt: usize,
+    },
+    /// 等待特定事件（协程）
+    WaitingFor {
+        line: u16,
+        stmt: usize,
+        event: WaitEvent,
+    },
+}
+
+/// 等待的事件类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum WaitEvent {
+    /// 等待任意按键
+    KeyPress,
+    /// 等待鼠标点击
+    MouseClick,
 }
 
 /// 运行时环境
@@ -182,6 +208,82 @@ impl Runtime {
     /// 检查是否可以继续执行
     pub fn can_continue(&self) -> bool {
         matches!(self.state, ExecutionState::Paused { .. })
+    }
+
+    // ========== 协程状态管理 ==========
+
+    /// 进入等待状态（WAIT 语句）
+    pub fn enter_wait(&mut self, resume_at: f64) {
+        if let Some(line) = self.current_line {
+            self.state = ExecutionState::Waiting {
+                line,
+                stmt: self.current_stmt,
+                resume_at,
+            };
+        }
+    }
+
+    /// 进入 Yield 状态（YIELD 语句）
+    pub fn enter_yield(&mut self) {
+        if let Some(line) = self.current_line {
+            self.state = ExecutionState::Yielded {
+                line,
+                stmt: self.current_stmt,
+            };
+        }
+    }
+
+    /// 进入等待事件状态（WAITKEY/WAITCLICK 语句）
+    pub fn enter_wait_for(&mut self, event: WaitEvent) {
+        if let Some(line) = self.current_line {
+            self.state = ExecutionState::WaitingFor {
+                line,
+                stmt: self.current_stmt,
+                event,
+            };
+        }
+    }
+
+    /// 从等待/Yield 状态恢复执行
+    pub fn resume_from_wait(&mut self) -> Result<()> {
+        match &self.state {
+            ExecutionState::Waiting { line, stmt, .. } |
+            ExecutionState::Yielded { line, stmt } |
+            ExecutionState::WaitingFor { line, stmt, .. } => {
+                self.current_line = Some(*line);
+                self.current_stmt = *stmt + 1;  // 移动到下一条语句
+                self.state = ExecutionState::Running;
+                Ok(())
+            }
+            _ => Err(BasicError::CantContinue),
+        }
+    }
+
+    /// 检查是否可以从等待状态恢复（基于游戏时间）
+    pub fn can_resume(&self, current_time: f64) -> bool {
+        match &self.state {
+            ExecutionState::Waiting { resume_at, .. } => current_time >= *resume_at,
+            ExecutionState::Yielded { .. } => true,
+            _ => false,
+        }
+    }
+
+    /// 检查是否在等待特定事件
+    pub fn is_waiting_for_event(&self, event: &WaitEvent) -> bool {
+        match &self.state {
+            ExecutionState::WaitingFor { event: wait_event, .. } => wait_event == event,
+            _ => false,
+        }
+    }
+
+    /// 检查是否处于协程等待状态
+    pub fn is_coroutine_waiting(&self) -> bool {
+        matches!(
+            self.state,
+            ExecutionState::Waiting { .. } |
+            ExecutionState::Yielded { .. } |
+            ExecutionState::WaitingFor { .. }
+        )
     }
 
     /// GOSUB 调用（入栈）

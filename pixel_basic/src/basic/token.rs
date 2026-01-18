@@ -41,7 +41,12 @@ pub enum Token {
     Clear,
     Get,
     New,
-    
+
+    // 协程扩展关键字（游戏引擎专用）
+    Yield,      // YIELD - 让出执行到下一帧
+    WaitKey,    // WAITKEY - 等待按键
+    WaitClick,  // WAITCLICK - 等待鼠标点击
+
     // 控制流关键字
     Then,
     To,
@@ -145,7 +150,12 @@ impl Token {
             "CLEAR" => Some(Token::Clear),
             "GET" => Some(Token::Get),
             "NEW" => Some(Token::New),
-            
+
+            // 协程扩展关键字
+            "YIELD" => Some(Token::Yield),
+            "WAITKEY" => Some(Token::WaitKey),
+            "WAITCLICK" => Some(Token::WaitClick),
+
             // 控制流关键字
             "THEN" => Some(Token::Then),
             "TO" => Some(Token::To),
@@ -204,7 +214,8 @@ impl Token {
             Token::If | Token::Restore | Token::Gosub | Token::Return | Token::Rem |
             Token::Stop | Token::On | Token::Null | Token::Wait | Token::Load |
             Token::Save | Token::Def | Token::Poke | Token::Print | Token::Cont |
-            Token::List | Token::Clear | Token::Get | Token::New
+            Token::List | Token::Clear | Token::Get | Token::New |
+            Token::Yield | Token::WaitKey | Token::WaitClick
         )
     }
 }
