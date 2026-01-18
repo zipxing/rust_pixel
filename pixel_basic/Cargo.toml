@@ -1,0 +1,21 @@
+[package]
+name = "pixel_basic"
+version = "0.1.0"
+edition = "2021"
+authors = ["RustPixel Team"]
+description = "BASIC scripting support for rust_pixel game engine"
+license = "MIT"
+
+[dependencies]
+# BASIC interpreter dependencies
+rand = "0.8"
+
+# rust_pixel integration (for GameBridge, will be added later)
+# rust_pixel = { path = "..", default-features = false }
+
+[dev-dependencies]
+# Testing dependencies
+
+[lib]
+name = "pixel_basic"
+path = "src/lib.rs"

@@ -118,6 +118,7 @@ opt-level = 's'
 members = [
     "apps/*",
     "tools/*",
+    "pixel_basic",
 ]
 
 exclude = [

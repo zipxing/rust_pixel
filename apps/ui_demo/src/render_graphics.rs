@@ -27,8 +27,8 @@ impl Render for UiDemoRender {
         ctx.adapter.init(
             UI_DEMO_WIDTH as u16,
             UI_DEMO_HEIGHT as u16,
-            1.0,
-            1.0,
+            2.0,
+            2.0,
             String::new(),
         );
 
