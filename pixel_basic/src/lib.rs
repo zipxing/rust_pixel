@@ -11,7 +11,7 @@ pub mod basic;
 // Game integration modules
 pub mod game_context;
 pub mod game_bridge;
-// pub mod extensions;   // TODO: implement game extension functions
+pub mod pixel_game_context;
 
 // Re-export core types
 pub use basic::{
@@ -30,3 +30,6 @@ pub use game_context::{GameContext, NullGameContext};
 
 // Re-export game bridge
 pub use game_bridge::{GameBridge, ON_INIT_LINE, ON_TICK_LINE, ON_DRAW_LINE};
+
+// Re-export pixel game context
+pub use pixel_game_context::{PixelGameContext, RenderBackend};

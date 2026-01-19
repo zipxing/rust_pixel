@@ -47,6 +47,20 @@ pub enum Token {
     WaitKey,    // WAITKEY - 等待按键
     WaitClick,  // WAITCLICK - 等待鼠标点击
 
+    // 图形语句关键字（游戏引擎专用）
+    Plot,       // PLOT x, y, ch$, fg, bg
+    Cls,        // CLS
+    Line,       // LINE x0, y0, x1, y1, ch$
+    Box,        // BOX x, y, w, h, style
+    Circle,     // CIRCLE cx, cy, r, ch$
+
+    // 精灵语句关键字（游戏引擎专用）
+    Sprite,     // SPRITE id, x, y, ch$
+    SMove,      // SMOVE id, dx, dy
+    SPos,       // SPOS id, x, y
+    SHide,      // SHIDE id, hidden
+    SColor,     // SCOLOR id, fg, bg
+
     // 控制流关键字
     Then,
     To,
@@ -156,6 +170,20 @@ impl Token {
             "WAITKEY" => Some(Token::WaitKey),
             "WAITCLICK" => Some(Token::WaitClick),
 
+            // 图形语句关键字
+            "PLOT" => Some(Token::Plot),
+            "CLS" => Some(Token::Cls),
+            "LINE" => Some(Token::Line),
+            "BOX" => Some(Token::Box),
+            "CIRCLE" => Some(Token::Circle),
+
+            // 精灵语句关键字
+            "SPRITE" => Some(Token::Sprite),
+            "SMOVE" => Some(Token::SMove),
+            "SPOS" => Some(Token::SPos),
+            "SHIDE" => Some(Token::SHide),
+            "SCOLOR" => Some(Token::SColor),
+
             // 控制流关键字
             "THEN" => Some(Token::Then),
             "TO" => Some(Token::To),
@@ -215,7 +243,11 @@ impl Token {
             Token::Stop | Token::On | Token::Null | Token::Wait | Token::Load |
             Token::Save | Token::Def | Token::Poke | Token::Print | Token::Cont |
             Token::List | Token::Clear | Token::Get | Token::New |
-            Token::Yield | Token::WaitKey | Token::WaitClick
+            Token::Yield | Token::WaitKey | Token::WaitClick |
+            // 图形语句
+            Token::Plot | Token::Cls | Token::Line | Token::Box | Token::Circle |
+            // 精灵语句
+            Token::Sprite | Token::SMove | Token::SPos | Token::SHide | Token::SColor
         )
     }
 }

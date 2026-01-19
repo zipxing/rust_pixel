@@ -6,6 +6,7 @@ use super::ast::*;
 use super::error::{BasicError, Result};
 use super::runtime::Runtime;
 use super::variables::{Value, Variables};
+use crate::game_context::GameContext;
 
 /// 输入回调函数类型
 pub type InputCallback = Box<dyn FnMut(&str) -> Option<String>>;
@@ -26,6 +27,8 @@ pub struct Executor {
     input_callback: Option<InputCallback>,
     /// 游戏时间累加器（秒）- 用于协程 WAIT 语句
     game_time: f64,
+    /// 游戏上下文（可选）- 用于调用游戏引擎 API
+    game_context: Option<Box<dyn GameContext>>,
 }
 
 /// DATA 值类型
@@ -47,7 +50,39 @@ impl Executor {
             data_pointer: 0,
             input_callback: None,
             game_time: 0.0,
+            game_context: None,
         }
+    }
+
+    /// 设置游戏上下文
+    ///
+    /// 设置后，BASIC 程序可以调用游戏引擎的图形、精灵、输入等 API。
+    ///
+    /// # 示例
+    ///
+    /// ```ignore
+    /// let ctx = Box::new(MyGameContext::new());
+    /// executor.set_game_context(ctx);
+    /// ```
+    pub fn set_game_context(&mut self, ctx: Box<dyn GameContext>) {
+        self.game_context = Some(ctx);
+    }
+
+    /// 获取游戏上下文的可变引用
+    ///
+    /// 如果没有设置游戏上下文，返回 None。
+    pub fn game_context_mut(&mut self) -> Option<&mut Box<dyn GameContext>> {
+        self.game_context.as_mut()
+    }
+
+    /// 获取游戏上下文的不可变引用
+    pub fn game_context(&self) -> Option<&Box<dyn GameContext>> {
+        self.game_context.as_ref()
+    }
+
+    /// 检查是否有游戏上下文
+    pub fn has_game_context(&self) -> bool {
+        self.game_context.is_some()
     }
     
     /// 设置输入回调函数（用于测试）
@@ -687,7 +722,120 @@ impl Executor {
                 // 简化实现：返回 0
                 Ok(Value::Number(0.0))
             }
-            
+
+            // ========== 游戏输入函数 ==========
+
+            "INKEY" => {
+                // INKEY() - 返回最后按下的按键 ASCII 码
+                if !args.is_empty() {
+                    return Err(BasicError::SyntaxError("INKEY requires no arguments".to_string()));
+                }
+                let key_code = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.inkey() as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Number(key_code))
+            }
+
+            "KEY" => {
+                // KEY(key$) - 检查指定按键是否按下
+                if args.len() != 1 {
+                    return Err(BasicError::SyntaxError("KEY requires 1 argument".to_string()));
+                }
+                let key_name = self.eval_expr(&args[0])?.as_string()?;
+                let pressed = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.key(&key_name)
+                } else {
+                    false
+                };
+                Ok(Value::Number(if pressed { 1.0 } else { 0.0 }))
+            }
+
+            "MOUSEX" => {
+                // MOUSEX() - 返回鼠标 X 坐标
+                if !args.is_empty() {
+                    return Err(BasicError::SyntaxError("MOUSEX requires no arguments".to_string()));
+                }
+                let x = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.mouse_x() as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Number(x))
+            }
+
+            "MOUSEY" => {
+                // MOUSEY() - 返回鼠标 Y 坐标
+                if !args.is_empty() {
+                    return Err(BasicError::SyntaxError("MOUSEY requires no arguments".to_string()));
+                }
+                let y = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.mouse_y() as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Number(y))
+            }
+
+            "MOUSEB" => {
+                // MOUSEB() - 返回鼠标按钮状态
+                if !args.is_empty() {
+                    return Err(BasicError::SyntaxError("MOUSEB requires no arguments".to_string()));
+                }
+                let buttons = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.mouse_button() as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Number(buttons))
+            }
+
+            // ========== 精灵查询函数 ==========
+
+            "SPRITEX" => {
+                // SPRITEX(id) - 返回精灵 X 坐标
+                if args.len() != 1 {
+                    return Err(BasicError::SyntaxError("SPRITEX requires 1 argument".to_string()));
+                }
+                let id = self.eval_expr(&args[0])?.as_number()? as u32;
+                let x = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.sprite_x(id).unwrap_or(0) as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Number(x))
+            }
+
+            "SPRITEY" => {
+                // SPRITEY(id) - 返回精灵 Y 坐标
+                if args.len() != 1 {
+                    return Err(BasicError::SyntaxError("SPRITEY requires 1 argument".to_string()));
+                }
+                let id = self.eval_expr(&args[0])?.as_number()? as u32;
+                let y = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.sprite_y(id).unwrap_or(0) as f64
+                } else {
+                    0.0
+                };
+                Ok(Value::Number(y))
+            }
+
+            "SPRITEHIT" => {
+                // SPRITEHIT(id1, id2) - 检测两个精灵是否碰撞
+                if args.len() != 2 {
+                    return Err(BasicError::SyntaxError("SPRITEHIT requires 2 arguments".to_string()));
+                }
+                let id1 = self.eval_expr(&args[0])?.as_number()? as u32;
+                let id2 = self.eval_expr(&args[1])?.as_number()? as u32;
+                let hit = if let Some(ctx) = self.game_context.as_ref() {
+                    ctx.sprite_hit(id1, id2)
+                } else {
+                    false
+                };
+                Ok(Value::Number(if hit { 1.0 } else { 0.0 }))
+            }
+
             _ => Err(BasicError::SyntaxError(
                 format!("Unknown function: {}", name)
             )),
@@ -1066,6 +1214,127 @@ impl Executor {
             Statement::WaitClick => {
                 // 等待鼠标点击
                 self.runtime.enter_wait_for(super::runtime::WaitEvent::MouseClick);
+                Ok(())
+            }
+
+            // ========== 图形语句 ==========
+
+            Statement::Plot { x, y, ch, fg, bg } => {
+                let x_val = self.eval_expr(x)?.as_number()? as i32;
+                let y_val = self.eval_expr(y)?.as_number()? as i32;
+                let ch_val = self.eval_expr(ch)?.as_string()?;
+                let ch_char = ch_val.chars().next().unwrap_or(' ');
+                let fg_val = self.eval_expr(fg)?.as_number()? as u8;
+                let bg_val = self.eval_expr(bg)?.as_number()? as u8;
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.plot(x_val, y_val, ch_char, fg_val, bg_val);
+                }
+                Ok(())
+            }
+
+            Statement::Cls => {
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.cls();
+                }
+                Ok(())
+            }
+
+            Statement::Line { x0, y0, x1, y1, ch } => {
+                let x0_val = self.eval_expr(x0)?.as_number()? as i32;
+                let y0_val = self.eval_expr(y0)?.as_number()? as i32;
+                let x1_val = self.eval_expr(x1)?.as_number()? as i32;
+                let y1_val = self.eval_expr(y1)?.as_number()? as i32;
+                let ch_val = self.eval_expr(ch)?.as_string()?;
+                let ch_char = ch_val.chars().next().unwrap_or('*');
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.line(x0_val, y0_val, x1_val, y1_val, ch_char);
+                }
+                Ok(())
+            }
+
+            Statement::Box { x, y, w, h, style } => {
+                let x_val = self.eval_expr(x)?.as_number()? as i32;
+                let y_val = self.eval_expr(y)?.as_number()? as i32;
+                let w_val = self.eval_expr(w)?.as_number()? as i32;
+                let h_val = self.eval_expr(h)?.as_number()? as i32;
+                let style_val = self.eval_expr(style)?.as_number()? as u8;
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.box_draw(x_val, y_val, w_val, h_val, style_val);
+                }
+                Ok(())
+            }
+
+            Statement::Circle { cx, cy, r, ch } => {
+                let cx_val = self.eval_expr(cx)?.as_number()? as i32;
+                let cy_val = self.eval_expr(cy)?.as_number()? as i32;
+                let r_val = self.eval_expr(r)?.as_number()? as i32;
+                let ch_val = self.eval_expr(ch)?.as_string()?;
+                let ch_char = ch_val.chars().next().unwrap_or('O');
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.circle(cx_val, cy_val, r_val, ch_char);
+                }
+                Ok(())
+            }
+
+            // ========== 精灵语句 ==========
+
+            Statement::Sprite { id, x, y, ch } => {
+                let id_val = self.eval_expr(id)?.as_number()? as u32;
+                let x_val = self.eval_expr(x)?.as_number()? as i32;
+                let y_val = self.eval_expr(y)?.as_number()? as i32;
+                let ch_val = self.eval_expr(ch)?.as_string()?;
+                let ch_char = ch_val.chars().next().unwrap_or('@');
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.sprite_create(id_val, x_val, y_val, ch_char);
+                }
+                Ok(())
+            }
+
+            Statement::SpriteMove { id, dx, dy } => {
+                let id_val = self.eval_expr(id)?.as_number()? as u32;
+                let dx_val = self.eval_expr(dx)?.as_number()? as i32;
+                let dy_val = self.eval_expr(dy)?.as_number()? as i32;
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.sprite_move(id_val, dx_val, dy_val);
+                }
+                Ok(())
+            }
+
+            Statement::SpritePos { id, x, y } => {
+                let id_val = self.eval_expr(id)?.as_number()? as u32;
+                let x_val = self.eval_expr(x)?.as_number()? as i32;
+                let y_val = self.eval_expr(y)?.as_number()? as i32;
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.sprite_pos(id_val, x_val, y_val);
+                }
+                Ok(())
+            }
+
+            Statement::SpriteHide { id, hidden } => {
+                let id_val = self.eval_expr(id)?.as_number()? as u32;
+                let hidden_val = self.eval_expr(hidden)?.as_number()? != 0.0;
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.sprite_hide(id_val, hidden_val);
+                }
+                Ok(())
+            }
+
+            Statement::SpriteColor { id, fg, bg } => {
+                let id_val = self.eval_expr(id)?.as_number()? as u32;
+                let fg_val = self.eval_expr(fg)?.as_number()? as u8;
+                let bg_val = self.eval_expr(bg)?.as_number()? as u8;
+
+                if let Some(ctx) = self.game_context.as_mut() {
+                    ctx.sprite_color(id_val, fg_val, bg_val);
+                }
                 Ok(())
             }
 
@@ -3513,6 +3782,144 @@ mod tests {
         // 验证函数已定义
         assert!(exec.variables.has_function("SQUARE"), "Function SQUARE should be defined");
         assert!(exec.variables.has_function("DOUBLE"), "Function DOUBLE should be defined");
+    }
+
+    // Test: GameContext 集成
+    #[test]
+    fn test_game_context_integration() {
+        use crate::game_context::NullGameContext;
+
+        let mut exec = Executor::new();
+
+        // 初始状态没有 GameContext
+        assert!(!exec.has_game_context());
+        assert!(exec.game_context().is_none());
+        assert!(exec.game_context_mut().is_none());
+
+        // 设置 GameContext
+        let ctx = Box::new(NullGameContext);
+        exec.set_game_context(ctx);
+
+        // 现在有 GameContext
+        assert!(exec.has_game_context());
+        assert!(exec.game_context().is_some());
+        assert!(exec.game_context_mut().is_some());
+
+        // 可以通过可变引用调用方法
+        if let Some(ctx) = exec.game_context_mut() {
+            ctx.plot(0, 0, '@', 1, 0);
+            ctx.cls();
+        }
+    }
+
+    // Test: 游戏输入函数（无 GameContext 时返回默认值）
+    #[test]
+    fn test_game_input_functions_without_context() {
+        let mut exec = Executor::new();
+
+        // INKEY() 无参数
+        let expr = Expr::FunctionCall {
+            name: "INKEY".to_string(),
+            args: vec![],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+
+        // KEY("W") 单参数
+        let expr = Expr::FunctionCall {
+            name: "KEY".to_string(),
+            args: vec![Expr::String("W".to_string())],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+
+        // MOUSEX() 无参数
+        let expr = Expr::FunctionCall {
+            name: "MOUSEX".to_string(),
+            args: vec![],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+
+        // MOUSEY() 无参数
+        let expr = Expr::FunctionCall {
+            name: "MOUSEY".to_string(),
+            args: vec![],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+
+        // MOUSEB() 无参数
+        let expr = Expr::FunctionCall {
+            name: "MOUSEB".to_string(),
+            args: vec![],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+    }
+
+    // Test: 精灵查询函数（无 GameContext 时返回默认值）
+    #[test]
+    fn test_sprite_query_functions_without_context() {
+        let mut exec = Executor::new();
+
+        // SPRITEX(1)
+        let expr = Expr::FunctionCall {
+            name: "SPRITEX".to_string(),
+            args: vec![Expr::Number(1.0)],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+
+        // SPRITEY(1)
+        let expr = Expr::FunctionCall {
+            name: "SPRITEY".to_string(),
+            args: vec![Expr::Number(1.0)],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+
+        // SPRITEHIT(1, 2)
+        let expr = Expr::FunctionCall {
+            name: "SPRITEHIT".to_string(),
+            args: vec![Expr::Number(1.0), Expr::Number(2.0)],
+        };
+        let result = exec.eval_expr(&expr).unwrap();
+        assert_eq!(result, Value::Number(0.0));
+    }
+
+    // Test: 游戏输入函数参数错误
+    #[test]
+    fn test_game_input_functions_argument_errors() {
+        let mut exec = Executor::new();
+
+        // INKEY() 不应有参数
+        let expr = Expr::FunctionCall {
+            name: "INKEY".to_string(),
+            args: vec![Expr::Number(1.0)],
+        };
+        assert!(exec.eval_expr(&expr).is_err());
+
+        // KEY() 必须有1个参数
+        let expr = Expr::FunctionCall {
+            name: "KEY".to_string(),
+            args: vec![],
+        };
+        assert!(exec.eval_expr(&expr).is_err());
+
+        // SPRITEX() 必须有1个参数
+        let expr = Expr::FunctionCall {
+            name: "SPRITEX".to_string(),
+            args: vec![],
+        };
+        assert!(exec.eval_expr(&expr).is_err());
+
+        // SPRITEHIT() 必须有2个参数
+        let expr = Expr::FunctionCall {
+            name: "SPRITEHIT".to_string(),
+            args: vec![Expr::Number(1.0)],
+        };
+        assert!(exec.eval_expr(&expr).is_err());
     }
 }
 

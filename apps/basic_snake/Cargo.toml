@@ -1,0 +1,25 @@
+[package]
+name = "basic_snake"
+version = "0.1.0"
+edition = "2021"
+description = "Snake game written in BASIC - demonstrates pixel_basic integration"
+repository = ""
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
+[dependencies]
+log = "0.4.28"
+wasm-bindgen = "0.2.103"
+rust_pixel = { path = "../..", default-features = false }
+pixel_basic = { path = "../../pixel_basic" }
+
+[features]
+sdl = ["rust_pixel/sdl"]
+term = ["rust_pixel/term"]
+glow = ["rust_pixel/glow"]
+wgpu = ["rust_pixel/wgpu"]

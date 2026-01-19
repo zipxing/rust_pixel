@@ -166,6 +166,21 @@ impl Parser {
                 self.advance();
                 Ok(Statement::WaitClick)
             }
+            // 图形语句
+            Token::Plot => self.parse_plot(),
+            Token::Cls => {
+                self.advance();
+                Ok(Statement::Cls)
+            }
+            Token::Line => self.parse_line_stmt(),
+            Token::Box => self.parse_box(),
+            Token::Circle => self.parse_circle(),
+            // 精灵语句
+            Token::Sprite => self.parse_sprite(),
+            Token::SMove => self.parse_smove(),
+            Token::SPos => self.parse_spos(),
+            Token::SHide => self.parse_shide(),
+            Token::SColor => self.parse_scolor(),
             // 隐式 LET（赋值语句没有 LET 关键字）
             Token::Identifier(_) => {
                 // 检查后面是否是 =, ( 或 ,
@@ -953,6 +968,123 @@ impl Parser {
             )))
         }
     }
+
+    // ========== 图形语句解析 ==========
+
+    /// 解析 PLOT x, y, ch$, fg, bg
+    fn parse_plot(&mut self) -> Result<Statement> {
+        self.expect(&Token::Plot)?;
+        let x = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let y = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let ch = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let fg = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let bg = self.parse_expression()?;
+        Ok(Statement::Plot { x, y, ch, fg, bg })
+    }
+
+    /// 解析 LINE x0, y0, x1, y1, ch$
+    fn parse_line_stmt(&mut self) -> Result<Statement> {
+        self.expect(&Token::Line)?;
+        let x0 = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let y0 = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let x1 = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let y1 = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let ch = self.parse_expression()?;
+        Ok(Statement::Line { x0, y0, x1, y1, ch })
+    }
+
+    /// 解析 BOX x, y, w, h, style
+    fn parse_box(&mut self) -> Result<Statement> {
+        self.expect(&Token::Box)?;
+        let x = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let y = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let w = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let h = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let style = self.parse_expression()?;
+        Ok(Statement::Box { x, y, w, h, style })
+    }
+
+    /// 解析 CIRCLE cx, cy, r, ch$
+    fn parse_circle(&mut self) -> Result<Statement> {
+        self.expect(&Token::Circle)?;
+        let cx = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let cy = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let r = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let ch = self.parse_expression()?;
+        Ok(Statement::Circle { cx, cy, r, ch })
+    }
+
+    // ========== 精灵语句解析 ==========
+
+    /// 解析 SPRITE id, x, y, ch$
+    fn parse_sprite(&mut self) -> Result<Statement> {
+        self.expect(&Token::Sprite)?;
+        let id = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let x = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let y = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let ch = self.parse_expression()?;
+        Ok(Statement::Sprite { id, x, y, ch })
+    }
+
+    /// 解析 SMOVE id, dx, dy
+    fn parse_smove(&mut self) -> Result<Statement> {
+        self.expect(&Token::SMove)?;
+        let id = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let dx = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let dy = self.parse_expression()?;
+        Ok(Statement::SpriteMove { id, dx, dy })
+    }
+
+    /// 解析 SPOS id, x, y
+    fn parse_spos(&mut self) -> Result<Statement> {
+        self.expect(&Token::SPos)?;
+        let id = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let x = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let y = self.parse_expression()?;
+        Ok(Statement::SpritePos { id, x, y })
+    }
+
+    /// 解析 SHIDE id, hidden
+    fn parse_shide(&mut self) -> Result<Statement> {
+        self.expect(&Token::SHide)?;
+        let id = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let hidden = self.parse_expression()?;
+        Ok(Statement::SpriteHide { id, hidden })
+    }
+
+    /// 解析 SCOLOR id, fg, bg
+    fn parse_scolor(&mut self) -> Result<Statement> {
+        self.expect(&Token::SColor)?;
+        let id = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let fg = self.parse_expression()?;
+        self.expect(&Token::Comma)?;
+        let bg = self.parse_expression()?;
+        Ok(Statement::SpriteColor { id, fg, bg })
+    }
 }
 
 #[cfg(test)]
@@ -1234,7 +1366,7 @@ mod tests {
     #[test]
     fn test_parse_function_call() {
         let line = parse_line_helper("PRINT SIN(X)").unwrap().unwrap();
-        
+
         match &line.statements[0] {
             Statement::Print { items } => {
                 if let PrintItem::Expr(Expr::FunctionCall { name, args }) = &items[0] {
@@ -1243,6 +1375,155 @@ mod tests {
                 }
             }
             _ => panic!("Expected Print statement"),
+        }
+    }
+
+    // ========== 图形语句解析测试 ==========
+
+    #[test]
+    fn test_parse_plot() {
+        let line = parse_line_helper("10 PLOT 10, 5, \"@\", 2, 0").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::Plot { x, y, ch, fg, bg } => {
+                assert_eq!(*x, Expr::Number(10.0));
+                assert_eq!(*y, Expr::Number(5.0));
+                assert_eq!(*ch, Expr::String("@".to_string()));
+                assert_eq!(*fg, Expr::Number(2.0));
+                assert_eq!(*bg, Expr::Number(0.0));
+            }
+            _ => panic!("Expected Plot statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_cls() {
+        let line = parse_line_helper("10 CLS").unwrap().unwrap();
+        assert!(matches!(&line.statements[0], Statement::Cls));
+    }
+
+    #[test]
+    fn test_parse_line_stmt() {
+        let line = parse_line_helper("10 LINE 0, 0, 10, 10, \"*\"").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::Line { x0, y0, x1, y1, ch } => {
+                assert_eq!(*x0, Expr::Number(0.0));
+                assert_eq!(*y0, Expr::Number(0.0));
+                assert_eq!(*x1, Expr::Number(10.0));
+                assert_eq!(*y1, Expr::Number(10.0));
+                assert_eq!(*ch, Expr::String("*".to_string()));
+            }
+            _ => panic!("Expected Line statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_box() {
+        let line = parse_line_helper("10 BOX 5, 5, 10, 8, 1").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::Box { x, y, w, h, style } => {
+                assert_eq!(*x, Expr::Number(5.0));
+                assert_eq!(*y, Expr::Number(5.0));
+                assert_eq!(*w, Expr::Number(10.0));
+                assert_eq!(*h, Expr::Number(8.0));
+                assert_eq!(*style, Expr::Number(1.0));
+            }
+            _ => panic!("Expected Box statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_circle() {
+        let line = parse_line_helper("10 CIRCLE 20, 12, 5, \"O\"").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::Circle { cx, cy, r, ch } => {
+                assert_eq!(*cx, Expr::Number(20.0));
+                assert_eq!(*cy, Expr::Number(12.0));
+                assert_eq!(*r, Expr::Number(5.0));
+                assert_eq!(*ch, Expr::String("O".to_string()));
+            }
+            _ => panic!("Expected Circle statement"),
+        }
+    }
+
+    // ========== 精灵语句解析测试 ==========
+
+    #[test]
+    fn test_parse_sprite() {
+        let line = parse_line_helper("10 SPRITE 1, 10, 20, \"@\"").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::Sprite { id, x, y, ch } => {
+                assert_eq!(*id, Expr::Number(1.0));
+                assert_eq!(*x, Expr::Number(10.0));
+                assert_eq!(*y, Expr::Number(20.0));
+                assert_eq!(*ch, Expr::String("@".to_string()));
+            }
+            _ => panic!("Expected Sprite statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_smove() {
+        let line = parse_line_helper("10 SMOVE 1, 2, -1").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::SpriteMove { id, dx, dy } => {
+                assert_eq!(*id, Expr::Number(1.0));
+                assert_eq!(*dx, Expr::Number(2.0));
+                // dy is -1, which is a unary negation
+                match dy {
+                    Expr::UnaryOp { op: UnaryOperator::Minus, operand } => {
+                        assert_eq!(**operand, Expr::Number(1.0));
+                    }
+                    _ => panic!("Expected unary minus for dy"),
+                }
+            }
+            _ => panic!("Expected SpriteMove statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_spos() {
+        let line = parse_line_helper("10 SPOS 1, 15, 10").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::SpritePos { id, x, y } => {
+                assert_eq!(*id, Expr::Number(1.0));
+                assert_eq!(*x, Expr::Number(15.0));
+                assert_eq!(*y, Expr::Number(10.0));
+            }
+            _ => panic!("Expected SpritePos statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_shide() {
+        let line = parse_line_helper("10 SHIDE 1, 1").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::SpriteHide { id, hidden } => {
+                assert_eq!(*id, Expr::Number(1.0));
+                assert_eq!(*hidden, Expr::Number(1.0));
+            }
+            _ => panic!("Expected SpriteHide statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_scolor() {
+        let line = parse_line_helper("10 SCOLOR 1, 14, 0").unwrap().unwrap();
+
+        match &line.statements[0] {
+            Statement::SpriteColor { id, fg, bg } => {
+                assert_eq!(*id, Expr::Number(1.0));
+                assert_eq!(*fg, Expr::Number(14.0));
+                assert_eq!(*bg, Expr::Number(0.0));
+            }
+            _ => panic!("Expected SpriteColor statement"),
         }
     }
 }

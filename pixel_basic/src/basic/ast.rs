@@ -222,6 +222,83 @@ pub enum Statement {
 
     // WAITCLICK - 等待鼠标点击
     WaitClick,
+
+    // ========== 图形语句（游戏引擎专用） ==========
+
+    // PLOT x, y, ch$, fg, bg - 在指定位置绘制字符
+    Plot {
+        x: Expr,
+        y: Expr,
+        ch: Expr,
+        fg: Expr,
+        bg: Expr,
+    },
+
+    // CLS - 清屏
+    Cls,
+
+    // LINE x0, y0, x1, y1, ch$ - 绘制线段
+    Line {
+        x0: Expr,
+        y0: Expr,
+        x1: Expr,
+        y1: Expr,
+        ch: Expr,
+    },
+
+    // BOX x, y, w, h, style - 绘制矩形边框
+    Box {
+        x: Expr,
+        y: Expr,
+        w: Expr,
+        h: Expr,
+        style: Expr,
+    },
+
+    // CIRCLE cx, cy, r, ch$ - 绘制圆形
+    Circle {
+        cx: Expr,
+        cy: Expr,
+        r: Expr,
+        ch: Expr,
+    },
+
+    // ========== 精灵语句（游戏引擎专用） ==========
+
+    // SPRITE id, x, y, ch$ - 创建或更新精灵
+    Sprite {
+        id: Expr,
+        x: Expr,
+        y: Expr,
+        ch: Expr,
+    },
+
+    // SMOVE id, dx, dy - 相对移动精灵
+    SpriteMove {
+        id: Expr,
+        dx: Expr,
+        dy: Expr,
+    },
+
+    // SPOS id, x, y - 设置精灵绝对位置
+    SpritePos {
+        id: Expr,
+        x: Expr,
+        y: Expr,
+    },
+
+    // SHIDE id, hidden - 控制精灵可见性
+    SpriteHide {
+        id: Expr,
+        hidden: Expr,
+    },
+
+    // SCOLOR id, fg, bg - 设置精灵颜色
+    SpriteColor {
+        id: Expr,
+        fg: Expr,
+        bg: Expr,
+    },
 }
 
 /// THEN 部分（行号或语句）

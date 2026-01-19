@@ -1,0 +1,131 @@
+10 REM ============================================
+20 REM SNAKE GAME - Written in BASIC for rust_pixel
+30 REM ============================================
+40 REM Entry point - call subroutines in loop
+50 GOSUB 1000: REM Initialize game
+60 YIELD: REM Wait for next frame
+70 GOTO 60
+80 END
+90 REM
+100 REM ============================================
+1000 REM ON_INIT - Game initialization
+1010 REM ============================================
+1020 CLS
+1030 REM Initialize snake position and direction
+1040 X = 20: Y = 10
+1050 DX = 1: DY = 0
+1060 L = 5: REM Initial snake length
+1070 REM Initialize food position
+1080 FX = 30: FY = 15
+1090 SC = 0: REM Score
+1100 REM Initialize snake body arrays
+1110 DIM BX(100): DIM BY(100)
+1120 FOR I = 0 TO L - 1
+1130   BX(I) = X - I: BY(I) = Y
+1140 NEXT I
+1150 REM Draw initial border
+1160 BOX 0, 0, 60, 24, 1
+1170 REM Display initial score
+1180 PRINT "SCORE: "; SC
+1190 RETURN
+2000 REM ============================================
+2010 REM ON_TICK - Game logic (called every frame)
+2020 REM ============================================
+2030 REM Handle input
+2040 IF KEY("W") AND DY = 0 THEN DX = 0: DY = -1
+2050 IF KEY("S") AND DY = 0 THEN DX = 0: DY = 1
+2060 IF KEY("A") AND DX = 0 THEN DX = -1: DY = 0
+2070 IF KEY("D") AND DX = 0 THEN DX = 1: DY = 0
+2080 REM
+2090 REM Move snake body (shift all segments)
+2100 FOR I = L - 1 TO 1 STEP -1
+2110   BX(I) = BX(I - 1)
+2120   BY(I) = BY(I - 1)
+2130 NEXT I
+2140 REM
+2150 REM Move head
+2160 X = X + DX: Y = Y + DY
+2170 BX(0) = X: BY(0) = Y
+2180 REM
+2190 REM Check wall collision
+2200 IF X <= 0 OR X >= 59 OR Y <= 0 OR Y >= 23 THEN GOSUB 4000: REM Game over
+2210 REM
+2220 REM Check self collision
+2230 FOR I = 1 TO L - 1
+2240   IF X = BX(I) AND Y = BY(I) THEN GOSUB 4000: REM Game over
+2250 NEXT I
+2260 REM
+2270 REM Check food collision
+2280 IF X = FX AND Y = FY THEN GOSUB 3000: REM Eat food
+2290 REM
+2300 RETURN
+3000 REM ============================================
+3010 REM EAT_FOOD - Handle food eating
+3020 REM ============================================
+3030 L = L + 1: REM Grow snake
+3040 SC = SC + 10: REM Increase score
+3050 REM Generate new food position
+3060 FX = INT(RND(0) * 58) + 1
+3070 FY = INT(RND(0) * 22) + 1
+3080 REM Make sure food is not on snake
+3090 FOR I = 0 TO L - 1
+3100   IF FX = BX(I) AND FY = BY(I) THEN GOTO 3060: REM Regenerate
+3110 NEXT I
+3120 RETURN
+3500 REM ============================================
+3510 REM ON_DRAW - Rendering (called every frame)
+3520 REM ============================================
+3530 REM Clear play area (not border)
+3540 FOR YY = 1 TO 22
+3550   FOR XX = 1 TO 58
+3560     PLOT XX, YY, " ", 7, 0
+3570   NEXT XX
+3580 NEXT YY
+3590 REM
+3600 REM Draw snake body
+3610 FOR I = 1 TO L - 1
+3620   PLOT BX(I), BY(I), "O", 2, 0
+3630 NEXT I
+3640 REM Draw snake head
+3650 PLOT X, Y, "@", 10, 0
+3660 REM
+3670 REM Draw food
+3680 PLOT FX, FY, "*", 14, 0
+3690 REM
+3700 REM Update score display
+3710 PLOT 1, 0, " ", 7, 0: REM Clear old score
+3720 PLOT 2, 0, " ", 7, 0
+3730 PLOT 3, 0, " ", 7, 0
+3740 PLOT 4, 0, " ", 7, 0
+3750 PLOT 5, 0, " ", 7, 0
+3760 PLOT 6, 0, " ", 7, 0
+3770 PLOT 7, 0, "S", 15, 0
+3780 PLOT 8, 0, "C", 15, 0
+3790 PLOT 9, 0, "O", 15, 0
+3800 PLOT 10, 0, "R", 15, 0
+3810 PLOT 11, 0, "E", 15, 0
+3820 PLOT 12, 0, ":", 15, 0
+3830 REM Display score (simple digit display)
+3840 S$ = STR$(SC)
+3850 FOR I = 1 TO LEN(S$)
+3860   C$ = MID$(S$, I, 1)
+3870   PLOT 12 + I, 0, C$, 11, 0
+3880 NEXT I
+3890 REM
+3900 RETURN
+4000 REM ============================================
+4010 REM GAME_OVER - Handle game over
+4020 REM ============================================
+4030 REM Display game over message
+4040 PLOT 25, 12, "G", 12, 0
+4050 PLOT 26, 12, "A", 12, 0
+4060 PLOT 27, 12, "M", 12, 0
+4070 PLOT 28, 12, "E", 12, 0
+4080 PLOT 29, 12, " ", 12, 0
+4090 PLOT 30, 12, "O", 12, 0
+4100 PLOT 31, 12, "V", 12, 0
+4110 PLOT 32, 12, "E", 12, 0
+4120 PLOT 33, 12, "R", 12, 0
+4130 REM Wait for space to restart
+4140 IF KEY("SPACE") THEN GOSUB 1000: REM Restart
+4150 RETURN
