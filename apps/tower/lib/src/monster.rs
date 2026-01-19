@@ -29,7 +29,7 @@ impl GObj for Monster {
     fn reset(&mut self, mtype: u8, ps: &[u32]) {
         self.mtype = mtype;
         if mtype == 1 {
-            self.life = 5800;
+            self.life = 2800;
             self.speed = 2;
         } else {
             self.life = 500;

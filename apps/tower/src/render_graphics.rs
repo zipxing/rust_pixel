@@ -97,11 +97,12 @@ impl TowerRender {
         self.panel.draw_objpool(&mut d.lasers, |pl, l| {
             pl.content.reset();
             pl.set_pos(0, 0);
+            pl.set_alpha(150); // 降低透明度，减少刺眼感
             let x0 = l.obj.src_pos.x * BW as u16 + 2;
             let y0 = l.obj.src_pos.y * BH as u16 + 2;
             let x1 = l.obj.dst_pos.x + 1;
             let y1 = l.obj.dst_pos.y + 1;
-            let pts = lightning(x0, y0, x1, y1, 10, 8);
+            let pts = lightning(x0, y0, x1, y1, 2, 1);
             for p in pts {
                 pl.draw_line(
                     PointU16 { x: p.0, y: p.1 },
