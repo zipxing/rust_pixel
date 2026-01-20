@@ -61,6 +61,7 @@ use crate::basic::{
     executor::Executor,
 };
 use crate::game_context::GameContext;
+use log;
 
 /// 生命周期钩子的行号常量
 pub const ON_INIT_LINE: u16 = 1000;  // 初始化钩子
@@ -107,7 +108,7 @@ pub struct GameBridge<C: GameContext> {
     init_called: bool,
 }
 
-impl<C: GameContext> GameBridge<C> {
+impl<C: GameContext + 'static> GameBridge<C> {
     /// 创建新的 GameBridge 实例
     ///
     /// # 参数
@@ -122,6 +123,29 @@ impl<C: GameContext> GameBridge<C> {
             executor: Executor::new(),
             context,
             init_called: false,
+        }
+    }
+
+    /// 将GameBridge的context临时借给executor使用
+    ///
+    /// 使用unsafe但确保正确管理生命周期
+    unsafe fn lend_context_to_executor(&mut self) {
+        let ctx_ptr = &mut self.context as *mut C as *mut dyn GameContext;
+        self.executor.set_game_context(Box::from_raw(ctx_ptr));
+    }
+
+    /// 从executor收回context的"借用"
+    fn reclaim_context_from_executor(&mut self) {
+        // 从executor取出box并转回指针，但不drop
+        if self.executor.has_game_context() {
+            unsafe {
+                if let Some(boxed) = self.executor.game_context_mut() {
+                    let replacement: Box<dyn GameContext> = Box::new(crate::game_context::NullGameContext);
+                    let ptr = Box::into_raw(std::mem::replace(boxed, replacement));
+                    // 不要drop这个指针，因为它指向self.context
+                    std::mem::forget(ptr);
+                }
+            }
         }
     }
 
@@ -220,18 +244,30 @@ impl<C: GameContext> GameBridge<C> {
     /// }
     /// ```
     pub fn update(&mut self, dt: f32) -> Result<bool> {
+        // 设置context用于整个update期间
+        unsafe { self.lend_context_to_executor(); }
+
         // 1. 首次调用时执行 ON_INIT 钩子
         if !self.init_called {
+            log::info!("GameBridge: Calling ON_INIT (line {})", ON_INIT_LINE);
             self.call_subroutine(ON_INIT_LINE)?;
             self.init_called = true;
+            log::info!("GameBridge: ON_INIT completed");
         }
 
         // 2. 调用 ON_TICK 钩子（设置 DT 变量）
+        log::debug!("GameBridge: Calling ON_TICK (line {}), dt={}", ON_TICK_LINE, dt);
         self.executor.variables_mut().set("DT", crate::basic::variables::Value::Number(dt as f64))?;
         self.call_subroutine(ON_TICK_LINE)?;
+        log::debug!("GameBridge: ON_TICK completed");
 
         // 3. 执行协程 step
-        self.executor.step(dt)
+        let result = self.executor.step(dt);
+
+        // 收回context
+        self.reclaim_context_from_executor();
+
+        result
     }
 
     /// 绘制游戏画面（每帧调用）
@@ -299,7 +335,7 @@ impl<C: GameContext> GameBridge<C> {
     ///
     /// 此方法会立即执行子程序直到 RETURN，不支持协程暂停。
     /// 如果子程序中有 WAIT/YIELD，会触发错误。
-    pub fn call_subroutine(&mut self, line_number: u16) -> Result<()> {
+    pub fn call_subroutine(&mut self, line_number: u16) -> Result<()> where C: 'static {
         // 检查行号是否存在
         if self.executor.runtime().get_line(line_number).is_none() {
             // 行号不存在，静默跳过（允许可选的钩子）
@@ -358,6 +394,33 @@ impl<C: GameContext> GameBridge<C> {
     /// 获取游戏上下文的不可变引用
     pub fn context(&self) -> &C {
         &self.context
+    }
+
+    /// 临时替换 GameContext 并执行代码
+    ///
+    /// 这允许在调用 BASIC 子程序时使用不同的 GameContext（例如用于渲染）
+    pub fn with_temp_context<C2: GameContext + 'static, F, R>(&mut self, temp_context: C2, f: F) -> R
+    where
+        F: FnOnce(&mut GameBridge<C2>) -> R,
+    {
+        // 取出 executor
+        let executor = std::mem::replace(&mut self.executor, crate::basic::executor::Executor::new());
+
+        // 创建临时的 GameBridge（使用取出的executor）
+        let mut temp_bridge = GameBridge {
+            executor,
+            context: temp_context,
+            init_called: self.init_called,
+        };
+
+        // 执行代码
+        let result = f(&mut temp_bridge);
+
+        // 恢复 executor
+        self.executor = temp_bridge.executor;
+        self.init_called = temp_bridge.init_called;
+
+        result
     }
 
     /// 检查程序是否已结束

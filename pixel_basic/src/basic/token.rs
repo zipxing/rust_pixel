@@ -96,7 +96,14 @@ pub enum Token {
     MidFunc,    // MID$
     Instr,      // INSTR
     SpaceFunc,  // SPACE$
-    
+
+    // 游戏输入函数
+    Inkey,      // INKEY() - 返回按键码
+    Key,        // KEY(key$) - 检查按键是否按下
+    MouseX,     // MOUSEX() - 鼠标X坐标
+    MouseY,     // MOUSEY() - 鼠标Y坐标
+    MouseBtn,   // MOUSEBTN() - 鼠标按键状态
+
     // 格式化函数（PRINT 用）
     Tab,
     Spc,
@@ -219,7 +226,14 @@ impl Token {
             "MID$" => Some(Token::MidFunc),
             "INSTR" => Some(Token::Instr),
             "SPACE$" => Some(Token::SpaceFunc),
-            
+
+            // 游戏输入函数
+            "INKEY" => Some(Token::Inkey),
+            "KEY" => Some(Token::Key),
+            "MOUSEX" => Some(Token::MouseX),
+            "MOUSEY" => Some(Token::MouseY),
+            "MOUSEBTN" => Some(Token::MouseBtn),
+
             // 格式化函数
             "TAB" => Some(Token::Tab),
             "SPC" => Some(Token::Spc),

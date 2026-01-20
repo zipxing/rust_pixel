@@ -1,9 +1,9 @@
 10 REM ============================================
 20 REM SNAKE GAME - Written in BASIC for rust_pixel
 30 REM ============================================
-40 REM Entry point - call subroutines in loop
-50 GOSUB 1000: REM Initialize game
-60 YIELD: REM Wait for next frame
+40 REM Main loop - GameBridge automatically calls hooks
+50 REM GameBridge will call: ON_INIT(1000), ON_TICK(2000), ON_DRAW(3500)
+60 YIELD: REM Let GameBridge manage the game loop
 70 GOTO 60
 80 END
 90 REM

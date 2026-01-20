@@ -1,9 +1,9 @@
 use rust_pixel::{
     context::Context,
-    event::{Event, KeyCode},
     game::Model,
 };
 use pixel_basic::{GameBridge, NullGameContext};
+use log::{info, debug, error};
 
 /// BasicSnakeModel - Game model that integrates BASIC script via GameBridge
 pub struct BasicSnakeModel {
@@ -27,26 +27,31 @@ impl BasicSnakeModel {
 
     /// Load BASIC program from string
     pub fn load_program(&mut self, program: &str) {
+        info!("Loading BASIC program...");
         if let Err(e) = self.bridge.load_program(program) {
-            eprintln!("Failed to load BASIC program: {:?}", e);
+            error!("Failed to load BASIC program: {:?}", e);
+        } else {
+            info!("BASIC program loaded successfully");
         }
     }
 }
 
 impl Model for BasicSnakeModel {
     fn init(&mut self, _ctx: &mut Context) {
+        info!("BasicSnakeModel::init() called");
         // Load the BASIC program
         let program = include_str!("../assets/game.bas");
         self.load_program(program);
     }
 
-    fn update(&mut self, ctx: &mut Context, dt: f32) {
+    fn update(&mut self, _ctx: &mut Context, dt: f32) {
         self.frame_count += 1;
+        debug!("Model::update() called, frame={}, dt={}", self.frame_count, dt);
 
         // Update BASIC script execution
         // This will call ON_TICK (line 2000) every frame
         if let Err(e) = self.bridge.update(dt) {
-            eprintln!("BASIC runtime error: {:?}", e);
+            error!("BASIC runtime error in update (frame {}): {:?}", self.frame_count, e);
         }
 
         // ESC key handling removed - will be handled by framework

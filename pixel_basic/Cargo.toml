@@ -9,6 +9,7 @@ license = "MIT"
 [dependencies]
 # BASIC interpreter dependencies
 rand = "0.8"
+log = "0.4"
 
 # rust_pixel integration (for GameBridge, will be added later)
 # rust_pixel = { path = "..", default-features = false }

@@ -853,7 +853,8 @@ impl Parser {
             Token::Atn | Token::Len | Token::Val | Token::Asc | Token::Peek |
             Token::Fre | Token::Pos | Token::Usr |
             Token::StrFunc | Token::ChrFunc | Token::LeftFunc | Token::RightFunc | Token::MidFunc |
-            Token::Instr | Token::SpaceFunc
+            Token::Instr | Token::SpaceFunc |
+            Token::Inkey | Token::Key | Token::MouseX | Token::MouseY | Token::MouseBtn
         )
     }
 
@@ -890,6 +891,11 @@ impl Parser {
             Token::MidFunc => "MID$",
             Token::Instr => "INSTR",
             Token::SpaceFunc => "SPACE$",
+            Token::Inkey => "INKEY",
+            Token::Key => "KEY",
+            Token::MouseX => "MOUSEX",
+            Token::MouseY => "MOUSEY",
+            Token::MouseBtn => "MOUSEBTN",
             _ => unreachable!(),
         }.to_string();
         

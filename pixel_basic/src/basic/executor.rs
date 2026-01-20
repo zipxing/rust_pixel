@@ -343,8 +343,22 @@ impl Executor {
             
             // 逻辑运算符（按位）
             And => {
-                let l = left_val.as_number()? as i32;
-                let r = right_val.as_number()? as i32;
+                log::debug!("AND operator: left_val={:?}, right_val={:?}", left_val, right_val);
+                let l = match left_val.as_number() {
+                    Ok(n) => n as i32,
+                    Err(e) => {
+                        log::error!("AND: Failed to convert left to number: {:?}, value={:?}", e, left_val);
+                        return Err(e);
+                    }
+                };
+                let r = match right_val.as_number() {
+                    Ok(n) => n as i32,
+                    Err(e) => {
+                        log::error!("AND: Failed to convert right to number: {:?}, value={:?}", e, right_val);
+                        return Err(e);
+                    }
+                };
+                log::debug!("AND operator: l={}, r={}, result={}", l, r, l & r);
                 Ok(Value::Number((l & r) as f64))
             }
             
