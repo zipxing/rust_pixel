@@ -2,13 +2,13 @@ use rust_pixel::{
     context::Context,
     game::Model,
 };
-use pixel_basic::{GameBridge, NullGameContext};
+use pixel_basic::GameBridge;
 use log::{info, debug, error};
 
 /// BasicSnakeModel - Game model that integrates BASIC script via GameBridge
 pub struct BasicSnakeModel {
     /// GameBridge manages BASIC script execution
-    pub bridge: GameBridge<NullGameContext>,
+    pub bridge: GameBridge,
 
     /// Frame counter for debugging
     pub frame_count: u64,
@@ -16,11 +16,8 @@ pub struct BasicSnakeModel {
 
 impl BasicSnakeModel {
     pub fn new() -> Self {
-        // Create GameBridge with null context (will be replaced by render layer)
-        let bridge = GameBridge::new(NullGameContext);
-
         Self {
-            bridge,
+            bridge: GameBridge::new(),
             frame_count: 0,
         }
     }

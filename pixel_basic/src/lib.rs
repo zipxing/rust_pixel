@@ -32,4 +32,4 @@ pub use game_context::{GameContext, NullGameContext};
 pub use game_bridge::{GameBridge, ON_INIT_LINE, ON_TICK_LINE, ON_DRAW_LINE};
 
 // Re-export pixel game context
-pub use pixel_game_context::{PixelGameContext, RenderBackend};
+pub use pixel_game_context::{PixelGameContext, DrawCommand, SpriteData};

@@ -12,11 +12,8 @@
 /// │ Model::       │  dt (f32)   │ update │   dt     │ step()   │
 /// │ handle_timer()│─────────────►│ ()     │─────────►│          │
 /// │               │              │        │          │          │
-/// │ Model::       │  Event[]    │ handle │  INKEY/  │ input    │
-/// │ handle_event()│─────────────►│ _input │  KEY()   │ state    │
-/// │               │              │        │          │          │
-/// │ Render::      │              │ draw() │          │ sprites  │
-/// │ draw()        │◄─────────────│        │◄─────────│ Panel    │
+/// │ Render::      │              │ draw() │          │ commands │
+/// │ draw()        │◄─────────────│        │◄─────────│ sprites  │
 /// └───────────────┘              └────────┘          └──────────┘
 /// ```
 ///
@@ -26,7 +23,7 @@
 ///
 /// - **ON_INIT (1000行)**: 游戏启动时调用一次
 /// - **ON_TICK (2000行)**: 每帧调用，用于游戏逻辑更新，DT 变量设置为帧时间
-/// - **ON_DRAW (3000行)**: 每帧调用，用于渲染操作
+/// - **ON_DRAW (3500行)**: 每帧调用，用于渲染操作
 ///
 /// # BASIC 程序示例
 ///
@@ -46,12 +43,12 @@
 /// 2020 IF KEY("S") THEN Y=Y+1
 /// 2030 IF KEY("A") THEN X=X-1
 /// 2040 IF KEY("D") THEN X=X+1
-/// 2050 SPRITE 1, X, Y, "@"
-/// 2060 RETURN
+/// 2050 RETURN
 ///
-/// 3000 REM ON_DRAW - 渲染
-/// 3010 CLS
-/// 3020 RETURN
+/// 3500 REM ON_DRAW - 渲染
+/// 3510 CLS
+/// 3520 PLOT X, Y, "@", 15, 0
+/// 3530 RETURN
 /// ```
 
 use crate::basic::{
@@ -61,31 +58,32 @@ use crate::basic::{
     executor::Executor,
 };
 use crate::game_context::GameContext;
+use crate::pixel_game_context::PixelGameContext;
 use log;
 
 /// 生命周期钩子的行号常量
 pub const ON_INIT_LINE: u16 = 1000;  // 初始化钩子
 pub const ON_TICK_LINE: u16 = 2000;  // 每帧逻辑钩子
-pub const ON_DRAW_LINE: u16 = 3000;  // 渲染钩子
+pub const ON_DRAW_LINE: u16 = 3500;  // 渲染钩子
 
 /// GameBridge - BASIC 与游戏引擎的桥接
 ///
-/// # 泛型参数
+/// # 设计
 ///
-/// - `C`: 实现 `GameContext` trait 的游戏上下文类型
+/// GameBridge 内部持有一个 `PixelGameContext`，用于收集 BASIC 脚本的绘制命令。
+/// 在每帧渲染时，外部代码可以通过 `context()` 获取这些命令并应用到 Panel。
 ///
 /// # 示例
 ///
 /// ```no_run
-/// use pixel_basic::{GameBridge, NullGameContext};
+/// use pixel_basic::{GameBridge, DrawCommand};
 ///
-/// let mut bridge = GameBridge::new(NullGameContext);
+/// let mut bridge = GameBridge::new();
 ///
 /// // 加载 BASIC 程序
 /// let program = r#"
 /// 10 PRINT "HELLO WORLD"
-/// 20 WAIT 1.0
-/// 30 END
+/// 20 END
 /// "#;
 /// bridge.load_program(program).unwrap();
 ///
@@ -95,54 +93,68 @@ pub const ON_DRAW_LINE: u16 = 3000;  // 渲染钩子
 ///     if !bridge.update(dt).unwrap() {
 ///         break; // 程序结束
 ///     }
+///
+///     // 获取绘制命令并应用到 Panel
+///     for cmd in bridge.context_mut().drain_commands() {
+///         match cmd {
+///             DrawCommand::Plot { x, y, ch, fg, bg } => {
+///                 // sprite.set_color_str(x, y, ch, fg, bg);
+///             }
+///             DrawCommand::Clear => {
+///                 // clear sprite
+///             }
+///         }
+///     }
 /// }
 /// ```
-pub struct GameBridge<C: GameContext> {
+pub struct GameBridge {
     /// BASIC 执行器
     executor: Executor,
 
-    /// 游戏上下文（提供图形/输入接口）
-    context: C,
+    /// 游戏上下文（收集绘制命令和输入状态）
+    context: PixelGameContext,
 
     /// 是否已调用 ON_INIT 钩子
     init_called: bool,
 }
 
-impl<C: GameContext + 'static> GameBridge<C> {
+impl Default for GameBridge {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GameBridge {
     /// 创建新的 GameBridge 实例
-    ///
-    /// # 参数
-    ///
-    /// - `context`: 实现 `GameContext` trait 的游戏上下文
     ///
     /// # 返回值
     ///
     /// 返回新的 GameBridge 实例，内部 BASIC 解释器已初始化
-    pub fn new(context: C) -> Self {
+    pub fn new() -> Self {
         Self {
             executor: Executor::new(),
-            context,
+            context: PixelGameContext::new(),
             init_called: false,
         }
     }
 
-    /// 将GameBridge的context临时借给executor使用
+    /// 将 context 临时借给 executor 使用
     ///
-    /// 使用unsafe但确保正确管理生命周期
+    /// 使用 unsafe 但确保正确管理生命周期
     unsafe fn lend_context_to_executor(&mut self) {
-        let ctx_ptr = &mut self.context as *mut C as *mut dyn GameContext;
+        let ctx_ptr = &mut self.context as *mut PixelGameContext as *mut dyn GameContext;
         self.executor.set_game_context(Box::from_raw(ctx_ptr));
     }
 
-    /// 从executor收回context的"借用"
+    /// 从 executor 收回 context 的"借用"
     fn reclaim_context_from_executor(&mut self) {
-        // 从executor取出box并转回指针，但不drop
+        // 从 executor 取出 box 并转回指针，但不 drop
         if self.executor.has_game_context() {
             unsafe {
                 if let Some(boxed) = self.executor.game_context_mut() {
                     let replacement: Box<dyn GameContext> = Box::new(crate::game_context::NullGameContext);
                     let ptr = Box::into_raw(std::mem::replace(boxed, replacement));
-                    // 不要drop这个指针，因为它指向self.context
+                    // 不要 drop 这个指针，因为它指向 self.context
                     std::mem::forget(ptr);
                 }
             }
@@ -165,8 +177,8 @@ impl<C: GameContext + 'static> GameBridge<C> {
     /// # 示例
     ///
     /// ```no_run
-    /// # use pixel_basic::{GameBridge, NullGameContext};
-    /// let mut bridge = GameBridge::new(NullGameContext);
+    /// # use pixel_basic::GameBridge;
+    /// let mut bridge = GameBridge::new();
     /// bridge.load_program("10 PRINT \"HELLO\"").unwrap();
     /// ```
     pub fn load_program(&mut self, source: &str) -> Result<()> {
@@ -234,8 +246,8 @@ impl<C: GameContext + 'static> GameBridge<C> {
     /// # 示例
     ///
     /// ```no_run
-    /// # use pixel_basic::{GameBridge, NullGameContext};
-    /// # let mut bridge = GameBridge::new(NullGameContext);
+    /// # use pixel_basic::GameBridge;
+    /// # let mut bridge = GameBridge::new();
     /// loop {
     ///     let dt = 0.016;
     ///     if !bridge.update(dt).unwrap() {
@@ -244,13 +256,13 @@ impl<C: GameContext + 'static> GameBridge<C> {
     /// }
     /// ```
     pub fn update(&mut self, dt: f32) -> Result<bool> {
-        // 设置context用于整个update期间
+        // 设置 context 用于整个 update 期间
         unsafe { self.lend_context_to_executor(); }
 
         // 1. 首次调用时执行 ON_INIT 钩子
         if !self.init_called {
             log::info!("GameBridge: Calling ON_INIT (line {})", ON_INIT_LINE);
-            self.call_subroutine(ON_INIT_LINE)?;
+            self.call_subroutine_internal(ON_INIT_LINE)?;
             self.init_called = true;
             log::info!("GameBridge: ON_INIT completed");
         }
@@ -258,84 +270,45 @@ impl<C: GameContext + 'static> GameBridge<C> {
         // 2. 调用 ON_TICK 钩子（设置 DT 变量）
         log::debug!("GameBridge: Calling ON_TICK (line {}), dt={}", ON_TICK_LINE, dt);
         self.executor.variables_mut().set("DT", crate::basic::variables::Value::Number(dt as f64))?;
-        self.call_subroutine(ON_TICK_LINE)?;
+        self.call_subroutine_internal(ON_TICK_LINE)?;
         log::debug!("GameBridge: ON_TICK completed");
 
         // 3. 执行协程 step
         let result = self.executor.step(dt);
 
-        // 收回context
+        // 收回 context
         self.reclaim_context_from_executor();
 
         result
     }
 
-    /// 绘制游戏画面（每帧调用）
+    /// 调用 ON_DRAW 钩子并收集绘制命令
     ///
-    /// 调用 ON_DRAW 钩子，允许 BASIC 程序执行渲染操作。
+    /// 此方法在渲染时调用，执行 BASIC 的 ON_DRAW 子程序。
+    /// 执行后，可以通过 `context_mut().drain_commands()` 获取绘制命令。
     ///
     /// # 返回值
     ///
     /// - `Ok(())`: 绘制成功
     /// - `Err(BasicError)`: 执行错误
-    ///
-    /// # 示例
-    ///
-    /// ```no_run
-    /// # use pixel_basic::{GameBridge, NullGameContext};
-    /// # let mut bridge = GameBridge::new(NullGameContext);
-    /// bridge.draw().unwrap();
-    /// ```
     pub fn draw(&mut self) -> Result<()> {
-        self.call_subroutine(ON_DRAW_LINE)?;
-        Ok(())
+        // 清空之前的绘制命令
+        self.context.clear_commands();
+
+        // 设置 context 用于绘制
+        unsafe { self.lend_context_to_executor(); }
+
+        // 调用 ON_DRAW
+        let result = self.call_subroutine_internal(ON_DRAW_LINE);
+
+        // 收回 context
+        self.reclaim_context_from_executor();
+
+        result
     }
 
-    /// 处理输入事件
-    ///
-    /// 此方法将 rust_pixel 的输入事件转换为 BASIC 可查询的输入状态。
-    /// 目前这是一个占位符，实际实现需要:
-    /// 1. 解析 rust_pixel 的 Event 类型
-    /// 2. 更新 GameContext 中的输入状态
-    /// 3. 检查是否有 WAITKEY/WAITCLICK 需要恢复
-    ///
-    /// # 参数
-    ///
-    /// - `events`: rust_pixel 的输入事件切片（未来扩展）
-    ///
-    /// # TODO
-    ///
-    /// - [ ] 定义 rust_pixel Event 类型的接口
-    /// - [ ] 实现键盘事件到 INKEY/KEY 的映射
-    /// - [ ] 实现鼠标事件到 MOUSEX/MOUSEY/MOUSEB 的映射
-    /// - [ ] 处理 WAITKEY/WAITCLICK 协程恢复
-    pub fn handle_input(&mut self, _events: &[()]) -> Result<()> {
-        // TODO: 实现输入事件处理
-        // 1. 遍历 events
-        // 2. 更新 context 的输入状态
-        // 3. 检查 runtime 是否在等待输入事件
-        // 4. 如果匹配，调用 runtime.resume_from_wait()
-        Ok(())
-    }
-
-    /// 调用 BASIC 子程序
-    ///
-    /// 执行指定行号的 GOSUB 调用，常用于生命周期钩子。
-    ///
-    /// # 参数
-    ///
-    /// - `line_number`: 要调用的子程序行号
-    ///
-    /// # 返回值
-    ///
-    /// - `Ok(())`: 调用成功
-    /// - `Err(BasicError)`: 行号不存在或执行错误
-    ///
-    /// # 注意
-    ///
-    /// 此方法会立即执行子程序直到 RETURN，不支持协程暂停。
-    /// 如果子程序中有 WAIT/YIELD，会触发错误。
-    pub fn call_subroutine(&mut self, line_number: u16) -> Result<()> where C: 'static {
+    /// 内部方法：调用 BASIC 子程序（假设 context 已经借出）
+    fn call_subroutine_internal(&mut self, line_number: u16) -> Result<()> {
         // 检查行号是否存在
         if self.executor.runtime().get_line(line_number).is_none() {
             // 行号不存在，静默跳过（允许可选的钩子）
@@ -372,6 +345,30 @@ impl<C: GameContext + 'static> GameBridge<C> {
         Ok(())
     }
 
+    /// 调用 BASIC 子程序（公开接口）
+    ///
+    /// 执行指定行号的 GOSUB 调用，常用于生命周期钩子。
+    ///
+    /// # 参数
+    ///
+    /// - `line_number`: 要调用的子程序行号
+    ///
+    /// # 返回值
+    ///
+    /// - `Ok(())`: 调用成功
+    /// - `Err(BasicError)`: 行号不存在或执行错误
+    pub fn call_subroutine(&mut self, line_number: u16) -> Result<()> {
+        // 设置 context
+        unsafe { self.lend_context_to_executor(); }
+
+        let result = self.call_subroutine_internal(line_number);
+
+        // 收回 context
+        self.reclaim_context_from_executor();
+
+        result
+    }
+
     /// 获取 BASIC 执行器的可变引用
     ///
     /// 用于高级用例，如直接操作变量或运行时状态。
@@ -386,41 +383,17 @@ impl<C: GameContext + 'static> GameBridge<C> {
 
     /// 获取游戏上下文的可变引用
     ///
-    /// 允许外部代码直接操作游戏上下文（如手动绘制图形）。
-    pub fn context_mut(&mut self) -> &mut C {
+    /// 允许外部代码:
+    /// - 获取绘制命令: `context_mut().drain_commands()`
+    /// - 更新输入状态: `context_mut().set_key_state(...)`
+    /// - 获取精灵数据: `context().sprites()`
+    pub fn context_mut(&mut self) -> &mut PixelGameContext {
         &mut self.context
     }
 
     /// 获取游戏上下文的不可变引用
-    pub fn context(&self) -> &C {
+    pub fn context(&self) -> &PixelGameContext {
         &self.context
-    }
-
-    /// 临时替换 GameContext 并执行代码
-    ///
-    /// 这允许在调用 BASIC 子程序时使用不同的 GameContext（例如用于渲染）
-    pub fn with_temp_context<C2: GameContext + 'static, F, R>(&mut self, temp_context: C2, f: F) -> R
-    where
-        F: FnOnce(&mut GameBridge<C2>) -> R,
-    {
-        // 取出 executor
-        let executor = std::mem::replace(&mut self.executor, crate::basic::executor::Executor::new());
-
-        // 创建临时的 GameBridge（使用取出的executor）
-        let mut temp_bridge = GameBridge {
-            executor,
-            context: temp_context,
-            init_called: self.init_called,
-        };
-
-        // 执行代码
-        let result = f(&mut temp_bridge);
-
-        // 恢复 executor
-        self.executor = temp_bridge.executor;
-        self.init_called = temp_bridge.init_called;
-
-        result
     }
 
     /// 检查程序是否已结束
@@ -436,6 +409,7 @@ impl<C: GameContext + 'static> GameBridge<C> {
     /// 清空所有变量、程序和运行时状态。
     pub fn reset(&mut self) {
         self.executor = Executor::new();
+        self.context = PixelGameContext::new();
         self.init_called = false;
     }
 }
@@ -443,17 +417,16 @@ impl<C: GameContext + 'static> GameBridge<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game_context::NullGameContext;
 
     #[test]
     fn test_game_bridge_creation() {
-        let bridge = GameBridge::new(NullGameContext);
+        let bridge = GameBridge::new();
         assert!(!bridge.init_called);
     }
 
     #[test]
     fn test_load_program() {
-        let mut bridge = GameBridge::new(NullGameContext);
+        let mut bridge = GameBridge::new();
         let program = r#"
 10 PRINT "HELLO"
 20 END
@@ -463,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_update_calls_init_once() {
-        let mut bridge = GameBridge::new(NullGameContext);
+        let mut bridge = GameBridge::new();
         let program = r#"
 10 X = 0
 20 YIELD
@@ -477,8 +450,8 @@ mod tests {
 2010 X = X + 1
 2020 RETURN
 
-3000 REM ON_DRAW
-3010 RETURN
+3500 REM ON_DRAW
+3510 RETURN
         "#;
         bridge.load_program(program).unwrap();
 
@@ -498,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_call_subroutine() {
-        let mut bridge = GameBridge::new(NullGameContext);
+        let mut bridge = GameBridge::new();
         let program = r#"
 10 X = 0
 20 END
@@ -519,7 +492,7 @@ mod tests {
 
     #[test]
     fn test_call_nonexistent_subroutine() {
-        let mut bridge = GameBridge::new(NullGameContext);
+        let mut bridge = GameBridge::new();
         let program = "10 END";
         bridge.load_program(program).unwrap();
 
@@ -529,7 +502,7 @@ mod tests {
 
     #[test]
     fn test_reset() {
-        let mut bridge = GameBridge::new(NullGameContext);
+        let mut bridge = GameBridge::new();
         bridge.load_program("10 X = 100").unwrap();
         bridge.update(0.016).unwrap();
 
@@ -538,5 +511,39 @@ mod tests {
         // 检查变量已被清空（get返回默认值0.0）
         let x = bridge.executor().variables().get("X");
         assert_eq!(x.as_number().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn test_draw_collects_commands() {
+        let mut bridge = GameBridge::new();
+        let program = r#"
+10 END
+
+3500 REM ON_DRAW
+3510 CLS
+3520 PLOT 10, 20, "@", 15, 0
+3530 RETURN
+        "#;
+        bridge.load_program(program).unwrap();
+
+        // 调用 draw
+        bridge.draw().unwrap();
+
+        // 检查绘制命令
+        let commands = bridge.context().commands();
+        assert_eq!(commands.len(), 2);
+
+        use crate::pixel_game_context::DrawCommand;
+        assert!(matches!(commands[0], DrawCommand::Clear));
+        match &commands[1] {
+            DrawCommand::Plot { x, y, ch, fg, bg } => {
+                assert_eq!(*x, 10);
+                assert_eq!(*y, 20);
+                assert_eq!(*ch, '@');
+                assert_eq!(*fg, 15);
+                assert_eq!(*bg, 0);
+            }
+            _ => panic!("Expected Plot command"),
+        }
     }
 }

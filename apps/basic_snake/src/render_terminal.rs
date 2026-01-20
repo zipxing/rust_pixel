@@ -4,58 +4,8 @@ use rust_pixel::{
     game::Render,
     render::{panel::Panel, sprite::Sprite, style::Color},
 };
-use pixel_basic::RenderBackend;
+use pixel_basic::DrawCommand;
 use log::{info, debug, error};
-
-/// PanelBackend - Implements RenderBackend for rust_pixel's Panel
-/// This backend draws directly to a single Sprite's buffer
-pub struct PanelBackend<'a> {
-    sprite: &'a mut Sprite,
-}
-
-impl<'a> PanelBackend<'a> {
-    pub fn new(sprite: &'a mut Sprite) -> Self {
-        Self { sprite }
-    }
-}
-
-impl<'a> RenderBackend for PanelBackend<'a> {
-    fn draw_pixel(&mut self, x: u16, y: u16, ch: char, fg: u8, bg: u8) {
-        // Draw directly to the sprite's buffer
-        self.sprite.set_color_str(
-            x,
-            y,
-            ch.to_string(),
-            Color::Indexed(fg),
-            Color::Indexed(bg)
-        );
-    }
-
-    fn clear(&mut self) {
-        // Clear the entire sprite by filling with spaces
-        let width = self.sprite.content.area.width;
-        let height = self.sprite.content.area.height;
-        for y in 0..height {
-            for x in 0..width {
-                self.sprite.set_color_str(x, y, " ", Color::Reset, Color::Reset);
-            }
-        }
-    }
-
-    fn add_sprite(&mut self, _id: u32, x: i32, y: i32, ch: char, fg: u8, bg: u8, _visible: bool) {
-        // For now, just draw as a pixel (sprite management not implemented)
-        self.draw_pixel(x as u16, y as u16, ch, fg, bg);
-    }
-
-    fn update_sprite(&mut self, _id: u32, x: i32, y: i32, ch: char, fg: u8, bg: u8, _visible: bool) {
-        // For now, just draw as a pixel
-        self.draw_pixel(x as u16, y as u16, ch, fg, bg);
-    }
-
-    fn has_sprite(&self, _id: u32) -> bool {
-        false
-    }
-}
 
 /// BasicSnakeRender - Terminal rendering using Panel API
 pub struct BasicSnakeRender {
@@ -72,6 +22,53 @@ impl BasicSnakeRender {
         panel.add_sprite(canvas, "CANVAS");
 
         Self { panel }
+    }
+
+    /// Apply draw commands from BASIC to the canvas sprite
+    fn apply_draw_commands(&mut self, model: &mut BasicSnakeModel) {
+        let canvas = self.panel.get_sprite("CANVAS");
+
+        // Drain commands from the bridge's context and apply to sprite
+        for cmd in model.bridge.context_mut().drain_commands() {
+            match cmd {
+                DrawCommand::Plot { x, y, ch, fg, bg } => {
+                    if x >= 0 && y >= 0 {
+                        canvas.set_color_str(
+                            x as u16,
+                            y as u16,
+                            ch.to_string(),
+                            Color::Indexed(fg),
+                            Color::Indexed(bg),
+                        );
+                    }
+                }
+                DrawCommand::Clear => {
+                    // Clear the entire sprite by filling with spaces
+                    let width = canvas.content.area.width;
+                    let height = canvas.content.area.height;
+                    for cy in 0..height {
+                        for cx in 0..width {
+                            canvas.set_color_str(cx, cy, " ", Color::Reset, Color::Reset);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also render sprites from BASIC
+        for sprite_data in model.bridge.context().sprites().values() {
+            if !sprite_data.hidden {
+                if sprite_data.x >= 0 && sprite_data.y >= 0 {
+                    canvas.set_color_str(
+                        sprite_data.x as u16,
+                        sprite_data.y as u16,
+                        sprite_data.ch.to_string(),
+                        Color::Indexed(sprite_data.fg),
+                        Color::Indexed(sprite_data.bg),
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -107,34 +104,13 @@ impl Render for BasicSnakeRender {
     fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         debug!("Render::draw() called, frame={}", model.frame_count);
 
-        // Get the canvas sprite from panel
-        let canvas = self.panel.get_sprite("CANVAS");
-
-        // Create PanelBackend that wraps this sprite
-        let backend = PanelBackend::new(canvas);
-        let mut game_ctx = pixel_basic::PixelGameContext::new(backend);
-
-        // Temporarily set game context in executor
-        unsafe {
-            let ctx_ptr = &mut game_ctx as *mut _ as *mut dyn pixel_basic::GameContext;
-            model.bridge.executor_mut().set_game_context(Box::from_raw(ctx_ptr));
-        }
-
-        // Call ON_DRAW
-        let result = model.bridge.call_subroutine(3500);
-
-        // Reclaim context
-        unsafe {
-            if let Some(boxed) = model.bridge.executor_mut().game_context_mut() {
-                let replacement: Box<dyn pixel_basic::GameContext> = Box::new(pixel_basic::NullGameContext);
-                let ptr = Box::into_raw(std::mem::replace(boxed, replacement));
-                let _ = ptr; // Don't drop
-            }
-        }
-
-        if let Err(e) = result {
+        // Call ON_DRAW to collect draw commands
+        if let Err(e) = model.bridge.draw() {
             error!("Failed to call ON_DRAW (frame {}): {:?}", model.frame_count, e);
         }
+
+        // Apply the collected draw commands to the canvas
+        self.apply_draw_commands(model);
 
         // Draw the panel (which includes our updated canvas)
         if let Err(e) = self.panel.draw(ctx) {

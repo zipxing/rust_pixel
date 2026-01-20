@@ -1,8 +1,8 @@
-use pixel_basic::{GameBridge, NullGameContext};
+use pixel_basic::GameBridge;
 
 #[test]
 fn test_key_and_expression() {
-    let mut bridge = GameBridge::new(NullGameContext);
+    let mut bridge = GameBridge::new();
 
     // Test KEY() function with AND operator
     let program = r#"

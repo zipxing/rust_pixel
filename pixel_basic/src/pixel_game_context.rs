@@ -1,36 +1,61 @@
 //! PixelGameContext - GameContext implementation for rust_pixel engine
 //!
 //! This module provides the concrete implementation of GameContext trait
-//! that bridges BASIC scripts with rust_pixel's Panel API.
+//! that bridges BASIC scripts with rust_pixel's rendering system.
+//!
+//! # Design
+//!
+//! Instead of directly holding a reference to Panel (which causes lifetime issues),
+//! this implementation collects draw commands that can be applied to a Panel later.
 
 use std::collections::HashMap;
 use crate::game_context::GameContext;
 
+/// A single draw command that can be applied to a Panel
+#[derive(Debug, Clone)]
+pub enum DrawCommand {
+    /// Draw a character at position with colors
+    Plot { x: i32, y: i32, ch: char, fg: u8, bg: u8 },
+    /// Clear the screen
+    Clear,
+}
+
 /// Sprite data managed by BASIC scripts
 #[derive(Debug, Clone)]
-struct SpriteData {
-    id: u32,
-    x: i32,
-    y: i32,
-    ch: char,
-    fg: u8,
-    bg: u8,
-    hidden: bool,
+pub struct SpriteData {
+    pub id: u32,
+    pub x: i32,
+    pub y: i32,
+    pub ch: char,
+    pub fg: u8,
+    pub bg: u8,
+    pub hidden: bool,
 }
 
-/// Trait for the rendering backend (Panel-like interface)
-pub trait RenderBackend {
-    fn draw_pixel(&mut self, x: u16, y: u16, ch: char, fg: u8, bg: u8);
-    fn clear(&mut self);
-    fn add_sprite(&mut self, id: u32, x: i32, y: i32, ch: char, fg: u8, bg: u8, visible: bool);
-    fn update_sprite(&mut self, id: u32, x: i32, y: i32, ch: char, fg: u8, bg: u8, visible: bool);
-    fn has_sprite(&self, id: u32) -> bool;
-}
-
-/// GameContext implementation for rust_pixel engine
-pub struct PixelGameContext<R: RenderBackend> {
-    /// Reference to the rendering backend
-    backend: R,
+/// GameContext implementation that collects draw commands
+///
+/// # Usage
+///
+/// ```ignore
+/// // Create context
+/// let mut ctx = PixelGameContext::new();
+///
+/// // Execute BASIC code (fills ctx with draw commands)
+/// bridge.call_draw(&mut ctx)?;
+///
+/// // Apply commands to Panel
+/// for cmd in ctx.drain_commands() {
+///     match cmd {
+///         DrawCommand::Plot { x, y, ch, fg, bg } => {
+///             sprite.set_color_str(x, y, ch, fg, bg);
+///         }
+///         DrawCommand::Clear => { ... }
+///     }
+/// }
+/// ```
+pub struct PixelGameContext {
+    /// Collected draw commands
+    commands: Vec<DrawCommand>,
 
     /// Sprite management
     sprites: HashMap<u32, SpriteData>,
@@ -43,11 +68,17 @@ pub struct PixelGameContext<R: RenderBackend> {
     mouse_buttons: u8,
 }
 
-impl<R: RenderBackend> PixelGameContext<R> {
+impl Default for PixelGameContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PixelGameContext {
     /// Create a new PixelGameContext
-    pub fn new(backend: R) -> Self {
+    pub fn new() -> Self {
         Self {
-            backend,
+            commands: Vec::new(),
             sprites: HashMap::new(),
             last_key: 0,
             key_states: HashMap::new(),
@@ -57,7 +88,36 @@ impl<R: RenderBackend> PixelGameContext<R> {
         }
     }
 
-    /// Update input state (called by game engine)
+    /// Drain all collected draw commands
+    ///
+    /// Returns an iterator over all commands and clears the internal buffer.
+    pub fn drain_commands(&mut self) -> impl Iterator<Item = DrawCommand> + '_ {
+        self.commands.drain(..)
+    }
+
+    /// Get all collected draw commands (without consuming)
+    pub fn commands(&self) -> &[DrawCommand] {
+        &self.commands
+    }
+
+    /// Clear all collected commands
+    pub fn clear_commands(&mut self) {
+        self.commands.clear();
+    }
+
+    /// Get all sprites (for rendering)
+    pub fn sprites(&self) -> &HashMap<u32, SpriteData> {
+        &self.sprites
+    }
+
+    /// Get a mutable reference to sprites
+    pub fn sprites_mut(&mut self) -> &mut HashMap<u32, SpriteData> {
+        &mut self.sprites
+    }
+
+    // ========== Input State Management ==========
+
+    /// Update the last pressed key (called by game engine)
     pub fn update_key(&mut self, key: u32) {
         self.last_key = key;
     }
@@ -74,17 +134,22 @@ impl<R: RenderBackend> PixelGameContext<R> {
         self.mouse_buttons = buttons;
     }
 
+    /// Clear all key states
+    pub fn clear_key_states(&mut self) {
+        self.key_states.clear();
+        self.last_key = 0;
+    }
 }
 
-impl<R: RenderBackend> GameContext for PixelGameContext<R> {
+impl GameContext for PixelGameContext {
     // ========== Graphics Methods ==========
 
     fn plot(&mut self, x: i32, y: i32, ch: char, fg: u8, bg: u8) {
-        self.backend.draw_pixel(x as u16, y as u16, ch, fg, bg);
+        self.commands.push(DrawCommand::Plot { x, y, ch, fg, bg });
     }
 
     fn cls(&mut self) {
-        self.backend.clear();
+        self.commands.push(DrawCommand::Clear);
     }
 
     fn line(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, ch: char) {
@@ -147,18 +212,18 @@ impl<R: RenderBackend> GameContext for PixelGameContext<R> {
         let mut y = r;
         let mut d = 1 - r;
 
-        let plot_circle_points = |ctx: &mut Self, cx: i32, cy: i32, x: i32, y: i32, ch: char| {
-            ctx.plot(cx + x, cy + y, ch, 15, 0);
-            ctx.plot(cx - x, cy + y, ch, 15, 0);
-            ctx.plot(cx + x, cy - y, ch, 15, 0);
-            ctx.plot(cx - x, cy - y, ch, 15, 0);
-            ctx.plot(cx + y, cy + x, ch, 15, 0);
-            ctx.plot(cx - y, cy + x, ch, 15, 0);
-            ctx.plot(cx + y, cy - x, ch, 15, 0);
-            ctx.plot(cx - y, cy - x, ch, 15, 0);
+        let mut plot_points = |cx: i32, cy: i32, x: i32, y: i32| {
+            self.plot(cx + x, cy + y, ch, 15, 0);
+            self.plot(cx - x, cy + y, ch, 15, 0);
+            self.plot(cx + x, cy - y, ch, 15, 0);
+            self.plot(cx - x, cy - y, ch, 15, 0);
+            self.plot(cx + y, cy + x, ch, 15, 0);
+            self.plot(cx - y, cy + x, ch, 15, 0);
+            self.plot(cx + y, cy - x, ch, 15, 0);
+            self.plot(cx - y, cy - x, ch, 15, 0);
         };
 
-        plot_circle_points(self, cx, cy, x, y, ch);
+        plot_points(cx, cy, x, y);
 
         while x < y {
             x += 1;
@@ -168,14 +233,13 @@ impl<R: RenderBackend> GameContext for PixelGameContext<R> {
                 y -= 1;
                 d += 2 * (x - y) + 1;
             }
-            plot_circle_points(self, cx, cy, x, y, ch);
+            plot_points(cx, cy, x, y);
         }
     }
 
     // ========== Sprite Methods ==========
 
     fn sprite_create(&mut self, id: u32, x: i32, y: i32, ch: char) {
-        // Create or update sprite data
         if let Some(sprite_data) = self.sprites.get_mut(&id) {
             sprite_data.x = x;
             sprite_data.y = y;
@@ -191,16 +255,12 @@ impl<R: RenderBackend> GameContext for PixelGameContext<R> {
                 hidden: false,
             });
         }
-
-        // Update actual sprite in Panel
-        self.sync_sprite_to_panel(id);
     }
 
     fn sprite_move(&mut self, id: u32, dx: i32, dy: i32) {
         if let Some(sprite_data) = self.sprites.get_mut(&id) {
             sprite_data.x += dx;
             sprite_data.y += dy;
-            self.sync_sprite_to_panel(id);
         }
     }
 
@@ -208,14 +268,12 @@ impl<R: RenderBackend> GameContext for PixelGameContext<R> {
         if let Some(sprite_data) = self.sprites.get_mut(&id) {
             sprite_data.x = x;
             sprite_data.y = y;
-            self.sync_sprite_to_panel(id);
         }
     }
 
     fn sprite_hide(&mut self, id: u32, hidden: bool) {
         if let Some(sprite_data) = self.sprites.get_mut(&id) {
             sprite_data.hidden = hidden;
-            self.sync_sprite_to_panel(id);
         }
     }
 
@@ -223,7 +281,6 @@ impl<R: RenderBackend> GameContext for PixelGameContext<R> {
         if let Some(sprite_data) = self.sprites.get_mut(&id) {
             sprite_data.fg = fg;
             sprite_data.bg = bg;
-            self.sync_sprite_to_panel(id);
         }
     }
 
@@ -266,79 +323,9 @@ impl<R: RenderBackend> GameContext for PixelGameContext<R> {
     }
 }
 
-// Private helper methods
-impl<R: RenderBackend> PixelGameContext<R> {
-    /// Sync sprite data to backend's sprite layer
-    fn sync_sprite_to_panel(&mut self, id: u32) {
-        if let Some(sprite_data) = self.sprites.get(&id) {
-            if self.backend.has_sprite(id) {
-                self.backend.update_sprite(
-                    id,
-                    sprite_data.x,
-                    sprite_data.y,
-                    sprite_data.ch,
-                    sprite_data.fg,
-                    sprite_data.bg,
-                    !sprite_data.hidden,
-                );
-            } else {
-                self.backend.add_sprite(
-                    id,
-                    sprite_data.x,
-                    sprite_data.y,
-                    sprite_data.ch,
-                    sprite_data.fg,
-                    sprite_data.bg,
-                    !sprite_data.hidden,
-                );
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Mock render backend for testing
-    struct MockBackend {
-        pixels: Vec<(u16, u16, char, u8, u8)>,
-        cleared: bool,
-        sprites: HashMap<u32, (i32, i32, char, u8, u8, bool)>,
-    }
-
-    impl MockBackend {
-        fn new() -> Self {
-            Self {
-                pixels: Vec::new(),
-                cleared: false,
-                sprites: HashMap::new(),
-            }
-        }
-    }
-
-    impl RenderBackend for MockBackend {
-        fn draw_pixel(&mut self, x: u16, y: u16, ch: char, fg: u8, bg: u8) {
-            self.pixels.push((x, y, ch, fg, bg));
-        }
-
-        fn clear(&mut self) {
-            self.cleared = true;
-            self.pixels.clear();
-        }
-
-        fn add_sprite(&mut self, id: u32, x: i32, y: i32, ch: char, fg: u8, bg: u8, visible: bool) {
-            self.sprites.insert(id, (x, y, ch, fg, bg, visible));
-        }
-
-        fn update_sprite(&mut self, id: u32, x: i32, y: i32, ch: char, fg: u8, bg: u8, visible: bool) {
-            self.sprites.insert(id, (x, y, ch, fg, bg, visible));
-        }
-
-        fn has_sprite(&self, id: u32) -> bool {
-            self.sprites.contains_key(&id)
-        }
-    }
 
     #[test]
     fn test_sprite_data_creation() {
@@ -360,8 +347,7 @@ mod tests {
 
     #[test]
     fn test_input_state_management() {
-        let backend = MockBackend::new();
-        let mut ctx = PixelGameContext::new(backend);
+        let mut ctx = PixelGameContext::new();
 
         ctx.update_key(65); // 'A'
         assert_eq!(ctx.inkey(), 65);
@@ -377,23 +363,52 @@ mod tests {
     }
 
     #[test]
-    fn test_plot_and_cls() {
-        let backend = MockBackend::new();
-        let mut ctx = PixelGameContext::new(backend);
+    fn test_plot_collects_commands() {
+        let mut ctx = PixelGameContext::new();
 
         ctx.plot(10, 20, '@', 15, 0);
-        assert_eq!(ctx.backend.pixels.len(), 1);
-        assert_eq!(ctx.backend.pixels[0], (10, 20, '@', 15, 0));
+        ctx.plot(5, 5, '#', 10, 1);
 
+        assert_eq!(ctx.commands().len(), 2);
+
+        match &ctx.commands()[0] {
+            DrawCommand::Plot { x, y, ch, fg, bg } => {
+                assert_eq!(*x, 10);
+                assert_eq!(*y, 20);
+                assert_eq!(*ch, '@');
+                assert_eq!(*fg, 15);
+                assert_eq!(*bg, 0);
+            }
+            _ => panic!("Expected Plot command"),
+        }
+    }
+
+    #[test]
+    fn test_cls_collects_clear_command() {
+        let mut ctx = PixelGameContext::new();
+
+        ctx.plot(10, 20, '@', 15, 0);
         ctx.cls();
-        assert!(ctx.backend.cleared);
-        assert_eq!(ctx.backend.pixels.len(), 0);
+
+        assert_eq!(ctx.commands().len(), 2);
+        assert!(matches!(ctx.commands()[1], DrawCommand::Clear));
+    }
+
+    #[test]
+    fn test_drain_commands() {
+        let mut ctx = PixelGameContext::new();
+
+        ctx.plot(10, 20, '@', 15, 0);
+        ctx.cls();
+
+        let commands: Vec<_> = ctx.drain_commands().collect();
+        assert_eq!(commands.len(), 2);
+        assert!(ctx.commands().is_empty());
     }
 
     #[test]
     fn test_sprite_operations() {
-        let backend = MockBackend::new();
-        let mut ctx = PixelGameContext::new(backend);
+        let mut ctx = PixelGameContext::new();
 
         // Create sprite
         ctx.sprite_create(1, 10, 20, '@');
@@ -417,8 +432,7 @@ mod tests {
 
     #[test]
     fn test_sprite_hit_detection() {
-        let backend = MockBackend::new();
-        let mut ctx = PixelGameContext::new(backend);
+        let mut ctx = PixelGameContext::new();
 
         ctx.sprite_create(1, 10, 20, '@');
         ctx.sprite_create(2, 10, 20, '#');
