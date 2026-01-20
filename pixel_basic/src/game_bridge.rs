@@ -150,13 +150,11 @@ impl GameBridge {
     fn reclaim_context_from_executor(&mut self) {
         // 从 executor 取出 box 并转回指针，但不 drop
         if self.executor.has_game_context() {
-            unsafe {
-                if let Some(boxed) = self.executor.game_context_mut() {
-                    let replacement: Box<dyn GameContext> = Box::new(crate::game_context::NullGameContext);
-                    let ptr = Box::into_raw(std::mem::replace(boxed, replacement));
-                    // 不要 drop 这个指针，因为它指向 self.context
-                    std::mem::forget(ptr);
-                }
+            if let Some(boxed) = self.executor.game_context_mut() {
+                let replacement: Box<dyn GameContext> = Box::new(crate::game_context::NullGameContext);
+                let ptr = Box::into_raw(std::mem::replace(boxed, replacement));
+                // 不要 drop 这个指针，因为它指向 self.context
+                let _ = ptr;  // 忽略指针，避免 drop
             }
         }
     }
