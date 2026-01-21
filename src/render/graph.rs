@@ -74,7 +74,7 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, AdapterBase},
+    render::{buffer::Buffer, cell::emoji_texidx, sprite::Sprites, style::Color, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -1093,24 +1093,28 @@ pub fn render_main_buffer<F>(
         let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
         let modifier = cell_info.4.bits();  // Convert Modifier to u16
 
-        // If we are in TUI mode (use_tui = true) and the texture is set to 0 (default),
-        // redirect it to the TUI block (Block 48).
-        // Texture 0 is normally the first block of Sprites.
-        // Texture 48 is the first block of TUI characters (which includes ASCII).
+        // Dynamic font rendering: TUI text characters no longer use Block 48-52
+        // Instead, they will be rasterized dynamically using fontdue.
+        // Here we check if the character should use static atlas (Sprite/Emoji) or dynamic rendering.
+        //
+        // Character classification:
+        // - Sprite symbols (tex 1-47, or Private Use Area U+E000-E0FF): Static atlas
+        // - Emoji (tex 53-55, or emoji_texidx match): Static atlas
+        // - All other TUI text characters (ASCII, CJK, etc.): Dynamic rendering
+        //
+        // For dynamic characters, we set texidx to a special value (255) to mark them.
+        // The actual glyph rendering will be handled by GlyphRenderer in the adapter.
         if use_tui && sh.1 == 0 {
-            // Use TUI specific mapping
-            // Because TUI texture layout is different from standard ASCII or Sprite layout
-            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
+            // Check if this is an Emoji
+            if let Some((block, idx)) = emoji_texidx(&cell.symbol) {
                 sh.1 = block;
                 sh.0 = idx;
             } else {
-                // Fallback to Block 48, Index 0 (Space) if not found
-                sh.1 = 48;
-                sh.0 = 0;
+                // Mark as dynamic text character (texidx = 255)
+                // The symbol field in cell will be used for glyph lookup
+                sh.1 = 255; // Special marker for dynamic rendering
+                sh.0 = 0;   // Not used for dynamic characters
             }
-            // if cell.is_blank() {
-            //     info!("sh....{} {}", sh.0, sh.1);
-            // }
         }
 
         // Pass use_tui flag directly to render_helper
