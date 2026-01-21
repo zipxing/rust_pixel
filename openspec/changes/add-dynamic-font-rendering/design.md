@@ -2,10 +2,17 @@
 
 ## Context
 
-rust_pixel 是一个基于图块(tile-based)的 2D 游戏引擎,支持终端文本模式和图形模式。当前图形模式的 TUI 文本渲染使用预制纹理图集,限制了文本清晰度和 CJK 字符支持。需要在保持图块渲染理念的前提下引入动态字体光栅化。
+rust_pixel 是一个基于图块(tile-based)的 2D 游戏引擎,支持终端文本模式和图形模式。当前图形模式使用 2048x2048 统一符号纹理 (`symbols.png`)，采用 block-based 布局：
+
+- **Sprite 区域** (Block 0-47): 3,072 个 16x16 像素符号，用于游戏精灵
+- **TUI 区域** (Block 48-52): 640 个 16x32 像素字符，用于 ASCII + 常用符号
+- **Emoji 区域** (Block 53-55): 192 个 32x32 像素 Emoji
+
+**问题：** TUI 区域的 640 个预渲染字符无法覆盖 CJK 字符集（2万+字符），需要动态字体光栅化作为补充。
 
 **约束:**
 - 保持现有的 Panel/Sprite/Buffer/Cell 架构
+- 与现有 TUI 纹理系统无缝集成
 - 图形模式下所有渲染仍基于纹理图块
 - 不影响终端文本模式(crossterm)的实现
 - 保持 60 FPS 性能
@@ -40,19 +47,38 @@ rust_pixel 是一个基于图块(tile-based)的 2D 游戏引擎,支持终端文�
   - `ab_glyph`: API 设计好,但性能略低于 fontdue
 - **选择原因:** fontdue 在性能、API 简洁性和 WASM 支持上最均衡
 
-### 决策 2: 混合渲染策略
-- **静态图集:** ASCII (0-127)、PETSCII、静态 Emoji
-- **动态字体:** CJK、其他 Unicode、特殊符号
-- **理由:**
-  - ASCII 使用频率高,静态图集性能最佳
-  - Emoji 需要彩色,当前用静态图集,未来可升级
-  - CJK 字符集庞大(2万+),必须动态生成
-- **判断逻辑:**
+### 决策 2: TUI 字符全面动态渲染
+
+**渲染策略：**
+1. **Sprite 符号** (U+E000~U+E0FF): 使用 Sprite 区域 (Block 0-47) - 保持静态
+2. **预渲染 Emoji**: 使用 Emoji 区域 (Block 53-55)，192 个彩色 Emoji - 保持静态
+3. **所有 TUI 文本字符**: 动态光栅化（包括 ASCII、CJK 及其他 Unicode）
+
+**为什么 ASCII 也用动态渲染：**
+- **缩放清晰度**: 预渲染纹理在任意缩放下都会模糊，动态渲染可针对目标分辨率光栅化
+- **一致性**: 中英文混排时，统一使用同一字体渲染，风格更协调
+- **简化逻辑**: 无需维护预渲染字符的判断逻辑
+- **性能影响极小**: ASCII 字符常用，很快被缓存，后续渲染 0 开销
+
+**保持静态的区域：**
+- **Sprite 符号**: 游戏像素艺术，不需要缩放清晰度，保持位图风格
+- **Emoji**: 彩色图像，当前用静态预渲染，未来可升级为 swash 彩色字体
+
+- **判断逻辑（在 `render_helper_tui` 中）:**
   ```rust
-  if ch.is_ascii() || emoji_map.contains(ch) {
-      use_static_atlas()
-  } else {
-      use_dynamic_font()
+  fn get_glyph_source(ch: char, symbol: &str) -> GlyphSource {
+      // 1. 检查是否为 Sprite 符号（私有使用区）
+      if is_sprite_symbol(ch) {
+          return GlyphSource::SpriteAtlas(symidx(ch));
+      }
+
+      // 2. 检查是否为预渲染 Emoji（Block 53-55）
+      if let Some(idx) = emoji_texidx(symbol) {
+          return GlyphSource::EmojiAtlas(idx);
+      }
+
+      // 3. 所有其他 TUI 字符：动态光栅化（包括 ASCII）
+      GlyphSource::Dynamic(ch)
   }
   ```
 
@@ -66,21 +92,64 @@ rust_pixel 是一个基于图块(tile-based)的 2D 游戏引擎,支持终端文�
 - **实现:** 使用 `lru` crate 或自定义 HashMap + LinkedList
 
 ### 决策 4: 纹理管理方案
-- **方案 A (选择):** 每个字符独立纹理
+- **方案 A:** 每个字符独立纹理
   - 优点:简单,易于缓存管理,支持任意字符组合
   - 缺点:纹理切换较多(现代 GPU 影响小)
-- **方案 B (未选择):** 动态纹理图集
-  - 优点:减少纹理切换
-  - 缺点:复杂,需处理图集满、碎片化等问题
-- **选择理由:** 方案 A 的简单性价值更高,现代 GPU 对小纹理切换优化良好
+- **方案 B (选择):** 动态纹理图集（与现有 block-based 布局一致）
+  - 优点:减少纹理切换,与现有渲染管线无缝集成
+  - 缺点:需处理图集满、碎片化等问题
+- **选择理由:** 方案 B 与现有 TUI 架构的 block-based 纹理管理一致，可复用现有的单次 draw call 渲染管线
 
-### 决策 5: 字体大小和分辨率
-- **字体大小:** 默认 16px(可配置)
-- **渲染分辨率:** 1x(与屏幕像素 1:1)
-- **理由:**
-  - 16px 在 terminal mode 中常见,保持一致
-  - 1:1 渲染避免缩放模糊
-  - 不同 DPI 通过调整字体大小参数而非缩放纹理
+**动态纹理图集设计：**
+- 使用独立的动态纹理（如 1024x1024），与 `symbols.png` 分离
+- 采用类似 TUI 区域的 block-based 布局
+- **字形尺寸：** 统一使用 32x32 像素槽位
+  - 半角字符（16x32）占用槽位左半边
+  - 全角字符（32x32，如 CJK 汉字）占用整个槽位
+- 每个 block 128x128 像素，可容纳 4x4 = 16 个字形槽位
+- 1024x1024 纹理 = 8x8 blocks = 64 blocks × 16 slots = 1024 个字形
+- LRU 驱逐时按字形槽位清理
+
+### 决策 5: 字体大小、分辨率和 DPI 感知
+
+**基础尺寸（逻辑像素）：**
+- **字体大小:** 默认 32px 高度（与 TUI 字符高度一致）
+- **字形尺寸:**
+  - **半角字符**（ASCII 等）: 16x32 逻辑像素，占 1 个 TUI Cell
+  - **全角字符**（CJK 汉字等）: 32x32 逻辑像素，占 2 个 TUI Cell（wcwidth=2）
+
+**DPI 感知和缩放支持：**
+- **光栅化尺寸 = 逻辑尺寸 × scale_factor**
+  - 1x 缩放: 32px 高度 → 光栅化 32px
+  - 2x 缩放: 32px 高度 → 光栅化 64px（Retina/HiDPI）
+  - 1.5x 缩放: 32px 高度 → 光栅化 48px
+- **动态纹理图集尺寸也随 scale_factor 调整：**
+  - 1x: 1024x1024（1024 个 32x32 槽位）
+  - 2x: 2048x2048（1024 个 64x64 槽位）
+- **scale_factor 来源：**
+  - 从 winit/SDL 获取窗口的 `scale_factor`
+  - 或用户配置覆盖
+
+**实现方式：**
+```rust
+pub struct GlyphRenderer {
+    base_font_height: f32,  // 逻辑高度 32px
+    scale_factor: f32,      // 从窗口获取，如 1.0, 2.0
+
+    // 实际光栅化高度 = base_font_height * scale_factor
+    fn effective_font_height(&self) -> f32 {
+        self.base_font_height * self.scale_factor
+    }
+}
+```
+
+**理由:**
+- 32px 逻辑高度与 TUI 字符高度一致
+- CJK 汉字为全角，宽高相等（32x32），符合 Unicode 宽度标准
+- **核心优势：按实际显示尺寸光栅化**
+  - 预渲染位图在放大时必然模糊（插值）或有锯齿（最近邻）
+  - 动态字体根据当前缩放比例重新光栅化，始终保持清晰
+  - 例：2x 缩放时，光栅化为 64px 字体，而非将 32px 位图放大 2 倍
 
 ### 决策 6: Emoji 接口设计
 - **当前:** 保持静态 Emoji 图集,通过 `emoji_map` 查找
@@ -100,64 +169,162 @@ rust_pixel 是一个基于图块(tile-based)的 2D 游戏引擎,支持终端文�
 
 ## Architecture
 
+### 与 TUI 架构的集成
+
+动态字体渲染**接管所有 TUI 文本字符**，仅保留 Sprite 和 Emoji 的静态纹理：
+
+```
+字符渲染流程：
+┌─────────────────────────────────────────────────────────────┐
+│                     render_helper_tui()                      │
+├─────────────────────────────────────────────────────────────┤
+│  1. is_sprite_symbol(ch)?  ──→ Sprite 区域 (Block 0-47)     │
+│  2. emoji_texidx(symbol)?  ──→ Emoji 区域 (Block 53-55)     │
+│  3. else (所有文本字符)    ──→ GlyphRenderer (动态纹理)      │
+│     - ASCII (0x20~0x7E)                                      │
+│     - CJK (中日韩汉字)                                       │
+│     - 其他 Unicode 字符                                      │
+└─────────────────────────────────────────────────────────────┘
+
+注：TUI 区域 (Block 48-52) 的 640 个预渲染字符将不再使用，
+    可用于其他用途或在未来版本中移除。
+```
+
 ### 核心组件
 
 ```rust
-/// 字形渲染器 - 管理字体和纹理缓存
+/// 字形来源枚举
+pub enum GlyphSource {
+    /// 静态 Sprite 符号纹理 (symbols.png Block 0-47)
+    SpriteAtlas { texidx: u8, symidx: u8 },
+    /// 静态 TUI 字符纹理 (symbols.png Block 48-52)
+    TuiAtlas { texidx: u8, symidx: u8 },
+    /// 静态 Emoji 纹理 (symbols.png Block 53-55)
+    EmojiAtlas { texidx: u8, symidx: u8 },
+    /// 动态光栅化字形
+    Dynamic { texture_id: u32, uv: UVRect },
+}
+
+/// 字形渲染器 - 管理动态字体和纹理缓存
 pub struct GlyphRenderer {
-    // 动态字体(用于文本)
+    // 动态字体 (用于 CJK 等)
     text_font: fontdue::Font,
-    text_font_size: f32,
+    text_font_height: f32,  // 32px，与 TUI 字符高度一致
 
-    // 字形纹理缓存 (char -> GPU texture ID)
-    glyph_cache: LruCache<char, u32>,
+    // 动态纹理图集
+    dynamic_atlas: DynamicTextureAtlas,
 
-    // 静态 Emoji 图集
-    emoji_atlas: TextureAtlas,
-    emoji_map: HashMap<char, (u32, UVRect)>,
+    // 字形缓存 (char -> 动态图集位置)
+    glyph_cache: LruCache<char, GlyphLocation>,
 
-    // GPU 交互(平台相关)
+    // GPU 交互 (平台相关)
     texture_uploader: Box<dyn TextureUploader>,
 }
 
+/// 动态纹理图集
+pub struct DynamicTextureAtlas {
+    texture_id: u32,
+    width: u32,   // 1024
+    height: u32,  // 1024
+    // Block-based 管理，与 TUI 架构一致
+    // 8x8 blocks = 64 blocks, 每个 block 16 slots
+    blocks: Vec<DynamicBlock>,
+    next_slot: usize,
+}
+
+/// 动态图集中的 block
+pub struct DynamicBlock {
+    // 128x128 像素，4x4 = 16 个字形槽位（每个 32x32）
+    slots: [Option<char>; 16],
+    usage_count: u32,
+}
+
+/// 字形位置信息
+pub struct GlyphLocation {
+    block_idx: usize,    // Block 索引 (0-63)
+    slot_idx: usize,     // 槽位索引 (0-15)
+    is_fullwidth: bool,  // 是否为全角字符（CJK 汉字）
+}
+
+impl GlyphLocation {
+    /// 转换为 UV 坐标
+    pub fn to_uv_rect(&self) -> UVRect {
+        let block_x = (self.block_idx % 8) as f32;
+        let block_y = (self.block_idx / 8) as f32;
+        let slot_x = (self.slot_idx % 4) as f32;
+        let slot_y = (self.slot_idx / 4) as f32;
+
+        let x = (block_x * 128.0 + slot_x * 32.0) / 1024.0;
+        let y = (block_y * 128.0 + slot_y * 32.0) / 1024.0;
+        let w = if self.is_fullwidth { 32.0 / 1024.0 } else { 16.0 / 1024.0 };
+        let h = 32.0 / 1024.0;
+
+        UVRect { x, y, w, h }
+    }
+}
+
 impl GlyphRenderer {
-    /// 获取字符对应的纹理
-    /// 自动判断使用静态图集还是动态渲染
-    pub fn get_texture(&mut self, ch: char) -> (u32, UVRect) {
-        // 1. 检查是否为 Emoji
-        if let Some(&texture) = self.emoji_map.get(&ch) {
-            return texture;
+    /// 获取字符的字形来源
+    pub fn get_glyph_source(&mut self, ch: char) -> GlyphSource {
+        // 检查缓存
+        if let Some(loc) = self.glyph_cache.get(&ch) {
+            return GlyphSource::Dynamic {
+                texture_id: self.dynamic_atlas.texture_id,
+                uv: loc.to_uv_rect(),
+            };
         }
 
-        // 2. 检查是否为 ASCII (可选:也可用动态渲染)
-        if ch.is_ascii() && self.ascii_atlas.is_some() {
-            return self.ascii_atlas.get(ch);
+        // 动态光栅化并缓存
+        let loc = self.rasterize_and_cache(ch);
+        GlyphSource::Dynamic {
+            texture_id: self.dynamic_atlas.texture_id,
+            uv: loc.to_uv_rect(),
         }
-
-        // 3. 动态光栅化(带缓存)
-        let texture_id = self.glyph_cache.get_or_insert_with(ch, || {
-            self.rasterize_and_upload(ch)
-        });
-
-        (*texture_id, UVRect::full())
     }
 
-    fn rasterize_and_upload(&mut self, ch: char) -> u32 {
-        // 使用 fontdue 光栅化
-        let (metrics, bitmap) = self.text_font.rasterize(ch, self.text_font_size);
+    fn rasterize_and_cache(&mut self, ch: char) -> GlyphLocation {
+        // 判断是否为全角字符（CJK 汉字等）
+        let is_fullwidth = unicode_width::UnicodeWidthChar::width(ch)
+            .map(|w| w == 2)
+            .unwrap_or(false);
 
-        // 上传到 GPU
-        self.texture_uploader.upload_alpha8(
-            bitmap,
-            metrics.width,
-            metrics.height
-        )
+        // 使用 fontdue 光栅化
+        let (metrics, bitmap) = self.text_font.rasterize(ch, self.text_font_height);
+
+        // 分配图集槽位
+        let loc = self.dynamic_atlas.allocate_slot(ch, is_fullwidth);
+
+        // 计算像素坐标
+        let block_x = (loc.block_idx % 8) * 128;
+        let block_y = (loc.block_idx / 8) * 128;
+        let slot_x = (loc.slot_idx % 4) * 32;
+        let slot_y = (loc.slot_idx / 4) * 32;
+        let pixel_x = block_x + slot_x;
+        let pixel_y = block_y + slot_y;
+
+        // 上传到 GPU（部分更新）
+        self.texture_uploader.upload_subimage(
+            self.dynamic_atlas.texture_id,
+            pixel_x as u32,
+            pixel_y as u32,
+            &bitmap,
+            metrics.width as u32,
+            metrics.height as u32,
+        );
+
+        // 添加到缓存
+        self.glyph_cache.put(ch, loc.clone());
+        loc
     }
 }
 
 /// 平台相关的纹理上传接口
 pub trait TextureUploader {
-    fn upload_alpha8(&mut self, data: &[u8], width: usize, height: usize) -> u32;
+    /// 创建新纹理
+    fn create_texture(&mut self, width: u32, height: u32) -> u32;
+    /// 部分更新纹理
+    fn upload_subimage(&mut self, texture_id: u32, x: u32, y: u32,
+                       data: &[u8], width: u32, height: u32);
 }
 ```
 
@@ -165,30 +332,68 @@ pub trait TextureUploader {
 
 每个图形适配器需要:
 1. 创建 `GlyphRenderer` 实例
-2. 在 `draw_cell()` 时调用 `get_texture()`
+2. 在 `render_helper_tui()` 中判断字形来源
 3. 实现 `TextureUploader` trait
 
 ```rust
-// 示例: SdlAdapter
-impl SdlAdapter {
+// 示例: 在 render_symbols.rs 中集成
+impl WgpuAdapter {
     fn init(&mut self) {
         // 加载字体
         let font_data = include_bytes!("../assets/NotoSansCJK-Regular.ttf");
         let font = fontdue::Font::from_bytes(font_data, Default::default()).unwrap();
 
-        // 创建渲染器
+        // 创建动态字形渲染器
         self.glyph_renderer = Some(GlyphRenderer::new(
             font,
-            16.0, // font size
-            Box::new(SdlTextureUploader { texture_creator: &self.texture_creator })
+            32.0, // 高度 32px，与 TUI 字符一致
+            Box::new(WgpuTextureUploader { device: &self.device, queue: &self.queue })
         ));
     }
+}
 
-    fn draw_cell(&mut self, cell: &Cell, x: i32, y: i32) {
-        let ch = cell.get_symbol();
-        let (texture_id, uv) = self.glyph_renderer.get_texture(ch);
+// 在 render_helper_tui 中使用
+fn render_helper_tui(
+    cell: &Cell,
+    glyph_renderer: &mut GlyphRenderer,
+    // ...
+) -> RenderCell {
+    let ch = cell.symbol.chars().next().unwrap_or(' ');
 
-        // 使用 texture_id 渲染...
+    // 1. 检查是否为预渲染 TUI 字符
+    if let Some((texidx, symidx)) = tui_char_index(ch) {
+        return RenderCell {
+            texture_id: SYMBOLS_TEXTURE_ID,
+            tx: calculate_tui_tx(texidx, symidx),
+            ty: calculate_tui_ty(texidx, symidx),
+            // ...
+        };
+    }
+
+    // 2. 检查是否为预渲染 Emoji
+    if let Some((texidx, symidx)) = emoji_texidx(&cell.symbol) {
+        return RenderCell {
+            texture_id: SYMBOLS_TEXTURE_ID,
+            tx: calculate_emoji_tx(texidx, symidx),
+            ty: calculate_emoji_ty(texidx, symidx),
+            // ...
+        };
+    }
+
+    // 3. 动态光栅化
+    let glyph_source = glyph_renderer.get_glyph_source(ch);
+    match glyph_source {
+        GlyphSource::Dynamic { texture_id, uv } => {
+            RenderCell {
+                texture_id,
+                tx: uv.x,
+                ty: uv.y,
+                tw: uv.w,
+                th: uv.h,
+                // ...
+            }
+        }
+        _ => unreachable!(),
     }
 }
 ```

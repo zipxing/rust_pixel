@@ -29,41 +29,41 @@
 
 ### Requirement: 统一符号纹理与三区域布局（Block-Based）
 
-渲染系统 MUST 支持统一的 1024x1024 符号纹理（`symbols.png`），使用 block-based 布局，包含三个区域：Sprite 符号（8x8 像素）、TUI 符号（8x16 像素）、Emoji（16x16 彩色）。
+渲染系统 MUST 支持统一的 2048x2048 符号纹理（`symbols.png`），使用 block-based 布局，包含三个区域：Sprite 符号（16x16 像素）、TUI 符号（16x32 像素）、Emoji（32x32 彩色）。
 
 #### 场景：统一纹理布局（向后兼容）
 - **当** 系统加载符号纹理时
-- **则** 纹理尺寸为 1024x1024 像素
-- **且** 顶部 768 像素（行 0-767）包含 Sprite 符号，每个字符 8x8 像素
-- **且** 底部 256 像素（行 768-1023）包含 TUI 和 Emoji 符号
+- **则** 纹理尺寸为 2048x2048 像素
+- **且** 顶部 1536 像素（行 0-1535）包含 Sprite 符号，每个字符 16x16 像素
+- **且** 底部 512 像素（行 1536-2047）包含 TUI 和 Emoji 符号
 - **且** Sprite 区域布局保持不变，确保向后兼容
 
 #### 场景：Sprite 符号区域布局（Block 0-47）
-- **当** 解析 Sprite 区域（行 0-767）时
+- **当** 解析 Sprite 区域（行 0-1535）时
 - **则** 该区域使用 block-based 布局：6 rows × 8 blocks/row = 48 blocks
-- **且** 每个 block 包含 16×16 个字符（128×128 像素）
-- **且** 每个字符占用 8 像素宽 × 8 像素高
-- **且** Sprite 字符总数为 48 × 256 = 12,288 个字符
-- **且** Sprite 符号在统一符号数组中占用线性索引 0-12287
-- **且** 索引计算公式：`linear_index = texidx * 256 + symidx`（texidx: 0-47）
+- **且** 每个 block 包含 8×8 个字符（128×128 像素）
+- **且** 每个字符占用 16 像素宽 × 16 像素高
+- **且** Sprite 字符总数为 48 × 64 = 3,072 个字符
+- **且** Sprite 符号在统一符号数组中占用线性索引 0-3071
+- **且** 索引计算公式：`linear_index = texidx * 64 + symidx`（texidx: 0-47）
 
 #### 场景：TUI 符号区域布局（Block 48-52）
-- **当** 解析 TUI 区域（行 768-1023）时
+- **当** 解析 TUI 区域（行 1536-2047）时
 - **则** 该区域使用 block-based 布局：5 blocks horizontally
-- **且** 每个 block 包含 16×16 个字符（128×256 像素）
-- **且** 每个字符占用 8 像素宽 × 16 像素高
-- **且** TUI 字符总数为 5 × 256 = 1280 个字符（active: 1024, reserved: 256）
-- **且** TUI 符号在统一符号数组中占用线性索引 12288-13567
-- **且** 索引计算公式：`linear_index = 12288 + (texidx - 48) * 256 + symidx`（texidx: 48-52）
+- **且** 每个 block 包含 8×16 个字符（128×512 像素）
+- **且** 每个字符占用 16 像素宽 × 32 像素高
+- **且** TUI 字符总数为 5 × 128 = 640 个字符（active: 512, reserved: 128）
+- **且** TUI 符号在统一符号数组中占用线性索引 3072-3711
+- **且** 索引计算公式：`linear_index = 3072 + (texidx - 48) * 128 + symidx`（texidx: 48-52）
 
 #### 场景：Emoji 区域布局（Block 53-55）
-- **当** 解析 Emoji 区域（行 768-1023）时
+- **当** 解析 Emoji 区域（行 1536-2047）时
 - **则** 该区域使用 block-based 布局：3 blocks horizontally
-- **且** 每个 block 包含 8×16 个 Emoji（128×256 像素）
-- **且** 每个 Emoji 占用 16 像素宽 × 16 像素高
-- **且** Emoji 总数为 3 × 128 = 384 个（active: 256, reserved: 128）
-- **且** Emoji 在统一符号数组中占用线性索引 13568-13951
-- **且** 索引计算公式：`linear_index = 13568 + (texidx - 53) * 128 + symidx`（texidx: 53-55）
+- **且** 每个 block 包含 4×16 个 Emoji（128×512 像素）
+- **且** 每个 Emoji 占用 32 像素宽 × 32 像素高
+- **且** Emoji 总数为 3 × 64 = 192 个（active: 128, reserved: 64）
+- **且** Emoji 在统一符号数组中占用线性索引 3712-3903
+- **且** 索引计算公式：`linear_index = 3712 + (texidx - 53) * 64 + symidx`（texidx: 53-55）
 - **且** Emoji 使用 RGBA 彩色格式
 
 #### 场景：文本模式保持不变
@@ -78,8 +78,8 @@
 #### 场景：Emoji 映射表
 - **当** 系统初始化时
 - **则** 创建 `EMOJI_MAP: HashMap<String, u16>`，将 Emoji 字符映射到纹理索引
-- **且** 预制 256 个最常用 Emoji（表情、符号、食物、自然等）+ 128 个预留空间
-- **且** Emoji 索引范围为 13568-13951（Emoji 区域，Block 53-55）
+- **且** 预制 128 个最常用 Emoji（表情、符号、食物、自然等）+ 64 个预留空间
+- **且** Emoji 索引范围为 3712-3903（Emoji 区域，Block 53-55）
 - **且** 未映射的 Emoji 显示为空白或占位符
 
 #### 场景：Emoji 识别
@@ -102,12 +102,12 @@
 - **且** 不影响其他字符的正常显示
 
 #### 场景：Emoji 纹理坐标计算
-- **当** 渲染 Emoji（线性索引 13568-13951）时
-- **则** Block 计算：`texidx = 53 + (emoji_idx - 13568) / 128`
-- **且** Block 内索引：`symidx = (emoji_idx - 13568) % 128`
-- **且** 纹理 X 坐标 = `(5 + (texidx - 53)) * 128 + (symidx % 8) * 16`
-- **且** 纹理 Y 坐标 = `768 + (symidx / 8) * 16`
-- **且** 源纹理尺寸为 16x16 像素
+- **当** 渲染 Emoji（线性索引 3712-3903）时
+- **则** Block 计算：`texidx = 53 + (emoji_idx - 3712) / 64`
+- **且** Block 内索引：`symidx = (emoji_idx - 3712) % 64`
+- **且** 纹理 X 坐标 = `(5 + (texidx - 53)) * 128 + (symidx % 4) * 32`
+- **且** 纹理 Y 坐标 = `1536 + (symidx / 4) * 32`
+- **且** 源纹理尺寸为 32x32 像素
 - **且** 目标渲染尺寸为 `cell_width * 2` × `cell_height`
 
 #### 场景：Emoji 常用分类
@@ -120,7 +120,7 @@
 - **且** 包含对象与工具类（📁📂📊🔧💻等，约 30 个）
 - **且** 包含活动与运动类（⚽🏀🎮🎯等，约 20 个）
 - **且** 其他常用类（数字、字母、几何等，约 16 个）
-- **且** 预留空间 128 个，供用户自定义或未来扩展
+- **且** 预留空间 64 个，供用户自定义或未来扩展
 
 ### Requirement: 区域感知的符号索引计算
 
@@ -129,26 +129,26 @@
 #### 场景：Sprite 层符号索引计算（Block 0-47）
 - **当** 渲染 Pixel Sprites 的字符时
 - **则** 使用 Sprite 区域的 block-based 索引计算
-- **且** 线性索引计算：`linear_index = texidx * 256 + symidx`（texidx: 0-47）
+- **且** 线性索引计算：`linear_index = texidx * 64 + symidx`（texidx: 0-47）
 - **且** Block 位置：`block_x = texidx % 8, block_y = texidx / 8`
-- **且** 纹理坐标：`pixel_x = block_x * 128 + (symidx % 16) * 8, pixel_y = block_y * 128 + (symidx / 16) * 8`
-- **且** 最终索引范围为 0-12287
+- **且** 纹理坐标：`pixel_x = block_x * 128 + (symidx % 8) * 16, pixel_y = block_y * 256 + (symidx / 8) * 16`
+- **且** 最终索引范围为 0-3071
 
 #### 场景：TUI 层符号索引计算（Block 48-52）
 - **当** 渲染 Main Buffer（TUI 层）的字符时
 - **则** 使用 TUI 区域的 block-based 索引计算
-- **且** 线性索引计算：`linear_index = 12288 + (texidx - 48) * 256 + symidx`（texidx: 48-52）
+- **且** 线性索引计算：`linear_index = 3072 + (texidx - 48) * 128 + symidx`（texidx: 48-52）
 - **且** Block 位置：`block_num = texidx - 48`（0-4）
-- **且** 纹理坐标：`pixel_x = block_num * 128 + (symidx % 16) * 8, pixel_y = 768 + (symidx / 16) * 16`
-- **且** 最终索引范围为 12288-13567（active: 12288-13311）
+- **且** 纹理坐标：`pixel_x = block_num * 128 + (symidx % 8) * 16, pixel_y = 1536 + (symidx / 8) * 32`
+- **且** 最终索引范围为 3072-3711（active: 3072-3583）
 
 #### 场景：Emoji 层符号索引计算（Block 53-55）
 - **当** 渲染 Emoji 字符时
 - **则** 使用 Emoji 区域的 block-based 索引计算
-- **且** 线性索引计算：`linear_index = 13568 + (texidx - 53) * 128 + symidx`（texidx: 53-55）
+- **且** 线性索引计算：`linear_index = 3712 + (texidx - 53) * 64 + symidx`（texidx: 53-55）
 - **且** Block 位置：`block_num = texidx - 53`（0-2）
-- **且** 纹理坐标：`pixel_x = (5 + block_num) * 128 + (symidx % 8) * 16, pixel_y = 768 + (symidx / 8) * 16`
-- **且** 最终索引范围为 13568-13951（active: 13568-13823）
+- **且** 纹理坐标：`pixel_x = (5 + block_num) * 128 + (symidx % 4) * 32, pixel_y = 1536 + (symidx / 4) * 32`
+- **且** 最终索引范围为 3712-3903（active: 3712-3839）
 
 #### 场景：渲染层自动区分
 - **当** `render_main_buffer` 生成 RenderCell 时
@@ -166,25 +166,25 @@
 
 ### Requirement: 统一坐标系统（水平共享，垂直转换）
 
-输入系统 MUST 在鼠标事件中使用统一的坐标系统，按 8 像素宽度计算，水平方向 TUI 和 Sprite 共享，垂直方向 TUI 需要除以 2。
+输入系统 MUST 在鼠标事件中使用统一的坐标系统，按 16 像素宽度计算，水平方向 TUI 和 Sprite 共享，垂直方向 TUI 需要除以 2。
 
 #### 场景：统一坐标计算
 - **当** 在图形模式下发生鼠标事件时
-- **则** `MouseEvent.column` 使用 8 像素宽度计算：`column = pixel_x / 8`
-- **且** `MouseEvent.row` 使用 8 像素高度计算：`row = pixel_y / 8`
-- **且** 坐标基于 Sprite 坐标系（8x8 像素）
+- **则** `MouseEvent.column` 使用 16 像素宽度计算：`column = pixel_x / 16`
+- **且** `MouseEvent.row` 使用 16 像素高度计算：`row = pixel_y / 16`
+- **且** 坐标基于 Sprite 坐标系（16x16 像素）
 
 #### 场景：TUI 层坐标转换
 - **当** TUI 组件（如 Button、Modal）处理鼠标事件时
-- **则** 水平方向直接使用：`column_tui = MouseEvent.column`（8 像素宽度相同）
-- **且** 垂直方向除以 2：`row_tui = MouseEvent.row / 2`（TUI 是 16 像素高）
-- **且** 命中测试准确对应 TUI 字符单元（8x16 像素）
+- **则** 水平方向直接使用：`column_tui = MouseEvent.column`（16 像素宽度相同）
+- **且** 垂直方向除以 2：`row_tui = MouseEvent.row / 2`（TUI 是 32 像素高）
+- **且** 命中测试准确对应 TUI 字符单元（16x32 像素）
 
 #### 场景：Sprite 层直接使用坐标
 - **当** 游戏代码处理 Pixel Sprite 的鼠标事件时
 - **则** 直接使用 `MouseEvent.column` 和 `MouseEvent.row`
 - **且** 无需任何坐标转换
-- **且** 坐标准确对应 Sprite 层（8x8 像素）的字符单元
+- **且** 坐标准确对应 Sprite 层（16x16 像素）的字符单元
 - **且** 向后兼容，现有 Sprite 代码无需修改
 
 ### Requirement: TUI 层渲染优先级
@@ -209,10 +209,10 @@
 
 #### 场景：统一尺寸配置
 - **当** 系统初始化时
-- **则** `PIXEL_SYM_WIDTH` 设置为 8.0 像素（Sprite 和 TUI 共享）
-- **且** `PIXEL_SYM_HEIGHT` 设置为 8.0 像素（Sprite 基准高度）
-- **且** TUI 宽度 = `PIXEL_SYM_WIDTH`（8 像素）
-- **且** TUI 高度 = `PIXEL_SYM_HEIGHT * 2`（16 像素）
+- **则** `PIXEL_SYM_WIDTH` 设置为 16.0 像素（Sprite 和 TUI 共享）
+- **且** `PIXEL_SYM_HEIGHT` 设置为 16.0 像素（Sprite 基准高度）
+- **且** TUI 宽度 = `PIXEL_SYM_WIDTH`（16 像素）
+- **且** TUI 高度 = `PIXEL_SYM_HEIGHT * 2`（32 像素）
 
 #### 场景：TUI 渲染使用派生尺寸
 - **当** 渲染 Main Buffer（TUI 层）时
@@ -238,7 +238,7 @@
 #### 场景：着色器中的可变单元尺寸
 - **当** 着色器处理不同尺寸的 RenderCell 时
 - **则** 每个单元的 `w` 和 `h` 字段正确指定其大小
-- **且** TUI 单元（8x16）和 Sprite 单元（8x8）在同一遍中正确渲染
+- **且** TUI 单元（16x32）和 Sprite 单元（16x16）在同一遍中正确渲染
 
 ### Requirement: TUI 架构始终启用
 
@@ -256,12 +256,12 @@
 - **则** TUI 层渲染为空（无额外开销）
 - **且** 应用的工作方式与之前完全相同
 - **当** 应用使用 Main Buffer 渲染 TUI 元素时
-- **则** TUI 元素使用 8x16 瘦字符渲染
+- **则** TUI 元素使用 16x32 瘦字符渲染
 - **且** TUI 层显示在所有 Pixel Sprite 之上
 
 ### Requirement: UI 组件坐标转换
 
-UI 组件 MUST 在 Main Buffer 中渲染时，正确转换鼠标坐标以匹配 TUI 字符单元（8x16 像素）。
+UI 组件 MUST 在 Main Buffer 中渲染时，正确转换鼠标坐标以匹配 TUI 字符单元（16x32 像素）。
 
 #### 场景：UI 组件鼠标命中测试
 - **当** UI 组件（如 Button）接收鼠标事件时
@@ -273,7 +273,7 @@ UI 组件 MUST 在 Main Buffer 中渲染时，正确转换鼠标坐标以匹配 
 #### 场景：游戏精灵鼠标处理无需转换
 - **当** 游戏代码处理 Pixel Sprite 的鼠标事件时
 - **则** 直接使用 `mouse_event.column` 和 `mouse_event.row`
-- **且** 坐标准确对应 Sprite 层（8x8 像素）
+- **且** 坐标准确对应 Sprite 层（16x16 像素）
 - **且** 向后兼容，现有代码无需修改
 
 ### Requirement: TUI 样式修饰符支持
