@@ -9,10 +9,13 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixelRenderer, init_sym_height, init_sym_width, Adapter, AdapterBase,
+        gl::{pixel::GlPixelRenderer, GlRender},
+        init_sym_height, init_sym_width, Adapter, AdapterBase,
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     },
     buffer::Buffer,
+    glyph::{GlyphRenderer, GlyphSource, UVRect, GLYPH_SLOT_SIZE},
+    graph::{generate_render_buffer, generate_render_buffer_split, UnifiedColor, UnifiedTransform},
     sprite::Sprites,
 };
 use log::info;
@@ -57,6 +60,12 @@ pub struct SdlAdapter {
     // Direct OpenGL pixel renderer - no more trait objects
     pub gl_pixel_renderer: Option<GlPixelRenderer>,
 
+    // Dynamic font renderer for TUI text characters
+    pub glyph_renderer: Option<GlyphRenderer>,
+
+    // Dynamic glyph texture handle
+    pub dynamic_glyph_texture: Option<glow::Texture>,
+
     // custom cursor
     pub cursor: Option<Cursor>,
 
@@ -86,6 +95,8 @@ impl SdlAdapter {
             sdl_window: None,
             gl_context: None,
             gl_pixel_renderer: None,
+            glyph_renderer: None,
+            dynamic_glyph_texture: None,
             drag: Default::default(),
         }
     }
@@ -172,6 +183,217 @@ impl SdlAdapter {
             _ => {}
         }
         false
+    }
+
+    /// Create an OpenGL texture for the dynamic glyph atlas
+    fn create_dynamic_glyph_texture(&self, width: u32, height: u32) -> glow::Texture {
+        use glow::HasContext;
+
+        if let Some(ref gl_renderer) = self.gl_pixel_renderer {
+            let gl = &gl_renderer.gl;
+            unsafe {
+                let texture = gl.create_texture().expect("Failed to create dynamic glyph texture");
+                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+
+                // Set texture parameters
+                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+                gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+
+                // Allocate empty texture
+                gl.tex_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    glow::RGBA as i32,
+                    width as i32,
+                    height as i32,
+                    0,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelUnpackData::Slice(None),
+                );
+
+                gl.bind_texture(glow::TEXTURE_2D, None);
+                texture
+            }
+        } else {
+            panic!("gl_pixel_renderer must be initialized before creating dynamic texture");
+        }
+    }
+
+    /// Upload glyph atlas bitmap to OpenGL texture
+    fn upload_glyph_atlas(&self, gl: &glow::Context, glyph_renderer: &GlyphRenderer, texture: glow::Texture) {
+        use glow::HasContext;
+
+        let (width, height) = glyph_renderer.get_atlas_size();
+        let bitmap = glyph_renderer.get_atlas_bitmap();
+
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            gl.tex_sub_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                0,
+                0,
+                width as i32,
+                height as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(Some(bitmap)),
+            );
+            gl.bind_texture(glow::TEXTURE_2D, None);
+        }
+    }
+
+    /// Render dynamic text cells using the GlyphRenderer
+    ///
+    /// This method handles the second pass of two-pass rendering:
+    /// 1. Rasterizes any new characters into the dynamic glyph atlas
+    /// 2. Uploads the updated atlas to GPU if needed
+    /// 3. Renders each dynamic cell using the glyph atlas texture
+    fn render_dynamic_text_cells(
+        &mut self,
+        dynamic_cells: &[crate::render::adapter::RenderCell],
+        current_buffer: &Buffer,
+    ) {
+        use glow::HasContext;
+
+        // Get references we need
+        let glyph_renderer = match self.glyph_renderer.as_mut() {
+            Some(gr) => gr,
+            None => return,
+        };
+        let dynamic_texture = match self.dynamic_glyph_texture {
+            Some(tex) => tex,
+            None => return,
+        };
+        let gl_pixel_renderer = match self.gl_pixel_renderer.as_mut() {
+            Some(glr) => glr,
+            None => return,
+        };
+
+        let ratio_x = self.base.gr.ratio_x;
+        let ratio_y = self.base.gr.ratio_y;
+
+        // Step 1: Rasterize all characters and collect glyph info
+        // We need to do this first to batch all atlas updates
+        let mut glyph_infos: Vec<(usize, GlyphSource)> = Vec::with_capacity(dynamic_cells.len());
+
+        for (i, cell) in dynamic_cells.iter().enumerate() {
+            let ch = cell.character;
+            if ch == '\0' || ch == ' ' {
+                // Skip null and space characters
+                continue;
+            }
+
+            let glyph_source = glyph_renderer.get_glyph(ch);
+            glyph_infos.push((i, glyph_source));
+        }
+
+        // Step 2: Upload atlas to GPU if dirty
+        if glyph_renderer.is_dirty() {
+            let gl = &gl_pixel_renderer.gl;
+            let (width, height) = glyph_renderer.get_atlas_size();
+            let bitmap = glyph_renderer.get_atlas_bitmap();
+
+            unsafe {
+                gl.bind_texture(glow::TEXTURE_2D, Some(dynamic_texture));
+                gl.tex_sub_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    0,
+                    0,
+                    width as i32,
+                    height as i32,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelUnpackData::Slice(Some(bitmap)),
+                );
+            }
+            glyph_renderer.clear_dirty();
+        }
+
+        // Step 3: Render each dynamic cell
+        // We need to carefully manage borrowing here since gl and gl_pixel
+        // are both part of gl_pixel_renderer
+
+        // First, bind the render target (texture 2)
+        {
+            let GlPixelRenderer { gl, gl_pixel } = gl_pixel_renderer;
+            gl_pixel.bind_target(gl, 2);
+        }
+
+        // Now render each glyph with dynamic texture
+        {
+            let GlPixelRenderer { gl, gl_pixel } = gl_pixel_renderer;
+            let r_sym = gl_pixel.get_symbol_renderer();
+            r_sym.bind_dynamic_texture(gl, dynamic_texture);
+
+            // Render each glyph
+            for (cell_idx, glyph_source) in glyph_infos {
+                let cell = &dynamic_cells[cell_idx];
+
+                if let GlyphSource::Dynamic { slot_idx, is_fullwidth } = glyph_source {
+                    let uv = UVRect::from_slot(slot_idx, is_fullwidth);
+
+                    // Calculate cell dimensions
+                    let cell_width = cell.w as f32;
+                    let cell_height = cell.h as f32;
+
+                    // Build transform similar to render_rbuf in render_symbols.rs
+                    let mut transform = UnifiedTransform::new();
+                    transform.translate(
+                        cell.x + cell.cx - cell.w as f32,
+                        cell.y + cell.cy - cell.h as f32,
+                    );
+                    if cell.angle != 0.0 {
+                        transform.rotate(cell.angle);
+                    }
+                    transform.translate(
+                        -cell.cx + cell.w as f32,
+                        -cell.cy + cell.h as f32,
+                    );
+
+                    // Scale based on glyph size vs cell size
+                    // Dynamic glyphs are 32x32 (or 16x32 for half-width)
+                    let glyph_width = if is_fullwidth {
+                        GLYPH_SLOT_SIZE as f32
+                    } else {
+                        GLYPH_SLOT_SIZE as f32 / 2.0
+                    };
+                    let glyph_height = GLYPH_SLOT_SIZE as f32;
+
+                    transform.scale(
+                        cell_width / glyph_width / ratio_x,
+                        cell_height / glyph_height / ratio_y,
+                    );
+
+                    let color = UnifiedColor::new(
+                        cell.fcolor.0,
+                        cell.fcolor.1,
+                        cell.fcolor.2,
+                        cell.fcolor.3,
+                    );
+
+                    r_sym.draw_dynamic_glyph(
+                        gl,
+                        uv.u0,
+                        uv.v0,
+                        uv.u1 - uv.u0,
+                        uv.v1 - uv.v0,
+                        glyph_width,
+                        glyph_height,
+                        &transform,
+                        &color,
+                    );
+                }
+            }
+
+            // Flush the draw calls and restore static texture binding
+            r_sym.draw(gl);
+            r_sym.bind_static_texture(gl);
+        }
     }
 }
 
@@ -261,6 +483,43 @@ impl Adapter for SdlAdapter {
         self.sdl_window = Some(window);
 
         info!("Window & gl init ok...");
+
+        // Initialize dynamic font rendering system
+        // 初始化动态字体渲染系统
+        let scale_factor = rx.max(ry).max(1.0);
+        match GlyphRenderer::with_default_font(project_path, scale_factor) {
+            Ok(mut glyph_renderer) => {
+                // Preload ASCII characters for faster initial rendering
+                glyph_renderer.preload_ascii();
+
+                // Create OpenGL texture for dynamic glyph atlas
+                let (atlas_width, atlas_height) = glyph_renderer.get_atlas_size();
+                let dynamic_texture = self.create_dynamic_glyph_texture(atlas_width, atlas_height);
+
+                // Upload initial atlas data
+                if let Some(ref gl_renderer) = self.gl_pixel_renderer {
+                    self.upload_glyph_atlas(&gl_renderer.gl, &glyph_renderer, dynamic_texture);
+                }
+
+                self.glyph_renderer = Some(glyph_renderer);
+                self.dynamic_glyph_texture = Some(dynamic_texture);
+
+                info!(
+                    "GlyphRenderer initialized with atlas size {}x{}",
+                    atlas_width, atlas_height
+                );
+            }
+            Err(e) => {
+                // Font not found is not fatal - just log warning and continue
+                // without dynamic font rendering
+                info!(
+                    "GlyphRenderer not initialized (font not found): {}. \
+                     Dynamic text rendering disabled. \
+                     To enable, place a TTF font at assets/fonts/default.ttf",
+                    e
+                );
+            }
+        }
 
         // custom mouse cursor image using global GAME_CONFIG
         // 使用全局 GAME_CONFIG 加载自定义鼠标光标图像
@@ -443,6 +702,62 @@ impl Adapter for SdlAdapter {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.setup_transbuf_rendering(target_texture);
         }
+    }
+
+    /// Override draw_all_graph to support dynamic font rendering
+    ///
+    /// This implementation uses two-pass rendering when GlyphRenderer is available:
+    /// 1. First pass: Render static cells (Sprites, Emoji) with symbols.png texture
+    /// 2. Second pass: Render dynamic cells (text) with dynamic glyph atlas texture
+    fn draw_all_graph(
+        &mut self,
+        current_buffer: &Buffer,
+        previous_buffer: &Buffer,
+        pixel_sprites: &mut Vec<Sprites>,
+        stage: u32,
+    ) {
+        // Check if we have dynamic font rendering capability
+        let has_glyph_renderer = self.glyph_renderer.is_some() && self.dynamic_glyph_texture.is_some();
+
+        if !has_glyph_renderer || !self.base.gr.rflag {
+            // Fallback to standard rendering (no dynamic fonts)
+            let rbuf = generate_render_buffer(
+                current_buffer,
+                previous_buffer,
+                pixel_sprites,
+                stage,
+                &mut self.base,
+            );
+
+            if self.base.gr.rflag {
+                self.draw_render_buffer_to_texture(&rbuf, 2, false);
+                self.draw_render_textures_to_screen();
+            } else {
+                self.base.gr.rbuf = rbuf;
+            }
+            return;
+        }
+
+        // Two-pass rendering with dynamic font support
+        let (static_cells, dynamic_cells) = generate_render_buffer_split(
+            current_buffer,
+            previous_buffer,
+            pixel_sprites,
+            stage,
+            &mut self.base,
+        );
+
+        // Pass 1: Render static cells (Sprites, Emoji) to render texture
+        // These use the symbols.png texture
+        self.draw_render_buffer_to_texture(&static_cells, 2, false);
+
+        // Pass 2: Render dynamic cells (text) with dynamic glyph atlas
+        if !dynamic_cells.is_empty() {
+            self.render_dynamic_text_cells(&dynamic_cells, current_buffer);
+        }
+
+        // Final composite to screen
+        self.draw_render_textures_to_screen();
     }
 }
 

@@ -579,4 +579,134 @@ impl GlRenderSymbols {
             uv_height,
         }
     }
+
+    /// Bind a custom texture for rendering (used for dynamic glyph atlas)
+    ///
+    /// After calling this, subsequent draw calls will use the specified texture
+    /// until bind_static_texture() is called.
+    pub fn bind_dynamic_texture(&mut self, gl: &glow::Context, texture: glow::Texture) {
+        // Flush any pending instances before switching texture
+        self.draw(gl);
+
+        unsafe {
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+        }
+        self.base.textures_binded = true;
+    }
+
+    /// Bind the static symbol texture (symbols.png)
+    ///
+    /// Restores the default texture binding after rendering dynamic glyphs.
+    pub fn bind_static_texture(&mut self, gl: &glow::Context) {
+        // Flush any pending instances before switching texture
+        self.draw(gl);
+
+        if !self.base.textures.is_empty() {
+            unsafe {
+                gl.active_texture(glow::TEXTURE0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(self.base.textures[0]));
+            }
+            self.base.textures_binded = true;
+        }
+    }
+
+    /// Draw a single glyph with explicit UV coordinates and dimensions
+    ///
+    /// Used for dynamic glyph rendering where UV coordinates come from
+    /// the GlyphRenderer's atlas rather than the static symbol table.
+    ///
+    /// # Parameters
+    /// - `gl`: OpenGL context
+    /// - `uv_left`, `uv_top`, `uv_width`, `uv_height`: UV coordinates in the dynamic atlas
+    /// - `glyph_width`, `glyph_height`: Display dimensions in pixels
+    /// - `transform`: World transformation matrix
+    /// - `color`: Foreground color
+    pub fn draw_dynamic_glyph(
+        &mut self,
+        gl: &glow::Context,
+        uv_left: f32,
+        uv_top: f32,
+        uv_width: f32,
+        uv_height: f32,
+        glyph_width: f32,
+        glyph_height: f32,
+        transform: &UnifiedTransform,
+        color: &UnifiedColor,
+    ) {
+        let size = 16u32;
+
+        // When the transform stack changes, flush any pending instances,
+        // update the UBO and resume batching.
+        if self.transform_dirty {
+            self.draw(gl);
+            self.send_uniform_buffer(gl);
+        }
+
+        if !self.base.shader_binded {
+            self.draw(gl);
+            self.base.shader[0].bind(gl);
+            self.base.shader_binded = true;
+        }
+
+        // Grow instance buffer when near capacity.
+        if (self.instance_buffer_at + size as isize) as usize >= self.instance_buffer_capacity {
+            self.instance_buffer_capacity *= 2;
+            self.instance_buffer
+                .resize(self.instance_buffer_capacity, 0.0);
+
+            unsafe {
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.base.gl_buffers[0]));
+                gl.buffer_data_size(
+                    glow::ARRAY_BUFFER,
+                    (self.instance_buffer_capacity * std::mem::size_of::<f32>()) as i32,
+                    glow::DYNAMIC_DRAW,
+                );
+            }
+        }
+
+        self.instance_count += 1;
+
+        let instance_buffer = &mut self.instance_buffer;
+
+        // Origin (1.0, 1.0 for standard positioning)
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = 1.0;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = 1.0;
+
+        // UV attributes
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = uv_left;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = uv_top;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = uv_width;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = uv_height;
+
+        // Transform attributes (matrix columns multiplied by glyph size, then translation)
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m00 * glyph_width;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m10 * glyph_width;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m01 * glyph_height;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m11 * glyph_height;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m20;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = transform.m21;
+
+        // Color
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.r;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.g;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.b;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = color.a;
+    }
 }

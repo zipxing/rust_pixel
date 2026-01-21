@@ -563,8 +563,9 @@ pub trait Adapter {
                          s2: ARect,
                          texidx: usize,
                          symidx: usize,
-                         modifier: u16| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
+                         modifier: u16,
+                         character: char| {
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier, character);
         };
 
         // Use Sprite characters (8×8) for pixel sprite buffers (backward compatibility)

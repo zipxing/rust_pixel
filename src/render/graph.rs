@@ -528,6 +528,14 @@ pub struct RenderCell {
     /// - 0x0080: HIDDEN (set alpha to 0)
     /// - 0x0100: CROSSED_OUT (shader middle line)
     pub modifier: u16,
+
+    /// Unicode character for dynamic text rendering
+    /// Unicode 字符，用于动态文本渲染
+    ///
+    /// When texsym indicates DYNAMIC_TEXT_MARKER (texidx=255), this field
+    /// contains the actual character to render using the GlyphRenderer.
+    /// For static texture rendering (Sprite/Emoji), this field is unused.
+    pub character: char,
 }
 
 pub struct Graph {
@@ -738,6 +746,7 @@ pub fn push_render_buffer(
     angle: f64,
     ccp: &PointI32,
     modifier: u16,
+    character: char,
 ) {
     let mut wc = RenderCell {
         fcolor: (
@@ -836,6 +845,7 @@ pub fn push_render_buffer(
     }
     wc.cx = ccp.x as f32;
     wc.cy = ccp.y as f32;
+    wc.character = character;
     rbuf.push(wc);
 }
 
@@ -1069,7 +1079,7 @@ where
 /// - `ry`: Vertical scaling ratio for display adaptation
 /// - `use_tui`: Use TUI characters (16×32) instead of Sprite characters (16×16)
 /// - `f`: Callback function to process each character (RenderCell)
-///   Signature: (fg_color, bg_color, dest_rect, tex_idx, sym_idx, modifier)
+///   Signature: (fg_color, bg_color, dest_rect, tex_idx, sym_idx, modifier, character)
 pub fn render_main_buffer<F>(
     buf: &Buffer,
     width: u16,
@@ -1078,7 +1088,7 @@ pub fn render_main_buffer<F>(
     use_tui: bool,
     mut f: F,
 ) where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, u16),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, u16, char),
 {
     let mut skip_next = false;
     for (i, cell) in buf.content.iter().enumerate() {
@@ -1156,7 +1166,11 @@ pub fn render_main_buffer<F>(
         } else {
             None
         };
-        f(&fc, &bc, s2, texidx, symidx, modifier);
+
+        // Get the first character from the symbol string for dynamic rendering
+        // For static textures (Sprite/Emoji), this character is not used
+        let character = cell.symbol.chars().next().unwrap_or(' ');
+        f(&fc, &bc, s2, texidx, symidx, modifier, character);
     }
 }
 
@@ -1389,7 +1403,7 @@ pub fn generate_render_buffer(
             |fc, s2, texidx, symidx| {
                 // Logo uses no modifier (0)
                 // Logo 不使用样式修饰符
-                push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz, 0);
+                push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz, 0, ' ');
             },
         );
         return rbuf;
@@ -1418,7 +1432,7 @@ pub fn generate_render_buffer(
             if item.is_pixel && !item.is_hidden {
                 render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
                     // Pixel sprites currently don't use modifier (0)
-                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);
+                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0, ' ');
                 });
             }
         }
@@ -1431,11 +1445,108 @@ pub fn generate_render_buffer(
                          s2: ARect,
                          texidx: usize,
                          symidx: usize,
-                         modifier: u16| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
+                         modifier: u16,
+                         character: char| {
+            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier, character);
         };
         render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
     }
 
     rbuf
+}
+
+/// Special texture index marker for dynamic text rendering
+///
+/// When texidx equals this value, the character should be rendered
+/// using dynamic font rasterization instead of the static texture atlas.
+pub const DYNAMIC_TEXT_MARKER: usize = 255;
+
+/// Generate render buffers split by texture type (static vs dynamic)
+///
+/// This is the new rendering pipeline that supports dynamic font rendering.
+/// It separates render cells into two groups:
+/// - static_cells: Sprites (Block 0-47) and Emoji (Block 53-55) from symbols.png
+/// - dynamic_cells: Text characters to be rendered dynamically via fontdue
+///
+/// # Parameters
+/// - `cb`: Current main buffer containing character grid data
+/// - `_pb`: Previous buffer (unused, kept for API compatibility)
+/// - `ps`: Vector of sprite layers to render
+/// - `stage`: Current animation stage (for logo animation, 0 = game content)
+/// - `base`: Adapter base containing graphics context and scaling information
+///
+/// # Returns
+/// Tuple of (static_cells, dynamic_cells) ready for two-pass GPU rendering
+///
+/// # Rendering Order
+/// 1. Render static_cells with symbols.png texture bound
+/// 2. Render dynamic_cells with dynamic glyph atlas texture bound
+pub fn generate_render_buffer_split(
+    cb: &Buffer,
+    _pb: &Buffer,
+    ps: &mut Vec<Sprites>,
+    stage: u32,
+    base: &mut AdapterBase,
+) -> (Vec<RenderCell>, Vec<RenderCell>) {
+    let mut static_cells = vec![];
+    let mut dynamic_cells = vec![];
+    let width = cb.area.width;
+    let pz = PointI32 { x: 0, y: 0 };
+
+    // render logo (always to static_cells as it uses sprite textures)
+    if stage <= LOGO_FRAME {
+        render_logo(
+            base.gr.ratio_x,
+            base.gr.ratio_y,
+            base.gr.pixel_w,
+            base.gr.pixel_h,
+            &mut base.rd,
+            stage,
+            |fc, s2, texidx, symidx| {
+                push_render_buffer(&mut static_cells, fc, &None, texidx, symidx, s2, 0.0, &pz, 0, ' ');
+            },
+        );
+        return (static_cells, dynamic_cells);
+    }
+
+    let rx = base.gr.ratio_x;
+    let ry = base.gr.ratio_y;
+
+    if stage > LOGO_FRAME {
+        // render pixel_sprites (always static)
+        for item in ps {
+            if item.is_pixel && !item.is_hidden {
+                render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
+                    push_render_buffer(&mut static_cells, fc, bc, texidx, symidx, s2, angle, &ccp, 0, ' ');
+                });
+            }
+        }
+
+        // render main buffer, categorizing by texture type
+        let mut rfunc = |fc: &(u8, u8, u8, u8),
+                         bc: &Option<(u8, u8, u8, u8)>,
+                         s2: ARect,
+                         texidx: usize,
+                         symidx: usize,
+                         modifier: u16,
+                         character: char| {
+            if texidx == DYNAMIC_TEXT_MARKER {
+                // Dynamic text character - goes to dynamic_cells
+                // The character field stores the actual character for glyph lookup
+                push_render_buffer(&mut dynamic_cells, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier, character);
+            } else {
+                // Static texture (Sprite or Emoji) - goes to static_cells
+                push_render_buffer(&mut static_cells, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier, character);
+            }
+        };
+        render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
+    }
+
+    (static_cells, dynamic_cells)
+}
+
+/// Check if a texidx indicates dynamic text rendering
+#[inline]
+pub fn is_dynamic_text(texidx: usize) -> bool {
+    texidx == DYNAMIC_TEXT_MARKER
 }

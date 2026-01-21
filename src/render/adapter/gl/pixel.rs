@@ -173,6 +173,11 @@ impl GlPixel {
     pub fn get_canvas_size(&self) -> (u32, u32) {
         (self.canvas_width, self.canvas_height)
     }
+
+    /// Get mutable reference to symbol renderer for dynamic glyph rendering
+    pub fn get_symbol_renderer(&mut self) -> &mut GlRenderSymbols {
+        &mut self.r_sym
+    }
 }
 
 /// OpenGL Pixel Renderer with owned context
