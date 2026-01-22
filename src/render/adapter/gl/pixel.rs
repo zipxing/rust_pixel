@@ -385,29 +385,16 @@ impl GlPixelRenderer {
             );
         }
 
-        // Layer 2: Draw render_texture 3 (transition effects and overlays)
+        // Layer 2: Draw render_texture 3 (dynamic text overlay)
+        // This layer is rendered on top of texture 2 with alpha blending
+        // to overlay dynamic text without affecting static content (emoji)
         if !self.gl_pixel.get_render_texture_hidden(3) {
-            // Calculate proper scaling for high-DPI displays
-            let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
-            let pcw = canvas_width as f32;
-            let pch = canvas_height as f32;
-
-            // Calculate scaled dimensions for transition layer
-            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
-
-            // Create unified transform with proper scaling
-            let mut unified_transform = crate::render::graph::UnifiedTransform::new();
-            unified_transform.scale(pw / pcw, ph / pch);
-
-            // OpenGL Y-axis: bottom-left origin
-            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
-
+            // Full-screen overlay for dynamic text
             self.gl_pixel.render_texture_to_screen_impl(
                 &self.gl,
                 3,
-                viewport,
-                &unified_transform,
+                [0.0, 0.0, 1.0, 1.0], // Full-screen quad (same as texture 2)
+                &crate::render::graph::UnifiedTransform::new(),
                 &unified_color,
             );
         }

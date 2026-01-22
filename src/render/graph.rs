@@ -1136,13 +1136,14 @@ pub fn render_main_buffer<F>(
             if let Some((block, idx)) = emoji_texidx(&cell.symbol) {
                 sh.1 = block;
                 sh.0 = idx;
-                // Debug: log emoji detection with buffer index (only first few)
-                static EMOJI_LOG_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-                if EMOJI_LOG_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 10 {
+                // Debug: log emoji detection every frame for first 200 frames
+                static EMOJI_DETECT_FRAME: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let frame = EMOJI_DETECT_FRAME.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if frame < 200 {
                     let row = i / width as usize;
                     let col = i % width as usize;
-                    log::info!("render_main: emoji at buf[{}] (row={}, col={}) width={} -> block={}, idx={}",
-                        i, row, col, width, block, idx);
+                    log::info!("[emoji_detect] frame={}: buf[{}] (row={}, col={}) symbol='{}' -> block={}, idx={}",
+                        frame, i, row, col, &cell.symbol, block, idx);
                 }
             } else {
                 // Mark as dynamic text character (texidx = 255)
@@ -1565,6 +1566,8 @@ pub fn generate_render_buffer_split(
         }
 
         // render main buffer, categorizing by texture type
+        // Debug: count emoji cells in this frame
+        let mut emoji_count_this_frame = 0usize;
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
                          s2: ARect,
@@ -1578,10 +1581,22 @@ pub fn generate_render_buffer_split(
                 push_render_buffer(&mut dynamic_cells, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier, character);
             } else {
                 // Static texture (Sprite or Emoji) - goes to static_cells
+                // Debug: count emoji (texidx 53-55)
+                if texidx >= 53 && texidx <= 55 {
+                    emoji_count_this_frame += 1;
+                }
                 push_render_buffer(&mut static_cells, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier, character);
             }
         };
         render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
+
+        // Debug: log emoji count every frame for first 200 frames
+        static SPLIT_FRAME_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let frame = SPLIT_FRAME_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if frame < 200 && (frame < 20 || frame % 30 == 0) {
+            log::info!("[split] frame={}: emoji_in_static={}, static_total={}, dynamic_total={}",
+                frame, emoji_count_this_frame, static_cells.len(), dynamic_cells.len());
+        }
     }
 
     (static_cells, dynamic_cells)

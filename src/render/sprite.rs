@@ -175,6 +175,19 @@ impl Widget for Sprite {
         if !self.is_hidden() {
             self.check_asset_request(am);
             if !is_pixel {
+                // Debug: log sprite content before merge
+                static SPRITE_RENDER_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let frame = SPRITE_RENDER_LOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if frame < 200 && (frame < 20 || frame % 30 == 0) {
+                    // Count non-blank cells in sprite content
+                    let non_blank = self.content.content.iter().filter(|c| !c.is_blank()).count();
+                    // Check for emoji (symbol starts with emoji chars)
+                    let emoji_count = self.content.content.iter()
+                        .filter(|c| crate::render::cell::is_prerendered_emoji(&c.symbol))
+                        .count();
+                    log::info!("[sprite.render] frame={}: non_blank={}, emoji={}, area={:?}",
+                        frame, non_blank, emoji_count, self.content.area);
+                }
                 buf.merge(&self.content, self.alpha, true);
             }
         }

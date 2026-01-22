@@ -377,6 +377,30 @@ impl GlRenderSymbols {
         ratio_x: f32,
         ratio_y: f32,
     ) {
+        // CRITICAL: Always rebind static texture (symbols.png) at start of render_rbuf
+        // This ensures correct texture state after dynamic text rendering may have changed it.
+        // The textures_binded flag is NOT reliable because OpenGL state can be changed
+        // externally (e.g., during dynamic texture upload) without updating the flag.
+        // 关键：在 render_rbuf 开始时始终重新绑定静态纹理 (symbols.png)
+        // 这确保在动态文本渲染可能改变了纹理状态后，纹理状态正确
+        // textures_binded 标志不可靠，因为 OpenGL 状态可能在外部被改变而没有更新标志
+        if !self.base.textures.is_empty() {
+            unsafe {
+                gl.active_texture(glow::TEXTURE0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(self.base.textures[0]));
+            }
+            self.base.textures_binded = true;
+        }
+
+        // Debug: log emoji rendering in rbuf
+        static RBUF_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let rbuf_frame = RBUF_LOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let emoji_count = rbuf.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).count();
+        if rbuf_frame >= 74 && rbuf_frame <= 90 {
+            log::info!("[render_rbuf] frame={}: rbuf.len={}, emoji_count={}, instance_count_before={}",
+                rbuf_frame, rbuf.len(), emoji_count, self.instance_count);
+        }
+
         // Modifier bit flags (matching Modifier enum in style.rs)
         // 样式修饰符位标志（与 style.rs 中的 Modifier 枚举匹配）
         const MOD_BOLD: u16 = 0x0001;
@@ -544,6 +568,10 @@ impl GlRenderSymbols {
                 self.draw_symbol(gl, 1280, &line_transform, &line_color);
             }
         }
+        // Debug: log instance count before draw
+        if rbuf_frame >= 74 && rbuf_frame <= 90 {
+            log::info!("[render_rbuf] frame={}: instance_count_after={}", rbuf_frame, self.instance_count);
+        }
         self.draw(gl);
     }
 
@@ -585,9 +613,13 @@ impl GlRenderSymbols {
     /// After calling this, subsequent draw calls will use the specified texture
     /// until bind_static_texture() is called.
     pub fn bind_dynamic_texture(&mut self, gl: &glow::Context, texture: glow::Texture) {
-        // Flush any pending instances before switching texture
-        self.draw(gl);
-
+        // NOTE: Do NOT call self.draw(gl) here!
+        // At this point, Pass 1 (static content including emoji) has already been rendered
+        // with the correct symbols.png texture. Calling draw() here would flush any pending
+        // instances using the WRONG texture (dynamic glyph atlas), causing emoji to disappear.
+        //
+        // The static content rendering is complete before this function is called,
+        // so we only need to switch the texture binding for subsequent dynamic text rendering.
         unsafe {
             gl.active_texture(glow::TEXTURE0);
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
@@ -609,6 +641,15 @@ impl GlRenderSymbols {
             }
             self.base.textures_binded = true;
         }
+    }
+
+    /// Invalidate the cached texture binding state
+    ///
+    /// Call this when you've changed the GL texture binding state externally
+    /// (e.g., uploading data to a different texture). This ensures that the
+    /// next render pass will rebind the correct texture.
+    pub fn invalidate_texture_binding(&mut self) {
+        self.base.textures_binded = false;
     }
 
     /// Draw a single glyph with explicit UV coordinates and dimensions

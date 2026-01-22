@@ -74,13 +74,27 @@ impl Render for CharTestRender {
 
 /// Render test content to the buffer
 fn render_test_content(buffer: &mut rust_pixel::render::buffer::Buffer) {
-    // ONLY emoji - no dynamic text to interfere
-    // Emoji at (0, 0) should render at pixel (0, 0)
-    buffer.set_str(0, 0, "😀", Style::default().fg(Color::White));
-
-    // Emoji at (4, 1) - col 4, row 1
-    buffer.set_str(4, 1, "😊", Style::default().fg(Color::White));
-
-    // Multiple emoji on row 2
+    // Test 1: Only emoji (should work)
+    // Row 2: Emoji (static rendering from symbols.png)
     buffer.set_str(0, 2, "😀😊😂🤔😭🥺🎉🔥", Style::default().fg(Color::White));
+
+    // Test 2: Add English text to see if it breaks emoji
+    // Row 0: English text (dynamic rendering)
+    buffer.set_str(0, 0, "Hello, RustPixel!", Style::default().fg(Color::Yellow));
+
+    // Uncomment to test Chinese
+    // // Row 1: Chinese text (dynamic rendering)
+    // buffer.set_str(0, 1, "你好，世界！", Style::default().fg(Color::Cyan));
+
+    // // Row 3: Mixed content - English + Emoji
+    // buffer.set_str(0, 3, "Happy 😀 Coding 🔥", Style::default().fg(Color::Green));
+
+    // // Row 4: Mixed content - Chinese + Emoji
+    // buffer.set_str(0, 4, "编程 💻 快乐 🎉", Style::default().fg(Color::Magenta));
+
+    // // Row 5: More emoji variety
+    // buffer.set_str(0, 5, "🚀🌟⭐💡🎯🎨🎵🎮", Style::default().fg(Color::White));
+
+    // // Row 6: Numbers and symbols (static PETSCII)
+    // buffer.set_str(0, 6, "0123456789 !@#$%", Style::default().fg(Color::Red));
 }

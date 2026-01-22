@@ -279,11 +279,13 @@ impl SdlAdapter {
         // Step 1: Rasterize all characters and collect glyph info
         // We need to do this first to batch all atlas updates
         let mut glyph_infos: Vec<(usize, GlyphSource)> = Vec::with_capacity(dynamic_cells.len());
+        let mut skipped_count = 0usize;
 
         for (i, cell) in dynamic_cells.iter().enumerate() {
             let ch = cell.character;
             if ch == '\0' || ch == ' ' {
                 // Skip null and space characters
+                skipped_count += 1;
                 continue;
             }
 
@@ -291,7 +293,25 @@ impl SdlAdapter {
             glyph_infos.push((i, glyph_source));
         }
 
+        // Debug: log how many characters were actually rendered vs skipped
+        static DYN_RENDER_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let dyn_frame = DYN_RENDER_LOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if dyn_frame < 10 {
+            log::info!("[DynRender] frame={}: total={}, skipped={}, to_render={}",
+                dyn_frame, dynamic_cells.len(), skipped_count, glyph_infos.len());
+        }
+
+        // Early return if no dynamic characters to render
+        // This avoids any OpenGL state changes that might interfere with static content
+        if glyph_infos.is_empty() {
+            return;
+        }
+
         // Step 2: Upload atlas to GPU if dirty
+        // IMPORTANT: After upload, we must invalidate the textures_binded flag
+        // because we changed the GL texture binding state. Otherwise, the next
+        // frame's Pass 1 will skip rebinding symbols.png and render emoji with
+        // the wrong texture (dynamic_texture).
         if glyph_renderer.is_dirty() {
             let gl = &gl_pixel_renderer.gl;
             let (width, height) = glyph_renderer.get_atlas_size();
@@ -312,21 +332,30 @@ impl SdlAdapter {
                 );
             }
             glyph_renderer.clear_dirty();
+
+            // Invalidate the cached texture binding state
+            // This forces the next render pass to rebind the correct texture
+            gl_pixel_renderer.gl_pixel.get_symbol_renderer().invalidate_texture_binding();
         }
 
-        // Step 3: Render each dynamic cell
-        // We need to carefully manage borrowing here since gl and gl_pixel
-        // are both part of gl_pixel_renderer
-
-        // First, bind the render target (texture 2)
+        // Step 3: Render dynamic cells to texture 3 (separate from static content in texture 2)
+        // This keeps emoji (in texture 2) and dynamic text (in texture 3) completely isolated.
+        // Both textures are then composited to the screen with alpha blending.
         {
             let GlPixelRenderer { gl, gl_pixel } = gl_pixel_renderer;
-            gl_pixel.bind_target(gl, 2);
-        }
 
-        // Now render each glyph with dynamic texture
-        {
-            let GlPixelRenderer { gl, gl_pixel } = gl_pixel_renderer;
+            // Bind to texture 3 for dynamic content
+            gl_pixel.bind_target(gl, 3);
+
+            // Clear texture 3 with fully transparent background
+            // This is critical - we need transparent black (0,0,0,0) so that
+            // when composited over texture 2, only the actual glyphs are visible
+            gl_pixel.set_clear_color(crate::render::graph::UnifiedColor::new(0.0, 0.0, 0.0, 0.0));
+            gl_pixel.clear(gl);
+
+            // Make texture 3 visible for compositing
+            gl_pixel.set_render_texture_hidden(3, false);
+
             let r_sym = gl_pixel.get_symbol_renderer();
             r_sym.bind_dynamic_texture(gl, dynamic_texture);
 
@@ -750,40 +779,53 @@ impl Adapter for SdlAdapter {
             &mut self.base,
         );
 
-        // Debug: log cell counts (first 300 frames)
+        // Debug: log cell counts
         static FRAME_LOG_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let frame_count = FRAME_LOG_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if frame_count < 300 {
-            // Count emoji cells in static_cells
-            // Emoji texsym: row 96-127, col 80-127
-            // texsym = row * 128 + col, so range is 96*128+80=12368 to 127*128+127=16383
-            let emoji_count = static_cells.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).count();
-            if emoji_count > 0 && frame_count == 76 {
-                // Log ALL emoji cells
-                log::info!("Frame {}: All emoji cells ({} total):", frame_count, emoji_count);
-                for ec in static_cells.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).take(10) {
-                    let emoji_row = ec.y as i32 / 32;
-                    let emoji_col = ec.x as i32 / 16;
-                    log::info!("  emoji at row={}, col={}, x={:.0}, y={:.0}, w={}, h={}",
-                        emoji_row, emoji_col, ec.x, ec.y, ec.w, ec.h);
+
+        // Count emoji cells in static_cells
+        // Emoji texsym: row 96-127, col 80-127
+        // texsym = row * 128 + col, so range is 96*128+80=12368 to 127*128+127=16383
+        let emoji_count = static_cells.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).count();
+
+        // Log first frames with emoji and dynamic content for debugging
+        let is_transition_frame = (emoji_count > 0 || !dynamic_cells.is_empty()) && frame_count < 3;
+        if is_transition_frame {
+            log::info!("[FRAME {}] static_cells={}, dynamic_cells={}, emoji_count={}, stage={}",
+                frame_count, static_cells.len(), dynamic_cells.len(), emoji_count, stage);
+            if emoji_count > 0 {
+                for (i, ec) in static_cells.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).enumerate().take(3) {
+                    log::info!("[FRAME {}] emoji[{}]: x={:.0}, y={:.0}, w={}, h={}, texsym={}",
+                        frame_count, i, ec.x, ec.y, ec.w, ec.h, ec.texsym);
                 }
-            }
-            if frame_count < 20 || frame_count % 60 == 0 {
-                log::info!("Frame {}: static_cells={}, dynamic_cells={}, emoji_count={}, stage={}",
-                    frame_count, static_cells.len(), dynamic_cells.len(), emoji_count, stage);
             }
         }
 
         // Pass 1: Render static cells (Sprites, Emoji) to render texture
-        // These use the symbols.png texture
+        if is_transition_frame {
+            log::info!("[FRAME {}] Pass1: rendering {} static cells", frame_count, static_cells.len());
+        }
         self.draw_render_buffer_to_texture(&static_cells, 2, false);
 
-        // Pass 2: Render dynamic cells (text) with dynamic glyph atlas
+        // Pass 2: Render dynamic cells (text) to texture 3 with dynamic glyph atlas
+        // Static content (emoji) stays in texture 2, dynamic text goes to texture 3
+        // Both are then composited to the screen with alpha blending
         if !dynamic_cells.is_empty() {
+            if is_transition_frame {
+                log::info!("[FRAME {}] Pass2: rendering {} dynamic cells to texture 3", frame_count, dynamic_cells.len());
+            }
             self.render_dynamic_text_cells(&dynamic_cells, current_buffer);
+        } else {
+            // Hide texture 3 if no dynamic content to avoid compositing empty texture
+            if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+                gl_pixel_renderer.gl_pixel.set_render_texture_hidden(3, true);
+            }
         }
 
         // Final composite to screen
+        if is_transition_frame {
+            log::info!("[FRAME {}] Composite: drawing to screen", frame_count);
+        }
         self.draw_render_textures_to_screen();
     }
 }
