@@ -482,6 +482,181 @@ fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
 - Phase 2 需要移除 TUI 符号加载逻辑
 - Phase 3 需要恢复 UI 组件的坐标使用
 
+### Decision 9: CJK 汉字静态渲染支持
+
+**选择：** 汉字渲染到 symbols.png 的 CJK 区域，运行时加载映射表，保持单纹理单 Pass 渲染
+
+**核心思想：**
+- 汉字与 Sprite/TUI/Emoji 共用 symbols.png，保持单纹理架构
+- 工具预先渲染所需汉字到 symbols.png 的 CJK 区域
+- 运行时加载 JSON 映射表，将汉字字符映射到纹理坐标
+- 单 Pass 渲染，性能最优
+
+**纹理布局（2048×2048）：**
+```
+2048x2048 symbols.png 布局：
+┌─────────────────────────────────────────────────────────────────┐
+│                      上半部分（行 0-1023）                        │
+├─────────────────────┬───────────────────────────────────────────┤
+│ Sprite 区域          │ CJK 扩展区域                              │
+│ (0,0) - (1023,1023) │ (1024,0) - (2047,1023)                   │
+│ 128×128 grid        │ 64×64 = 4096 个汉字                       │
+│ 8×8 px each         │ 16×16 px each                            │
+├─────────────────────┴───────────────────────────────────────────┤
+│                      下半部分（行 1024-2047）                     │
+├─────────────────────────────────────────────────────────────────┤
+│ TUI 区域 (行 1024-1535)                                          │
+│ - 128 cols × 32 rows = 4096 chars (8×16 px each)               │
+│ - 索引范围: 0-4095                                               │
+├─────────────────────────────────────────────────────────────────┤
+│ Emoji 区域 (行 1536-2047)                                        │
+│ - 64 cols × 32 rows = 2048 emoji (16×16 px each)               │
+│ - 索引范围: 4096-6143                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+区域详情：
+- Sprite:  左上 1024×1024, 128×128 格, 每格 8×8 px, 共 16384 个
+- CJK:     右上 1024×1024, 64×64 格, 每格 16×16 px, 共 4096 个
+- TUI:     左下 2048×512, 128×32 格, 每格 8×16 px, 共 4096 个
+- Emoji:   底部 2048×512, 64×32 格, 每格 16×16 px, 共 2048 个
+```
+
+**工具链设计：**
+
+```bash
+# 将汉字渲染到 symbols.png 的 CJK 区域
+cargo pixel cjk <font.ttf> <chars.txt> <symbols.png> [--region x,y,w,h]
+
+# 示例：
+cargo pixel cjk assets/fonts/simhei.ttf assets/chinese_chars.txt assets/symbols.png --region 1024,0,1024,1024
+
+# 输出：
+# assets/symbols.png      (原地修改，添加汉字)
+# assets/cjk_map.json     (字符映射表)
+```
+
+**chars.txt 格式：**
+```
+你好世界
+游戏开始结束
+返回确认取消
+等级分数时间
+```
+
+**映射表格式 (cjk_map.json)：**
+```json
+{
+  "version": 1,
+  "char_size": [16, 16],
+  "region": { "x": 1024, "y": 0, "w": 1024, "h": 1024 },
+  "chars": {
+    "你": { "x": 1024, "y": 0 },
+    "好": { "x": 1040, "y": 0 },
+    "世": { "x": 1056, "y": 0 },
+    "界": { "x": 1072, "y": 0 }
+  }
+}
+```
+
+**运行时加载：**
+```rust
+// asset.rs 或 cjk.rs
+pub struct CjkCharMap {
+    map: HashMap<char, CjkCharInfo>,
+}
+
+pub struct CjkCharInfo {
+    pub tex_x: u16,  // 纹理 x 坐标
+    pub tex_y: u16,  // 纹理 y 坐标
+}
+
+impl CjkCharMap {
+    pub fn load(json_path: &str) -> Result<Self, Error> {
+        let content = std::fs::read_to_string(json_path)?;
+        let data: serde_json::Value = serde_json::from_str(&content)?;
+        let mut map = HashMap::new();
+        if let Some(chars) = data["chars"].as_object() {
+            for (ch, info) in chars {
+                let c = ch.chars().next().unwrap();
+                map.insert(c, CjkCharInfo {
+                    tex_x: info["x"].as_u64().unwrap() as u16,
+                    tex_y: info["y"].as_u64().unwrap() as u16,
+                });
+            }
+        }
+        Ok(Self { map })
+    }
+
+    pub fn get(&self, ch: char) -> Option<&CjkCharInfo> {
+        self.map.get(&ch)
+    }
+}
+
+// Context 中添加可选的 CJK 映射
+pub struct Context {
+    // ... 现有字段
+    pub cjk_map: Option<CjkCharMap>,
+}
+```
+
+**渲染集成（单 Pass）：**
+```rust
+// symidx / render_helper 中处理 CJK
+fn get_symbol_tex_coords(symbol: &str, cjk_map: &Option<CjkCharMap>) -> (f32, f32, f32, f32) {
+    // 检查是否是 CJK 汉字
+    if let Some(ch) = symbol.chars().next() {
+        if let Some(ref map) = cjk_map {
+            if let Some(info) = map.get(ch) {
+                // 返回 CJK 区域的纹理坐标
+                return (info.tex_x as f32, info.tex_y as f32, 16.0, 16.0);
+            }
+        }
+    }
+
+    // 否则走原有的 Sprite/TUI/Emoji 逻辑
+    // ...
+}
+
+// 渲染流程保持单 Pass
+fn render_frame() {
+    bind_texture(symbols_texture);  // 包含所有内容
+    draw_call(all_cells);           // 单次绘制
+}
+```
+
+**多分辨率支持：**
+```
+symbols.png      : 2048×2048 (1x 基准)
+symbols@2x.png   : 4096×4096 (2x Retina)
+symbols@3x.png   : 6144×6144 (3x 高DPI)
+
+运行时根据 scale_factor 选择合适的纹理版本
+```
+
+**理由：**
+1. **单纹理单 Pass** - 保持现有渲染架构，性能最优
+2. **架构一致** - CJK 与 Sprite/TUI/Emoji 统一处理
+3. **清晰度保证** - 多分辨率纹理支持
+4. **按需使用** - 不需要 CJK 的项目无需加载映射表
+5. **容量充足** - 2048×2048 纹理，CJK 区域可容纳 4096 个汉字
+6. **工具链简单** - `cargo pixel cjk` 直接修改 symbols.png
+
+**替代方案及弊端：**
+
+**方案 A：动态字体渲染（dyndraw 分支）**
+- ❌ 架构复杂，多 Pass 渲染
+- ❌ 启动慢，运行时开销
+
+**方案 B：独立 CJK 纹理文件**
+- ❌ 多纹理绑定，多 Pass 渲染
+- ❌ 打破单纹理架构
+
+**方案 C：CJK 集成到 symbols.png（当前选择）**
+- ✅ 单纹理单 Pass，性能最优
+- ✅ 架构简单一致
+- ⚠️ 纹理尺寸 2048×2048（约 16MB 未压缩）
+- ⚠️ 需要预先确定使用的汉字
+
 ## Open Questions
 
 1. **TUI 符号纹理内容：** 是否需要为 TUI 专门设计字符集，还是复用现有符号？
