@@ -777,7 +777,7 @@ pub fn push_render_buffer(
     // - Rows 96-127, Cols 80-127 (indices 16384-17919): 16×16 Emoji
     //
     // For Sprite region (block-based layout for backward compatibility):
-    if texidx >= 53 {
+    if texidx >= 53 && texidx <= 55 {
         // Emoji blocks (53-55)
         // Block 53: Cols 80-95
         // Block 54: Cols 96-111
@@ -796,6 +796,12 @@ pub fn push_render_buffer(
         let grid_row = row_offset + r * 2;
 
         wc.texsym = grid_row * 128 + grid_col;
+
+        // Debug: log emoji texture calculation (only first few)
+        static EMOJI_TEX_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if EMOJI_TEX_LOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 15 {
+            log::info!("Emoji tex: block={}, symidx={}, texsym={}", texidx, symidx, wc.texsym);
+        }
     } else if texidx >= 48 {
         // TUI blocks (48-52)
         // Block 48: Cols 0-15
@@ -1103,6 +1109,17 @@ pub fn render_main_buffer<F>(
         let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
         let modifier = cell_info.4.bits();  // Convert Modifier to u16
 
+        // Debug: log emoji cells detected by get_cell_info
+        if sh.1 >= 53 && sh.1 <= 55 {
+            static EMOJI_BUF_LOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            if EMOJI_BUF_LOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 10 {
+                let row = i / width as usize;
+                let col = i % width as usize;
+                log::info!("Emoji cell at buf[{}] (row={}, col={}) width={} -> block={}, idx={}",
+                    i, row, col, width, sh.1, sh.0);
+            }
+        }
+
         // Dynamic font rendering: TUI text characters no longer use Block 48-52
         // Instead, they will be rasterized dynamically using fontdue.
         // Here we check if the character should use static atlas (Sprite/Emoji) or dynamic rendering.
@@ -1119,6 +1136,14 @@ pub fn render_main_buffer<F>(
             if let Some((block, idx)) = emoji_texidx(&cell.symbol) {
                 sh.1 = block;
                 sh.0 = idx;
+                // Debug: log emoji detection with buffer index (only first few)
+                static EMOJI_LOG_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if EMOJI_LOG_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 10 {
+                    let row = i / width as usize;
+                    let col = i % width as usize;
+                    log::info!("render_main: emoji at buf[{}] (row={}, col={}) width={} -> block={}, idx={}",
+                        i, row, col, width, block, idx);
+                }
             } else {
                 // Mark as dynamic text character (texidx = 255)
                 // The symbol field in cell will be used for glyph lookup
@@ -1139,13 +1164,34 @@ pub fn render_main_buffer<F>(
             use_tui,
         );
 
-        // Handle Emoji rendering in TUI mode
-        // Emoji (Block >= 53) are 16x16 source (32x32 in 2048 texture),
-        // while TUI chars are 8x16 source (16x32 in 2048 texture).
+        // Get the first character from the symbol string for dynamic rendering
+        // For static textures (Sprite/Emoji), this character is not used
+        let character = cell.symbol.chars().next().unwrap_or(' ');
+
+        // Handle full-width character rendering in TUI mode
         // render_helper calculated s2 based on TUI height (32px) and width (16px).
-        // For Emoji, we need double width (32px) to maintain 1:1 aspect ratio.
+        // For full-width characters (Emoji, CJK), we need double width (32px).
         // We also skip the next cell rendering to avoid overlap/artifacts.
-        if use_tui && texidx >= 53 {
+        //
+        // Full-width cases:
+        // 1. Emoji (Block 53-55): Static texture, always 32x32
+        // 2. Dynamic text (texidx=255): Check unicode width for CJK characters
+        let is_fullwidth_char = if use_tui {
+            if texidx >= 53 && texidx <= 55 {
+                // Emoji blocks are always full-width
+                true
+            } else if texidx == DYNAMIC_TEXT_MARKER {
+                // For dynamic text, check unicode width
+                use unicode_width::UnicodeWidthChar;
+                character.width().unwrap_or(1) >= 2
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if is_fullwidth_char {
             s2.w *= 2;
             // Only skip next if we are not at the end of a row
             if (i + 1) % width as usize != 0 {
@@ -1155,21 +1201,17 @@ pub fn render_main_buffer<F>(
 
         // For Emoji, use white color (no color modulation) to preserve original colors
         // For TUI/Sprite characters, use the cell's foreground color
-        let fc = if use_tui && texidx >= 53 {
+        let fc = if use_tui && texidx >= 53 && texidx <= 55 {
             (255, 255, 255, 255)  // White - no color modulation for Emoji
         } else {
             sh.2.get_rgba()
         };
-        
+
         let bc = if sh.3 != Color::Reset {
             Some(sh.3.get_rgba())
         } else {
             None
         };
-
-        // Get the first character from the symbol string for dynamic rendering
-        // For static textures (Sprite/Emoji), this character is not used
-        let character = cell.symbol.chars().next().unwrap_or(' ');
         f(&fc, &bc, s2, texidx, symidx, modifier, character);
     }
 }

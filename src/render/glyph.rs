@@ -246,14 +246,22 @@ impl DynamicTextureAtlas {
         offset_x: u32,
         offset_y: u32,
         fg_color: (u8, u8, u8),
+        is_fullwidth: bool,
     ) {
         let (slot_x, slot_y) = self.slot_to_pixels(slot_idx);
         let atlas_width = self.width as usize;
 
         // Clear the slot first (transparent)
+        // For half-width, only clear left half; for full-width, clear entire slot
         let scaled_slot_size = (GLYPH_SLOT_SIZE as f32 * self.scale_factor) as u32;
+        let target_width = if is_fullwidth {
+            scaled_slot_size
+        } else {
+            scaled_slot_size / 2
+        };
+
         for dy in 0..scaled_slot_size {
-            for dx in 0..scaled_slot_size {
+            for dx in 0..target_width {
                 let px = slot_x + dx;
                 let py = slot_y + dy;
                 let idx = ((py as usize * atlas_width) + px as usize) * 4;
@@ -266,7 +274,12 @@ impl DynamicTextureAtlas {
             }
         }
 
-        // Write glyph pixels
+        // Write glyph pixels, clipping to target area boundaries
+        // For half-width characters, clip to left half of slot (16px)
+        // For full-width characters, clip to full slot (32px)
+        let slot_right = slot_x + target_width;
+        let slot_bottom = slot_y + scaled_slot_size;
+
         for gy in 0..glyph_height {
             for gx in 0..glyph_width {
                 let coverage = glyph_bitmap[gy * glyph_width + gx];
@@ -274,7 +287,9 @@ impl DynamicTextureAtlas {
                     let px = slot_x + offset_x + gx as u32;
                     let py = slot_y + offset_y + gy as u32;
 
-                    if px < self.width && py < self.height {
+                    // Clip to target area boundaries to prevent bleeding
+                    if px >= slot_x && px < slot_right && py >= slot_y && py < slot_bottom
+                       && px < self.width && py < self.height {
                         let idx = ((py as usize * atlas_width) + px as usize) * 4;
                         if idx + 3 < self.bitmap.len() {
                             // Premultiplied alpha
@@ -290,7 +305,7 @@ impl DynamicTextureAtlas {
         }
 
         // Mark dirty region
-        self.mark_dirty(slot_x, slot_y, scaled_slot_size, scaled_slot_size);
+        self.mark_dirty(slot_x, slot_y, target_width, scaled_slot_size);
     }
 
     /// Mark a region as dirty for partial upload
@@ -368,7 +383,7 @@ pub struct GlyphRenderer {
 }
 
 /// Default font file path (relative to assets directory)
-pub const DEFAULT_FONT_PATH: &str = "assets/fonts/default.ttf";
+pub const DEFAULT_FONT_PATH: &str = "assets/fonts/default.otf";
 
 impl GlyphRenderer {
     /// Create a new glyph renderer from font file data (bytes)
@@ -387,7 +402,9 @@ impl GlyphRenderer {
 
         Ok(Self {
             font,
-            font_height: GLYPH_SLOT_SIZE as f32, // 32px logical height
+            // Use 90% of slot height for larger glyphs with minimal padding
+            // With a proper monospace font, characters fit well within slot width
+            font_height: GLYPH_SLOT_SIZE as f32 * 0.90,
             scale_factor,
             atlas: DynamicTextureAtlas::new(scale_factor),
             cache,
@@ -453,6 +470,7 @@ impl GlyphRenderer {
         let is_fullwidth = ch.width().unwrap_or(1) >= 2;
 
         // Calculate pixel size for rasterization
+        // Use consistent font height, then scale down wide glyphs if needed
         let pixel_size = self.font_height * self.scale_factor;
 
         // Rasterize the glyph
@@ -481,31 +499,63 @@ impl GlyphRenderer {
             scaled_slot_size / 2
         };
 
+        // For half-width characters, allow up to 95% of slot width
+        // With a monospace font, most characters fit well within this limit
+        let max_glyph_width = (glyph_target_width as f32 * 0.95) as usize;
+
+        // If glyph is too wide, re-rasterize at smaller size
+        // Use >= to ensure we catch glyphs at exactly max width too (need some margin)
+        let (final_metrics, final_bitmap) = if !is_fullwidth && metrics.width >= max_glyph_width {
+            // Calculate scale factor to fit glyph within max width with 10% margin
+            let target_width = (max_glyph_width as f32 * 0.90) as usize;
+            let scale_down = target_width as f32 / metrics.width as f32;
+            let smaller_size = pixel_size * scale_down;
+            self.font.rasterize(ch, smaller_size)
+        } else {
+            (metrics, bitmap)
+        };
+
+        // Debug: log glyph metrics for problematic characters
+        if ch == 'w' || ch == 'm' || ch == 'W' || ch == 'M' || self.cache.len() < 3 {
+            log::info!(
+                "Glyph '{}': orig_w={}, final_w={}, max_w={}, slot_w={}, is_fullwidth={}",
+                ch, metrics.width, final_metrics.width, max_glyph_width, glyph_target_width, is_fullwidth
+            );
+        }
+
         // Center horizontally
-        let offset_x = if metrics.width < glyph_target_width as usize {
-            ((glyph_target_width as usize - metrics.width) / 2) as u32
+        let offset_x = if final_metrics.width < glyph_target_width as usize {
+            ((glyph_target_width as usize - final_metrics.width) / 2) as u32
         } else {
             0
         };
 
-        // Align to baseline (top-aligned for now, can be improved with proper baseline metrics)
-        let offset_y = if metrics.height < scaled_slot_size as usize {
-            // Add some top padding (approximately 20% of slot height for ascender space)
-            let top_padding = (scaled_slot_size as f32 * 0.1) as u32;
-            top_padding
-        } else {
-            0
-        };
+        // Align to baseline using font metrics
+        // The baseline is positioned at approximately 75-80% from the top of the slot
+        // This leaves room for ascenders above and descenders below
+        //
+        // fontdue metrics:
+        // - ymin: vertical offset from baseline to bottom of glyph (negative for descenders)
+        // - height: glyph bitmap height
+        //
+        // For proper baseline alignment:
+        // baseline_y = slot_height * 0.75 (baseline at 75% from top)
+        // glyph_top = baseline_y - (height + ymin) = baseline_y - height - ymin
+        //           = baseline_y - height + |ymin| (since ymin is typically negative)
+        let baseline_y = (scaled_slot_size as f32 * 0.78) as i32;
+        let glyph_top = baseline_y - final_metrics.height as i32 - final_metrics.ymin;
+        let offset_y = glyph_top.max(0) as u32;
 
         // Write to atlas (white foreground, shader will apply color)
         self.atlas.write_glyph(
             slot_idx,
-            &bitmap,
-            metrics.width,
-            metrics.height,
+            &final_bitmap,
+            final_metrics.width,
+            final_metrics.height,
             offset_x,
             offset_y,
             (255, 255, 255),
+            is_fullwidth,
         );
 
         // Add to cache
@@ -513,7 +563,7 @@ impl GlyphRenderer {
         let cached = CachedGlyph {
             slot_idx,
             is_fullwidth,
-            metrics,
+            metrics: final_metrics,
             scale_factor: self.scale_factor,
         };
         self.cache.put(key, cached);

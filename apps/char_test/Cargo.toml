@@ -1,0 +1,23 @@
+[package]
+name = "char_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rust_pixel = { path = "../..", features = ["term"] }
+log = "0.4"
+wasm-bindgen = "0.2"
+
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["term"]
+term = ["rust_pixel/term"]
+sdl = ["rust_pixel/sdl"]
+glow = ["rust_pixel/glow"]
+wgpu = ["rust_pixel/wgpu"]
+web = ["rust_pixel/web"]

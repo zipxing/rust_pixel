@@ -244,8 +244,25 @@ pub fn is_prerendered_emoji(symbol: &str) -> bool {
 ///
 /// Returns Some((block_idx, sym_idx)) if the Emoji is in the EMOJI_MAP,
 /// or None if the Emoji is not pre-rendered.
+///
+/// This function handles emoji with variation selectors (U+FE0F) by
+/// stripping them if direct lookup fails.
 pub fn emoji_texidx(symbol: &str) -> Option<(u8, u8)> {
-    EMOJI_MAP.get(symbol).copied()
+    // Try direct lookup first
+    if let Some(result) = EMOJI_MAP.get(symbol) {
+        return Some(*result);
+    }
+
+    // If not found, try stripping variation selector (U+FE0F) and ZWJ (U+200D)
+    let stripped: String = symbol.chars()
+        .filter(|&c| c != '\u{FE0F}' && c != '\u{200D}')
+        .collect();
+
+    if stripped != symbol {
+        EMOJI_MAP.get(&stripped).copied()
+    } else {
+        None
+    }
 }
 
 /// get index idx from a symbol string

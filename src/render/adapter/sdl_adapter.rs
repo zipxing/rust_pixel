@@ -357,6 +357,9 @@ impl SdlAdapter {
 
                     // Scale based on glyph size vs cell size
                     // Dynamic glyphs are 32x32 (or 16x32 for half-width)
+                    // Match the scaling logic in render_rbuf for consistency:
+                    // - frame_width = glyph_width / ratio_x
+                    // - scale = cell_width / frame_width / ratio_x = cell_width / glyph_width
                     let glyph_width = if is_fullwidth {
                         GLYPH_SLOT_SIZE as f32
                     } else {
@@ -365,8 +368,8 @@ impl SdlAdapter {
                     let glyph_height = GLYPH_SLOT_SIZE as f32;
 
                     transform.scale(
-                        cell_width / glyph_width / ratio_x,
-                        cell_height / glyph_height / ratio_y,
+                        cell_width / glyph_width,
+                        cell_height / glyph_height,
                     );
 
                     let color = UnifiedColor::new(
@@ -746,6 +749,30 @@ impl Adapter for SdlAdapter {
             stage,
             &mut self.base,
         );
+
+        // Debug: log cell counts (first 300 frames)
+        static FRAME_LOG_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let frame_count = FRAME_LOG_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if frame_count < 300 {
+            // Count emoji cells in static_cells
+            // Emoji texsym: row 96-127, col 80-127
+            // texsym = row * 128 + col, so range is 96*128+80=12368 to 127*128+127=16383
+            let emoji_count = static_cells.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).count();
+            if emoji_count > 0 && frame_count == 76 {
+                // Log ALL emoji cells
+                log::info!("Frame {}: All emoji cells ({} total):", frame_count, emoji_count);
+                for ec in static_cells.iter().filter(|c| c.texsym >= 12368 && c.texsym <= 16383).take(10) {
+                    let emoji_row = ec.y as i32 / 32;
+                    let emoji_col = ec.x as i32 / 16;
+                    log::info!("  emoji at row={}, col={}, x={:.0}, y={:.0}, w={}, h={}",
+                        emoji_row, emoji_col, ec.x, ec.y, ec.w, ec.h);
+                }
+            }
+            if frame_count < 20 || frame_count % 60 == 0 {
+                log::info!("Frame {}: static_cells={}, dynamic_cells={}, emoji_count={}, stage={}",
+                    frame_count, static_cells.len(), dynamic_cells.len(), emoji_count, stage);
+            }
+        }
 
         // Pass 1: Render static cells (Sprites, Emoji) to render texture
         // These use the symbols.png texture
