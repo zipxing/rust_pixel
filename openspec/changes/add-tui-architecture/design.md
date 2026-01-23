@@ -1,12 +1,12 @@
 ## Context
 
-rust_pixel 目前支持文本模式（终端）和图形模式（SDL/OpenGL/WGPU/WebGL），但在图形模式下缺乏对 TUI（Terminal User Interface）风格界面的良好支持。终端字符通常是瘦高的（8x16 像素），而图形模式使用的符号是矮胖的（8x8 像素）。这导致在图形模式下无法真实模拟终端 UI 的视觉效果。
+rust_pixel 目前支持文本模式（终端）和图形模式（SDL/OpenGL/WGPU/WebGL），但在图形模式下缺乏对 TUI（Terminal User Interface）风格界面的良好支持。终端字符通常是瘦高的（16x32 像素），而图形模式使用的符号是矮胖的（16x16 像素）。这导致在图形模式下无法真实模拟终端 UI 的视觉效果。
 
 **约束条件：**
 - 必须保持文本模式完全向后兼容
 - 必须保持单次 draw call 的高性能渲染
 - 必须支持 TUI 和游戏精灵的混合渲染
-- 使用统一的 1024x1024 符号纹理，包含 TUI、Emoji 和 Sprite 三个区域
+- 使用统一的 4096x4096 符号纹理，包含 Sprite、TUI、Emoji 和 CJK 四个区域
 
 **相关方：**
 - 游戏开发者：需要在图形模式下使用 TUI 界面
@@ -16,7 +16,7 @@ rust_pixel 目前支持文本模式（终端）和图形模式（SDL/OpenGL/WGPU
 ## Goals / Non-Goals
 
 **Goals:**
-- 在图形模式下支持瘦高字符（8x16）的 TUI 渲染
+- 在图形模式下支持瘦高字符（16x32）的 TUI 渲染
 - 提供清晰的 TUI 层和游戏精灵层分离
 - 实现双坐标系统，正确处理 TUI 和游戏区域的鼠标事件
 - TUI 层永远渲染在最上层，确保界面可见性
@@ -33,70 +33,70 @@ rust_pixel 目前支持文本模式（终端）和图形模式（SDL/OpenGL/WGPU
 
 ### Decision 1: 统一符号纹理与区域划分
 
-**选择：** 使用统一的 1024x1024 `symbols.png` 纹理，包含三个区域：TUI 符号（8x16）、Emoji（16x16 彩色）、Sprite 符号（8x8）
+**选择：** 使用统一的 4096x4096 `symbols.png` 纹理，包含四个区域：Sprite 符号（16x16）、TUI 符号（16x32）、Emoji（32x32 彩色）、CJK 汉字（32x32）
 
-**布局规划（向后兼容设计）：**
+**布局规划（10 Sprite Rows 设计）：**
 ```
-1024x1024 纹理布局（Block-Based，Sprite 在前）：
+4096x4096 纹理布局（Block-Based）：
 ┌────────────────────────────────────────┐
-│ Sprite 区域（行 0-767）                 │ 768px 高
-│ - 6 rows × 8 blocks/row = 48 blocks   │
-│ - 每 block: 16×16 chars, 8×8px each    │
-│ - Block 0-47: 12,288 sprites           │
-│ - 线性索引：0-12287                     │
+│ Sprite 区域（行 0-2559）                │ 2560px 高
+│ - 10 rows × 16 blocks/row = 160 blocks │
+│ - 每 block: 16×16 chars, 16×16px each  │
+│ - Block 0-159: 40,960 sprites          │
+│ - 线性索引：0-40959                     │
 ├────────────────────────────────────────┤
-│ TUI + Emoji 区域（行 768-1023）         │ 256px 高
-│ - 8 blocks horizontally                │
-│ - Block 48-51: TUI active (1024 chars) │
-│ - Block 52: TUI reserved (256 chars)   │
-│ - Block 53-54: Emoji active (256 emoji)│
-│ - Block 55: Emoji reserved (128 emoji) │
-│ - TUI 线性索引：12288-13567             │
-│ - Emoji 线性索引：13568-13951           │
+│ TUI + Emoji 区域（行 2560-3071）       │ 512px 高
+│ - 16 blocks (256px wide × 512px tall)  │
+│ - Block 160-169: TUI (2560 chars)      │
+│ - Block 170-175: Emoji (768 emoji)     │
+│ - TUI 线性索引：40960-43519             │
+│ - Emoji 线性索引：43520-44287           │
+├────────────────────────────────────────┤
+│ CJK 区域（行 3072-4095）               │ 1024px 高
+│ - 汉字 32x32，共 4096 个               │
+│ - 线性索引：44288-48383                 │
 └────────────────────────────────────────┘
 
 Block 规格：
-- Sprite blocks (0-47):  16×16 chars/block, 8×8px each, 256 chars/block
-- TUI blocks (48-52):    16×16 chars/block, 8×16px each, 256 chars/block
-- Emoji blocks (53-55):  8×16 chars/block, 16×16px each, 128 chars/block
+- Sprite blocks (0-159):   16×16 chars/block, 16×16px each, 256 chars/block, 256×256px
+- TUI blocks (160-169):    16×16 chars/block, 16×32px each, 256 chars/block, 256×512px
+- Emoji blocks (170-175):  8×16 chars/block, 32×32px each, 128 chars/block, 256×512px
+- CJK 区域: 128×32 grid, 32×32px each, 4096 chars
 
 符号索引分配总结：
-- 0-12287:     Sprite 游戏精灵（8x8，单色）  - 12,288 个（保持不变）
-- 12288-13311: TUI 文本字符（8x16，单色）    - 1024 个（active）
-- 13312-13567: TUI 预留（8x16）              - 256 个（reserved）
-- 13568-13823: 预制 Emoji（16x16，彩色）     - 256 个（active）
-- 13824-13951: Emoji 预留（16x16）           - 128 个（reserved）
+- 0-40959:     Sprite 游戏精灵（16x16，单色）  - 40,960 个
+- 40960-43519: TUI 文本字符（16x32，单色）     - 2,560 个
+- 43520-44287: 预制 Emoji（32x32，彩色）       - 768 个
+- 44288-48383: CJK 汉字（32x32，单色）         - 4,096 个
 ```
 
 **理由：**
-- **向后兼容**：Sprite 区域保持原有布局不变（索引 0-12287），现有游戏无需修改
 - 单个纹理简化纹理管理，无需多个纹理绑定
 - Block-based 管理便于编辑器 UI 按块选择和管理符号
-- 三个区域明确分离，避免符号索引冲突
-- Emoji 和 TUI 都有预留空间，便于未来扩展
-- 1024x1024 纹理大小适中（1MB），加载快，所有 GPU 都支持
-- Sprite 区域容量充足（12,288 个），满足大型游戏需求
-- TUI + Emoji 放在底部，不影响现有 Sprite 布局
+- 四个区域明确分离，避免符号索引冲突
+- 4096x4096 纹理在现代设备上兼容性好（OpenGL ES 3.0+、WebGL 2.0+）
+- Sprite 区域容量充足（40,960 个），满足大型游戏需求
+- CJK 区域可容纳 4,096 个汉字，覆盖常用汉字需求（GB2312 一级常用字 3,755 个）
 - 保持高效的 GPU 纹理采样性能
 
 **替代方案：**
 - 独立 TUI 纹理文件 → 需要管理两个纹理，增加加载和绑定开销
-- 运行时缩放 8x8 符号 → 视觉效果差，失真明显
-- 更大的统一纹理 → 超出常见 GPU 纹理限制
+- 运行时缩放 16x16 符号 → 视觉效果差，失真明显
+- 2048x2048 纹理 → CJK 容量不足，仅能支持约 1000 个汉字
 
 ### Decision 2: 统一坐标系统（水平共享，垂直转换）
 
-**选择：** `MouseEvent` 只提供 `(column, row)`，按 8 像素宽度计算
+**选择：** `MouseEvent` 只提供 `(column, row)`，按 16 像素宽度计算
 
 **坐标计算：**
 ```rust
 // 基础坐标（所有 adapter）
-column = pixel_x / 8   // 8 像素宽度（TUI 和 Sprite 共享）
-row = pixel_y / 8      // 8 像素高度（Sprite 坐标系）
+column = pixel_x / 16   // 16 像素宽度（TUI 和 Sprite 共享）
+row = pixel_y / 16      // 16 像素高度（Sprite 坐标系）
 
 // TUI 层使用
-column_tui = column    // 水平方向相同（都是 8 像素宽）
-row_tui = row / 2      // 垂直方向转换（TUI 是 16 像素高）
+column_tui = column    // 水平方向相同（都是 16 像素宽）
+row_tui = row / 2      // 垂直方向转换（TUI 是 32 像素高）
 
 // Sprite 层使用
 sprite_col = column    // 直接使用
@@ -104,10 +104,10 @@ sprite_row = row       // 直接使用
 ```
 
 **理由：**
-- 水平统一：TUI 和 Sprite 都是 8 像素宽，`column` 通用无需转换
+- 水平统一：TUI 和 Sprite 都是 16 像素宽，`column` 通用无需转换
 - 垂直简单：TUI 高度是 Sprite 的 2 倍，简单除以 2 即可
 - 向后兼容：Sprite 层代码完全不需要修改，直接使用 `column/row`
-- TUI 转换直观：只需要 `row / 2`，符合 16/8 = 2 的比例关系
+- TUI 转换直观：只需要 `row / 2`，符合 32/16 = 2 的比例关系
 - API 简洁：只有一套坐标，减少复杂度
 
 **替代方案：**
@@ -131,12 +131,12 @@ sprite_row = row       // 直接使用
 
 **选择：** 使用统一的全局配置，TUI 高度为 Sprite 的 2 倍：
 ```rust
-pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();   // 8 pixels (both Sprite and TUI)
-pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();  // 8 pixels (Sprite)
+pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();   // 16 pixels (both Sprite and TUI)
+pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();  // 16 pixels (Sprite)
 
 // TUI dimensions derived from Sprite:
-// TUI_WIDTH = PIXEL_SYM_WIDTH        // 8 pixels (same as Sprite)
-// TUI_HEIGHT = PIXEL_SYM_HEIGHT * 2  // 16 pixels (double Sprite height)
+// TUI_WIDTH = PIXEL_SYM_WIDTH        // 16 pixels (same as Sprite)
+// TUI_HEIGHT = PIXEL_SYM_HEIGHT * 2  // 32 pixels (double Sprite height)
 ```
 
 **理由：**
@@ -235,41 +235,54 @@ Cell.tex    → 区块索引 (TUI: 0-15, Sprite: 0-223)
 
 **索引计算公式（Block-Based）：**
 
-Sprite 区域（Block 0-47，行 0-767）：
+Sprite 区域（Block 0-127，行 0-2047）：
 ```rust
-// 线性索引: 0-12287
-// Block-based layout: 6 rows × 8 blocks/row
-if texidx <= 47 {
+// 线性索引: 0-40959
+// Block-based layout: 10 rows × 16 blocks/row = 160 blocks
+if texidx <= 159 {
     linear_index = texidx * 256 + symidx
-    block_x = (texidx % 8)
-    block_y = (texidx / 8)
-    pixel_x = block_x * 128 + (symidx % 16) * 8
-    pixel_y = block_y * 128 + (symidx / 16) * 8
+    block_x = (texidx % 16)
+    block_y = (texidx / 16)
+    pixel_x = block_x * 256 + (symidx % 16) * 16
+    pixel_y = block_y * 256 + (symidx / 16) * 16
 }
 ```
 
-TUI 区域（Block 48-52，行 768-1023）：
+TUI 区域（Block 160-169，行 2560-3071）：
 ```rust
-// 线性索引: 12288-13567
-// Block-based layout: 5 blocks horizontally
-if texidx >= 48 && texidx <= 52 {
-    linear_index = 12288 + (texidx - 48) * 256 + symidx
-    block_num = texidx - 48  // 0-4
-    pixel_x = block_num * 128 + (symidx % 16) * 8
-    pixel_y = 768 + (symidx / 16) * 16  // TUI is 8x16
+// 线性索引: 40960-43519
+// Block-based layout: 10 blocks (256px wide × 512px tall each)
+// 每块 16×16 chars = 256 chars
+if texidx >= 160 && texidx <= 169 {
+    linear_index = 40960 + (texidx - 160) * 256 + symidx
+    block_num = texidx - 160  // 0-9
+    pixel_x = block_num * 256 + (symidx % 16) * 16
+    pixel_y = 2560 + (symidx / 16) * 32  // TUI is 16x32, 16 rows
 }
 ```
 
-Emoji 区域（Block 53-55，行 768-1023）：
+Emoji 区域（Block 170-175，行 2560-3071）：
 ```rust
-// 线性索引: 13568-13951
-// Block-based layout: 3 blocks horizontally
-if texidx >= 53 && texidx <= 55 {
-    linear_index = 13568 + (texidx - 53) * 128 + symidx
-    block_num = texidx - 53  // 0-2
-    pixel_x = (5 + block_num) * 128 + (symidx % 8) * 16
-    pixel_y = 768 + (symidx / 8) * 16  // Emoji is 16x16
+// 线性索引: 43520-44287
+// Block-based layout: 6 blocks (256px wide × 512px tall each)
+// 每块 8×16 chars = 128 emoji
+if texidx >= 170 && texidx <= 175 {
+    linear_index = 43520 + (texidx - 170) * 128 + symidx
+    block_num = texidx - 170  // 0-5
+    pixel_x = 2560 + block_num * 256 + (symidx % 8) * 32  // 从 x=2560 开始
+    pixel_y = 2560 + (symidx / 8) * 32  // Emoji is 32x32, 16 rows
 }
+```
+
+CJK 区域（行 3072-4095）：
+```rust
+// 线性索引: 44288-48383
+// Grid layout: 128 cols × 32 rows = 4096 chars
+// 每行 128 个汉字（4096 / 32 = 128）
+// 共 32 行（1024 / 32 = 32）
+let cjk_idx = linear_index - 44288
+pixel_x = (cjk_idx % 128) * 32
+pixel_y = 3072 + (cjk_idx / 128) * 32  // CJK is 32x32
 ```
 
 **理由：**
@@ -365,13 +378,15 @@ for grapheme in graphemes {
 ```rust
 // graph.rs
 fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
-    let relative_idx = emoji_idx - 4096;  // Emoji 区域基址
-    
-    // 每个 Emoji: 16x16 像素
-    // 每行 128 个 Emoji (2048 / 16)
-    let emoji_x = (relative_idx % 128) * 16;
-    let emoji_y = 256 + (relative_idx / 128) * 16;  // 从行 256 开始
-    
+    let relative_idx = emoji_idx - 43520;  // Emoji 区域基址
+
+    // 每个 Emoji: 32x32 像素
+    // Block 170-175 (6 blocks)，每块 8×16 = 128 emoji
+    let block_num = relative_idx / 128;
+    let in_block_idx = relative_idx % 128;
+    let emoji_x = 2560 + block_num * 256 + (in_block_idx % 8) * 32;
+    let emoji_y = 2560 + (in_block_idx / 8) * 32;
+
     // Destination: Emoji 占 2 格宽度
     let dest = ARect {
         x: cell_x,
@@ -379,15 +394,15 @@ fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
         w: cell_width * 2.0,  // 2 倍宽度
         h: cell_height,
     };
-    
-    // Source: 16x16 在 2048x2048 纹理中
+
+    // Source: 32x32 在 4096x4096 纹理中
     let src = ARect {
         x: emoji_x as f32,
         y: emoji_y as f32,
-        w: 16.0,
-        h: 16.0,
+        w: 32.0,
+        h: 32.0,
     };
-    
+
     // 返回渲染数据...
 }
 ```
@@ -395,20 +410,20 @@ fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
 **理由：**
 1. **实现简单** - 复用现有预制纹理机制，无需引入字体渲染库
 2. **性能最优** - 预制纹理性能最好，无运行时光栅化开销
-3. **纹理可控** - 固定 64px 高度（256 个 Emoji 位置），纹理大小可预测
+3. **纹理可控** - 固定 512px 高度（768 个 Emoji 位置），纹理大小可预测
 4. **风格统一** - 可以使用统一风格的 Emoji 集（如 Twemoji, Noto Emoji）
-5. **足够实用** - 175 个精选常用 Emoji + 81 个预留空间，覆盖 90%+ 的使用场景
+5. **容量充足** - 768 个 Emoji 容量，覆盖绝大多数使用场景
 6. **易于扩展** - 未来可以通过加载额外纹理支持更多 Emoji
 
-**Emoji 选择标准（256 个总容量）：**
-- **表情与情感**（50 个）：😀😊😂🤣😍🥰😘😎🤔😭🥺😤😡🤯😱 等
-- **符号与标志**（30 个）：✅❌⚠️🔥⭐🌟✨💫🎯🚀⚡💡🔔📌🔗🔒 等
-- **箭头与指示**（20 个）：➡️⬅️⬆️⬇️↗️↘️↙️↖️🔄🔃 等
-- **食物与饮料**（20 个）：🍕🍔🍟🍿🍩🍪🍰🎂🍭🍫☕🍺🍷 等
-- **自然与动物**（20 个）：🌈🌸🌺🌻🌲🌳🍀🐱🐶🐭🐹🦊🐻 等
-- **对象与工具**（20 个）：📁📂📄📊📈📉🔧🔨⚙️🖥️💻⌨️🖱️ 等
-- **活动与运动**（15 个）：⚽🏀🏈⚾🎮🎲🎯🎨🎭🎪 等
-- **预留空间**（81 个）：供用户自定义或未来扩展
+**Emoji 选择标准（768 个总容量）：**
+- **表情与情感**（100 个）：😀😊😂🤣😍🥰😘😎🤔😭🥺😤😡🤯😱 等
+- **符号与标志**（80 个）：✅❌⚠️🔥⭐🌟✨💫🎯🚀⚡💡🔔📌🔗🔒 等
+- **箭头与指示**（50 个）：➡️⬅️⬆️⬇️↗️↘️↙️↖️🔄🔃 等
+- **食物与饮料**（50 个）：🍕🍔🍟🍿🍩🍪🍰🎂🍭🍫☕🍺🍷 等
+- **自然与动物**（50 个）：🌈🌸🌺🌻🌲🌳🍀🐱🐶🐭🐹🦊🐻 等
+- **对象与工具**（50 个）：📁📂📄📊📈📉🔧🔨⚙️🖥️💻⌨️🖱️ 等
+- **活动与运动**（30 个）：⚽🏀🏈⚾🎮🎲🎯🎨🎭🎪 等
+- **预留空间**（358 个）：供用户自定义或未来扩展
 
 **替代方案及弊端：**
 
@@ -484,7 +499,7 @@ fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
 
 ### Decision 9: CJK 汉字静态渲染支持
 
-**选择：** 汉字渲染到 symbols.png 的 CJK 区域，运行时加载映射表，保持单纹理单 Pass 渲染
+**选择：** 汉字渲染到 symbols.png 的 CJK 区域（行 3072-4095），运行时加载映射表，保持单纹理单 Pass 渲染
 
 **核心思想：**
 - 汉字与 Sprite/TUI/Emoji 共用 symbols.png，保持单纹理架构
@@ -492,43 +507,16 @@ fn render_helper_emoji(emoji_idx: u16, ...) -> ... {
 - 运行时加载 JSON 映射表，将汉字字符映射到纹理坐标
 - 单 Pass 渲染，性能最优
 
-**纹理布局（2048×2048）：**
-```
-2048x2048 symbols.png 布局：
-┌─────────────────────────────────────────────────────────────────┐
-│                      上半部分（行 0-1023）                        │
-├─────────────────────┬───────────────────────────────────────────┤
-│ Sprite 区域          │ CJK 扩展区域                              │
-│ (0,0) - (1023,1023) │ (1024,0) - (2047,1023)                   │
-│ 128×128 grid        │ 64×64 = 4096 个汉字                       │
-│ 8×8 px each         │ 16×16 px each                            │
-├─────────────────────┴───────────────────────────────────────────┤
-│                      下半部分（行 1024-2047）                     │
-├─────────────────────────────────────────────────────────────────┤
-│ TUI 区域 (行 1024-1535)                                          │
-│ - 128 cols × 32 rows = 4096 chars (8×16 px each)               │
-│ - 索引范围: 0-4095                                               │
-├─────────────────────────────────────────────────────────────────┤
-│ Emoji 区域 (行 1536-2047)                                        │
-│ - 64 cols × 32 rows = 2048 emoji (16×16 px each)               │
-│ - 索引范围: 4096-6143                                            │
-└─────────────────────────────────────────────────────────────────┘
-
-区域详情：
-- Sprite:  左上 1024×1024, 128×128 格, 每格 8×8 px, 共 16384 个
-- CJK:     右上 1024×1024, 64×64 格, 每格 16×16 px, 共 4096 个
-- TUI:     左下 2048×512, 128×32 格, 每格 8×16 px, 共 4096 个
-- Emoji:   底部 2048×512, 64×32 格, 每格 16×16 px, 共 2048 个
-```
+**CJK 区域容量：** 4096x4096 纹理中 CJK 区域（行 3072-4095）可容纳 4,096 个汉字（128 列 × 32 行，每个 32×32 像素，线性索引 44288-48383），足够覆盖 GB2312 一级常用字（3,755 个）。
 
 **工具链设计：**
 
 ```bash
-# 将汉字渲染到 symbols.png 的 CJK 区域
+# 将汉字渲染到 symbols.png 的预留区域
 cargo pixel cjk <font.ttf> <chars.txt> <symbols.png> [--region x,y,w,h]
 
-# 示例：
-cargo pixel cjk assets/fonts/simhei.ttf assets/chinese_chars.txt assets/symbols.png --region 1024,0,1024,1024
+# 示例：使用 TUI 预留区域
+cargo pixel cjk assets/fonts/simhei.ttf assets/chinese_chars.txt assets/symbols.png
 
 # 输出：
 # assets/symbols.png      (原地修改，添加汉字)
@@ -547,13 +535,12 @@ cargo pixel cjk assets/fonts/simhei.ttf assets/chinese_chars.txt assets/symbols.
 ```json
 {
   "version": 1,
-  "char_size": [16, 16],
-  "region": { "x": 1024, "y": 0, "w": 1024, "h": 1024 },
+  "char_size": [32, 32],
   "chars": {
-    "你": { "x": 1024, "y": 0 },
-    "好": { "x": 1040, "y": 0 },
-    "世": { "x": 1056, "y": 0 },
-    "界": { "x": 1072, "y": 0 }
+    "你": { "x": 0, "y": 2560 },
+    "好": { "x": 32, "y": 2560 },
+    "世": { "x": 64, "y": 2560 },
+    "界": { "x": 96, "y": 2560 }
   }
 }
 ```
@@ -607,8 +594,8 @@ fn get_symbol_tex_coords(symbol: &str, cjk_map: &Option<CjkCharMap>) -> (f32, f3
     if let Some(ch) = symbol.chars().next() {
         if let Some(ref map) = cjk_map {
             if let Some(info) = map.get(ch) {
-                // 返回 CJK 区域的纹理坐标
-                return (info.tex_x as f32, info.tex_y as f32, 16.0, 16.0);
+                // 返回 CJK 区域的纹理坐标（32x32 像素）
+                return (info.tex_x as f32, info.tex_y as f32, 32.0, 32.0);
             }
         }
     }
@@ -626,9 +613,8 @@ fn render_frame() {
 
 **多分辨率支持：**
 ```
-symbols.png      : 2048×2048 (1x 基准)
-symbols@2x.png   : 4096×4096 (2x Retina)
-symbols@3x.png   : 6144×6144 (3x 高DPI)
+symbols.png      : 4096×4096 (基准)
+symbols@2x.png   : 8192×8192 (2x Retina)
 
 运行时根据 scale_factor 选择合适的纹理版本
 ```
@@ -638,7 +624,7 @@ symbols@3x.png   : 6144×6144 (3x 高DPI)
 2. **架构一致** - CJK 与 Sprite/TUI/Emoji 统一处理
 3. **清晰度保证** - 多分辨率纹理支持
 4. **按需使用** - 不需要 CJK 的项目无需加载映射表
-5. **容量充足** - 2048×2048 纹理，CJK 区域可容纳 4096 个汉字
+5. **容量充足** - 4096×4096 纹理，CJK 区域可容纳 6,144 个汉字
 6. **工具链简单** - `cargo pixel cjk` 直接修改 symbols.png
 
 **替代方案及弊端：**
@@ -665,7 +651,7 @@ symbols@3x.png   : 6144×6144 (3x 高DPI)
 2. **混合渲染性能：** 在大量 TUI 元素和游戏精灵混合时，单次 draw call 是否仍然高效？
    - **建议：** 在 `ui_demo` 中添加压力测试场景
 
-3. **多分辨率支持：** 不同 DPI 下，8x16 的 TUI 字符是否需要特殊处理？
+3. **多分辨率支持：** 不同 DPI 下，16x32 的 TUI 字符是否需要特殊处理？
    - **建议：** 复用现有的 `ratio_x/ratio_y` 缩放机制
 
 4. **TUI 模式配置：** TUI 模式总是启用，无需配置开关。

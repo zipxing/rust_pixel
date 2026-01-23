@@ -50,10 +50,10 @@ lazy_static! {
     };
 
     /// Emoji mapping table for pre-rendered Emoji in the unified texture
-    /// 
-    /// Maps common Emoji characters to texture indices in the Emoji region (1024-1279).
-    /// The Emoji region occupies rows 128-191 of the 1024x1024 unified texture,
-    /// with each Emoji being 16x16 pixels in RGBA color format.
+    ///
+    /// Maps common Emoji characters to texture indices in the Emoji region.
+    /// The Emoji region occupies rows 96-127, cols 80-127 of the 2048x2048 unified texture,
+    /// with each Emoji being 32x32 pixels in RGBA color format.
     /// 
     /// Total capacity: 256 Emoji positions
     /// - 175 common Emoji (mapped below)

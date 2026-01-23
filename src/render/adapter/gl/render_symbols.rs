@@ -232,43 +232,52 @@ impl GlRender for GlRenderSymbols {
 }
 
 impl GlRenderSymbols {
-    /// Load symbol texture with support for TUI (8x16) and Emoji (16x16)
+    /// Load symbol texture with support for TUI (16x32), Emoji (32x32), and CJK (32x32)
     ///
-    /// Maintains original row-major order for backward compatibility:
-    /// - Indices 0-12287: Rows 0-95, all 8x8 Sprites (original layout preserved)
-    /// - Indices 12288+: Rows 96-127, TUI (8x16) and Emoji (16x16) mixed
+    /// 4096x4096 texture layout (256x256 grid, 10 Sprite Rows):
+    /// - Rows 0-159 (indices 0-40959): 16x16 Sprites
+    /// - Rows 160-191, cols 0-159: 16x32 TUI characters (Block 160-169)
+    /// - Rows 160-191, cols 160-255: 32x32 Emoji (Block 170-175)
+    /// - Rows 192-255 (indices 44288-48383): 32x32 CJK characters
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
-        
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 8.0
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 8.0
-        
-        let th = (texh as f32 / sym_height) as usize;  // Grid rows (e.g., 128)
-        let tw = (texw as f32 / sym_width) as usize;   // Grid cols (e.g., 128)
-        
-        // Layout constants (based on 1024x1024 texture with 128x128 grid)
-        const SPRITE_ROWS: usize = 96;  // Rows 0-95 for sprites
-        const TUI_COLS: usize = 80;     // Cols 0-79 for TUI in rows 96+
-        
+
+        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");   // 16.0
+        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init"); // 16.0
+
+        let th = (texh as f32 / sym_height) as usize;  // Grid rows (e.g., 256 for 4096/16)
+        let tw = (texw as f32 / sym_width) as usize;   // Grid cols (e.g., 256 for 4096/16)
+
+        // Layout constants (based on 4096x4096 texture with 256x256 grid, 10 Sprite Rows)
+        const SPRITE_ROWS: usize = 160;     // Rows 0-159 for sprites (2560px / 16px)
+        const TUI_EMOJI_END_ROW: usize = 192; // Rows 160-191 for TUI+Emoji (512px / 16px = 32 rows)
+        const TUI_COL_BOUNDARY: usize = 160;  // Columns 0-159 are TUI, 160-255 are Emoji
+
         // Traverse in row-major order (same as original code)
         for i in 0..th {
             for j in 0..tw {
                 let pixel_x = j as f32 * sym_width;
                 let pixel_y = i as f32 * sym_height;
-                
-                // Determine symbol size based on row position
+
+                // Determine symbol size based on row and column position
                 let (width, height) = if i < SPRITE_ROWS {
-                    // Rows 0-95: Standard 8x8 sprites (indices 0-12287)
+                    // Rows 0-159: Standard 16x16 sprites
                     (sym_width, sym_height)
-                } else if j < TUI_COLS {
-                    // Rows 96-127, Cols 0-79: TUI 8x16 characters
-                    (sym_width, sym_height * 2.0)
+                } else if i < TUI_EMOJI_END_ROW {
+                    // Rows 160-191: TUI+Emoji region
+                    if j < TUI_COL_BOUNDARY {
+                        // Columns 0-159: TUI 16x32 characters
+                        (sym_width, sym_height * 2.0)
+                    } else {
+                        // Columns 160-255: Emoji 32x32
+                        (sym_width * 2.0, sym_height * 2.0)
+                    }
                 } else {
-                    // Rows 96-127, Cols 80-127: Emoji 16x16
+                    // Rows 192-255: CJK 32x32 characters
                     (sym_width * 2.0, sym_height * 2.0)
                 };
-                
+
                 let symbol = self.make_symbols_frame_custom(
                     &mut sprite_sheet,
                     pixel_x, pixel_y,
@@ -555,7 +564,7 @@ impl GlRenderSymbols {
     
     /// Create a symbol frame with custom dimensions
     ///
-    /// Used for TUI (8x16), Emoji (16x16), and Sprite (8x8) regions.
+    /// Used for TUI (16x32), Emoji (32x32), and Sprite (16x16) regions.
     fn make_symbols_frame_custom(&mut self, sheet: &mut GlTexture, x: f32, y: f32, width: f32, height: f32) -> GlCell {
         let origin_x = 1.0;
         let origin_y = 1.0;

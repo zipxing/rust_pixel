@@ -128,10 +128,11 @@ pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 /// # Returns
 /// Width of a single symbol
 ///
-/// Calculates the width of a single 8x8 sprite cell based on texture dimensions.
-/// The texture is organized as a 128x128 grid (128 columns × 128 rows).
+/// Calculates the width of a single 16x16 sprite cell based on texture dimensions.
+/// The texture is organized as a 256x256 grid (256 columns × 256 rows).
+/// For a 4096x4096 texture: 4096 / 256 = 16 pixels per symbol.
 pub fn init_sym_width(width: u32) -> f32 {
-    const TEXTURE_GRID_SIZE: f32 = 128.0;
+    const TEXTURE_GRID_SIZE: f32 = 256.0;
     width as f32 / TEXTURE_GRID_SIZE
 }
 
@@ -143,10 +144,11 @@ pub fn init_sym_width(width: u32) -> f32 {
 /// # Returns
 /// Height of a single symbol
 ///
-/// Calculates the height of a single 8x8 sprite cell based on texture dimensions.
-/// The texture is organized as a 128x128 grid (128 columns × 128 rows).
+/// Calculates the height of a single 16x16 sprite cell based on texture dimensions.
+/// The texture is organized as a 256x256 grid (256 columns × 256 rows).
+/// For a 4096x4096 texture: 4096 / 256 = 16 pixels per symbol.
 pub fn init_sym_height(height: u32) -> f32 {
-    const TEXTURE_GRID_SIZE: f32 = 128.0;
+    const TEXTURE_GRID_SIZE: f32 = 256.0;
     height as f32 / TEXTURE_GRID_SIZE
 }
 
@@ -721,13 +723,17 @@ impl Graph {
 /// - `ccp`: Center point for rotation
 /// - `modifier`: Style modifier flags (see Modifier enum in style.rs)
 ///
-/// # Unified Texture Layout (1024x1024)
-/// - **TUI Region** (rows 0-127): 128 cols × 8 rows = 1024 chars (8x16 pixels each)
-///   - Index range: 0-1023 (linear)
-/// - **Emoji Region** (rows 128-191): 64 cols × 4 rows = 256 emojis (16x16 pixels each)
-///   - Index range: 1024-1279 (linear)
-/// - **Sprite Region** (rows 192-1023): 128 cols × 104 rows = 13312 chars (8x8 pixels each)
-///   - Index range: 1280-14591 (linear)
+/// # Unified Texture Layout (4096x4096, 10 Sprite Rows)
+/// - **Sprite Region** (rows 0-159): 256 cols × 160 rows = 40960 sprites (16x16 pixels each)
+///   - Index range: 0-40959 (linear)
+/// - **TUI Region** (rows 160-191): 10 blocks (256×512px each), 2560 chars (16x32 pixels each)
+///   - Block 160-169, 16×16 chars/block
+///   - Index range: 40960-43519 (linear)
+/// - **Emoji Region** (rows 160-191, x=2560): 6 blocks (256×512px each), 768 emojis (32x32 pixels each)
+///   - Block 170-175, 8×16 chars/block
+///   - Index range: 43520-44287 (linear)
+/// - **CJK Region** (rows 192-255): 128 cols × 32 rows = 4096 chars (32x32 pixels each)
+///   - Index range: 44288-48383 (linear)
 pub fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
     fc: &(u8, u8, u8, u8),
@@ -762,22 +768,22 @@ pub fn push_render_buffer(
 
     // Calculate final texture symbol index
     //
-    // The texture is traversed in row-major order (128 cols × 128 rows):
-    // - Rows 0-95 (indices 0-12287): 8×8 Sprites (block-based layout)
-    // - Rows 96-127, Cols 0-79 (indices 12288-16383): 8×16 TUI characters
-    // - Rows 96-127, Cols 80-127 (indices 16384-17919): 16×16 Emoji
+    // The texture is traversed in row-major order (256 cols × 256 rows):
+    // - Rows 0-159 (indices 0-40959): 16x16 Sprites (block-based layout)
+    // - Rows 160-191 (indices 40960-43519): 16x32 TUI characters (Block 160-169)
+    // - Rows 160-191, x=2560+ (indices 43520-44287): 32x32 Emoji (Block 170-175)
+    // - Rows 192-255 (indices 44288-48383): 32x32 CJK characters
     //
-    // For Sprite region (block-based layout for backward compatibility):
-    if texidx >= 53 {
-        // Emoji blocks (53-55)
-        // Block 53: Cols 80-95
-        // Block 54: Cols 96-111
-        // Block 55: Cols 112-127
-        // Base row is 96
-        let col_offset = 80 + (texidx - 53) * 16;
-        let row_offset = 96;
+    // 10 Sprite Rows layout
+    if texidx >= 170 {
+        // Emoji blocks (170-175)
+        // 6 blocks, each 256×512px, starts at x=2560 (column 160 in 16px grid)
+        // Each block: 8×16 chars = 128 emoji (32×32px each)
+        let block_num = texidx - 170;
+        let col_offset = 160 + block_num * 16;  // Each block is 256px wide = 16 cols in 16px grid
+        let row_offset = 160;  // Base row is 160 (y=2560)
 
-        // Each Emoji is 16x16px (2x2 grid units of 8x8px)
+        // Each Emoji is 32x32px (2x2 grid units of 16x16px)
         // symidx is 0-127 (128 chars per block)
         // In block: 8 cols * 16 rows
         let r = symidx / 8;
@@ -786,17 +792,16 @@ pub fn push_render_buffer(
         let grid_col = col_offset + c * 2;
         let grid_row = row_offset + r * 2;
 
-        wc.texsym = grid_row * 128 + grid_col;
-    } else if texidx >= 48 {
-        // TUI blocks (48-52)
-        // Block 48: Cols 0-15
-        // ...
-        // Block 52: Cols 64-79
-        // Base row is 96
-        let col_offset = (texidx - 48) * 16;
-        let row_offset = 96;
+        wc.texsym = grid_row * 256 + grid_col;
+    } else if texidx >= 160 {
+        // TUI blocks (160-169)
+        // 10 blocks, each 256×512px
+        // Each block: 16×16 chars = 256 TUI chars (16×32px each)
+        let block_num = texidx - 160;
+        let col_offset = block_num * 16;  // Each block is 256px wide = 16 cols in 16px grid
+        let row_offset = 160;  // Base row is 160 (y=2560)
 
-        // Each TUI char is 8x16px (1x2 grid units)
+        // Each TUI char is 16x32px (1x2 grid units)
         // symidx is 0-255 (256 chars per block)
         // In block: 16 cols * 16 rows
         let r = symidx / 16;
@@ -805,13 +810,13 @@ pub fn push_render_buffer(
         let grid_col = col_offset + c;
         let grid_row = row_offset + r * 2;
 
-        wc.texsym = grid_row * 128 + grid_col;
+        wc.texsym = grid_row * 256 + grid_col;
     } else {
-        // Sprite blocks (0-47)
-        // 16x16 chars/block, 8x8px each (1x1 grid unit)
-        let x = symidx as u32 % 16u32 + (texidx as u32 % 8u32) * 16u32;
-        let y = symidx as u32 / 16u32 + (texidx as u32 / 8u32) * 16u32;
-        wc.texsym = (y * 128u32 + x) as usize;
+        // Sprite blocks (0-159)
+        // 16x16 chars/block, 16x16px each (1x1 grid unit)
+        let x = symidx as u32 % 16u32 + (texidx as u32 % 16u32) * 16u32;
+        let y = symidx as u32 / 16u32 + (texidx as u32 / 16u32) * 16u32;
+        wc.texsym = (y * 256u32 + x) as usize;
     }
     // Derive the instance anchor from the destination rectangle produced by helper functions.
     //
@@ -1126,12 +1131,12 @@ pub fn render_main_buffer<F>(
         );
 
         // Handle Emoji rendering in TUI mode
-        // Emoji (Block >= 53) are 16x16 source (32x32 in 2048 texture),
-        // while TUI chars are 8x16 source (16x32 in 2048 texture).
+        // Emoji (Block >= 170) are 32x32 source in 4096 texture,
+        // while TUI chars are 16x32 source in 4096 texture.
         // render_helper calculated s2 based on TUI height (32px) and width (16px).
         // For Emoji, we need double width (32px) to maintain 1:1 aspect ratio.
         // We also skip the next cell rendering to avoid overlap/artifacts.
-        if use_tui && texidx >= 53 {
+        if use_tui && texidx >= 170 {
             s2.w *= 2;
             // Only skip next if we are not at the end of a row
             if (i + 1) % width as usize != 0 {
@@ -1141,7 +1146,7 @@ pub fn render_main_buffer<F>(
 
         // For Emoji, use white color (no color modulation) to preserve original colors
         // For TUI/Sprite characters, use the cell's foreground color
-        let fc = if use_tui && texidx >= 53 {
+        let fc = if use_tui && texidx >= 170 {
             (255, 255, 255, 255)  // White - no color modulation for Emoji
         } else {
             sh.2.get_rgba()
