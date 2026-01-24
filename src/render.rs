@@ -25,6 +25,7 @@ pub mod image;
 pub mod panel;
 pub mod sprite;
 pub mod style;
+pub mod symbol_map;
 pub mod symbols;
 
 // re-export
@@ -40,3 +41,4 @@ pub use graph::{
 pub use panel::Panel;
 pub use sprite::Sprites;
 pub use style::{Color, Style};
+pub use symbol_map::{SymbolIndex, SymbolMap, SymbolMapStats, SymbolRegion};
