@@ -21,6 +21,11 @@
 use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use crate::render::graph::UnifiedTransform;
 
+/// Background fill symbol index in PETSCII texture (solid white block at row 10, col 0)
+/// In 4096x4096 texture: 256 symbols per row, row 10 starts at index 256*10 = 2560
+/// Used for cell background color, underline, and strikethrough effects
+const BG_FILL_SYMBOL: usize = 2560;
+
 /// Symbol instance data for WGPU (matches OpenGL layout exactly)
 ///
 /// This is the per-instance attribute payload consumed by the instanced
@@ -327,16 +332,16 @@ impl WgpuSymbolRenderer {
                     -r.cy + r.h as f32,
                 );
                 
-                // Background symbol 1280 has its own frame size, scale to match cell size
-                // 背景符号1280有自己的frame尺寸，需要缩放以匹配cell尺寸
-                let bg_frame = &self.symbols[1280];
+                // Background symbol (BG_FILL_SYMBOL, solid block in PETSCII) has its own frame size, scale to match cell size
+                // 背景符号160 (PETSCII中的实心方块) 有自己的frame尺寸，需要缩放以匹配cell尺寸
+                let bg_frame = &self.symbols[BG_FILL_SYMBOL];
                 let bg_frame_width = bg_frame.width / ratio_x;
                 let bg_frame_height = bg_frame.height / ratio_y;
                 let bg_scale_x = cell_width / bg_frame_width / ratio_x;
                 let bg_scale_y = cell_height / bg_frame_height / ratio_y;
                 bg_transform.scale(bg_scale_x, bg_scale_y);
-                
-                self.draw_symbol_instance(1280, &bg_transform, [b.0, b.1, b.2, b.3]);
+
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &bg_transform, [b.0, b.1, b.2, b.3]);
             }
             
             // Foreground rendering
@@ -377,7 +382,7 @@ impl WgpuSymbolRenderer {
             
             // Draw UNDERLINED effect: a line at the bottom of the cell
             // UNDERLINED 效果：在单元格底部绘制线条
-            // Uses symbol 1280 (background fill) scaled to line thickness
+            // Uses BG_FILL_SYMBOL (solid block in PETSCII) scaled to line thickness
             if modifier & MOD_UNDERLINED != 0 {
                 let mut line_transform = self.transform_stack;
                 // Position at bottom of cell (90% down)
@@ -387,16 +392,16 @@ impl WgpuSymbolRenderer {
                     line_transform.rotate(r.angle);
                 }
                 line_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-                
+
                 // Scale to full width, thin height (10% of cell height)
-                let line_frame = &self.symbols[1280];
+                let line_frame = &self.symbols[BG_FILL_SYMBOL];
                 let line_scale_x = cell_width / (line_frame.width / ratio_x) / ratio_x;
                 let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
                 line_transform.scale(line_scale_x, line_scale_y);
-                
-                self.draw_symbol_instance(1280, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
+
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
             }
-            
+
             // Draw CROSSED_OUT effect: a line through the middle of the cell
             // CROSSED_OUT 效果：在单元格中间绘制删除线
             if modifier & MOD_CROSSED_OUT != 0 {
@@ -408,14 +413,14 @@ impl WgpuSymbolRenderer {
                     line_transform.rotate(r.angle);
                 }
                 line_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-                
+
                 // Scale to full width, thin height (8% of cell height)
-                let line_frame = &self.symbols[1280];
+                let line_frame = &self.symbols[BG_FILL_SYMBOL];
                 let line_scale_x = cell_width / (line_frame.width / ratio_x) / ratio_x;
                 let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
                 line_transform.scale(line_scale_x, line_scale_y);
-                
-                self.draw_symbol_instance(1280, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
+
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
             }
         }
     }

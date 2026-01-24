@@ -83,27 +83,26 @@ use std::sync::OnceLock;
 
 /// Symbol texture file path
 ///
-/// The symbol texture contains 8x8 blocks, each block containing 16x16 symbols,
-/// totaling 128×128 symbols. This texture serves as the character atlas for
-/// rendering text and symbols.
+/// The symbol texture is 4096×4096 pixels, organized as a 256×256 grid
+/// (16 pixels per cell). Contains four regions:
 ///
-/// Layout:
+/// Layout (4096×4096, 10 Sprite Rows):
 /// ```text
-/// ┌─────────────────────────────────────────────────────────────┐
-/// │                   Symbols Texture Layout                    │
-/// │                                                             │
-/// │  ┌─────────┬─────────┬─────────┬─────────┬─────────┐        │
-/// │  │Block 0,0│Block 1,0│Block 2,0│Block 3,0│Block 4,0│ ...    │
-/// │  │16x16    │16x16    │16x16    │16x16    │16x16    │        │
-/// │  │Symbols  │Symbols  │Symbols  │Symbols  │Symbols  │        │
-/// │  ├─────────┼─────────┼─────────┼─────────┼─────────┤        │
-/// │  │Block 0,1│Block 1,1│Block 2,1│Block 3,1│Block 4,1│ ...    │
-/// │  │16x16    │16x16    │16x16    │16x16    │16x16    │        │
-/// │  │Symbols  │Symbols  │Symbols  │Symbols  │Symbols  │        │
-/// │  └─────────┴─────────┴─────────┴─────────┴─────────┘        │
-/// │                           ...                               │
-/// └─────────────────────────────────────────────────────────────┘
+/// ┌────────────────────────────────────────────────────┐
+/// │ Sprite Region (rows 0-159): 40,960 sprites 16×16  │ 2560px
+/// ├────────────────────────────────────────────────────┤
+/// │ TUI Region (rows 160-191, cols 0-159): 2,560 TUI  │
+/// │ Emoji Region (rows 160-191, cols 160-255): 768    │ 512px
+/// ├────────────────────────────────────────────────────┤
+/// │ CJK Region (rows 192-255): 4,096 chars 32×32      │ 1024px
+/// └────────────────────────────────────────────────────┘
 /// ```
+///
+/// Block assignments:
+/// - Sprite: Block 0-159 (16×16 chars/block, 16×16px each)
+/// - TUI: Block 160-169 (16×16 chars/block, 16×32px each)
+/// - Emoji: Block 170-175 (8×16 chars/block, 32×32px each)
+/// - CJK: Grid-based (128×32 chars, 32×32px each)
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
@@ -1098,19 +1097,19 @@ pub fn render_main_buffer<F>(
         let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
         let modifier = cell_info.4.bits();  // Convert Modifier to u16
 
-        // If we are in TUI mode (use_tui = true) and the texture is set to 0 (default),
-        // redirect it to the TUI block (Block 48).
-        // Texture 0 is normally the first block of Sprites.
-        // Texture 48 is the first block of TUI characters (which includes ASCII).
-        if use_tui && sh.1 == 0 {
+        // If we are in TUI mode (use_tui = true) and the texture is in Sprite region (< 160),
+        // redirect it to the TUI block (Block 160+).
+        // Textures 0-159 are Sprite blocks.
+        // Texture 160-169 is TUI, 170-175 is Emoji (already in correct region).
+        if use_tui && sh.1 < 160 {
             // Use TUI specific mapping
             // Because TUI texture layout is different from standard ASCII or Sprite layout
             if let Some((block, idx)) = tui_symidx(&cell.symbol) {
                 sh.1 = block;
                 sh.0 = idx;
             } else {
-                // Fallback to Block 48, Index 0 (Space) if not found
-                sh.1 = 48;
+                // Fallback to Block 160, Index 0 (Space) if not found
+                sh.1 = 160;
                 sh.0 = 0;
             }
             // if cell.is_blank() {

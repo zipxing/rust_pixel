@@ -224,26 +224,22 @@ pub use crate::render::graph::{
 
 /// Path to the symbols texture file
 ///
-/// The symbols texture contains 8x8 blocks where each block contains 16x16 symbols,
-/// totaling 128 × 128 symbols. This texture serves as a character atlas for rendering
-/// text and symbols in graphics mode.
+/// The symbols texture is 4096×4096 pixels (256×256 grid, 16px per cell).
+/// Contains four regions for Sprite, TUI, Emoji, and CJK characters.
 ///
-/// Layout:
+/// Layout (10 Sprite Rows):
 /// ```text
-/// ┌────────────────────────────────────────────────────────────┐
-/// │                   Symbols Texture (128×128)                │
-/// │  ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐         │
-/// │  │Block│Block│Block│Block│Block│Block│Block│Block│         │
-/// │  │ 0,0 │ 1,0 │ 2,0 │ 3,0 │ 4,0 │ 5,0 │ 6,0 │ 7,0 │         │
-/// │  │16×16│16×16│16×16│16×16│16×16│16×16│16×16│16×16│         │
-/// │  ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤         │
-/// │  │Block│Block│Block│Block│Block│Block│Block│Block│         │
-/// │  │ 0,1 │ 1,1 │ 2,1 │ 3,1 │ 4,1 │ 5,1 │ 6,1 │ 7,1 │         │
-/// │  │16×16│16×16│16×16│16×16│16×16│16×16│16×16│16×16│         │
-/// │  ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤         │
-/// │  │  ⋮  │  ⋮   │  ⋮  │  ⋮  │  ⋮   │  ⋮  │  ⋮  │  ⋮   │         │
-/// │  └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘         │
-/// └────────────────────────────────────────────────────────────┘
+/// ┌────────────────────────────────────────────────────┐
+/// │ Sprite Region (rows 0-159): 40,960 sprites 16×16  │ 2560px
+/// │ - Block 0-159: 16×16 chars/block                  │
+/// ├────────────────────────────────────────────────────┤
+/// │ TUI (rows 160-191, cols 0-159): 2,560 chars 16×32 │
+/// │ - Block 160-169                                   │ 512px
+/// │ Emoji (rows 160-191, cols 160-255): 768 32×32     │
+/// │ - Block 170-175                                   │
+/// ├────────────────────────────────────────────────────┤
+/// │ CJK Region (rows 192-255): 4,096 chars 32×32      │ 1024px
+/// └────────────────────────────────────────────────────┘
 /// ```
 /// Adapter base data structure containing shared information and OpenGL resources
 ///
