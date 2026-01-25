@@ -303,6 +303,248 @@ impl SymbolMapStats {
     }
 }
 
+// ============================================================================
+// Texture Layout Constants and Utilities
+// ============================================================================
+
+/// Texture layout constants for 4096x4096 symbol texture
+///
+/// Linear symbol array layout:
+/// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
+/// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
+/// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
+/// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
+pub mod layout {
+    // Region counts
+    pub const SPRITE_BLOCKS: u32 = 160;
+    pub const SPRITE_SYMBOLS_PER_BLOCK: u32 = 256;
+    pub const SPRITE_TOTAL: u32 = SPRITE_BLOCKS * SPRITE_SYMBOLS_PER_BLOCK; // 40960
+
+    pub const TUI_BLOCKS: u32 = 10;
+    pub const TUI_SYMBOLS_PER_BLOCK: u32 = 256;
+    pub const TUI_TOTAL: u32 = TUI_BLOCKS * TUI_SYMBOLS_PER_BLOCK; // 2560
+
+    pub const EMOJI_BLOCKS: u32 = 6;
+    pub const EMOJI_SYMBOLS_PER_BLOCK: u32 = 128;
+    pub const EMOJI_TOTAL: u32 = EMOJI_BLOCKS * EMOJI_SYMBOLS_PER_BLOCK; // 768
+
+    pub const CJK_COLS: u32 = 128;
+    pub const CJK_ROWS: u32 = 32;
+    pub const CJK_TOTAL: u32 = CJK_COLS * CJK_ROWS; // 4096
+
+    // Linear index bases
+    pub const SPRITE_BASE: usize = 0;
+    pub const TUI_BASE: usize = SPRITE_TOTAL as usize; // 40960
+    pub const EMOJI_BASE: usize = TUI_BASE + TUI_TOTAL as usize; // 43520
+    pub const CJK_BASE: usize = EMOJI_BASE + EMOJI_TOTAL as usize; // 44288
+
+    // Block index boundaries
+    pub const SPRITE_BLOCK_START: usize = 0;
+    pub const SPRITE_BLOCK_END: usize = 159;
+    pub const TUI_BLOCK_START: usize = 160;
+    pub const TUI_BLOCK_END: usize = 169;
+    pub const EMOJI_BLOCK_START: usize = 170;
+    pub const EMOJI_BLOCK_END: usize = 175;
+
+    // Pixel positions in texture
+    pub const SPRITE_Y_START: u32 = 0;
+    pub const TUI_Y_START: u32 = 2560;
+    pub const EMOJI_X_START: u32 = 2560;
+    pub const CJK_Y_START: u32 = 3072;
+
+    // Symbol sizes
+    pub const SPRITE_WIDTH: u32 = 16;
+    pub const SPRITE_HEIGHT: u32 = 16;
+    pub const TUI_WIDTH: u32 = 16;
+    pub const TUI_HEIGHT: u32 = 32;
+    pub const EMOJI_WIDTH: u32 = 32;
+    pub const EMOJI_HEIGHT: u32 = 32;
+    pub const CJK_WIDTH: u32 = 32;
+    pub const CJK_HEIGHT: u32 = 32;
+
+    // Background fill symbol (Block 0, symbol 160 = row 10, col 0)
+    pub const BG_FILL_SYMBOL: usize = 160;
+}
+
+/// Calculate linear texture symbol index from block and symbol index
+///
+/// This function converts (texidx, symidx) from symbol_map lookups
+/// into a linear index for the symbols array in renderers.
+///
+/// # Arguments
+/// * `texidx` - Block/texture index (0-159 for Sprite, 160-169 for TUI, 170-175 for Emoji)
+/// * `symidx` - Symbol index within the block
+///
+/// # Returns
+/// Linear index into the symbols array
+///
+/// # Example
+/// ```
+/// use rust_pixel::render::symbol_map::calc_linear_index;
+///
+/// // Sprite block 0, symbol 0 -> index 0
+/// assert_eq!(calc_linear_index(0, 0), 0);
+///
+/// // TUI block 160, symbol 0 -> index 40960
+/// assert_eq!(calc_linear_index(160, 0), 40960);
+///
+/// // Emoji block 170, symbol 0 -> index 43520
+/// assert_eq!(calc_linear_index(170, 0), 43520);
+/// ```
+#[inline]
+pub fn calc_linear_index(texidx: usize, symidx: usize) -> usize {
+    if texidx >= layout::EMOJI_BLOCK_START {
+        // Emoji blocks (170-175): base 43520 + block offset + symbol index
+        layout::EMOJI_BASE + (texidx - layout::EMOJI_BLOCK_START) * layout::EMOJI_SYMBOLS_PER_BLOCK as usize + symidx
+    } else if texidx >= layout::TUI_BLOCK_START {
+        // TUI blocks (160-169): base 40960 + block offset + symbol index
+        layout::TUI_BASE + (texidx - layout::TUI_BLOCK_START) * layout::TUI_SYMBOLS_PER_BLOCK as usize + symidx
+    } else {
+        // Sprite blocks (0-159): direct linear index
+        texidx * layout::SPRITE_SYMBOLS_PER_BLOCK as usize + symidx
+    }
+}
+
+/// Symbol frame descriptor for texture loading
+///
+/// Describes the position and size of a symbol in the texture atlas.
+/// Used by renderers (GL/WGPU) when loading symbol textures.
+#[derive(Debug, Clone, Copy)]
+pub struct SymbolFrame {
+    /// X position in texture (pixels)
+    pub pixel_x: u32,
+    /// Y position in texture (pixels)
+    pub pixel_y: u32,
+    /// Symbol width (pixels)
+    pub width: u32,
+    /// Symbol height (pixels)
+    pub height: u32,
+}
+
+/// Iterator over all symbol frames for texture loading
+///
+/// Yields SymbolFrame for each symbol in order:
+/// 1. Sprite region (40960 frames)
+/// 2. TUI region (2560 frames)
+/// 3. Emoji region (768 frames)
+/// 4. CJK region (4096 frames)
+///
+/// Total: 48384 frames
+pub struct SymbolFrameIterator {
+    current: usize,
+    total: usize,
+}
+
+impl SymbolFrameIterator {
+    pub fn new() -> Self {
+        let total = layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
+        Self {
+            current: 0,
+            total: total as usize,
+        }
+    }
+}
+
+impl Default for SymbolFrameIterator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Iterator for SymbolFrameIterator {
+    type Item = SymbolFrame;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current >= self.total {
+            return None;
+        }
+
+        let frame = if self.current < layout::TUI_BASE {
+            // Sprite region: 160 blocks × 256 symbols, 16×16px each
+            let idx = self.current;
+            let block = idx / layout::SPRITE_SYMBOLS_PER_BLOCK as usize;
+            let sym = idx % layout::SPRITE_SYMBOLS_PER_BLOCK as usize;
+
+            let block_col = block % 16;
+            let block_row = block / 16;
+            let sym_col = sym % 16;
+            let sym_row = sym / 16;
+
+            SymbolFrame {
+                pixel_x: ((block_col * 16 + sym_col) * layout::SPRITE_WIDTH as usize) as u32,
+                pixel_y: ((block_row * 16 + sym_row) * layout::SPRITE_HEIGHT as usize) as u32,
+                width: layout::SPRITE_WIDTH,
+                height: layout::SPRITE_HEIGHT,
+            }
+        } else if self.current < layout::EMOJI_BASE {
+            // TUI region: 10 blocks × 256 symbols, 16×32px each
+            let idx = self.current - layout::TUI_BASE;
+            let block = idx / layout::TUI_SYMBOLS_PER_BLOCK as usize;
+            let sym = idx % layout::TUI_SYMBOLS_PER_BLOCK as usize;
+
+            let sym_col = sym % 16;
+            let sym_row = sym / 16;
+
+            SymbolFrame {
+                pixel_x: ((block * 16 + sym_col) * layout::TUI_WIDTH as usize) as u32,
+                pixel_y: layout::TUI_Y_START + (sym_row as u32 * layout::TUI_HEIGHT),
+                width: layout::TUI_WIDTH,
+                height: layout::TUI_HEIGHT,
+            }
+        } else if self.current < layout::CJK_BASE {
+            // Emoji region: 6 blocks × 128 symbols, 32×32px each
+            let idx = self.current - layout::EMOJI_BASE;
+            let block = idx / layout::EMOJI_SYMBOLS_PER_BLOCK as usize;
+            let sym = idx % layout::EMOJI_SYMBOLS_PER_BLOCK as usize;
+
+            let sym_col = sym % 8;
+            let sym_row = sym / 8;
+
+            SymbolFrame {
+                pixel_x: layout::EMOJI_X_START + ((block * 8 + sym_col) as u32 * layout::EMOJI_WIDTH),
+                pixel_y: layout::TUI_Y_START + (sym_row as u32 * layout::EMOJI_HEIGHT),
+                width: layout::EMOJI_WIDTH,
+                height: layout::EMOJI_HEIGHT,
+            }
+        } else {
+            // CJK region: 128 cols × 32 rows, 32×32px each
+            let idx = self.current - layout::CJK_BASE;
+            let col = idx % layout::CJK_COLS as usize;
+            let row = idx / layout::CJK_COLS as usize;
+
+            SymbolFrame {
+                pixel_x: col as u32 * layout::CJK_WIDTH,
+                pixel_y: layout::CJK_Y_START + row as u32 * layout::CJK_HEIGHT,
+                width: layout::CJK_WIDTH,
+                height: layout::CJK_HEIGHT,
+            }
+        };
+
+        self.current += 1;
+        Some(frame)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.total - self.current;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for SymbolFrameIterator {}
+
+/// Create an iterator over all symbol frames
+///
+/// # Example
+/// ```ignore
+/// for frame in iter_symbol_frames() {
+///     let symbol = make_frame(frame.pixel_x, frame.pixel_y, frame.width, frame.height);
+///     symbols.push(symbol);
+/// }
+/// ```
+pub fn iter_symbol_frames() -> SymbolFrameIterator {
+    SymbolFrameIterator::new()
+}
+
 // JSON configuration structures
 
 #[derive(Deserialize)]
@@ -405,5 +647,74 @@ mod tests {
         } else {
             panic!("▇ should be in Sprite region via extras, sprite count: {}", map.stats().sprite_count);
         }
+    }
+
+    #[test]
+    fn test_calc_linear_index() {
+        // Sprite region
+        assert_eq!(calc_linear_index(0, 0), 0);
+        assert_eq!(calc_linear_index(0, 255), 255);
+        assert_eq!(calc_linear_index(1, 0), 256);
+        assert_eq!(calc_linear_index(159, 255), 40959);
+
+        // TUI region
+        assert_eq!(calc_linear_index(160, 0), 40960);
+        assert_eq!(calc_linear_index(160, 255), 41215);
+        assert_eq!(calc_linear_index(169, 255), 43519);
+
+        // Emoji region
+        assert_eq!(calc_linear_index(170, 0), 43520);
+        assert_eq!(calc_linear_index(170, 127), 43647);
+        assert_eq!(calc_linear_index(175, 127), 44287);
+    }
+
+    #[test]
+    fn test_symbol_frame_iterator() {
+        let frames: Vec<_> = iter_symbol_frames().collect();
+
+        // Total count should be 48384
+        let expected_total = layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
+        assert_eq!(frames.len(), expected_total as usize);
+
+        // First frame should be Sprite at (0, 0) with size 16x16
+        assert_eq!(frames[0].pixel_x, 0);
+        assert_eq!(frames[0].pixel_y, 0);
+        assert_eq!(frames[0].width, 16);
+        assert_eq!(frames[0].height, 16);
+
+        // First TUI frame at index 40960
+        let tui_first = &frames[layout::TUI_BASE];
+        assert_eq!(tui_first.pixel_x, 0);
+        assert_eq!(tui_first.pixel_y, 2560);
+        assert_eq!(tui_first.width, 16);
+        assert_eq!(tui_first.height, 32);
+
+        // First Emoji frame at index 43520
+        let emoji_first = &frames[layout::EMOJI_BASE];
+        assert_eq!(emoji_first.pixel_x, 2560);
+        assert_eq!(emoji_first.pixel_y, 2560);
+        assert_eq!(emoji_first.width, 32);
+        assert_eq!(emoji_first.height, 32);
+
+        // First CJK frame at index 44288
+        let cjk_first = &frames[layout::CJK_BASE];
+        assert_eq!(cjk_first.pixel_x, 0);
+        assert_eq!(cjk_first.pixel_y, 3072);
+        assert_eq!(cjk_first.width, 32);
+        assert_eq!(cjk_first.height, 32);
+    }
+
+    #[test]
+    fn test_layout_constants() {
+        // Verify layout constants
+        assert_eq!(layout::SPRITE_TOTAL, 40960);
+        assert_eq!(layout::TUI_TOTAL, 2560);
+        assert_eq!(layout::EMOJI_TOTAL, 768);
+        assert_eq!(layout::CJK_TOTAL, 4096);
+
+        assert_eq!(layout::SPRITE_BASE, 0);
+        assert_eq!(layout::TUI_BASE, 40960);
+        assert_eq!(layout::EMOJI_BASE, 43520);
+        assert_eq!(layout::CJK_BASE, 44288);
     }
 }

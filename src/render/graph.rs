@@ -74,7 +74,7 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, AdapterBase},
+    render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, symbol_map::calc_linear_index, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -765,25 +765,8 @@ pub fn push_render_buffer(
         wc.bcolor = None;
     }
 
-    // Calculate final texture symbol index using linear region-based indexing
-    //
-    // Linear symbol array layout:
-    // - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols)
-    // - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols)
-    // - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols)
-    // - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols)
-    //
-    // Simple linear calculation for each region:
-    wc.texsym = if texidx >= 170 {
-        // Emoji blocks (170-175): base 43520 + block offset + symbol index
-        43520 + (texidx - 170) * 128 + symidx
-    } else if texidx >= 160 {
-        // TUI blocks (160-169): base 40960 + block offset + symbol index
-        40960 + (texidx - 160) * 256 + symidx
-    } else {
-        // Sprite blocks (0-159): direct linear index
-        texidx * 256 + symidx
-    };
+    // Calculate linear symbol index using centralized function from symbol_map
+    wc.texsym = calc_linear_index(texidx, symidx);
     // Derive the instance anchor from the destination rectangle produced by helper functions.
     //
     // The backend transform chain applies additional translation and ratio-compensation.

@@ -23,20 +23,12 @@ use crate::render::adapter::gl::{
 };
 use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use crate::render::adapter::RenderCell;
+use crate::render::symbol_map::{iter_symbol_frames, layout};
 use glow::HasContext;
 use log::info;
 
-/// Background fill symbol index (solid white block)
-///
-/// Linear indexing layout:
-/// - Sprite: [0, 40959] = 160 blocks × 256 symbols
-/// - TUI: [40960, 43519] = 10 blocks × 256 symbols
-/// - Emoji: [43520, 44287] = 6 blocks × 128 symbols
-/// - CJK: [44288, 48383] = 128 cols × 32 rows
-///
-/// BG_FILL_SYMBOL = Block 0, symbol 160 (row 10, col 0 within the block)
-/// Used for cell background color, underline, and strikethrough effects
-const BG_FILL_SYMBOL: usize = 160;
+/// Background fill symbol - use centralized constant from symbol_map
+const BG_FILL_SYMBOL: usize = layout::BG_FILL_SYMBOL;
 
 pub struct GlRenderSymbols {
     pub base: GlRenderBase,
@@ -244,98 +236,37 @@ impl GlRender for GlRenderSymbols {
 }
 
 impl GlRenderSymbols {
-    /// Load symbol texture with linear region-based indexing
+    /// Load symbol texture using centralized iterator from symbol_map
     ///
-    /// 4096x4096 texture layout with linear symbol array:
-    /// - [0, 40959]: Sprite region (160 blocks × 256 = 40960 symbols, 16×16px each)
-    /// - [40960, 43519]: TUI region (10 blocks × 256 = 2560 symbols, 16×32px each)
-    /// - [43520, 44287]: Emoji region (6 blocks × 128 = 768 symbols, 32×32px each)
-    /// - [44288, 48383]: CJK region (128 cols × 32 rows = 4096 symbols, 32×32px each)
-    ///
-    /// This linear layout simplifies index calculation in push_render_buffer:
-    /// - Sprite: texidx * 256 + symidx
-    /// - TUI: 40960 + (texidx - 160) * 256 + symidx
-    /// - Emoji: 43520 + (texidx - 170) * 128 + symidx
-    /// - CJK: 44288 + linear_offset
+    /// Uses iter_symbol_frames() which yields all symbols in linear order:
+    /// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
+    /// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
+    /// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
+    /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
 
-        // Region 1: Sprite (160 blocks × 256 = 40960 symbols, 16×16px each)
-        // Texture layout: 16×10 blocks, each block is 256×256px (16×16 symbols of 16×16px)
-        // Rows 0-159 (y: 0-2559px)
-        for block in 0u32..160 {
-            let block_col = block % 16;  // 0-15
-            let block_row = block / 16;  // 0-9
-            for idx in 0u32..256 {
-                let sym_col = idx % 16;  // 0-15 within block
-                let sym_row = idx / 16;  // 0-15 within block
-                let pixel_x = (block_col * 16 + sym_col) * 16;
-                let pixel_y = (block_row * 16 + sym_row) * 16;
-                let symbol = self.make_symbols_frame_custom(
-                    &mut sprite_sheet,
-                    pixel_x as f32, pixel_y as f32,
-                    16.0, 16.0,
-                );
-                self.symbols.push(symbol);
-            }
-        }
-
-        // Region 2: TUI (10 blocks × 256 = 2560 symbols, 16×32px each)
-        // Texture layout: 10 blocks horizontal, each block is 256×512px (16×16 symbols of 16×32px)
-        // Rows 160-191 (y: 2560-3071px), cols 0-159 (x: 0-2559px)
-        for block in 0u32..10 {
-            for idx in 0u32..256 {
-                let sym_col = idx % 16;  // 0-15 within block
-                let sym_row = idx / 16;  // 0-15 within block
-                let pixel_x = (block * 16 + sym_col) * 16;  // Each block is 256px wide
-                let pixel_y = 2560 + sym_row * 32;  // TUI starts at y=2560, 32px height per symbol
-                let symbol = self.make_symbols_frame_custom(
-                    &mut sprite_sheet,
-                    pixel_x as f32, pixel_y as f32,
-                    16.0, 32.0,
-                );
-                self.symbols.push(symbol);
-            }
-        }
-
-        // Region 3: Emoji (6 blocks × 128 = 768 symbols, 32×32px each)
-        // Texture layout: 6 blocks horizontal, each block is 256×512px (8×16 symbols of 32×32px)
-        // Rows 160-191 (y: 2560-3071px), cols 160-255 (x: 2560-4095px)
-        for block in 0u32..6 {
-            for idx in 0u32..128 {
-                let sym_col = idx % 8;   // 0-7 within block
-                let sym_row = idx / 8;   // 0-15 within block
-                let pixel_x = 2560 + (block * 8 + sym_col) * 32;  // Emoji starts at x=2560
-                let pixel_y = 2560 + sym_row * 32;  // Emoji starts at y=2560
-                let symbol = self.make_symbols_frame_custom(
-                    &mut sprite_sheet,
-                    pixel_x as f32, pixel_y as f32,
-                    32.0, 32.0,
-                );
-                self.symbols.push(symbol);
-            }
-        }
-
-        // Region 4: CJK (128 cols × 32 rows = 4096 symbols, 32×32px each)
-        // Texture layout: grid-based, each symbol is 32×32px
-        // Rows 192-255 (y: 3072-4095px), cols 0-127 (x: 0-4095px)
-        for row in 0u32..32 {
-            for col in 0u32..128 {
-                let pixel_x = col * 32;
-                let pixel_y = 3072 + row * 32;
-                let symbol = self.make_symbols_frame_custom(
-                    &mut sprite_sheet,
-                    pixel_x as f32, pixel_y as f32,
-                    32.0, 32.0,
-                );
-                self.symbols.push(symbol);
-            }
+        // Use centralized iterator from symbol_map
+        for frame in iter_symbol_frames() {
+            let symbol = self.make_symbols_frame_custom(
+                &mut sprite_sheet,
+                frame.pixel_x as f32,
+                frame.pixel_y as f32,
+                frame.width as f32,
+                frame.height as f32,
+            );
+            self.symbols.push(symbol);
         }
 
         info!(
-            "symbols loaded: {} (Sprite: 40960, TUI: 2560, Emoji: 768, CJK: 4096, Total: 48384)",
-            self.symbols.len()
+            "symbols loaded: {} (Sprite: {}, TUI: {}, Emoji: {}, CJK: {}, Total: {})",
+            self.symbols.len(),
+            layout::SPRITE_TOTAL,
+            layout::TUI_TOTAL,
+            layout::EMOJI_TOTAL,
+            layout::CJK_TOTAL,
+            layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL
         );
         self.base.textures.clear();
         self.base.textures.push(self.symbols[0].texture);
