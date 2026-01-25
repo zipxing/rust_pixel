@@ -315,6 +315,13 @@ impl SymbolMapStats {
 /// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
 /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
 pub mod layout {
+    #[cfg(graphics_mode)]
+    use crate::render::graph::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
+
+    // Default base size (used when PIXEL_SYM_WIDTH/HEIGHT not initialized or in non-graphics mode)
+    pub const DEFAULT_BASE_WIDTH: u32 = 16;
+    pub const DEFAULT_BASE_HEIGHT: u32 = 16;
+
     // Region counts
     pub const SPRITE_BLOCKS: u32 = 160;
     pub const SPRITE_SYMBOLS_PER_BLOCK: u32 = 256;
@@ -346,24 +353,123 @@ pub mod layout {
     pub const EMOJI_BLOCK_START: usize = 170;
     pub const EMOJI_BLOCK_END: usize = 175;
 
-    // Pixel positions in texture
-    pub const SPRITE_Y_START: u32 = 0;
-    pub const TUI_Y_START: u32 = 2560;
-    pub const EMOJI_X_START: u32 = 2560;
-    pub const CJK_Y_START: u32 = 3072;
-
-    // Symbol sizes
-    pub const SPRITE_WIDTH: u32 = 16;
-    pub const SPRITE_HEIGHT: u32 = 16;
-    pub const TUI_WIDTH: u32 = 16;
-    pub const TUI_HEIGHT: u32 = 32;
-    pub const EMOJI_WIDTH: u32 = 32;
-    pub const EMOJI_HEIGHT: u32 = 32;
-    pub const CJK_WIDTH: u32 = 32;
-    pub const CJK_HEIGHT: u32 = 32;
+    // Size multipliers (relative to base PIXEL_SYM_WIDTH/HEIGHT)
+    // Sprite: 1x width, 1x height
+    // TUI: 1x width, 2x height
+    // Emoji: 2x width, 2x height
+    // CJK: 2x width, 2x height
+    pub const TUI_HEIGHT_MULTIPLIER: u32 = 2;
+    pub const EMOJI_SIZE_MULTIPLIER: u32 = 2;
+    pub const CJK_SIZE_MULTIPLIER: u32 = 2;
 
     // Background fill symbol (Block 0, symbol 160 = row 10, col 0)
     pub const BG_FILL_SYMBOL: usize = 160;
+
+    // ========== Runtime size functions ==========
+    // In graphics mode: read from PIXEL_SYM_WIDTH/HEIGHT (with fallback to defaults)
+    // In non-graphics mode: use default values
+
+    /// Get base symbol width
+    /// In graphics mode: from PIXEL_SYM_WIDTH if initialized, else default
+    /// In non-graphics mode: default value
+    #[inline]
+    pub fn base_width() -> u32 {
+        #[cfg(graphics_mode)]
+        {
+            PIXEL_SYM_WIDTH.get().map(|v| *v as u32).unwrap_or(DEFAULT_BASE_WIDTH)
+        }
+        #[cfg(not(graphics_mode))]
+        {
+            DEFAULT_BASE_WIDTH
+        }
+    }
+
+    /// Get base symbol height
+    /// In graphics mode: from PIXEL_SYM_HEIGHT if initialized, else default
+    /// In non-graphics mode: default value
+    #[inline]
+    pub fn base_height() -> u32 {
+        #[cfg(graphics_mode)]
+        {
+            PIXEL_SYM_HEIGHT.get().map(|v| *v as u32).unwrap_or(DEFAULT_BASE_HEIGHT)
+        }
+        #[cfg(not(graphics_mode))]
+        {
+            DEFAULT_BASE_HEIGHT
+        }
+    }
+
+    /// Sprite symbol width (= base_width)
+    #[inline]
+    pub fn sprite_width() -> u32 {
+        base_width()
+    }
+
+    /// Sprite symbol height (= base_height)
+    #[inline]
+    pub fn sprite_height() -> u32 {
+        base_height()
+    }
+
+    /// TUI symbol width (= base_width)
+    #[inline]
+    pub fn tui_width() -> u32 {
+        base_width()
+    }
+
+    /// TUI symbol height (= base_height * 2)
+    #[inline]
+    pub fn tui_height() -> u32 {
+        base_height() * TUI_HEIGHT_MULTIPLIER
+    }
+
+    /// Emoji symbol width (= base_width * 2)
+    #[inline]
+    pub fn emoji_width() -> u32 {
+        base_width() * EMOJI_SIZE_MULTIPLIER
+    }
+
+    /// Emoji symbol height (= base_height * 2)
+    #[inline]
+    pub fn emoji_height() -> u32 {
+        base_height() * EMOJI_SIZE_MULTIPLIER
+    }
+
+    /// CJK symbol width (= base_width * 2)
+    #[inline]
+    pub fn cjk_width() -> u32 {
+        base_width() * CJK_SIZE_MULTIPLIER
+    }
+
+    /// CJK symbol height (= base_height * 2)
+    #[inline]
+    pub fn cjk_height() -> u32 {
+        base_height() * CJK_SIZE_MULTIPLIER
+    }
+
+    /// Sprite area Y start (= 0)
+    #[inline]
+    pub fn sprite_y_start() -> u32 {
+        0
+    }
+
+    /// TUI area Y start (= SPRITE_BLOCKS / 16 * 16 * base_height = 10 * 16 * base_height)
+    #[inline]
+    pub fn tui_y_start() -> u32 {
+        (SPRITE_BLOCKS / 16) * 16 * base_height()
+    }
+
+    /// Emoji area X start (= TUI_BLOCKS * 16 * base_width)
+    #[inline]
+    pub fn emoji_x_start() -> u32 {
+        TUI_BLOCKS * 16 * base_width()
+    }
+
+    /// CJK area Y start (= tui_y_start + 16 * tui_height)
+    #[inline]
+    pub fn cjk_y_start() -> u32 {
+        tui_y_start() + 16 * tui_height()
+    }
 }
 
 /// Calculate linear texture symbol index from block and symbol index
@@ -460,7 +566,7 @@ impl Iterator for SymbolFrameIterator {
         }
 
         let frame = if self.current < layout::TUI_BASE {
-            // Sprite region: 160 blocks × 256 symbols, 16×16px each
+            // Sprite region: 160 blocks × 256 symbols
             let idx = self.current;
             let block = idx / layout::SPRITE_SYMBOLS_PER_BLOCK as usize;
             let sym = idx % layout::SPRITE_SYMBOLS_PER_BLOCK as usize;
@@ -470,14 +576,17 @@ impl Iterator for SymbolFrameIterator {
             let sym_col = sym % 16;
             let sym_row = sym / 16;
 
+            let sprite_w = layout::sprite_width();
+            let sprite_h = layout::sprite_height();
+
             SymbolFrame {
-                pixel_x: ((block_col * 16 + sym_col) * layout::SPRITE_WIDTH as usize) as u32,
-                pixel_y: ((block_row * 16 + sym_row) * layout::SPRITE_HEIGHT as usize) as u32,
-                width: layout::SPRITE_WIDTH,
-                height: layout::SPRITE_HEIGHT,
+                pixel_x: ((block_col * 16 + sym_col) as u32) * sprite_w,
+                pixel_y: ((block_row * 16 + sym_row) as u32) * sprite_h,
+                width: sprite_w,
+                height: sprite_h,
             }
         } else if self.current < layout::EMOJI_BASE {
-            // TUI region: 10 blocks × 256 symbols, 16×32px each
+            // TUI region: 10 blocks × 256 symbols
             let idx = self.current - layout::TUI_BASE;
             let block = idx / layout::TUI_SYMBOLS_PER_BLOCK as usize;
             let sym = idx % layout::TUI_SYMBOLS_PER_BLOCK as usize;
@@ -485,14 +594,17 @@ impl Iterator for SymbolFrameIterator {
             let sym_col = sym % 16;
             let sym_row = sym / 16;
 
+            let tui_w = layout::tui_width();
+            let tui_h = layout::tui_height();
+
             SymbolFrame {
-                pixel_x: ((block * 16 + sym_col) * layout::TUI_WIDTH as usize) as u32,
-                pixel_y: layout::TUI_Y_START + (sym_row as u32 * layout::TUI_HEIGHT),
-                width: layout::TUI_WIDTH,
-                height: layout::TUI_HEIGHT,
+                pixel_x: ((block * 16 + sym_col) as u32) * tui_w,
+                pixel_y: layout::tui_y_start() + (sym_row as u32) * tui_h,
+                width: tui_w,
+                height: tui_h,
             }
         } else if self.current < layout::CJK_BASE {
-            // Emoji region: 6 blocks × 128 symbols, 32×32px each
+            // Emoji region: 6 blocks × 128 symbols
             let idx = self.current - layout::EMOJI_BASE;
             let block = idx / layout::EMOJI_SYMBOLS_PER_BLOCK as usize;
             let sym = idx % layout::EMOJI_SYMBOLS_PER_BLOCK as usize;
@@ -500,23 +612,29 @@ impl Iterator for SymbolFrameIterator {
             let sym_col = sym % 8;
             let sym_row = sym / 8;
 
+            let emoji_w = layout::emoji_width();
+            let emoji_h = layout::emoji_height();
+
             SymbolFrame {
-                pixel_x: layout::EMOJI_X_START + ((block * 8 + sym_col) as u32 * layout::EMOJI_WIDTH),
-                pixel_y: layout::TUI_Y_START + (sym_row as u32 * layout::EMOJI_HEIGHT),
-                width: layout::EMOJI_WIDTH,
-                height: layout::EMOJI_HEIGHT,
+                pixel_x: layout::emoji_x_start() + ((block * 8 + sym_col) as u32) * emoji_w,
+                pixel_y: layout::tui_y_start() + (sym_row as u32) * emoji_h,
+                width: emoji_w,
+                height: emoji_h,
             }
         } else {
-            // CJK region: 128 cols × 32 rows, 32×32px each
+            // CJK region: 128 cols × 32 rows
             let idx = self.current - layout::CJK_BASE;
             let col = idx % layout::CJK_COLS as usize;
             let row = idx / layout::CJK_COLS as usize;
 
+            let cjk_w = layout::cjk_width();
+            let cjk_h = layout::cjk_height();
+
             SymbolFrame {
-                pixel_x: col as u32 * layout::CJK_WIDTH,
-                pixel_y: layout::CJK_Y_START + row as u32 * layout::CJK_HEIGHT,
-                width: layout::CJK_WIDTH,
-                height: layout::CJK_HEIGHT,
+                pixel_x: (col as u32) * cjk_w,
+                pixel_y: layout::cjk_y_start() + (row as u32) * cjk_h,
+                width: cjk_w,
+                height: cjk_h,
             }
         };
 
@@ -676,32 +794,32 @@ mod tests {
         let expected_total = layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
         assert_eq!(frames.len(), expected_total as usize);
 
-        // First frame should be Sprite at (0, 0) with size 16x16
+        // First frame should be Sprite at (0, 0) with base size
         assert_eq!(frames[0].pixel_x, 0);
         assert_eq!(frames[0].pixel_y, 0);
-        assert_eq!(frames[0].width, 16);
-        assert_eq!(frames[0].height, 16);
+        assert_eq!(frames[0].width, layout::sprite_width());
+        assert_eq!(frames[0].height, layout::sprite_height());
 
         // First TUI frame at index 40960
         let tui_first = &frames[layout::TUI_BASE];
         assert_eq!(tui_first.pixel_x, 0);
-        assert_eq!(tui_first.pixel_y, 2560);
-        assert_eq!(tui_first.width, 16);
-        assert_eq!(tui_first.height, 32);
+        assert_eq!(tui_first.pixel_y, layout::tui_y_start());
+        assert_eq!(tui_first.width, layout::tui_width());
+        assert_eq!(tui_first.height, layout::tui_height());
 
         // First Emoji frame at index 43520
         let emoji_first = &frames[layout::EMOJI_BASE];
-        assert_eq!(emoji_first.pixel_x, 2560);
-        assert_eq!(emoji_first.pixel_y, 2560);
-        assert_eq!(emoji_first.width, 32);
-        assert_eq!(emoji_first.height, 32);
+        assert_eq!(emoji_first.pixel_x, layout::emoji_x_start());
+        assert_eq!(emoji_first.pixel_y, layout::tui_y_start());
+        assert_eq!(emoji_first.width, layout::emoji_width());
+        assert_eq!(emoji_first.height, layout::emoji_height());
 
         // First CJK frame at index 44288
         let cjk_first = &frames[layout::CJK_BASE];
         assert_eq!(cjk_first.pixel_x, 0);
-        assert_eq!(cjk_first.pixel_y, 3072);
-        assert_eq!(cjk_first.width, 32);
-        assert_eq!(cjk_first.height, 32);
+        assert_eq!(cjk_first.pixel_y, layout::cjk_y_start());
+        assert_eq!(cjk_first.width, layout::cjk_width());
+        assert_eq!(cjk_first.height, layout::cjk_height());
     }
 
     #[test]
@@ -716,5 +834,27 @@ mod tests {
         assert_eq!(layout::TUI_BASE, 40960);
         assert_eq!(layout::EMOJI_BASE, 43520);
         assert_eq!(layout::CJK_BASE, 44288);
+    }
+
+    #[test]
+    fn test_layout_runtime_functions() {
+        // Test runtime size functions use default values when PIXEL_SYM_WIDTH/HEIGHT not initialized
+        assert_eq!(layout::base_width(), layout::DEFAULT_BASE_WIDTH);
+        assert_eq!(layout::base_height(), layout::DEFAULT_BASE_HEIGHT);
+
+        // Test derived sizes
+        assert_eq!(layout::sprite_width(), layout::DEFAULT_BASE_WIDTH);
+        assert_eq!(layout::sprite_height(), layout::DEFAULT_BASE_HEIGHT);
+        assert_eq!(layout::tui_width(), layout::DEFAULT_BASE_WIDTH);
+        assert_eq!(layout::tui_height(), layout::DEFAULT_BASE_HEIGHT * layout::TUI_HEIGHT_MULTIPLIER);
+        assert_eq!(layout::emoji_width(), layout::DEFAULT_BASE_WIDTH * layout::EMOJI_SIZE_MULTIPLIER);
+        assert_eq!(layout::emoji_height(), layout::DEFAULT_BASE_HEIGHT * layout::EMOJI_SIZE_MULTIPLIER);
+        assert_eq!(layout::cjk_width(), layout::DEFAULT_BASE_WIDTH * layout::CJK_SIZE_MULTIPLIER);
+        assert_eq!(layout::cjk_height(), layout::DEFAULT_BASE_HEIGHT * layout::CJK_SIZE_MULTIPLIER);
+
+        // Test pixel positions
+        assert_eq!(layout::sprite_y_start(), 0);
+        assert_eq!(layout::tui_y_start(), (layout::SPRITE_BLOCKS / 16) * 16 * layout::DEFAULT_BASE_HEIGHT);
+        assert_eq!(layout::emoji_x_start(), layout::TUI_BLOCKS * 16 * layout::DEFAULT_BASE_WIDTH);
     }
 }
