@@ -130,7 +130,8 @@ CJK_GRID_ROWS = 32
 
 # CJK 渲染参数
 CJK_RENDER_SIZE = 64
-CJK_FONT_NAME = "PingFang SC"  # macOS 内置中文字体
+CJK_FONT_NAME = "DroidSansMono Nerd Font"
+# CJK_FONT_NAME = "PingFang SC"  # macOS 内置中文字体
 CJK_FONT_SIZE = 56
 
 # 线性索引基址
@@ -767,13 +768,35 @@ def main():
 
     print(f"  绘制了 {emoji_idx} 个 Emoji")
 
+    # ========== 绘制 CJK 区域 ==========
+    print(f"\n绘制 CJK 区域 (y={CJK_AREA_START_Y}-{TEXTURE_SIZE - 1})...")
+    cjk_idx = 0
+
+    for i, img in enumerate(cjk_images):
+        if img is None:
+            continue
+
+        col = i % CJK_GRID_COLS
+        row = i // CJK_GRID_COLS
+
+        x = col * CJK_CHAR_SIZE
+        y = CJK_AREA_START_Y + row * CJK_CHAR_SIZE
+
+        texture.paste(img, (x, y))
+        cjk_idx += 1
+
+        if (i + 1) % 512 == 0:
+            print(f"  已绘制 {i + 1}/{len(cjk_images)}")
+
+    print(f"  绘制了 {cjk_idx} 个 CJK 字符")
+
     # ========== 保存纹理 ==========
     print(f"\n保存纹理到 {args.output_png}...")
     texture.save(args.output_png, "PNG")
 
     # ========== 生成 symbol_map.json ==========
     print(f"\n生成 {args.output_json}...")
-    symbol_map = build_symbol_map(tui_chars, emojis)
+    symbol_map = build_symbol_map(tui_chars, emojis, cjk_chars)
 
     with open(args.output_json, 'w', encoding='utf-8') as f:
         json.dump(symbol_map, f, ensure_ascii=False, indent=2)
@@ -787,7 +810,7 @@ def main():
     print(f"  Sprite (Block 0-{SPRITE_BLOCKS-1}): {sprite_idx} 个")
     print(f"  TUI (Block {TUI_BLOCKS_START}-{TUI_BLOCKS_START + TUI_BLOCKS_COUNT - 1}): {tui_idx} 个")
     print(f"  Emoji (Block {EMOJI_BLOCKS_START}-{EMOJI_BLOCKS_START + EMOJI_BLOCKS_COUNT - 1}): {emoji_idx} 个")
-    print(f"  CJK (预留): {CJK_GRID_COLS * CJK_GRID_ROWS} 个位置")
+    print(f"  CJK (y={CJK_AREA_START_Y}-{TEXTURE_SIZE-1}): {cjk_idx} 个 (容量 {CJK_GRID_COLS * CJK_GRID_ROWS})")
     print(f"\n线性索引范围:")
     print(f"  Sprite: [{LINEAR_SPRITE_BASE}, {LINEAR_TUI_BASE - 1}]")
     print(f"  TUI:    [{LINEAR_TUI_BASE}, {LINEAR_EMOJI_BASE - 1}]")

@@ -8,6 +8,28 @@
 //! - **TUI** (Block 160-169): 16x32 terminal UI characters, single color
 //! - **Emoji** (Block 170-175): 32x32 color emoji
 //! - **CJK** (y=3072-4095): 32x32 Chinese characters, single color
+//! ┌────────────────────────────────────────────────────────────┐
+//! │ Sprite 区域（y=0-2559, 2560px 高）                         │
+//! │ - 10 rows × 16 blocks/row = 160 blocks                     │
+//! │ - 每 block: 256×256px (16×16 chars, 16×16px each)          │
+//! │ - Block 0-159: 40,960 sprites                              │
+//! ├────────────────────────────────────────────────────────────┤
+//! │ TUI + Emoji 区域（y=2560-3071, 512px 高）                  │
+//! │                                                            │
+//! │ TUI 区域（x=0-2559）:                                      │
+//! │ - 10 blocks (Block 160-169)                                │
+//! │ - 每 block: 256×512px (16×16 chars, 16×32px each)          │
+//! │ - 2560 TUI 字符                                            │
+//! │                                                            │
+//! │ Emoji 区域（x=2560-4095）:                                 │
+//! │ - 6 blocks (Block 170-175)                                 │
+//! │ - 每 block: 256×512px (8×16 emojis, 32×32px each)          │
+//! │ - 768 Emoji                                                │
+//! ├────────────────────────────────────────────────────────────┤
+//! │ CJK 区域（y=3072-4095, 1024px 高）                         │
+//! │ - 128×32 grid of 32×32px chars                             │
+//! │ - 4096 CJK 字符                                            │
+//! └────────────────────────────────────────────────────────────┘
 //!
 //! # Usage
 //! ```rust
@@ -102,7 +124,12 @@ impl SymbolMap {
             Self::parse_grid_region(region, &mut cjk);
         }
 
-        Self { sprite, tui, emoji, cjk }
+        Self {
+            sprite,
+            tui,
+            emoji,
+            cjk,
+        }
     }
 
     fn parse_block_region(region: &RegionConfig, map: &mut HashMap<String, (u8, u8)>) {
@@ -206,8 +233,8 @@ impl SymbolMap {
 
         // Convert pixel coordinates to grid position
         // CJK region starts at y=3072, each cell is 32x32 pixels
-        let col = pixel_x / 32;  // 0-127
-        let row = (pixel_y - 3072) / 32;  // 0-31
+        let col = pixel_x / 32; // 0-127
+        let row = (pixel_y - 3072) / 32; // 0-31
 
         // Convert to block/index format
         // block = CJK_BLOCK_START + row = 176 + row
@@ -256,24 +283,25 @@ impl SymbolMap {
     /// Use this when you know which region to check
     pub fn lookup_in_region(&self, symbol: &str, region: SymbolRegion) -> SymbolIndex {
         match region {
-            SymbolRegion::Sprite => {
-                self.sprite.get(symbol)
-                    .map(|(b, i)| SymbolIndex::Sprite(*b, *i))
-                    .unwrap_or(SymbolIndex::NotFound)
-            }
-            SymbolRegion::Tui => {
-                self.tui.get(symbol)
-                    .map(|(b, i)| SymbolIndex::Tui(*b, *i))
-                    .unwrap_or(SymbolIndex::NotFound)
-            }
-            SymbolRegion::Emoji => {
-                self.emoji.get(symbol)
-                    .map(|(b, i)| SymbolIndex::Emoji(*b, *i))
-                    .unwrap_or(SymbolIndex::NotFound)
-            }
+            SymbolRegion::Sprite => self
+                .sprite
+                .get(symbol)
+                .map(|(b, i)| SymbolIndex::Sprite(*b, *i))
+                .unwrap_or(SymbolIndex::NotFound),
+            SymbolRegion::Tui => self
+                .tui
+                .get(symbol)
+                .map(|(b, i)| SymbolIndex::Tui(*b, *i))
+                .unwrap_or(SymbolIndex::NotFound),
+            SymbolRegion::Emoji => self
+                .emoji
+                .get(symbol)
+                .map(|(b, i)| SymbolIndex::Emoji(*b, *i))
+                .unwrap_or(SymbolIndex::NotFound),
             SymbolRegion::Cjk => {
                 if let Some(ch) = symbol.chars().next() {
-                    self.cjk.get(&ch)
+                    self.cjk
+                        .get(&ch)
                         .map(|(x, y)| SymbolIndex::Cjk(*x, *y))
                         .unwrap_or(SymbolIndex::NotFound)
                 } else {
@@ -400,7 +428,10 @@ pub mod layout {
     pub fn base_width() -> u32 {
         #[cfg(graphics_mode)]
         {
-            PIXEL_SYM_WIDTH.get().map(|v| *v as u32).unwrap_or(DEFAULT_BASE_WIDTH)
+            PIXEL_SYM_WIDTH
+                .get()
+                .map(|v| *v as u32)
+                .unwrap_or(DEFAULT_BASE_WIDTH)
         }
         #[cfg(not(graphics_mode))]
         {
@@ -415,7 +446,10 @@ pub mod layout {
     pub fn base_height() -> u32 {
         #[cfg(graphics_mode)]
         {
-            PIXEL_SYM_HEIGHT.get().map(|v| *v as u32).unwrap_or(DEFAULT_BASE_HEIGHT)
+            PIXEL_SYM_HEIGHT
+                .get()
+                .map(|v| *v as u32)
+                .unwrap_or(DEFAULT_BASE_HEIGHT)
         }
         #[cfg(not(graphics_mode))]
         {
@@ -526,13 +560,19 @@ pub fn calc_linear_index(texidx: usize, symidx: usize) -> usize {
     if texidx >= layout::CJK_BLOCK_START {
         // CJK blocks (176-207): base 44288 + row offset + column index
         // Each block = one row (128 symbols), symidx = column (0-127)
-        layout::CJK_BASE + (texidx - layout::CJK_BLOCK_START) * layout::CJK_SYMBOLS_PER_BLOCK as usize + symidx
+        layout::CJK_BASE
+            + (texidx - layout::CJK_BLOCK_START) * layout::CJK_SYMBOLS_PER_BLOCK as usize
+            + symidx
     } else if texidx >= layout::EMOJI_BLOCK_START {
         // Emoji blocks (170-175): base 43520 + block offset + symbol index
-        layout::EMOJI_BASE + (texidx - layout::EMOJI_BLOCK_START) * layout::EMOJI_SYMBOLS_PER_BLOCK as usize + symidx
+        layout::EMOJI_BASE
+            + (texidx - layout::EMOJI_BLOCK_START) * layout::EMOJI_SYMBOLS_PER_BLOCK as usize
+            + symidx
     } else if texidx >= layout::TUI_BLOCK_START {
         // TUI blocks (160-169): base 40960 + block offset + symbol index
-        layout::TUI_BASE + (texidx - layout::TUI_BLOCK_START) * layout::TUI_SYMBOLS_PER_BLOCK as usize + symidx
+        layout::TUI_BASE
+            + (texidx - layout::TUI_BLOCK_START) * layout::TUI_SYMBOLS_PER_BLOCK as usize
+            + symidx
     } else {
         // Sprite blocks (0-159): direct linear index
         texidx * layout::SPRITE_SYMBOLS_PER_BLOCK as usize + symidx
@@ -571,7 +611,8 @@ pub struct SymbolFrameIterator {
 
 impl SymbolFrameIterator {
     pub fn new() -> Self {
-        let total = layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
+        let total =
+            layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
         Self {
             current: 0,
             total: total as usize,
@@ -836,7 +877,10 @@ mod tests {
             assert_eq!(block, 0);
             assert_eq!(idx, 209);
         } else {
-            panic!("▇ should be in Sprite region via extras, sprite count: {}", map.stats().sprite_count);
+            panic!(
+                "▇ should be in Sprite region via extras, sprite count: {}",
+                map.stats().sprite_count
+            );
         }
     }
 
@@ -859,10 +903,10 @@ mod tests {
         assert_eq!(calc_linear_index(175, 127), 44287);
 
         // CJK region
-        assert_eq!(calc_linear_index(176, 0), 44288);  // First CJK (row 0, col 0)
-        assert_eq!(calc_linear_index(176, 127), 44415);  // End of first row
-        assert_eq!(calc_linear_index(177, 0), 44416);  // Start of second row
-        assert_eq!(calc_linear_index(207, 127), 48383);  // Last CJK (row 31, col 127)
+        assert_eq!(calc_linear_index(176, 0), 44288); // First CJK (row 0, col 0)
+        assert_eq!(calc_linear_index(176, 127), 44415); // End of first row
+        assert_eq!(calc_linear_index(177, 0), 44416); // Start of second row
+        assert_eq!(calc_linear_index(207, 127), 48383); // Last CJK (row 31, col 127)
     }
 
     #[test]
@@ -870,7 +914,8 @@ mod tests {
         let frames: Vec<_> = iter_symbol_frames().collect();
 
         // Total count should be 48384
-        let expected_total = layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
+        let expected_total =
+            layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL;
         assert_eq!(frames.len(), expected_total as usize);
 
         // First frame should be Sprite at (0, 0) with base size
@@ -925,15 +970,36 @@ mod tests {
         assert_eq!(layout::sprite_width(), layout::DEFAULT_BASE_WIDTH);
         assert_eq!(layout::sprite_height(), layout::DEFAULT_BASE_HEIGHT);
         assert_eq!(layout::tui_width(), layout::DEFAULT_BASE_WIDTH);
-        assert_eq!(layout::tui_height(), layout::DEFAULT_BASE_HEIGHT * layout::TUI_HEIGHT_MULTIPLIER);
-        assert_eq!(layout::emoji_width(), layout::DEFAULT_BASE_WIDTH * layout::EMOJI_SIZE_MULTIPLIER);
-        assert_eq!(layout::emoji_height(), layout::DEFAULT_BASE_HEIGHT * layout::EMOJI_SIZE_MULTIPLIER);
-        assert_eq!(layout::cjk_width(), layout::DEFAULT_BASE_WIDTH * layout::CJK_SIZE_MULTIPLIER);
-        assert_eq!(layout::cjk_height(), layout::DEFAULT_BASE_HEIGHT * layout::CJK_SIZE_MULTIPLIER);
+        assert_eq!(
+            layout::tui_height(),
+            layout::DEFAULT_BASE_HEIGHT * layout::TUI_HEIGHT_MULTIPLIER
+        );
+        assert_eq!(
+            layout::emoji_width(),
+            layout::DEFAULT_BASE_WIDTH * layout::EMOJI_SIZE_MULTIPLIER
+        );
+        assert_eq!(
+            layout::emoji_height(),
+            layout::DEFAULT_BASE_HEIGHT * layout::EMOJI_SIZE_MULTIPLIER
+        );
+        assert_eq!(
+            layout::cjk_width(),
+            layout::DEFAULT_BASE_WIDTH * layout::CJK_SIZE_MULTIPLIER
+        );
+        assert_eq!(
+            layout::cjk_height(),
+            layout::DEFAULT_BASE_HEIGHT * layout::CJK_SIZE_MULTIPLIER
+        );
 
         // Test pixel positions
         assert_eq!(layout::sprite_y_start(), 0);
-        assert_eq!(layout::tui_y_start(), (layout::SPRITE_BLOCKS / 16) * 16 * layout::DEFAULT_BASE_HEIGHT);
-        assert_eq!(layout::emoji_x_start(), layout::TUI_BLOCKS * 16 * layout::DEFAULT_BASE_WIDTH);
+        assert_eq!(
+            layout::tui_y_start(),
+            (layout::SPRITE_BLOCKS / 16) * 16 * layout::DEFAULT_BASE_HEIGHT
+        );
+        assert_eq!(
+            layout::emoji_x_start(),
+            layout::TUI_BLOCKS * 16 * layout::DEFAULT_BASE_WIDTH
+        );
     }
 }
