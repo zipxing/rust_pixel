@@ -1094,8 +1094,9 @@ pub fn render_main_buffer<F>(
         }
 
         // For Emoji, use white color (no color modulation) to preserve original colors
-        // For TUI/Sprite characters, use the cell's foreground color
-        let fc = if use_tui && texidx >= 170 {
+        // For TUI/Sprite/CJK characters, use the cell's foreground color
+        // Emoji blocks are 170-175, CJK blocks are 176-207
+        let fc = if use_tui && texidx >= 170 && texidx <= 175 {
             (255, 255, 255, 255)  // White - no color modulation for Emoji
         } else {
             sh.2.get_rgba()
