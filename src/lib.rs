@@ -81,6 +81,32 @@ pub fn get_game_config() -> &'static GameConfig {
 /// Target frames per second for the main game loop. Keep this moderate to conserve CPU.
 pub const GAME_FRAME: u32 = 60;
 
+/// Initialize the global symbol map from JSON string (standalone WASM function)
+/// This must be called BEFORE creating a PixelGame instance in web mode.
+///
+/// In JavaScript:
+/// ```js
+/// import init, {PixelGame, wasm_init_symbol_map} from "./pkg/pixel.js";
+/// await init();
+/// const symbolMapJson = await (await fetch("assets/pix/symbol_map.json")).text();
+/// wasm_init_symbol_map(symbolMapJson);  // Call BEFORE PixelGame.new()
+/// const sg = PixelGame.new();
+/// ```
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn wasm_init_symbol_map(json: &str) -> bool {
+    match render::symbol_map::init_symbol_map_from_json(json) {
+        Ok(()) => {
+            web_sys::console::log_1(&"RUST: Symbol map initialized from JSON".into());
+            true
+        }
+        Err(e) => {
+            web_sys::console::error_1(&format!("RUST: Failed to init symbol map: {}", e).into());
+            false
+        }
+    }
+}
+
 #[cfg(not(graphics_mode))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
 

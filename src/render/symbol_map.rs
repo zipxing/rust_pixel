@@ -42,6 +42,71 @@
 
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+
+/// Path to symbol_map.json file (relative to executable or assets directory)
+/// This file should be in the same directory as symbols.png
+pub const PIXEL_SYMBOL_MAP_FILE: &str = "assets/pix/symbol_map.json";
+
+/// Global symbol map instance, initialized lazily
+/// For native mode: loaded from file on first access
+/// For web mode: must be initialized via init_symbol_map() before use
+static GLOBAL_SYMBOL_MAP: OnceLock<SymbolMap> = OnceLock::new();
+
+/// Initialize the global symbol map from JSON string
+/// This is the preferred method for web mode where JSON is loaded via JavaScript
+pub fn init_symbol_map_from_json(json: &str) -> Result<(), String> {
+    let map = SymbolMap::from_json(json)
+        .map_err(|e| format!("Failed to parse symbol_map.json: {}", e))?;
+    GLOBAL_SYMBOL_MAP.set(map)
+        .map_err(|_| "Symbol map already initialized".to_string())
+}
+
+/// Get the global symbol map instance
+/// For native mode: automatically loads from file on first access
+/// For web mode: must be initialized via init_symbol_map_from_json() first
+///
+/// # Panics
+/// - Native mode: panics if symbol_map.json cannot be loaded
+/// - Web mode: panics if init_symbol_map_from_json() was not called before this
+pub fn get_symbol_map() -> &'static SymbolMap {
+    GLOBAL_SYMBOL_MAP.get_or_init(|| {
+        // For native builds, load from file (panic on failure)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Use project_path like texture loading does
+            let project_path = &crate::get_game_config().project_path;
+            let symbol_map_path = format!(
+                "{}{}{}",
+                project_path,
+                std::path::MAIN_SEPARATOR,
+                PIXEL_SYMBOL_MAP_FILE
+            );
+            match SymbolMap::load(&symbol_map_path) {
+                Ok(map) => {
+                    log::info!("Loaded symbol map from {}", symbol_map_path);
+                    map
+                }
+                Err(e) => {
+                    panic!(
+                        "Failed to load symbol map from {}: {}. \
+                        Ensure symbol_map.json exists in the assets directory.",
+                        symbol_map_path, e
+                    );
+                }
+            }
+        }
+        // For WASM builds, panic if not initialized
+        // (init_symbol_map_from_json MUST be called before this)
+        #[cfg(target_arch = "wasm32")]
+        {
+            panic!(
+                "Symbol map not initialized! \
+                Call wasm_init_symbol_map() before creating the game instance."
+            );
+        }
+    })
+}
 
 /// Symbol index result from lookup
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,13 +147,24 @@ impl SymbolMap {
         Ok(Self::from_config(config))
     }
 
-    /// Load from embedded default configuration (backward compatible)
+    /// Load symbol map from default file path (using project_path)
+    /// Prefer using get_symbol_map() for the global instance
+    ///
+    /// # Panics
+    /// Panics if the symbol_map.json file cannot be loaded
     pub fn default_map() -> Self {
-        let json = include_str!("../../assets/pix/symbol_map.json");
-        Self::from_json(json).expect("Invalid embedded symbol_map.json")
+        let project_path = &crate::get_game_config().project_path;
+        let symbol_map_path = format!(
+            "{}{}{}",
+            project_path,
+            std::path::MAIN_SEPARATOR,
+            PIXEL_SYMBOL_MAP_FILE
+        );
+        Self::load(&symbol_map_path)
+            .expect("Failed to load symbol_map.json from default path")
     }
 
-    /// Create empty symbol map
+    /// Create empty symbol map (for testing only)
     pub fn empty() -> Self {
         Self {
             sprite: HashMap::new(),

@@ -88,7 +88,7 @@ utils.loop = update => {
  * - WebAssembly.instantiate() is inherently async
  * - Memory allocation and linking must complete before use
  */
-import init, {PixelGame} from "./pkg/pixel.js";
+import init, {PixelGame, wasm_init_symbol_map} from "./pkg/pixel.js";
 const wasm = await init();
 
 /**
@@ -124,8 +124,20 @@ ctx.drawImage(timg, 0, 0);
 const imgdata = ctx.getImageData(0, 0, timg.width, timg.height).data;
 
 /**
+ * Symbol Map Loading
+ *
+ * Load the symbol_map.json configuration file which defines character-to-texture
+ * mappings for Sprite, TUI, Emoji, and CJK regions.
+ * This MUST be loaded and initialized BEFORE creating the game instance,
+ * because game initialization accesses the symbol map.
+ */
+const symbolMapResponse = await fetch("assets/pix/symbol_map.json");
+const symbolMapText = await symbolMapResponse.text();
+wasm_init_symbol_map(symbolMapText);
+
+/**
  * Game Instance Creation and Initialization
- * 
+ *
  * Creates the main game object (compiled from Rust to WASM) and uploads
  * the symbol texture data for WebGL rendering.
  */

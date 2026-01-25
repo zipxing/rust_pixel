@@ -15,20 +15,13 @@
 //! via the SymbolMap module for easier maintenance and customization.
 
 use crate::render::style::{Color, Modifier, Style};
-use crate::render::symbol_map::SymbolMap;
-use lazy_static::lazy_static;
+use crate::render::symbol_map::get_symbol_map;
 use serde::{Deserialize, Serialize};
-
-lazy_static! {
-    /// Global symbol map loaded from JSON configuration
-    /// Contains mappings for Sprite, TUI, Emoji, and CJK regions
-    static ref SYMBOL_MAP: SymbolMap = SymbolMap::default();
-}
 
 /// Get TUI symbol index and block
 /// Returns (block, index) for TUI region (Block 160-169)
 pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
-    SYMBOL_MAP.tui_idx(symbol)
+    get_symbol_map().tui_idx(symbol)
 }
 
 /// sym_index, texture_index, fg_color, bg_color, modifier
@@ -54,7 +47,7 @@ pub fn cellsym(idx: u8) -> String {
 /// Returns true if the symbol exists in the Emoji mapping, meaning it has
 /// a pre-rendered 32x32 RGBA image in the Emoji region of the texture.
 pub fn is_prerendered_emoji(symbol: &str) -> bool {
-    SYMBOL_MAP.emoji_idx(symbol).is_some()
+    get_symbol_map().emoji_idx(symbol).is_some()
 }
 
 /// Get the texture index and symbol index for a pre-rendered Emoji
@@ -62,7 +55,7 @@ pub fn is_prerendered_emoji(symbol: &str) -> bool {
 /// Returns Some((block_idx, sym_idx)) if the Emoji is in the mapping,
 /// or None if the Emoji is not pre-rendered.
 pub fn emoji_texidx(symbol: &str) -> Option<(u8, u8)> {
-    SYMBOL_MAP.emoji_idx(symbol)
+    get_symbol_map().emoji_idx(symbol)
 }
 
 /// get index idx from a symbol string
@@ -77,7 +70,7 @@ fn symidx(symbol: &String) -> u8 {
         return idx;
     }
     // search in sprite symbol map for common ASCII chars
-    if let Some((_, idx)) = SYMBOL_MAP.sprite_idx(symbol) {
+    if let Some((_, idx)) = get_symbol_map().sprite_idx(symbol) {
         return idx;
     }
     0u8
@@ -111,12 +104,12 @@ impl Cell {
     /// sym_index, texture_index, fg_color, bg_color, modifier
     pub fn get_cell_info(&self) -> CellInfo {
         // Check for Emoji first
-        if let Some((block, idx)) = SYMBOL_MAP.emoji_idx(&self.symbol) {
+        if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
             return (idx, block, self.fg, self.bg, self.modifier);
         }
 
         // Check for CJK characters (returns block 176-207, idx 0-127)
-        if let Some((block, idx)) = SYMBOL_MAP.cjk_idx(&self.symbol) {
+        if let Some((block, idx)) = get_symbol_map().cjk_idx(&self.symbol) {
             return (idx, block, self.fg, self.bg, self.modifier);
         }
 
