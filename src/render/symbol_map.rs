@@ -62,8 +62,31 @@ pub fn init_symbol_map_from_json(json: &str) -> Result<(), String> {
         .map_err(|_| "Symbol map already initialized".to_string())
 }
 
+/// Initialize the global symbol map from file path
+/// This should be called during adapter.init() after game_config is initialized
+/// Uses get_game_config().project_path to load from app's assets directory
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init_symbol_map_from_file() -> Result<(), String> {
+    let project_path = &crate::get_game_config().project_path;
+    let symbol_map_path = format!(
+        "{}{}{}",
+        project_path,
+        std::path::MAIN_SEPARATOR,
+        PIXEL_SYMBOL_MAP_FILE
+    );
+
+    let map = SymbolMap::load(&symbol_map_path)
+        .map_err(|e| format!("Failed to load symbol map from {}: {}", symbol_map_path, e))?;
+
+    GLOBAL_SYMBOL_MAP.set(map)
+        .map_err(|_| "Symbol map already initialized".to_string())?;
+
+    log::info!("Loaded symbol map from {}", symbol_map_path);
+    Ok(())
+}
+
 /// Get the global symbol map instance
-/// For native mode: automatically loads from file on first access
+/// For native mode: automatically loads from file on first access (lazy loading)
 /// For web mode: must be initialized via init_symbol_map_from_json() first
 ///
 /// # Panics
@@ -71,10 +94,10 @@ pub fn init_symbol_map_from_json(json: &str) -> Result<(), String> {
 /// - Web mode: panics if init_symbol_map_from_json() was not called before this
 pub fn get_symbol_map() -> &'static SymbolMap {
     GLOBAL_SYMBOL_MAP.get_or_init(|| {
-        // For native builds, load from file (panic on failure)
+        // For native builds, lazy load from app's assets directory
+        // init_game_config() MUST be called before this (done first in pixel_game! macro)
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // Use project_path like texture loading does
             let project_path = &crate::get_game_config().project_path;
             let symbol_map_path = format!(
                 "{}{}{}",
@@ -90,14 +113,14 @@ pub fn get_symbol_map() -> &'static SymbolMap {
                 Err(e) => {
                     panic!(
                         "Failed to load symbol map from {}: {}. \
-                        Ensure symbol_map.json exists in the assets directory.",
+                        Ensure symbol_map.json exists in the app's assets directory.",
                         symbol_map_path, e
                     );
                 }
             }
         }
         // For WASM builds, panic if not initialized
-        // (init_symbol_map_from_json MUST be called before this)
+        // (wasm_init_symbol_map MUST be called before PixelGame.new())
         #[cfg(target_arch = "wasm32")]
         {
             panic!(
@@ -153,6 +176,7 @@ impl SymbolMap {
     /// # Panics
     /// Panics if the symbol_map.json file cannot be loaded
     pub fn default_map() -> Self {
+        // Use get_game_config().project_path to load from app's assets directory
         let project_path = &crate::get_game_config().project_path;
         let symbol_map_path = format!(
             "{}{}{}",

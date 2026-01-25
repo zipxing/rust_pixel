@@ -200,12 +200,15 @@ macro_rules! pixel_game {
             }
 
             pub fn init_game() -> [<$name Game>] {
-                let m = [<$name Model>]::new();
-                let r = [<$name Render>]::new();
+                // Initialize global game config FIRST (before Model/Render creation)
+                // This ensures get_game_config().project_path is available for symbol_map loading
                 let pp = get_project_path();
                 println!("asset path : {:?}", pp);
-                // Initialize global game config (ignore if already initialized)
                 rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp);
+
+                // Now create Model and Render (they may use symbol_map functions)
+                let m = [<$name Model>]::new();
+                let r = [<$name Render>]::new();
                 let mut g = Game::new(m, r);
                 g.init();
                 [<$name Game>] { g }

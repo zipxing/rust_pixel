@@ -457,6 +457,9 @@ where
         PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
     );
 
+    // Symbol map is lazy-loaded from app's assets directory via get_symbol_map()
+    // when first accessed (after init_game_config() sets project_path)
+
     // 2. Set basic parameters
     adapter.set_size(w, h);
     adapter.set_title(title.clone());

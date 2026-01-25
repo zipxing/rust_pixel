@@ -205,6 +205,10 @@ impl Adapter for SdlAdapter {
             PIXEL_SYM_WIDTH.get().expect("lazylock init"),
             PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
         );
+
+        // Symbol map is lazy-loaded from app's assets directory via get_symbol_map()
+        // when first accessed (after init_game_config() sets project_path)
+
         self.set_size(w, h).set_title(title);
         self.base.gr.set_ratiox(rx);
         self.base.gr.set_ratioy(ry);
