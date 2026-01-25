@@ -18,13 +18,20 @@
 //!   combination of upstream sizing and per-instance scaling here, matching
 //!   the contract in `graph.rs`.
 
-use crate::render::adapter::{RenderCell, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
+use crate::render::adapter::RenderCell;
 use crate::render::graph::UnifiedTransform;
 
-/// Background fill symbol index in PETSCII texture (solid white block at row 10, col 0)
-/// In 4096x4096 texture: 256 symbols per row, row 10 starts at index 256*10 = 2560
+/// Background fill symbol index (solid white block)
+///
+/// Linear indexing layout:
+/// - Sprite: [0, 40959] = 160 blocks × 256 symbols
+/// - TUI: [40960, 43519] = 10 blocks × 256 symbols
+/// - Emoji: [43520, 44287] = 6 blocks × 128 symbols
+/// - CJK: [44288, 48383] = 128 cols × 32 rows
+///
+/// BG_FILL_SYMBOL = Block 0, symbol 160 (row 10, col 0 within the block)
 /// Used for cell background color, underline, and strikethrough effects
-const BG_FILL_SYMBOL: usize = 2560;
+const BG_FILL_SYMBOL: usize = 160;
 
 /// Symbol instance data for WGPU (matches OpenGL layout exactly)
 ///
@@ -155,55 +162,92 @@ impl WgpuSymbolRenderer {
         }
     }
     
-    /// Load symbol texture with support for TUI (16x32), Emoji (32x32), and CJK (32x32)
+    /// Load symbol texture with linear region-based indexing
     ///
-    /// 4096x4096 texture layout (256x256 grid, 10 Sprite Rows):
-    /// - Rows 0-159 (indices 0-40959): 16x16 Sprites
-    /// - Rows 160-191, cols 0-159: 16x32 TUI characters (Block 160-169)
-    /// - Rows 160-191, cols 160-255: 32x32 Emoji (Block 170-175)
-    /// - Rows 192-255 (indices 44288-48383): 32x32 CJK characters
+    /// 4096x4096 texture layout with linear symbol array:
+    /// - [0, 40959]: Sprite region (160 blocks × 256 = 40960 symbols, 16×16px each)
+    /// - [40960, 43519]: TUI region (10 blocks × 256 = 2560 symbols, 16×32px each)
+    /// - [43520, 44287]: Emoji region (6 blocks × 128 = 768 symbols, 32×32px each)
+    /// - [44288, 48383]: CJK region (128 cols × 32 rows = 4096 symbols, 32×32px each)
+    ///
+    /// This linear layout simplifies index calculation in push_render_buffer:
+    /// - Sprite: texidx * 256 + symidx
+    /// - TUI: 40960 + (texidx - 160) * 256 + symidx
+    /// - Emoji: 43520 + (texidx - 170) * 128 + symidx
+    /// - CJK: 44288 + linear_offset
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
         self.symbols.clear();
 
-        let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
-        let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+        let tex_width = texw as f32;
+        let tex_height = texh as f32;
 
-        let th = (texh as f32 / sym_height) as usize;  // Grid rows (e.g., 256 for 4096/16)
-        let tw = (texw as f32 / sym_width) as usize;   // Grid cols (e.g., 256 for 4096/16)
-
-        // Layout constants (based on 4096x4096 texture with 256x256 grid, 10 Sprite Rows)
-        const SPRITE_ROWS: usize = 160;     // Rows 0-159 for sprites (2560px / 16px)
-        const TUI_EMOJI_END_ROW: usize = 192; // Rows 160-191 for TUI+Emoji (512px / 16px = 32 rows)
-        const TUI_COL_BOUNDARY: usize = 160;  // Columns 0-159 are TUI, 160-255 are Emoji
-
-        // Traverse in row-major order (same as original code)
-        for i in 0..th {
-            for j in 0..tw {
-                let pixel_x = j as f32 * sym_width;
-                let pixel_y = i as f32 * sym_height;
-
-                // Determine symbol size based on row and column position
-                let (width, height) = if i < SPRITE_ROWS {
-                    // Rows 0-159: Standard 16x16 sprites
-                    (sym_width, sym_height)
-                } else if i < TUI_EMOJI_END_ROW {
-                    // Rows 160-191: TUI+Emoji region
-                    if j < TUI_COL_BOUNDARY {
-                        // Columns 0-159: TUI 16x32 characters
-                        (sym_width, sym_height * 2.0)
-                    } else {
-                        // Columns 160-255: Emoji 32x32
-                        (sym_width * 2.0, sym_height * 2.0)
-                    }
-                } else {
-                    // Rows 192-255: CJK 32x32 characters
-                    (sym_width * 2.0, sym_height * 2.0)
-                };
-
+        // Region 1: Sprite (160 blocks × 256 = 40960 symbols, 16×16px each)
+        // Texture layout: 16×10 blocks, each block is 256×256px (16×16 symbols of 16×16px)
+        // Rows 0-159 (y: 0-2559px)
+        for block in 0u32..160 {
+            let block_col = block % 16;  // 0-15
+            let block_row = block / 16;  // 0-9
+            for idx in 0u32..256 {
+                let sym_col = idx % 16;  // 0-15 within block
+                let sym_row = idx / 16;  // 0-15 within block
+                let pixel_x = (block_col * 16 + sym_col) * 16;
+                let pixel_y = (block_row * 16 + sym_row) * 16;
                 let frame = self.make_symbols_frame_custom(
-                    texw as f32, texh as f32,
-                    pixel_x, pixel_y,
-                    width, height,
+                    tex_width, tex_height,
+                    pixel_x as f32, pixel_y as f32,
+                    16.0, 16.0,
+                );
+                self.symbols.push(frame);
+            }
+        }
+
+        // Region 2: TUI (10 blocks × 256 = 2560 symbols, 16×32px each)
+        // Texture layout: 10 blocks horizontal, each block is 256×512px (16×16 symbols of 16×32px)
+        // Rows 160-191 (y: 2560-3071px), cols 0-159 (x: 0-2559px)
+        for block in 0u32..10 {
+            for idx in 0u32..256 {
+                let sym_col = idx % 16;  // 0-15 within block
+                let sym_row = idx / 16;  // 0-15 within block
+                let pixel_x = (block * 16 + sym_col) * 16;  // Each block is 256px wide
+                let pixel_y = 2560 + sym_row * 32;  // TUI starts at y=2560, 32px height per symbol
+                let frame = self.make_symbols_frame_custom(
+                    tex_width, tex_height,
+                    pixel_x as f32, pixel_y as f32,
+                    16.0, 32.0,
+                );
+                self.symbols.push(frame);
+            }
+        }
+
+        // Region 3: Emoji (6 blocks × 128 = 768 symbols, 32×32px each)
+        // Texture layout: 6 blocks horizontal, each block is 256×512px (8×16 symbols of 32×32px)
+        // Rows 160-191 (y: 2560-3071px), cols 160-255 (x: 2560-4095px)
+        for block in 0u32..6 {
+            for idx in 0u32..128 {
+                let sym_col = idx % 8;   // 0-7 within block
+                let sym_row = idx / 8;   // 0-15 within block
+                let pixel_x = 2560 + (block * 8 + sym_col) * 32;  // Emoji starts at x=2560
+                let pixel_y = 2560 + sym_row * 32;  // Emoji starts at y=2560
+                let frame = self.make_symbols_frame_custom(
+                    tex_width, tex_height,
+                    pixel_x as f32, pixel_y as f32,
+                    32.0, 32.0,
+                );
+                self.symbols.push(frame);
+            }
+        }
+
+        // Region 4: CJK (128 cols × 32 rows = 4096 symbols, 32×32px each)
+        // Texture layout: grid-based, each symbol is 32×32px
+        // Rows 192-255 (y: 3072-4095px), cols 0-127 (x: 0-4095px)
+        for row in 0u32..32 {
+            for col in 0u32..128 {
+                let pixel_x = col * 32;
+                let pixel_y = 3072 + row * 32;
+                let frame = self.make_symbols_frame_custom(
+                    tex_width, tex_height,
+                    pixel_x as f32, pixel_y as f32,
+                    32.0, 32.0,
                 );
                 self.symbols.push(frame);
             }

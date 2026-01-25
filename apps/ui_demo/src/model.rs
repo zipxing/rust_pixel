@@ -102,9 +102,9 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
         });
     
     // Add some test items
-    test_list.add_text_item("🎵 Music Files");
-    test_list.add_text_item("📁 Documents");
-    test_list.add_text_item("🖼️ Pictures");
+    test_list.add_text_item("😀 Music Files");
+    test_list.add_text_item("🐭 Documents");
+    test_list.add_text_item("🎸 Pictures");
     test_list.add_text_item("📹 Videos");
     test_list.add_text_item("⚙️ Settings");
     

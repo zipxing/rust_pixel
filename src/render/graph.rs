@@ -722,17 +722,17 @@ impl Graph {
 /// - `ccp`: Center point for rotation
 /// - `modifier`: Style modifier flags (see Modifier enum in style.rs)
 ///
-/// # Unified Texture Layout (4096x4096, 10 Sprite Rows)
-/// - **Sprite Region** (rows 0-159): 256 cols × 160 rows = 40960 sprites (16x16 pixels each)
-///   - Index range: 0-40959 (linear)
-/// - **TUI Region** (rows 160-191): 10 blocks (256×512px each), 2560 chars (16x32 pixels each)
-///   - Block 160-169, 16×16 chars/block
-///   - Index range: 40960-43519 (linear)
-/// - **Emoji Region** (rows 160-191, x=2560): 6 blocks (256×512px each), 768 emojis (32x32 pixels each)
-///   - Block 170-175, 8×16 chars/block
-///   - Index range: 43520-44287 (linear)
-/// - **CJK Region** (rows 192-255): 128 cols × 32 rows = 4096 chars (32x32 pixels each)
-///   - Index range: 44288-48383 (linear)
+/// # Linear Symbol Array Layout (4096x4096 texture)
+///
+/// The symbols array uses a simple linear indexing scheme:
+/// - **Sprite**: [0, 40959] = 160 blocks × 256 symbols (16×16px each)
+///   - Formula: texidx * 256 + symidx
+/// - **TUI**: [40960, 43519] = 10 blocks × 256 symbols (16×32px each)
+///   - Formula: 40960 + (texidx - 160) * 256 + symidx
+/// - **Emoji**: [43520, 44287] = 6 blocks × 128 symbols (32×32px each)
+///   - Formula: 43520 + (texidx - 170) * 128 + symidx
+/// - **CJK**: [44288, 48383] = 128 cols × 32 rows = 4096 symbols (32×32px each)
+///   - Formula: 44288 + linear_offset
 pub fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
     fc: &(u8, u8, u8, u8),
@@ -765,58 +765,25 @@ pub fn push_render_buffer(
         wc.bcolor = None;
     }
 
-    // Calculate final texture symbol index
+    // Calculate final texture symbol index using linear region-based indexing
     //
-    // The texture is traversed in row-major order (256 cols × 256 rows):
-    // - Rows 0-159 (indices 0-40959): 16x16 Sprites (block-based layout)
-    // - Rows 160-191 (indices 40960-43519): 16x32 TUI characters (Block 160-169)
-    // - Rows 160-191, x=2560+ (indices 43520-44287): 32x32 Emoji (Block 170-175)
-    // - Rows 192-255 (indices 44288-48383): 32x32 CJK characters
+    // Linear symbol array layout:
+    // - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols)
+    // - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols)
+    // - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols)
+    // - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols)
     //
-    // 10 Sprite Rows layout
-    if texidx >= 170 {
-        // Emoji blocks (170-175)
-        // 6 blocks, each 256×512px, starts at x=2560 (column 160 in 16px grid)
-        // Each block: 8×16 chars = 128 emoji (32×32px each)
-        let block_num = texidx - 170;
-        let col_offset = 160 + block_num * 16;  // Each block is 256px wide = 16 cols in 16px grid
-        let row_offset = 160;  // Base row is 160 (y=2560)
-
-        // Each Emoji is 32x32px (2x2 grid units of 16x16px)
-        // symidx is 0-127 (128 chars per block)
-        // In block: 8 cols * 16 rows
-        let r = symidx / 8;
-        let c = symidx % 8;
-
-        let grid_col = col_offset + c * 2;
-        let grid_row = row_offset + r * 2;
-
-        wc.texsym = grid_row * 256 + grid_col;
+    // Simple linear calculation for each region:
+    wc.texsym = if texidx >= 170 {
+        // Emoji blocks (170-175): base 43520 + block offset + symbol index
+        43520 + (texidx - 170) * 128 + symidx
     } else if texidx >= 160 {
-        // TUI blocks (160-169)
-        // 10 blocks, each 256×512px
-        // Each block: 16×16 chars = 256 TUI chars (16×32px each)
-        let block_num = texidx - 160;
-        let col_offset = block_num * 16;  // Each block is 256px wide = 16 cols in 16px grid
-        let row_offset = 160;  // Base row is 160 (y=2560)
-
-        // Each TUI char is 16x32px (1x2 grid units)
-        // symidx is 0-255 (256 chars per block)
-        // In block: 16 cols * 16 rows
-        let r = symidx / 16;
-        let c = symidx % 16;
-
-        let grid_col = col_offset + c;
-        let grid_row = row_offset + r * 2;
-
-        wc.texsym = grid_row * 256 + grid_col;
+        // TUI blocks (160-169): base 40960 + block offset + symbol index
+        40960 + (texidx - 160) * 256 + symidx
     } else {
-        // Sprite blocks (0-159)
-        // 16x16 chars/block, 16x16px each (1x1 grid unit)
-        let x = symidx as u32 % 16u32 + (texidx as u32 % 16u32) * 16u32;
-        let y = symidx as u32 / 16u32 + (texidx as u32 / 16u32) * 16u32;
-        wc.texsym = (y * 256u32 + x) as usize;
-    }
+        // Sprite blocks (0-159): direct linear index
+        texidx * 256 + symidx
+    };
     // Derive the instance anchor from the destination rectangle produced by helper functions.
     //
     // The backend transform chain applies additional translation and ratio-compensation.
