@@ -123,6 +123,7 @@ members = [
 
 exclude = [
     "tools/cargo-pixel",
+    "tools/symbols",
     "apps/poker/ffi",
     "apps/poker/wasm",
     "apps/template/ffi",
