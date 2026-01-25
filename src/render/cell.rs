@@ -115,6 +115,11 @@ impl Cell {
             return (idx, block, self.fg, self.bg, self.modifier);
         }
 
+        // Check for CJK characters (returns block 176-207, idx 0-127)
+        if let Some((block, idx)) = SYMBOL_MAP.cjk_idx(&self.symbol) {
+            return (idx, block, self.fg, self.bg, self.modifier);
+        }
+
         // For Sprite texture (tex=0), handle space character specially
         // Sprite symbol map maps space to index 33, but in Sprite texture it should be 32
         if self.tex == 0 && self.symbol == " " {

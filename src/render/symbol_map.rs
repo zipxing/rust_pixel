@@ -197,6 +197,27 @@ impl SymbolMap {
         self.cjk.get(&ch).copied()
     }
 
+    /// Query CJK region symbol and return (block, index) format
+    /// Compatible with calc_linear_index for rendering
+    /// Returns (block, idx) where block is 176-207 (row) and idx is 0-127 (column)
+    pub fn cjk_idx(&self, symbol: &str) -> Option<(u8, u8)> {
+        let ch = symbol.chars().next()?;
+        let (pixel_x, pixel_y) = self.cjk.get(&ch).copied()?;
+
+        // Convert pixel coordinates to grid position
+        // CJK region starts at y=3072, each cell is 32x32 pixels
+        let col = pixel_x / 32;  // 0-127
+        let row = (pixel_y - 3072) / 32;  // 0-31
+
+        // Convert to block/index format
+        // block = CJK_BLOCK_START + row = 176 + row
+        // idx = col
+        let block = (layout::CJK_BLOCK_START as u16 + row) as u8;
+        let idx = col as u8;
+
+        Some((block, idx))
+    }
+
     /// Add CJK character mapping
     /// Used by CJK tool to update mappings at runtime
     pub fn add_cjk(&mut self, ch: char, pixel_x: u16, pixel_y: u16) {
@@ -352,6 +373,9 @@ pub mod layout {
     pub const TUI_BLOCK_END: usize = 169;
     pub const EMOJI_BLOCK_START: usize = 170;
     pub const EMOJI_BLOCK_END: usize = 175;
+    pub const CJK_BLOCK_START: usize = 176;
+    pub const CJK_BLOCK_END: usize = 207; // 176 + 32 - 1 = 207 (32 rows)
+    pub const CJK_SYMBOLS_PER_BLOCK: u32 = 128; // 128 columns per row
 
     // Size multipliers (relative to base PIXEL_SYM_WIDTH/HEIGHT)
     // Sprite: 1x width, 1x height
@@ -499,7 +523,11 @@ pub mod layout {
 /// ```
 #[inline]
 pub fn calc_linear_index(texidx: usize, symidx: usize) -> usize {
-    if texidx >= layout::EMOJI_BLOCK_START {
+    if texidx >= layout::CJK_BLOCK_START {
+        // CJK blocks (176-207): base 44288 + row offset + column index
+        // Each block = one row (128 symbols), symidx = column (0-127)
+        layout::CJK_BASE + (texidx - layout::CJK_BLOCK_START) * layout::CJK_SYMBOLS_PER_BLOCK as usize + symidx
+    } else if texidx >= layout::EMOJI_BLOCK_START {
         // Emoji blocks (170-175): base 43520 + block offset + symbol index
         layout::EMOJI_BASE + (texidx - layout::EMOJI_BLOCK_START) * layout::EMOJI_SYMBOLS_PER_BLOCK as usize + symidx
     } else if texidx >= layout::TUI_BLOCK_START {
@@ -751,7 +779,52 @@ mod tests {
     #[test]
     fn test_not_found() {
         let map = SymbolMap::default();
-        assert!(matches!(map.lookup("不存在"), SymbolIndex::NotFound));
+        // Use a rare character not in the 3500 common CJK set
+        assert!(matches!(map.lookup("㊀"), SymbolIndex::NotFound));
+    }
+
+    #[test]
+    fn test_cjk_lookup() {
+        let map = SymbolMap::default();
+        // "一" is the first CJK character at grid position (0, 0)
+        // pixel_region starts at y=3072, char_size is 32x32
+        if let SymbolIndex::Cjk(x, y) = map.lookup("一") {
+            assert_eq!(x, 0);
+            assert_eq!(y, 3072);
+        } else {
+            panic!("一 should be in CJK region");
+        }
+
+        // "中" is at grid position (26, 0)
+        if let SymbolIndex::Cjk(x, y) = map.lookup("中") {
+            assert_eq!(x, 26 * 32);
+            assert_eq!(y, 3072);
+        } else {
+            panic!("中 should be in CJK region");
+        }
+
+        // Test direct cjk_coords
+        assert_eq!(map.cjk_coords('一'), Some((0, 3072)));
+    }
+
+    #[test]
+    fn test_cjk_idx() {
+        let map = SymbolMap::default();
+
+        // "一" is at grid position (col=0, row=0)
+        // block = 176 + 0 = 176, idx = 0
+        assert_eq!(map.cjk_idx("一"), Some((176, 0)));
+
+        // "中" is at grid position (col=26, row=0)
+        // block = 176 + 0 = 176, idx = 26
+        assert_eq!(map.cjk_idx("中"), Some((176, 26)));
+
+        // Test that linear index calculation works for CJK
+        // "一": linear index = CJK_BASE + 0 * 128 + 0 = 44288
+        assert_eq!(calc_linear_index(176, 0), layout::CJK_BASE);
+
+        // "中": linear index = CJK_BASE + 0 * 128 + 26 = 44314
+        assert_eq!(calc_linear_index(176, 26), layout::CJK_BASE + 26);
     }
 
     #[test]
@@ -784,6 +857,12 @@ mod tests {
         assert_eq!(calc_linear_index(170, 0), 43520);
         assert_eq!(calc_linear_index(170, 127), 43647);
         assert_eq!(calc_linear_index(175, 127), 44287);
+
+        // CJK region
+        assert_eq!(calc_linear_index(176, 0), 44288);  // First CJK (row 0, col 0)
+        assert_eq!(calc_linear_index(176, 127), 44415);  // End of first row
+        assert_eq!(calc_linear_index(177, 0), 44416);  // Start of second row
+        assert_eq!(calc_linear_index(207, 127), 48383);  // Last CJK (row 31, col 127)
     }
 
     #[test]

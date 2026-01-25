@@ -98,6 +98,16 @@ CJK_CHAR_SIZE = 32        # CJK 字符 32×32px
 CJK_AREA_START_Y = 3072   # CJK 区域起始 Y
 CJK_GRID_COLS = 128       # 每行 128 个 CJK 字符
 CJK_GRID_ROWS = 32        # 32 行
+
+# CJK 渲染参数
+CJK_TXT = os.path.join(SCRIPT_DIR, "3500C.txt")
+CJK_CHARS_DIR = os.path.join(SCRIPT_DIR, "cjk_chars")
+CJK_RENDER_SIZE = 64      # 渲染尺寸（会缩放到 32×32）
+CJK_FONT_NAME = "PingFang SC"
+CJK_FONT_SIZE = 56
+
+# TUI 输入文件
+TUI_TXT = os.path.join(SCRIPT_DIR, "tui.txt")
 # ------------------------------------------
 
 
@@ -205,6 +215,276 @@ def load_emojis(emoji_dir, count):
     return symbols
 
 
+def parse_tui_txt(filepath):
+    """
+    解析 tui.txt 获取 TUI 字符和 Emoji 列表
+
+    Returns:
+        (tui_chars, emojis)
+        - tui_chars: list of TUI characters
+        - emojis: list of emoji strings
+    """
+    if not os.path.exists(filepath):
+        print(f"  警告: TUI 文件不存在: {filepath}")
+        return [], []
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    # 跳过开头的空行
+    start_idx = 0
+    while start_idx < len(lines) and lines[start_idx].strip() == '':
+        start_idx += 1
+
+    # 找到分隔 TUI 和 Emoji 的空行
+    separator_idx = -1
+    for i in range(start_idx, len(lines)):
+        if lines[i].strip() == '':
+            separator_idx = i
+            break
+
+    if separator_idx == -1:
+        print("  错误: 未找到空行分隔符")
+        return [], []
+
+    tui_lines = lines[start_idx:separator_idx]
+    emoji_lines = lines[separator_idx + 1:]
+
+    # 解析 TUI 字符（首位添加空格）
+    tui_chars = [' ']
+    for line in tui_lines:
+        line = line.strip()
+        if line:
+            for char in line:
+                tui_chars.append(char)
+
+    # 解析 Emoji
+    emojis = []
+    for line in emoji_lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        i = 0
+        while i < len(line):
+            char = line[i]
+            code = ord(char)
+
+            # 检查是否是 emoji 起始字符
+            is_emoji_start = (
+                (0x1F000 <= code <= 0x1FFFF) or
+                (0x2600 <= code <= 0x27BF) or
+                (0x2300 <= code <= 0x23FF) or
+                (0x2B00 <= code <= 0x2BFF) or
+                char in '⭐⚡☔⛳⛵⚓⛱⛰⛲⏰✏✅✌❤❎❌⚫⚪⬛⬜'
+            )
+
+            if is_emoji_start:
+                emoji = char
+
+                # 检查变体选择器 U+FE0F
+                if i + 1 < len(line) and ord(line[i + 1]) == 0xFE0F:
+                    emoji += line[i + 1]
+                    i += 2
+                else:
+                    i += 1
+
+                emojis.append(emoji)
+            else:
+                i += 1
+
+    print(f"  解析到 {len(tui_chars)} 个 TUI 字符, {len(emojis)} 个 Emoji")
+    return tui_chars, emojis
+
+
+def parse_cjk_txt(filepath):
+    """
+    解析 CJK 字符文件（每行一个汉字）
+
+    Returns:
+        list of str: CJK 字符列表
+    """
+    if not os.path.exists(filepath):
+        print(f"  警告: CJK 文件不存在: {filepath}")
+        return []
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        chars = [line.strip() for line in f if line.strip()]
+
+    # 限制数量（最多 4096 个）
+    max_chars = CJK_GRID_COLS * CJK_GRID_ROWS
+    if len(chars) > max_chars:
+        print(f"  警告: CJK 字符数量 {len(chars)} 超过上限 {max_chars}，将截断")
+        chars = chars[:max_chars]
+
+    return chars
+
+
+def render_cjk_chars(cjk_chars, output_dir):
+    """
+    使用 Quartz 渲染 CJK 字符为 PNG 图像
+
+    Args:
+        cjk_chars: CJK 字符列表
+        output_dir: 输出目录
+
+    Returns:
+        bool: 是否成功
+    """
+    try:
+        import Quartz
+        import CoreText
+    except ImportError:
+        print("  错误: 无法导入 Quartz/CoreText（需要 macOS）")
+        return False
+
+    import shutil
+
+    # 清理并创建输出目录
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir)
+
+    print(f"  渲染 {len(cjk_chars)} 个 CJK 字符到 {output_dir}...")
+
+    success_count = 0
+    for idx, char in enumerate(cjk_chars):
+        output_path = os.path.join(output_dir, f"{idx:04d}_{char}.png")
+
+        # 创建位图上下文
+        color_space = Quartz.CGColorSpaceCreateDeviceRGB()
+        context = Quartz.CGBitmapContextCreate(
+            None,
+            CJK_RENDER_SIZE, CJK_RENDER_SIZE,
+            8,
+            CJK_RENDER_SIZE * 4,
+            color_space,
+            Quartz.kCGImageAlphaPremultipliedLast
+        )
+
+        if context is None:
+            print(f"    错误: 无法创建上下文 {idx}: {char}")
+            continue
+
+        # 清空背景（透明）
+        Quartz.CGContextClearRect(context, Quartz.CGRectMake(0, 0, CJK_RENDER_SIZE, CJK_RENDER_SIZE))
+
+        # 设置文本绘制模式
+        Quartz.CGContextSetTextDrawingMode(context, Quartz.kCGTextFill)
+        Quartz.CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0)
+
+        # 创建字体
+        font = CoreText.CTFontCreateWithName(CJK_FONT_NAME, CJK_FONT_SIZE, None)
+
+        # 创建属性字符串
+        attributes = {
+            CoreText.kCTFontAttributeName: font,
+            CoreText.kCTForegroundColorFromContextAttributeName: True
+        }
+        attr_string = CoreText.CFAttributedStringCreate(None, char, attributes)
+
+        # 创建 CTLine
+        line = CoreText.CTLineCreateWithAttributedString(attr_string)
+
+        # 获取字形边界以居中
+        bounds = CoreText.CTLineGetBoundsWithOptions(line, 0)
+        text_width = bounds.size.width
+        text_height = bounds.size.height
+
+        # 获取字体度量信息
+        ascent = CoreText.CTFontGetAscent(font)
+        descent = CoreText.CTFontGetDescent(font)
+        leading = CoreText.CTFontGetLeading(font)
+
+        # 计算居中位置
+        x = (CJK_RENDER_SIZE - text_width) / 2.0
+        font_height = ascent + descent + leading
+        baseline_y = (CJK_RENDER_SIZE - font_height) / 2.0 + descent
+
+        # 设置文本位置并绘制
+        Quartz.CGContextSetTextPosition(context, x, baseline_y)
+        CoreText.CTLineDraw(line, context)
+
+        # 创建 CGImage
+        image = Quartz.CGBitmapContextCreateImage(context)
+        if image is None:
+            print(f"    错误: 无法创建图像 {idx}: {char}")
+            continue
+
+        # 保存为 PNG
+        url = Quartz.CFURLCreateFromFileSystemRepresentation(
+            None,
+            output_path.encode('utf-8'),
+            len(output_path.encode('utf-8')),
+            False
+        )
+
+        dest = Quartz.CGImageDestinationCreateWithURL(url, "public.png", 1, None)
+        if dest is None:
+            print(f"    错误: 无法创建图像目标 {idx}: {char}")
+            continue
+
+        Quartz.CGImageDestinationAddImage(dest, image, None)
+        if Quartz.CGImageDestinationFinalize(dest):
+            success_count += 1
+
+        if (idx + 1) % 500 == 0:
+            print(f"    已渲染 {idx + 1}/{len(cjk_chars)}")
+
+    print(f"  渲染完成: {success_count}/{len(cjk_chars)}")
+    return success_count > 0
+
+
+def load_cjk_chars(cjk_dir, cjk_chars):
+    """
+    加载渲染好的 CJK 字符图像
+
+    Args:
+        cjk_dir: CJK 字符目录
+        cjk_chars: CJK 字符列表
+
+    Returns:
+        list of PIL.Image: CJK 字符图像
+    """
+    symbols = []
+
+    for i, char in enumerate(cjk_chars):
+        # 查找文件：0000_字.png
+        img_path = os.path.join(cjk_dir, f"{i:04d}_{char}.png")
+
+        if os.path.exists(img_path):
+            img = Image.open(img_path).convert("RGBA")
+            # 缩放到 32×32
+            if img.size != (CJK_CHAR_SIZE, CJK_CHAR_SIZE):
+                img = img.resize((CJK_CHAR_SIZE, CJK_CHAR_SIZE), Image.LANCZOS)
+            symbols.append(img)
+        else:
+            # 创建空白符号
+            symbols.append(Image.new("RGBA", (CJK_CHAR_SIZE, CJK_CHAR_SIZE), (0, 0, 0, 0)))
+            if i < 100:  # 只警告前面的
+                print(f"  警告: CJK 字符 {i} ({char}) 未找到")
+
+    return symbols
+
+
+def build_cjk_mappings(cjk_chars):
+    """
+    构建 CJK 字符到网格位置的映射
+
+    Args:
+        cjk_chars: CJK 字符列表
+
+    Returns:
+        dict: {char: [col, row], ...}
+    """
+    mappings = {}
+    for i, char in enumerate(cjk_chars):
+        col = i % CJK_GRID_COLS
+        row = i // CJK_GRID_COLS
+        mappings[char] = [col, row]
+    return mappings
+
+
 def main():
     print("="*70)
     print("生成 4096x4096 symbols.png")
@@ -223,6 +503,10 @@ def main():
     if not os.path.exists(TUI_EMOJIS_DIR):
         print(f"错误: 找不到 {TUI_EMOJIS_DIR}")
         sys.exit(1)
+
+    # 解析 tui.txt 获取 TUI 字符和 Emoji（用于 symbol_map.json）
+    print("\n解析 tui.txt...")
+    tui_chars_list, emoji_list = parse_tui_txt(TUI_TXT)
 
     # 创建空白纹理
     print(f"\n创建 {TEXTURE_SIZE}×{TEXTURE_SIZE} 纹理...")
@@ -250,6 +534,28 @@ def main():
     emoji_total = EMOJI_BLOCKS_COUNT * EMOJI_CHARS_PER_BLOCK  # 6 blocks × 128 = 768
     emojis = load_emojis(TUI_EMOJIS_DIR, emoji_total)
     print(f"  加载了 {len(emojis)} 个 Emoji")
+
+    # ========== 加载/渲染 CJK 字符 ==========
+    print("\n处理 CJK 字符...")
+    cjk_chars = parse_cjk_txt(CJK_TXT)
+    print(f"  解析到 {len(cjk_chars)} 个 CJK 字符")
+
+    cjk_images = []
+    if cjk_chars:
+        # 检查是否已有渲染好的字符
+        if os.path.exists(CJK_CHARS_DIR):
+            existing_files = len([f for f in os.listdir(CJK_CHARS_DIR) if f.endswith('.png')])
+            if existing_files >= len(cjk_chars):
+                print(f"  使用已渲染的 CJK 字符 ({existing_files} 个)")
+            else:
+                print(f"  已有 {existing_files} 个，需要重新渲染...")
+                render_cjk_chars(cjk_chars, CJK_CHARS_DIR)
+        else:
+            render_cjk_chars(cjk_chars, CJK_CHARS_DIR)
+
+        # 加载 CJK 字符图像
+        cjk_images = load_cjk_chars(CJK_CHARS_DIR, cjk_chars)
+        print(f"  加载了 {len(cjk_images)} 个 CJK 字符图像")
 
     # ========== 绘制 Sprite 区域（Block 0-159）==========
     print(f"\n绘制 Sprite 区域（Block 0-{SPRITE_BLOCKS-1}）...")
@@ -339,13 +645,98 @@ def main():
 
     print(f"  绘制了 {emoji_idx} 个 Emoji")
 
-    # ========== CJK 区域预留 ==========
-    print(f"\nCJK 区域预留（y={CJK_AREA_START_Y}-{TEXTURE_SIZE-1}）...")
-    print(f"  预留 {CJK_GRID_COLS}×{CJK_GRID_ROWS} = {CJK_GRID_COLS * CJK_GRID_ROWS} 个 CJK 字符位置")
+    # ========== 绘制 CJK 区域 ==========
+    print(f"\n绘制 CJK 区域（y={CJK_AREA_START_Y}-{TEXTURE_SIZE-1}）...")
+    cjk_idx = 0
+
+    for i, img in enumerate(cjk_images):
+        col = i % CJK_GRID_COLS
+        row = i // CJK_GRID_COLS
+
+        x = col * CJK_CHAR_SIZE
+        y = CJK_AREA_START_Y + row * CJK_CHAR_SIZE
+
+        texture.paste(img, (x, y))
+        cjk_idx += 1
+
+        if (i + 1) % 500 == 0:
+            print(f"  已绘制 {i + 1}/{len(cjk_images)}")
+
+    print(f"  绘制了 {cjk_idx} 个 CJK 字符")
 
     # ========== 保存纹理 ==========
     print(f"\n保存纹理到 {OUTPUT_PNG}...")
     texture.save(OUTPUT_PNG, "PNG")
+
+    # ========== 生成 symbol_map.json ==========
+    print(f"\n生成 {SYMBOL_MAP_JSON}...")
+
+    # 构建 CJK 映射
+    cjk_mappings = build_cjk_mappings(cjk_chars) if cjk_chars else {}
+
+    symbol_map = {
+        "version": 1,
+        "texture_size": TEXTURE_SIZE,
+        "regions": {
+            "sprite": {
+                "type": "block",
+                "block_range": [0, SPRITE_BLOCKS - 1],
+                "char_size": [SPRITE_CHAR_SIZE, SPRITE_CHAR_SIZE],
+                "chars_per_block": SPRITE_CHARS_PER_BLOCK,
+                "symbols": "@abcdefghijklmnopqrstuvwxyz[£]↑← !\"#$%&'()*+,-./0123456789:;<=>?─ABCDEFGHIJKLMNOPQRSTUVWXYZ┼",
+                "extras": {
+                    "▇": [0, 209],
+                    "▒": [0, 94],
+                    "∙": [0, 122],
+                    "│": [0, 93],
+                    "┐": [0, 110],
+                    "╮": [0, 73],
+                    "┌": [0, 112],
+                    "╭": [0, 85],
+                    "└": [0, 109],
+                    "╰": [0, 74],
+                    "┘": [0, 125],
+                    "╯": [0, 75]
+                }
+            },
+            "tui": {
+                "type": "block",
+                "block_range": [TUI_BLOCKS_START, TUI_BLOCKS_START + TUI_BLOCKS_COUNT - 1],
+                "char_size": [TUI_CHAR_WIDTH, TUI_CHAR_HEIGHT],
+                "chars_per_block": TUI_CHARS_PER_BLOCK,
+                "symbols": ''.join(tui_chars_list)  # 从 tui.txt 动态读取
+            },
+            "emoji": {
+                "type": "block",
+                "block_range": [EMOJI_BLOCKS_START, EMOJI_BLOCKS_START + EMOJI_BLOCKS_COUNT - 1],
+                "char_size": [EMOJI_CHAR_SIZE, EMOJI_CHAR_SIZE],
+                "chars_per_block": EMOJI_CHARS_PER_BLOCK,
+                "symbols": emoji_list  # 从 tui.txt 动态读取
+            },
+            "cjk": {
+                "type": "grid",
+                "pixel_region": [0, CJK_AREA_START_Y, TEXTURE_SIZE, TEXTURE_SIZE - CJK_AREA_START_Y],
+                "char_size": [CJK_CHAR_SIZE, CJK_CHAR_SIZE],
+                "grid_cols": CJK_GRID_COLS,
+                "mappings": cjk_mappings
+            }
+        },
+        "linear_index": {
+            "sprite_base": 0,
+            "sprite_total": SPRITE_BLOCKS * SPRITE_CHARS_PER_BLOCK,
+            "tui_base": SPRITE_BLOCKS * SPRITE_CHARS_PER_BLOCK,
+            "tui_total": TUI_BLOCKS_COUNT * TUI_CHARS_PER_BLOCK,
+            "emoji_base": SPRITE_BLOCKS * SPRITE_CHARS_PER_BLOCK + TUI_BLOCKS_COUNT * TUI_CHARS_PER_BLOCK,
+            "emoji_total": EMOJI_BLOCKS_COUNT * EMOJI_CHARS_PER_BLOCK,
+            "cjk_base": SPRITE_BLOCKS * SPRITE_CHARS_PER_BLOCK + TUI_BLOCKS_COUNT * TUI_CHARS_PER_BLOCK + EMOJI_BLOCKS_COUNT * EMOJI_CHARS_PER_BLOCK,
+            "cjk_total": len(cjk_chars) if cjk_chars else CJK_GRID_COLS * CJK_GRID_ROWS
+        }
+    }
+
+    with open(SYMBOL_MAP_JSON, 'w', encoding='utf-8') as f:
+        json.dump(symbol_map, f, ensure_ascii=False, indent=2)
+
+    print(f"  已保存 symbol_map.json (包含 {len(cjk_mappings)} 个 CJK 映射)")
 
     # ========== 统计 ==========
     print("\n" + "="*70)
@@ -367,8 +758,10 @@ def main():
     print(f"    - 已绘制: {emoji_idx} emojis")
     print(f"  CJK 区域 (y={CJK_AREA_START_Y}-{TEXTURE_SIZE-1}):")
     print(f"    - Grid: {CJK_GRID_COLS}×{CJK_GRID_ROWS} (32×32px each)")
-    print(f"    - 预留: {CJK_GRID_COLS * CJK_GRID_ROWS} chars")
-    print(f"\n输出文件: {OUTPUT_PNG}")
+    print(f"    - 已绘制: {cjk_idx} chars")
+    print(f"\n输出文件:")
+    print(f"  - {OUTPUT_PNG}")
+    print(f"  - {SYMBOL_MAP_JSON}")
     file_size = os.path.getsize(OUTPUT_PNG)
     print(f"文件大小: {file_size / 1024 / 1024:.2f} MB")
 
