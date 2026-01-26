@@ -420,15 +420,20 @@ pub fn winit_init_common<T>(
 where
     T: crate::render::adapter::Adapter,
 {
-    use crate::render::adapter::{
-        init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
-    };
+    use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE};
     use log::info;
     use winit::event_loop::EventLoop;
 
     info!("Initializing Winit adapter common components...");
 
-    // 1. Load texture file and set symbol dimensions
+    // 1. Use pre-loaded texture data from init_pixel_assets()
+    // Texture and symbol_map are already loaded during init_pixel_assets()
+    // PIXEL_SYM_WIDTH/HEIGHT are already set
+    let tex_data = crate::get_pixel_texture_data();
+    let texwidth = tex_data.width;
+    let texheight = tex_data.height;
+
+    // Build texture path for logging (actual data comes from cache)
     let project_path = &crate::get_game_config().project_path;
     let texture_path = format!(
         "{}{}{}",
@@ -436,39 +441,23 @@ where
         std::path::MAIN_SEPARATOR,
         PIXEL_TEXTURE_FILE
     );
-    let teximg = image::open(&texture_path)
-        .map_err(|e| e.to_string())
-        .unwrap()
-        .to_rgba8();
-    let texwidth = teximg.width();
-    let texheight = teximg.height();
 
-    PIXEL_SYM_WIDTH
-        .set(init_sym_width(texwidth))
-        .expect("lazylock init");
-    PIXEL_SYM_HEIGHT
-        .set(init_sym_height(texheight))
-        .expect("lazylock init");
-
-    info!("Loaded texture: {}", texture_path);
+    info!("Using pre-loaded texture: {}x{}", texwidth, texheight);
     info!(
-        "Symbol dimensions: {}x{} (Sprite: 8x8, TUI: 8x16)",
-        PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-        PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+        "Symbol dimensions: {}x{} (Sprite: 16x16, TUI: 16x32)",
+        PIXEL_SYM_WIDTH.get().expect("PIXEL_SYM_WIDTH not initialized - call init_pixel_assets first"),
+        PIXEL_SYM_HEIGHT.get().expect("PIXEL_SYM_HEIGHT not initialized - call init_pixel_assets first"),
     );
-
-    // Symbol map is lazy-loaded from app's assets directory via get_symbol_map()
-    // when first accessed (after init_game_config() sets project_path)
 
     // 2. Set basic parameters
     adapter.set_size(w, h);
     adapter.set_title(title.clone());
-    
+
     // Get base reference once to avoid multiple mutable borrows
     let base = adapter.get_base();
     base.gr.set_ratiox(rx);
     base.gr.set_ratioy(ry);
-    
+
     // Get needed values first, then call methods
     let cell_w = base.cell_w;
     let cell_h = base.cell_h;

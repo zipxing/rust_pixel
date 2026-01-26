@@ -38,16 +38,41 @@ impl WebAdapter {
         }
     }
 
-    pub fn init_glpix(&mut self, texwidth: i32, texheight: i32, tex: &[u8]) {
-        PIXEL_SYM_WIDTH
-            .set(init_sym_width(texwidth as u32))
-            .expect("lazylock init");
-        PIXEL_SYM_HEIGHT
-            .set(init_sym_height(texheight as u32))
-            .expect("lazylock init");
-        
+    /// Initialize WebGL pixel renderer using pre-cached texture data
+    ///
+    /// This method uses the texture data that was cached during wasm_init_pixel_assets().
+    /// Call this instead of upload_imgdata() when using the new unified asset loading.
+    pub fn init_glpix_from_cache(&mut self) {
+        let tex_data = crate::get_pixel_texture_data();
+
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
-        
+
+        // Create direct OpenGL pixel renderer using cached texture data
+        if let Some(gl) = self.gl.take() {
+            let gl_pixel_renderer = GlPixelRenderer::new(
+                gl,
+                "#version 300 es",
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+                tex_data.width as i32,
+                tex_data.height as i32,
+                &tex_data.data,
+            );
+            self.gl_pixel_renderer = Some(gl_pixel_renderer);
+        }
+        info!("web glpix init from cache ok: {}x{}", tex_data.width, tex_data.height);
+    }
+
+    /// DEPRECATED: Use wasm_init_pixel_assets() + init_glpix_from_cache() instead
+    ///
+    /// Initialize WebGL pixel renderer with provided texture data (legacy method)
+    pub fn init_glpix(&mut self, texwidth: i32, texheight: i32, tex: &[u8]) {
+        // Set PIXEL_SYM_WIDTH/HEIGHT if not already set
+        let _ = PIXEL_SYM_WIDTH.set(init_sym_width(texwidth as u32));
+        let _ = PIXEL_SYM_HEIGHT.set(init_sym_height(texheight as u32));
+
+        self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
+
         // Create direct OpenGL pixel renderer - no more trait objects!
         // We need to take ownership of the GL context
         if let Some(gl) = self.gl.take() {

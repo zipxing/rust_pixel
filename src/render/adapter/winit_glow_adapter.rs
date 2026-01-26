@@ -558,13 +558,10 @@ impl WinitGlowAdapter {
             })
         };
 
-        // Create and initialize GlPixelRenderer
-        let teximg = image::open(&params.texture_path)
-            .map_err(|e| e.to_string())
-            .unwrap()
-            .to_rgba8();
-        let texwidth = teximg.width();
-        let texheight = teximg.height();
+        // Create and initialize GlPixelRenderer using pre-loaded texture data
+        let tex_data = crate::get_pixel_texture_data();
+        let texwidth = tex_data.width;
+        let texheight = tex_data.height;
 
         let gl_pixel_renderer = GlPixelRenderer::new(
             gl,
@@ -573,7 +570,7 @@ impl WinitGlowAdapter {
             self.base.gr.pixel_h as i32,
             texwidth as i32,
             texheight as i32,
-            &teximg,
+            &tex_data.data,
         );
 
         // Store all OpenGL objects

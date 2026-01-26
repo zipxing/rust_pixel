@@ -9,8 +9,8 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixelRenderer, init_sym_height, init_sym_width, Adapter, AdapterBase,
-        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+        gl::pixel::GlPixelRenderer, Adapter, AdapterBase,
+        PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
     sprite::Sprites,
@@ -177,37 +177,18 @@ impl SdlAdapter {
 
 impl Adapter for SdlAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
-        // load texture file using global GAME_CONFIG
-        // 使用全局 GAME_CONFIG 加载纹理文件
-        let project_path = &crate::get_game_config().project_path;
-        let texture_path = format!(
-            "{}{}{}",
-            project_path,
-            std::path::MAIN_SEPARATOR,
-            PIXEL_TEXTURE_FILE
-        );
-        let teximg = image::open(&texture_path)
-            .map_err(|e| e.to_string())
-            .expect(&format!("open file:{:?}", &texture_path))
-            .to_rgba8();
-        let texwidth = teximg.width();
-        let texheight = teximg.height();
-        PIXEL_SYM_WIDTH
-            .set(init_sym_width(texwidth))
-            .expect("lazylock init");
-        PIXEL_SYM_HEIGHT
-            .set(init_sym_height(texheight))
-            .expect("lazylock init");
+        // Use pre-loaded texture data from init_pixel_assets()
+        // 使用 init_pixel_assets() 预加载的纹理数据
+        let tex_data = crate::get_pixel_texture_data();
+        let texwidth = tex_data.width;
+        let texheight = tex_data.height;
 
-        info!("gl_pixel load texture...{}", texture_path);
+        info!("Using pre-loaded texture: {}x{}", texwidth, texheight);
         info!(
-            "symbol_w={} symbol_h={} (Sprite: 8x8, TUI: 8x16)",
-            PIXEL_SYM_WIDTH.get().expect("lazylock init"),
-            PIXEL_SYM_HEIGHT.get().expect("lazylock init"),
+            "symbol_w={} symbol_h={} (Sprite: 16x16, TUI: 16x32)",
+            PIXEL_SYM_WIDTH.get().expect("PIXEL_SYM_WIDTH not initialized - call init_pixel_assets first"),
+            PIXEL_SYM_HEIGHT.get().expect("PIXEL_SYM_HEIGHT not initialized - call init_pixel_assets first"),
         );
-
-        // Symbol map is lazy-loaded from app's assets directory via get_symbol_map()
-        // when first accessed (after init_game_config() sets project_path)
 
         self.set_size(w, h).set_title(title);
         self.base.gr.set_ratiox(rx);
@@ -249,7 +230,7 @@ impl Adapter for SdlAdapter {
             })
         };
 
-        // Create direct OpenGL pixel renderer
+        // Create direct OpenGL pixel renderer using pre-loaded texture data
         let gl_pixel_renderer = GlPixelRenderer::new(
             gl,
             "#version 330 core",
@@ -257,7 +238,7 @@ impl Adapter for SdlAdapter {
             self.base.gr.pixel_h as i32,
             texwidth as i32,
             texheight as i32,
-            &teximg,
+            &tex_data.data,
         );
 
         // Store the direct renderer - no more trait objects!
@@ -268,6 +249,7 @@ impl Adapter for SdlAdapter {
 
         // custom mouse cursor image using global GAME_CONFIG
         // 使用全局 GAME_CONFIG 加载自定义鼠标光标图像
+        let project_path = &crate::get_game_config().project_path;
         let cursor_path = format!(
             "{}{}{}",
             project_path,

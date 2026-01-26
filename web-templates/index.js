@@ -88,7 +88,7 @@ utils.loop = update => {
  * - WebAssembly.instantiate() is inherently async
  * - Memory allocation and linking must complete before use
  */
-import init, {PixelGame, wasm_init_symbol_map} from "./pkg/pixel.js";
+import init, {PixelGame, wasm_init_pixel_assets} from "./pkg/pixel.js";
 const wasm = await init();
 
 /**
@@ -124,25 +124,28 @@ ctx.drawImage(timg, 0, 0);
 const imgdata = ctx.getImageData(0, 0, timg.width, timg.height).data;
 
 /**
- * Symbol Map Loading
+ * Unified Asset Loading (New Approach)
  *
- * Load the symbol_map.json configuration file which defines character-to-texture
- * mappings for Sprite, TUI, Emoji, and CJK regions.
- * This MUST be loaded and initialized BEFORE creating the game instance,
- * because game initialization accesses the symbol map.
+ * Load the symbol_map.json configuration file and initialize all assets
+ * at once using wasm_init_pixel_assets(). This provides:
+ * - Unified loading for texture + symbol_map
+ * - Consistent with native mode initialization
+ * - All assets cached before game creation
  */
 const symbolMapResponse = await fetch("assets/pix/symbol_map.json");
 const symbolMapText = await symbolMapResponse.text();
-wasm_init_symbol_map(symbolMapText);
+
+// Initialize all assets at once: game config + texture + symbol_map
+wasm_init_pixel_assets("pixel_game", timg.width, timg.height, imgdata, symbolMapText);
 
 /**
  * Game Instance Creation and Initialization
  *
- * Creates the main game object (compiled from Rust to WASM) and uploads
- * the symbol texture data for WebGL rendering.
+ * Creates the main game object (compiled from Rust to WASM) and initializes
+ * WebGL using the pre-cached texture data.
  */
 const sg = PixelGame.new();
-sg.upload_imgdata(timg.width, timg.height, imgdata);
+sg.init_from_cache();  // Initialize WebGL using cached texture data
 
 // ============================================================================
 // Event System: Browser → Rust

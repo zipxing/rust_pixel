@@ -185,11 +185,15 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 eprintln!("Warning: Failed to copy web templates: {}", e);
             }
             
-            // Replace content in index.js
+            // Replace content in index.js with targeted replacements
+            // We only replace specific patterns to avoid breaking function names like wasm_init_pixel_assets
             let index_js_path = tmpwd_path.join("index.js");
             if index_js_path.exists() {
                 if let Ok(content) = fs::read_to_string(&index_js_path) {
-                    let content = content.replace("Pixel", &capname).replace("pixel", &loname);
+                    let content = content
+                        .replace("PixelGame", &format!("{}Game", capname))  // Class name
+                        .replace("pixel.js", &format!("{}.js", loname))     // Module import
+                        .replace("\"pixel_game\"", &format!("\"{}\"", loname));  // Game name string
                     if let Err(e) = fs::write(&index_js_path, content) {
                         eprintln!("Warning: Failed to update index.js: {}", e);
                     }

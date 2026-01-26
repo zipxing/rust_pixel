@@ -507,7 +507,24 @@ impl WgpuPixelRender {
         Ok(())
     }
 
-    /// Load the symbol texture from the specified path
+    /// Load the symbol texture from pre-loaded data
+    ///
+    /// This is the preferred method when using init_pixel_assets() which pre-loads
+    /// the texture data into memory.
+    pub fn load_symbol_texture_from_data(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_width: u32,
+        texture_height: u32,
+        texture_data: &[u8],
+    ) -> Result<(), String> {
+        self.load_symbol_texture_internal(device, queue, texture_width, texture_height, texture_data)
+    }
+
+    /// Load the symbol texture from the specified path (legacy method)
+    ///
+    /// Prefer using load_symbol_texture_from_data() with pre-loaded texture data.
     pub fn load_symbol_texture(
         &mut self,
         device: &wgpu::Device,
@@ -524,6 +541,19 @@ impl WgpuPixelRender {
 
         let texture_width = texture_image.width();
         let texture_height = texture_image.height();
+
+        self.load_symbol_texture_internal(device, queue, texture_width, texture_height, &texture_image)
+    }
+
+    /// Internal method for loading symbol texture
+    fn load_symbol_texture_internal(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_width: u32,
+        texture_height: u32,
+        texture_data: &[u8],
+    ) -> Result<(), String> {
 
         // Symbol texture loaded successfully (debug output removed for performance)
 
@@ -546,7 +576,7 @@ impl WgpuPixelRender {
         // Write texture data
         queue.write_texture(
             texture.as_image_copy(),
-            &texture_image,
+            texture_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * texture_width),
@@ -591,7 +621,7 @@ impl WgpuPixelRender {
         self.symbol_renderer.load_texture(
             texture_width as i32,
             texture_height as i32,
-            &texture_image,
+            texture_data,
         );
 
         Ok(())

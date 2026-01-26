@@ -581,10 +581,15 @@ impl WinitWgpuAdapter {
             wgpu_surface_config.format,
         );
 
-        // Initialize all WGPU components
-        if let Err(e) =
-            wgpu_pixel_renderer.load_symbol_texture(&wgpu_device, &wgpu_queue, &params.texture_path)
-        {
+        // Initialize all WGPU components using pre-loaded texture data
+        let tex_data = crate::get_pixel_texture_data();
+        if let Err(e) = wgpu_pixel_renderer.load_symbol_texture_from_data(
+            &wgpu_device,
+            &wgpu_queue,
+            tex_data.width,
+            tex_data.height,
+            &tex_data.data,
+        ) {
             panic!("Failed to load symbol texture: {}", e);
         }
 
