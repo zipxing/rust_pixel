@@ -46,6 +46,8 @@ Unified rendering abstraction
 
 Terminal | Desktop | Web
 
+Terminal-free TUI in native windows
+
 One codebase, multiple targets
 
 </td>
