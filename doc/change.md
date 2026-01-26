@@ -1,3 +1,83 @@
+# 1.0.8 - Texture Upgrade, Code Refactoring & Color Enhancement
+
+## 🖼️ Texture System Upgrade
+
+### **4096x4096 Symbol Texture**
+Upgraded from 2048x2048 to 4096x4096 texture atlas:
+
+- **10 Sprite Rows** layout for better organization
+- **Chinese Character Support** - CJK glyphs in dedicated region
+- **Emoji Support** - Full emoji rendering capability
+- **TUI Region** - Dedicated area for terminal UI symbols
+- **symbol_map.json** - New mapping file for dynamic symbol lookup
+
+```
+4096x4096 Texture Layout:
+┌────────────────────────────────┐
+│ Row 0-3: PETSCII/ASCII symbols │
+│ Row 4-5: Custom game sprites   │
+│ Row 6-7: TUI components        │
+│ Row 8-9: CJK/Emoji glyphs      │
+└────────────────────────────────┘
+```
+
+### **Unified Asset Loading**
+New unified initialization flow for both native and WASM:
+
+- `init_pixel_assets()` - Loads texture + symbol_map at startup
+- `wasm_init_pixel_assets()` - JS passes texture data to WASM
+- Texture data cached in `PIXEL_TEXTURE_DATA` for deferred GPU upload
+
+## 🔧 Code Refactoring
+
+### **Modular Architecture**
+Reorganized core modules for better maintainability:
+
+- **`src/init.rs`** (NEW): Asset initialization module
+  - `GameConfig` - Global game configuration
+  - `PixelTextureData` - Texture data caching
+  - `init_pixel_assets()` - Native graphics mode initialization
+  - `wasm_init_pixel_assets()` - WASM mode initialization
+
+- **`src/macros.rs`** (NEW): Application scaffolding macro
+  - `app!` macro (renamed from `pixel_game!`)
+  - Cleaner, more concise macro implementation
+
+### **Macro Rename: `pixel_game!` → `app!`**
+```rust
+// Old (deprecated)
+use rust_pixel::pixel_game;
+pixel_game!(MyGame);
+
+// New
+use rust_pixel::app;
+app!(MyGame);
+```
+
+## 🎨 Color Enhancement
+
+### **Improved Graphics Mode Colors**
+Updated ANSI 16-color palette for better contrast in graphics mode:
+
+| Color | Old Value | New Value |
+|-------|-----------|-----------|
+| Red | `#800000` | `#CD3131` |
+| Green | `#008000` | `#0DBC79` |
+| Yellow | `#808000` | `#E5E510` |
+| Blue | `#000080` | `#2472C8` |
+| Magenta | `#800080` | `#BC3FBC` |
+| Cyan | `#008080` | `#11A8CD` |
+
+Colors now match modern terminal color schemes (VS Code style).
+
+## 🔄 Migration
+
+- All 12 demo apps updated to use `app!` macro
+- **Breaking Change**: `pixel_game!` macro removed
+- Replace `use rust_pixel::pixel_game;` with `use rust_pixel::app;`
+
+---
+
 # 1.0.7 - Major Release: RustPixel UI Framework
 
 ## 🎨 What's New

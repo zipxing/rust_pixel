@@ -409,14 +409,16 @@ Benefits:
 ### Macro System
 
 ```rust
-// pixel_game! macro simplifies game creation
-pixel_game!(MyGame);
+// app! macro simplifies game creation
+use rust_pixel::app;
+app!(MyGame);
 
 // Generates:
 // - mod model;
 // - mod render_graphics; (or render_terminal)
 // - Game initialization boilerplate
 // - Platform-specific compilation
+// - WASM exports for web builds
 
 // asset2sprite! macro for easy asset loading
 asset2sprite!(sprite, "path/to/asset.pix", ctx);

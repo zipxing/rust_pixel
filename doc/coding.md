@@ -50,16 +50,14 @@ fn main() {
 To reduce duplication of code, procedural macros are used:
 
 ```rust
-mod model;
-mod render;
+use rust_pixel::app;
 
-use pixel_macro::pixel_game;
-
-// refer to rust_pixel/pixel_macro for macro details
-pixel_game!(Block);  
+// The app! macro generates game scaffolding code
+// See src/macros.rs for implementation details
+app!(Block);
 ```
 
-`pixel_game!(Block)` will expand into the following code:
+`app!(Block)` will expand into the following code:
 
 ```rust
 use crate::{model::BlockModel, render::BlockRender};

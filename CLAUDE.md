@@ -156,7 +156,9 @@ rust_pixel/
 │   ├── audio.rs            # Audio playback
 │   ├── context.rs          # Shared runtime state
 │   ├── game.rs             # Game loop implementation
-│   └── lib.rs              # Main entry point and pixel_game! macro
+│   ├── init.rs             # Asset initialization (GameConfig, texture loading)
+│   ├── macros.rs           # app! macro for scaffolding applications
+│   └── lib.rs              # Main entry point and re-exports
 ├── apps/                   # Demo games and applications
 │   ├── template/           # Template for new apps
 │   ├── tetris/
@@ -182,7 +184,7 @@ Each app follows this layout:
 ```
 apps/my_game/
 ├── src/
-│   ├── lib.rs              # Uses pixel_game! macro
+│   ├── lib.rs              # Uses app! macro
 │   ├── main.rs             # Native entry point
 │   ├── model.rs            # Game state and logic
 │   ├── render_terminal.rs  # Terminal rendering
@@ -232,13 +234,19 @@ Each adapter implements platform-specific rendering:
 
 All adapters expose the same `Adapter` trait interface, allowing games to work across platforms without modification.
 
-### The pixel_game! Macro
+### The app! Macro
 
-The `pixel_game!` macro in `src/lib.rs` scaffolds the application entry point:
+The `app!` macro in `src/macros.rs` scaffolds the application entry point:
 - Generates the `{Name}Game` struct wrapping `Game<Model, Render>`
 - Creates `init_game()` and `run()` functions
-- Provides WASM exports (`new()`, `tick()`, `key_event()`) for web builds
+- Provides WASM exports (`new()`, `tick()`, `key_event()`, `wasm_init_pixel_assets()`) for web builds
 - Conditionally compiles `render_terminal` or `render_graphics` modules based on build features
+
+Example usage in app's `lib.rs`:
+```rust
+use rust_pixel::app;
+app!(MyGame);
+```
 
 ### Features and Conditional Compilation
 

@@ -34,9 +34,10 @@ https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
 
 ### Features
 
+- **`app!` macro** for quick game scaffolding - generates cross-platform entry points (macros.rs)
 - Game loops & Model/Render design pattern (game.rs)
 - Event/Timer messaging mechanism (event.rs)
-- Unified render adapter trait for text & graphics mode( adapter.rs ) 
+- Unified render adapter trait for text & graphics mode (adapter.rs) 
 - Support text render mode (crossterm) (cross_adapter.rs)
 - OpenGL mode supports sdl and wasm (glow & sdl2 | glow) (sdl_adapter.rs, winit_glow_adapter.rs, web_adapter.rs)
 - Wgpu drawing mode (wgpu) (winit_wgpu_adapter.rs)
