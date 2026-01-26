@@ -1,3 +1,3 @@
-use rust_pixel::pixel_game;
-pixel_game!(GinRummy);
+use rust_pixel::app;
+app!(GinRummy);
 

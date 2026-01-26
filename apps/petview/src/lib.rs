@@ -1,2 +1,2 @@
-use rust_pixel::pixel_game;
-pixel_game!(Petview);
+use rust_pixel::app;
+app!(Petview);

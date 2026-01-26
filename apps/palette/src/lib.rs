@@ -1,4 +1,4 @@
 mod select;
-use rust_pixel::pixel_game;
-pixel_game!(Palette);
+use rust_pixel::app;
+app!(Palette);
 

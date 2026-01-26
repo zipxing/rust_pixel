@@ -1,3 +1,3 @@
-use rust_pixel::pixel_game;
-pixel_game!(Template);
+use rust_pixel::app;
+app!(Template);
 

@@ -1,2 +1,2 @@
-use rust_pixel::pixel_game;
-pixel_game!(UiDemo);
+use rust_pixel::app;
+app!(UiDemo);

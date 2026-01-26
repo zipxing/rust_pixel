@@ -1,4 +1,4 @@
-use rust_pixel::pixel_game;
+use rust_pixel::app;
 pub mod level;
-pixel_game!(Colorblk);
+app!(Colorblk);
 
