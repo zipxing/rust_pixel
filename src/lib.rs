@@ -77,7 +77,7 @@ pub use paste;
 
 /// Macros for scaffolding RustPixel applications.
 ///
-/// Provides `app!` macro (and deprecated `pixel_game!` alias) for generating
+/// Provides `app!` macro for generating
 /// cross-platform game entry points.
 #[cfg(not(feature = "base"))]
 mod macros;

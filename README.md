@@ -1,5 +1,7 @@
 ![logo](./screen-shot/logo.png)
 
+<div align="center">
+
 ![License] [![Latest Version]][crates.io] ![Downloads] [![API Documentation]][docs.rs] ![MSRV]
 
 [License]: https://img.shields.io/badge/license-Apache2.0-blue.svg
@@ -10,226 +12,328 @@
 [docs.rs]: https://docs.rs/rust_pixel
 [MSRV]: https://img.shields.io/badge/rust-1.71+-brightgreen.svg?&logo=rust
 
-[Change Log]&nbsp; | &nbsp;[Principle]&nbsp; | &nbsp;[Coding]&nbsp; | &nbsp;[FAQ]&nbsp; | &nbsp;[TODO]&nbsp; | &nbsp;[Art Center Roadmap]
+**A 2D Game Engine for Retro-Style Games**
+
+[Change Log] | [Principle] | [Coding] | [FAQ] | [TODO] | [Online Demo]
 
 [Change Log]: doc/change.md
 [Principle]: doc/principle.md
 [Coding]: doc/coding.md
 [FAQ]: doc/faq.md
 [TODO]: doc/todo.md
-[Art Center Roadmap]: doc/ascii_art_center_roadmap.md
+[Online Demo]: https://zipxing.github.io/rust_pixel
 
-RustPixel is a **2D game engine** & **rapid prototyping tools**, supporting both **text** and **graphics** rendering modes.<br>
-It is suitable for creating **2D pixel-style games** and developing **terminal applications**.<br>
-It can be compiled into **FFI** for front-end and back-end use, and into **WASM** for web projects.
+</div>
 
-- Text Mode: Built with **crossterm**, runs in the terminal, and uses **ASCII & Unicode Emoji** for drawing.
-- Graphical Mode: Built with **wgpu** & **glow** & **sdl2**, using **PETSCII/ASCII & custom graphics symbols** for rendering.
+---
 
-[online demo]: https://zipxing.github.io/rust_pixel
+## Core Philosophy
 
-Here is a petscii art painting browser made with **rust_pixel**. Special thanks to x.com/PETSCIIWORLD for the character painting and the transition shader provided by **gltransition**. Click here for [online demo]。
+<table>
+<tr>
+<td width="33%" align="center">
+
+### Everything is Tiles
+
+Cell → Buffer → Sprite → Panel
+
+Unified rendering abstraction
+
+</td>
+<td width="33%" align="center">
+
+### Write Once, Run Anywhere
+
+Terminal | Desktop | Web
+
+One codebase, multiple targets
+
+</td>
+<td width="33%" align="center">
+
+### Quick Start
+
+`app!` macro scaffolding
+
+Built-in BASIC interpreter
+
+Model-Render-Game pattern
+
+</td>
+</tr>
+</table>
+
+---
+
+## Rendering Modes
+
+| Mode | Backend | Output |
+|------|---------|--------|
+| **Terminal** | crossterm | ASCII / Unicode / Emoji |
+| **SDL** | SDL2 + OpenGL | PETSCII / Custom Symbols |
+| **Glow** | winit + OpenGL | PETSCII / Custom Symbols |
+| **WGPU** | winit + wgpu | PETSCII / Custom Symbols |
+| **Web** | WASM + WebGL | PETSCII / Custom Symbols |
+
+---
+
+## Showcase
+
+PETSCII art browser built with RustPixel. Art by [@PETSCIIWORLD](https://x.com/PETSCIIWORLD), transitions by **gltransition**.
 
 https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
 
-### Features
+---
 
-- **`app!` macro** for quick game scaffolding - generates cross-platform entry points (macros.rs)
-- Game loops & Model/Render design pattern (game.rs)
-- Event/Timer messaging mechanism (event.rs)
-- Unified render adapter trait for text & graphics mode (adapter.rs) 
-- Support text render mode (crossterm) (cross_adapter.rs)
-- OpenGL mode supports sdl and wasm (glow & sdl2 | glow) (sdl_adapter.rs, winit_glow_adapter.rs, web_adapter.rs)
-- Wgpu drawing mode (wgpu) (winit_wgpu_adapter.rs)
-- 3 core OpenGl shaders for gl & web graphics mode: (gl/) 
-- 3 core Wgpu shaders for wgpu graphics mode: (wgpu/) 
-    - instance rendering shader for draw mainbuffer (render_symbols.rs) 
-    - transition shader for transition effect (render_transition.rs)
-    - general 2d shader for draw render texture (render_general2d.rs)
-- Some common game algorithms (algorithm.rs, algorithm/, util.rs, util/)
-- audio & log support (audio.rs, log.rs)
-- Demo games: tetris, tower, poker... (apps/)
-- Demo terminal ui app: palette... (apps/)
-- Examples of wrapping core algorithms into FFI and WASM (apps/poker/ffi, apps/poker/wasm)
-- Cargo style cli tool: cargo-pixel
+## Quick Start
 
-### Installation Guide
+### Install
 
-The main steps of the installation process are as follows:
-- Install [DroidSansMono Nerd Font] & setup terminal (for text render mode)
-- Install dependent libraries and softwares
-- Install **Rust** and **Wasm-pack**
-
-The detailed steps for each operating system: &nbsp;&nbsp;[MacOS]&nbsp;&nbsp; | &nbsp;&nbsp;[Linux]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows (WSL)]&nbsp;&nbsp; | &nbsp;&nbsp;[Windows (Native)]
-
-[MacOS]: doc/mac.md
-[Linux]: doc/linux.md
-[Windows (WSL)]: doc/win.md
-[Windows (Native)]: doc/win-native.md
-[DroidSansMono Nerd Font]: https://github.com/ryanoasis/nerd-fonts
-
-Starting from version 0.5.3, you can deploy **cargo-pixel** directly from crates.io:
-```
-cargo install rust_pixel         # use crates.io rust_pixel crate deploy cargo-pixel
-cargo pixel                      # first run cargo-pixel will clone rust_pixel to <homedir>/rust_pixel_work automatic 
-cd ~/rust_pixel_work             # cd to workspace
-cargo pixel r petview s          # run demo game...
+```bash
+cargo install rust_pixel         # Install cargo-pixel CLI
+cargo pixel                      # First run clones workspace to ~/rust_pixel_work
+cd ~/rust_pixel_work
 ```
 
-To use the newest code, you should clone **RustPixel** and deploy **cargo-pixel** tool:
-``` 
-git clone https://github.com/zipxing/rust_pixel
-cd rust_pixel
-cargo install --path . --force
-``` 
+### Run Demo Games
 
-If you have installed an old version of cargo-pixel, you may get an error when running it. git update is required and the new version of cargo-pixel is deployed manually:
-```
-cd rust_pixel
-git pull
-cargo install --path . --force
+```bash
+cargo pixel r snake t            # Snake - Terminal mode
+cargo pixel r snake s            # Snake - SDL mode
+cargo pixel r tetris w           # Tetris - Web mode (localhost:8080)
+cargo pixel r petview g -r       # Petview - Glow mode (release)
+cargo pixel r petview wg -r      # Petview - WGPU mode (release)
 ```
 
-### Usage Instructions
-``` 
-cd rust_pixel
-cargo pixel run snake term            #Run the snake game in terminal mode
-cargo pixel r snake t                 #Run the snake game in terminal mode - shorthand
-cargo pixel r tetris s                #Run the Tetris game in SDL window mode
-cargo pixel r tower w                 #Run tower in web,visit http://localhost:8080/ in your browser
-cargo pixel r tower w --webport 8081  #Change web server port
-cargo pixel r tower w -r              #Run with release mode
-cargo pixel r petview g -r            #Run the petview game in glow mode (winit+opengl)
-cargo pixel r petview wg -r           #Run the petview game in wgpu mode (winit+wgpu)
-``` 
+### Create Your Own Game
 
-You can also use cargo pixel to create your own game or app:
-```
-cargo pixel c mygame           #Create mygame in ./apps using apps/template as a template
-```
-Creat a standalone app in some directory:
-```
-cargo pixel c myapp ..  #Create a standalone crate in ../myapp 
-cd ../myapp 
-cargo pixel r myapp t
-cargo pixel r myapp s
+```bash
+cargo pixel c mygame             # Create in ./apps/mygame
+cargo pixel r mygame t           # Run it!
 
+# Or create standalone project
+cargo pixel c myapp ..           # Create in ../myapp
+cd ../myapp && cargo pixel r myapp s
 ```
 
-RustPixel also includes several tools:
-1. **palette**: A terminal-ui tool to generate, analyze, convert and manipulate colors.
-```
-cargo pixel r palette t -r
-```
- ![palette](./screen-shot/palette.gif)
+### Write Games in BASIC
 
-2. **edit**: Used to edit character art assets, example:
-``` 
-#term mode
-cargo pixel edit term . assets/logo.txt
-or
-cargo pixel e t . assets/logo.txt
+RustPixel includes **pixel_basic** - a built-in BASIC interpreter perfect for beginners or quick prototyping!
 
-#graphics mode
-cargo pixel edit sdl . assets/logo.pix
-or 
-cargo pixel e s . assets/logo.pix
-```
- ![tedit_t](./screen-shot/tedit_term.png)
- ![tedit_s](./screen-shot/tedit_sdl.png)
-
-3. **petii**: Used to convert regular images into PETSCII character art, example:
-```
-cargo pixel p assets/a.png > a.pix
-cargo pixel e g . assets/a.pix
-```
-```
-cargo pixel p assets/lion.png 40 40 > assets/lion.pix
-cargo pixel e g . assets/lion.pix
-```
- ![tpetii_1](./screen-shot/a.png)
- ![tpetii_2](./screen-shot/lion.png)
-
-4. Script to automatically **convert gif images into PETSCII animations (.ssf)**
-```
-cargo pixel cg assets/sdq/fire.gif assets/sdq/fire.ssf 40 25 
-cargo pixel ssf . assets/sdq/fire.ssf       # preview ssf 
+```bash
+cargo pixel r basic_snake t      # Run BASIC Snake game
 ```
 
-### Demo games
-1. snake: A snake game with a cool PETSCII animations
-```
-#graphics mode
-cargo pixel r snake s -r
-```
+Write game logic in familiar BASIC syntax (`apps/basic_snake/assets/game.bas`):
 
-![graphics mode](./screen-shot/snake_sdl.gif)
+```basic
+10 REM SNAKE GAME
+20 X = 20: Y = 10
+30 DIM BX(100): DIM BY(100)
+40 YIELD
+50 GOTO 40
 
-``` 
-#term mode
-cargo pixel r snake t -r
-```
+1000 REM ON_INIT
+1010 BOX 0, 0, 60, 24, 1
+1020 RETURN
 
-```
-#web mode
-cargo pixel r snake w -r
-#and visit http://localhost:8080/ in your browser
-```
+2000 REM ON_TICK
+2010 IF KEY("W") THEN DY = -1: DX = 0
+2020 X = X + DX: Y = Y + DY
+2030 RETURN
 
-2. tetris: A Tetris game where you can play against AI
-``` 
-#term mode
-cargo pixel r tetris t -r
+3500 REM ON_DRAW
+3510 PLOT X, Y, "@", 10, 0
+3520 RETURN
 ```
 
- ![term mode](./screen-shot/tetris_term.gif)
+**pixel_basic** features:
+- Classic BASIC syntax with line numbers
+- Game hooks: `ON_INIT (1000)`, `ON_TICK (2000)`, `ON_DRAW (3500)`
+- Graphics: `PLOT x, y, char, fg, bg` / `BOX` / `CLS`
+- Input: `KEY("W")`, `KEY("SPACE")`
+- Arrays: `DIM arr(100)`
+- Control flow: `GOTO`, `GOSUB/RETURN`, `FOR/NEXT`, `IF/THEN`
+- Math: `RND()`, `INT()`, `ABS()`
+- Strings: `STR$()`, `LEN()`, `MID$()`
+
+See `pixel_basic/` for the interpreter source code.
+
+---
+
+## Architecture
 
 ```
-#graphics mode
-cargo pixel r tetris s -r
+┌─────────────────────────────────────────────────────────┐
+│                         Game                            │
+│  ┌─────────────────────┐  ┌─────────────────────────┐  │
+│  │       Model         │  │        Render           │  │
+│  │  ├─ init()          │  │  ├─ init()              │  │
+│  │  ├─ handle_input()  │  │  ├─ draw()              │  │
+│  │  ├─ handle_auto()   │  │  └─ Panel               │  │
+│  │  └─ handle_timer()  │  │      └─ Sprites[]       │  │
+│  └─────────────────────┘  │          └─ Buffer      │  │
+│                           │              └─ Cells[] │  │
+│                           └─────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-![graphics mode](./screen-shot/tetris_sdl.gif)
+---
 
+## Demo Games
+
+<table>
+<tr>
+<td width="50%">
+
+### Snake
+PETSCII animations with smooth gameplay
+
+```bash
+cargo pixel r snake s -r    # SDL
+cargo pixel r snake t -r    # Terminal
+cargo pixel r snake w -r    # Web
 ```
-#web mode
-cargo pixel r tetris w -r
-#and visit http://localhost:8080/ in your browser
+
+![Snake](./screen-shot/snake_sdl.gif)
+
+</td>
+<td width="50%">
+
+### Tetris
+Play against AI
+
+```bash
+cargo pixel r tetris s -r   # SDL
+cargo pixel r tetris t -r   # Terminal
+cargo pixel r tetris w -r   # Web
 ```
 
-![web mode](./screen-shot/tetris_web.gif)
+![Tetris](./screen-shot/tetris_sdl.gif)
 
-3. poker: Includes the core algorithms for Texas Hold'em and Gin Rummy
-``` 
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### Tower Defense
+Pixel-perfect sprite movement
+
+```bash
+cargo pixel r tower s -r    # SDL
+cargo pixel r tower w -r    # Web
+```
+
+![Tower](./screen-shot/tower_sdl.gif)
+
+</td>
+<td width="50%">
+
+### Poker / Gin Rummy
+Card game algorithms + FFI/WASM demos
+
+```bash
 cargo pixel r poker t -r
 cargo pixel r gin_rummy t -r
 ```
- ![gin_rummy](./screen-shot/ginrummy.png)
- ![red_black](./screen-shot/redblack.png)
 
-The poker/ffi directory demo how to wrap Rust algorithms into CFFI for use with other languages, showcasing C++ and Python calling poker_ffi
+![Poker](./screen-shot/ginrummy.png)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Tools
+
+### Palette - Color Tool
+Terminal UI for color manipulation
+
+```bash
+cargo pixel r palette t -r
 ```
-cd apps/poker/ffi
-make run
+
+![Palette](./screen-shot/palette.gif)
+
+### Edit - Character Art Editor
+
+```bash
+cargo pixel e t . assets/logo.txt    # Terminal mode
+cargo pixel e s . assets/logo.pix    # SDL mode
 ```
-The poker/wasm directory demo how to wrap Rust algorithms into wasm for JS calling
+
+<table><tr>
+<td><img src="./screen-shot/tedit_term.png" alt="Edit Terminal"></td>
+<td><img src="./screen-shot/tedit_sdl.png" alt="Edit SDL"></td>
+</tr></table>
+
+### Petii - Image to PETSCII Converter
+
+```bash
+cargo pixel p assets/lion.png 40 40 > lion.pix
+cargo pixel e g . lion.pix
 ```
-cd apps/poker/wasm
-make run
+
+<table><tr>
+<td><img src="./screen-shot/a.png" alt="Petii Example 1"></td>
+<td><img src="./screen-shot/lion.png" alt="Petii Example 2"></td>
+</tr></table>
+
+### GIF to PETSCII Animation
+
+```bash
+cargo pixel cg input.gif output.ssf 40 25
+cargo pixel ssf . output.ssf    # Preview
 ```
 
-4. tower: A tower defense game prototype demonstrating the use of objpool and pixel_sprite for pixel-perfect sprite movement
-``` 
-#graphics mode
-cargo pixel r tower s -r
+---
 
-#web mode
-cargo pixel r tower w -r
-#and visit http://localhost:8080/ in your browser
+## FFI & WASM
+
+RustPixel algorithms can be exported for other languages:
+
+```bash
+# C++/Python FFI
+cd apps/poker/ffi && make run
+
+# JavaScript WASM
+cd apps/poker/wasm && make run
 ```
- ![tower](./screen-shot/tower_sdl.gif)
 
-and so on ... ...
+---
 
+## Installation Guide
 
+| Platform | Guide |
+|----------|-------|
+| macOS | [doc/mac.md](doc/mac.md) |
+| Linux | [doc/linux.md](doc/linux.md) |
+| Windows (WSL) | [doc/win.md](doc/win.md) |
+| Windows (Native) | [doc/win-native.md](doc/win-native.md) |
 
+**Requirements:**
+- [Nerd Font](https://github.com/ryanoasis/nerd-fonts) (for terminal mode)
+- Rust 1.71+
+- wasm-pack (for web mode)
+
+---
+
+## Features
+
+- **`app!` macro** - One-line game scaffolding with cross-platform entry points
+- **Model/Render pattern** - Clean separation of logic and presentation
+- **Event/Timer system** - Built-in messaging mechanism
+- **Unified adapter trait** - Same code for all rendering backends
+- **OpenGL shaders** - Instance rendering, transitions, 2D effects
+- **WGPU shaders** - Modern GPU rendering pipeline
+- **Game algorithms** - Pathfinding, object pools, utilities
+- **Audio support** - Sound effects and music playback
+
+---
+
+<div align="center">
+
+**Made with Rust**
+
+</div>
