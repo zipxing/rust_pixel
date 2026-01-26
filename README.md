@@ -14,13 +14,14 @@
 
 **Tile-first. Retro-ready. Write Once, Run Anywhere—2D Engine!**
 
-[Change Log] | [Principle] | [Coding] | [FAQ] | [TODO] | [Online Demo]
+[Change Log] | [Principle] | [Coding] | [FAQ] | [TODO] | [Roadmap] | [Online Demo]
 
 [Change Log]: doc/change.md
 [Principle]: doc/principle.md
 [Coding]: doc/coding.md
 [FAQ]: doc/faq.md
 [TODO]: doc/todo.md
+[Roadmap]: doc/roadmap_2026.md
 [Online Demo]: https://zipxing.github.io/rust_pixel
 
 </div>
