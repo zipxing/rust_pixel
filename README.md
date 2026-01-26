@@ -12,7 +12,7 @@
 [docs.rs]: https://docs.rs/rust_pixel
 [MSRV]: https://img.shields.io/badge/rust-1.71+-brightgreen.svg?&logo=rust
 
-**A 2D Game Engine for Retro-Style Games**
+**Tile-first. Retro-ready. Write Once, Run Anywhere—2D Engine!**
 
 [Change Log] | [Principle] | [Coding] | [FAQ] | [TODO] | [Online Demo]
 
@@ -46,7 +46,7 @@ Unified rendering abstraction
 
 Terminal | Desktop | Web
 
-Terminal-free TUI in native windows
+TUI in native windows — no terminal emulator required
 
 One codebase, multiple targets
 

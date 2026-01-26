@@ -65,7 +65,8 @@ pub fn init_symbol_map_from_json(json: &str) -> Result<(), String> {
 /// Initialize the global symbol map from file path
 /// This should be called during adapter.init() after game_config is initialized
 /// Uses get_game_config().project_path to load from app's assets directory
-#[cfg(not(target_arch = "wasm32"))]
+/// Only available in graphics mode (SDL/Glow/WGPU)
+#[cfg(all(not(target_arch = "wasm32"), graphics_mode))]
 pub fn init_symbol_map_from_file() -> Result<(), String> {
     let project_path = &crate::get_game_config().project_path;
     let symbol_map_path = format!(
@@ -86,17 +87,27 @@ pub fn init_symbol_map_from_file() -> Result<(), String> {
 }
 
 /// Get the global symbol map instance
-/// For native mode: automatically loads from file on first access (lazy loading)
-/// For web mode: must be initialized via init_symbol_map_from_json() first
+/// - Graphics mode (SDL/Glow/WGPU): loads from app's assets directory
+/// - Terminal mode: returns empty SymbolMap (not needed for text rendering)
+/// - Web mode: must be initialized via init_symbol_map_from_json() first
 ///
 /// # Panics
-/// - Native mode: panics if symbol_map.json cannot be loaded
+/// - Graphics mode: panics if symbol_map.json cannot be loaded
 /// - Web mode: panics if init_symbol_map_from_json() was not called before this
 pub fn get_symbol_map() -> &'static SymbolMap {
     GLOBAL_SYMBOL_MAP.get_or_init(|| {
-        // For native builds, lazy load from app's assets directory
-        // init_game_config() MUST be called before this (done first in pixel_game! macro)
-        #[cfg(not(target_arch = "wasm32"))]
+        // For WASM builds, panic if not initialized
+        // (wasm_init_symbol_map MUST be called before PixelGame.new())
+        #[cfg(target_arch = "wasm32")]
+        {
+            panic!(
+                "Symbol map not initialized! \
+                Call wasm_init_symbol_map() before creating the game instance."
+            );
+        }
+
+        // For native graphics mode, lazy load from app's assets directory
+        #[cfg(all(not(target_arch = "wasm32"), graphics_mode))]
         {
             let project_path = &crate::get_game_config().project_path;
             let symbol_map_path = format!(
@@ -119,14 +130,13 @@ pub fn get_symbol_map() -> &'static SymbolMap {
                 }
             }
         }
-        // For WASM builds, panic if not initialized
-        // (wasm_init_symbol_map MUST be called before PixelGame.new())
-        #[cfg(target_arch = "wasm32")]
+
+        // For terminal mode (crossterm), symbol map is not needed
+        // Return empty map to avoid file loading
+        #[cfg(all(not(target_arch = "wasm32"), not(graphics_mode)))]
         {
-            panic!(
-                "Symbol map not initialized! \
-                Call wasm_init_symbol_map() before creating the game instance."
-            );
+            log::info!("Terminal mode: using empty symbol map (not needed for text rendering)");
+            SymbolMap::empty()
         }
     })
 }
