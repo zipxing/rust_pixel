@@ -133,23 +133,25 @@ fn get_u8_rgb(r: u8, g: u8, b: u8) -> u8 {
     ret
 }
 
+// Base 16 colors optimized for better contrast in graphics mode
+// These values are brighter than standard ANSI to match modern terminal color schemes
 pub const ANSI_COLOR_RGB: [[u8; 3]; 256] = [
-    [0, 0, 0],
-    [128, 0, 0],
-    [0, 128, 0],
-    [128, 128, 0],
-    [0, 0, 128],
-    [128, 0, 128],
-    [0, 128, 128],
-    [192, 192, 192],
-    [128, 128, 128],
-    [255, 0, 0],
-    [0, 255, 0],
-    [255, 255, 0],
-    [0, 0, 255],
-    [255, 0, 255],
-    [0, 255, 255],
-    [255, 255, 255],
+    [0, 0, 0],         // 0: Black
+    [205, 49, 49],     // 1: Red (brighter)
+    [13, 188, 121],    // 2: Green (brighter)
+    [229, 229, 16],    // 3: Yellow (brighter)
+    [36, 114, 200],    // 4: Blue (brighter)
+    [188, 63, 188],    // 5: Magenta (brighter)
+    [17, 168, 205],    // 6: Cyan (brighter)
+    [229, 229, 229],   // 7: Gray (brighter)
+    [102, 102, 102],   // 8: DarkGray
+    [241, 76, 76],     // 9: LightRed
+    [35, 209, 139],    // 10: LightGreen
+    [245, 245, 67],    // 11: LightYellow
+    [59, 142, 234],    // 12: LightBlue
+    [214, 112, 214],   // 13: LightMagenta
+    [41, 184, 219],    // 14: LightCyan
+    [255, 255, 255],   // 15: White
     [0, 0, 0],
     [0, 0, 95],
     [0, 0, 135],
