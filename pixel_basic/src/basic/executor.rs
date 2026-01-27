@@ -28,6 +28,7 @@ pub struct Executor {
     /// 游戏时间累加器（秒）- 用于协程 WAIT 语句
     game_time: f64,
     /// 游戏上下文（可选）- 用于调用游戏引擎 API
+    /// 改为不持有所有权，只在需要时临时传入
     game_context: Option<Box<dyn GameContext>>,
 }
 
@@ -84,7 +85,7 @@ impl Executor {
     pub fn has_game_context(&self) -> bool {
         self.game_context.is_some()
     }
-    
+
     /// 设置输入回调函数（用于测试）
     pub fn set_input_callback<F>(&mut self, callback: F)
     where

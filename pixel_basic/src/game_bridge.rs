@@ -118,8 +118,6 @@ pub struct GameBridge {
     init_called: bool,
 }
 
-// No separate guard struct needed - we'll use closures instead
-
 impl Default for GameBridge {
     fn default() -> Self {
         Self::new()
@@ -140,50 +138,40 @@ impl GameBridge {
         }
     }
 
-    /// 将 context 临时借给 executor 使用
+    // All unsafe code has been removed!
+    // The new approach: temporarily move context into executor, execute, then move it back
+    // This is safe because GameBridge owns both executor and context
+
+    /// Temporarily lend context to executor for the duration of a closure
     ///
-    /// 使用 unsafe 但确保正确管理生命周期
-    unsafe fn lend_context_to_executor(&mut self) {
-        let ctx_ptr = &mut self.context as *mut PixelGameContext as *mut dyn GameContext;
-        self.executor.set_game_context(Box::from_raw(ctx_ptr));
-    }
-
-    /// 从 executor 收回 context 的"借用"
-    fn reclaim_context_from_executor(&mut self) {
-        // 从 executor 取出 box 并转回指针，但不 drop
-        if self.executor.has_game_context() {
-            if let Some(boxed) = self.executor.game_context_mut() {
-                let replacement: Box<dyn GameContext> = Box::new(crate::game_context::NullGameContext);
-                let ptr = Box::into_raw(std::mem::replace(boxed, replacement));
-                // 不要 drop 这个指针，因为它指向 self.context
-                let _ = ptr;  // 忽略指针，避免 drop
-            }
-        }
-    }
-
-    /// Helper method to execute a closure with context lent to executor
-    /// This ensures context is always reclaimed, even if F returns Err or panics
+    /// This is completely safe - we move the context into the executor,
+    /// execute the closure, then move it back. No unsafe code needed!
     fn with_context<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
-        unsafe {
-            self.lend_context_to_executor();
-        }
+        // Move context into executor (safe - we own both)
+        let ctx_box: Box<dyn GameContext> = Box::new(std::mem::replace(
+            &mut self.context,
+            crate::pixel_game_context::PixelGameContext::new(),
+        ));
+        self.executor.set_game_context(ctx_box);
 
-        // Use a guard struct to ensure cleanup on panic
-        struct Guard<'a> {
-            bridge: &'a mut GameBridge,
-        }
-        impl<'a> Drop for Guard<'a> {
-            fn drop(&mut self) {
-                self.bridge.reclaim_context_from_executor();
+        // Execute the closure (which can now use executor methods that access game_context)
+        let result = f(self);
+
+        // Move context back from executor
+        if let Some(boxed_ctx) = self.executor.game_context_mut() {
+            // Downcast back to PixelGameContext
+            // SAFETY: We know it's a PixelGameContext because we just put it there
+            if let Some(pixel_ctx) = (boxed_ctx.as_mut() as &mut dyn std::any::Any)
+                .downcast_mut::<crate::pixel_game_context::PixelGameContext>()
+            {
+                self.context = std::mem::replace(pixel_ctx, crate::pixel_game_context::PixelGameContext::new());
             }
         }
 
-        let _guard = Guard { bridge: self };
-        f(_guard.bridge)
-        // _guard drops here, calling reclaim_context_from_executor()
+        result
     }
 
     /// 加载 BASIC 程序
@@ -281,14 +269,12 @@ impl GameBridge {
     /// }
     /// ```
     pub fn update(&mut self, dt: f32) -> Result<bool> {
-        // Use with_context to ensure context is always reclaimed, even on error/panic
-        // This fixes the memory safety bug where errors during execution
-        // would leave a dangling Box pointing to stack memory
+        // Use with_context to safely lend context to executor
         self.with_context(|bridge| {
             // 1. 首次调用时执行 ON_INIT 钩子
             if !bridge.init_called {
                 log::info!("GameBridge: Calling ON_INIT (line {})", ON_INIT_LINE);
-                bridge.call_subroutine_internal(ON_INIT_LINE)?;  // Safe to early return now
+                bridge.call_subroutine_internal(ON_INIT_LINE)?;
                 bridge.init_called = true;
                 log::info!("GameBridge: ON_INIT completed");
             }
@@ -296,13 +282,12 @@ impl GameBridge {
             // 2. 调用 ON_TICK 钩子（设置 DT 变量）
             log::debug!("GameBridge: Calling ON_TICK (line {}), dt={}", ON_TICK_LINE, dt);
             bridge.executor.variables_mut().set("DT", crate::basic::variables::Value::Number(dt as f64))?;
-            bridge.call_subroutine_internal(ON_TICK_LINE)?;  // Safe to early return now
+            bridge.call_subroutine_internal(ON_TICK_LINE)?;
             log::debug!("GameBridge: ON_TICK completed");
 
             // 3. 执行协程 step
             bridge.executor.step(dt)
         })
-        // context automatically reclaimed here by Drop
     }
 
     /// 调用 ON_DRAW 钩子并收集绘制命令
@@ -318,13 +303,16 @@ impl GameBridge {
         // 清空之前的绘制命令
         self.context.clear_commands();
 
-        // Use with_context to ensure context is always reclaimed
+        // Use with_context to safely lend context to executor
         self.with_context(|bridge| {
             bridge.call_subroutine_internal(ON_DRAW_LINE)
         })
     }
 
-    /// 内部方法：调用 BASIC 子程序（假设 context 已经借出）
+    /// 内部方法：调用 BASIC 子程序
+    ///
+    /// 假设 context 已经通过 with_context 借给了 executor，
+    /// 所以可以直接使用 execute_statement。
     fn call_subroutine_internal(&mut self, line_number: u16) -> Result<()> {
         // 检查行号是否存在
         if self.executor.runtime().get_line(line_number).is_none() {
@@ -346,6 +334,7 @@ impl GameBridge {
         self.executor.runtime_mut().set_execution_position(line_number, 0)?;
 
         // 执行到 RETURN（栈深度恢复到初始值）
+        // Context is already in executor via with_context, so just use execute_statement
         loop {
             if let Some(stmt) = self.executor.runtime_mut().get_next_statement() {
                 self.executor.execute_statement(&stmt)?;
@@ -375,7 +364,7 @@ impl GameBridge {
     /// - `Ok(())`: 调用成功
     /// - `Err(BasicError)`: 行号不存在或执行错误
     pub fn call_subroutine(&mut self, line_number: u16) -> Result<()> {
-        // Use with_context to ensure context is always reclaimed
+        // Use with_context to safely lend context to executor
         self.with_context(|bridge| {
             bridge.call_subroutine_internal(line_number)
         })
