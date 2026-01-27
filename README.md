@@ -40,7 +40,7 @@ Cell → Buffer → Sprite → Panel
 
 Unified rendering abstraction
 
-One texture, one draw call — 40K+ symbols (PETSCII/ASCII/Emoji/CJK/Custom)
+High performance - One texture, one draw call 
 
 </td>
 <td width="33%" align="center">
