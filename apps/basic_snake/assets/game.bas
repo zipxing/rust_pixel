@@ -7,6 +7,7 @@
 70 GOTO 60
 80 END
 90 REM
+
 100 REM ============================================
 1000 REM ON_INIT - Game initialization (called once at start)
 1010 REM ============================================
@@ -15,6 +16,7 @@
 1040 REM Call reset to set initial game state
 1050 GOSUB 1500
 1060 RETURN
+
 1500 REM RESET_GAME - Reset game state (called on init and restart)
 1510 REM ============================================
 1520 CLS
@@ -36,6 +38,7 @@
 1660 REM Display initial score
 1670 PRINT "SCORE: "; SC
 1680 RETURN
+
 2000 REM ============================================
 2010 REM ON_TICK - Game logic (called every frame)
 2020 REM ============================================
