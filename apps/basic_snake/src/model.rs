@@ -1,9 +1,10 @@
 use rust_pixel::{
     context::Context,
+    event::{Event, KeyCode, KeyEventKind},
     game::Model,
 };
 use pixel_basic::GameBridge;
-use log::{info, debug, error};
+use log::{info, error};
 
 /// BasicSnakeModel - Game model that integrates BASIC script via GameBridge
 pub struct BasicSnakeModel {
@@ -41,25 +42,73 @@ impl Model for BasicSnakeModel {
         self.load_program(program);
     }
 
-    fn update(&mut self, _ctx: &mut Context, dt: f32) {
-        self.frame_count += 1;
-        debug!("Model::update() called, frame={}, dt={}", self.frame_count, dt);
+    // Use default update() which calls: handle_event -> handle_timer -> handle_input -> handle_auto
+    // This ensures handle_input sets key states BEFORE handle_auto runs the BASIC script
 
-        // Update BASIC script execution
-        // This will call ON_TICK (line 2000) every frame
-        if let Err(e) = self.bridge.update(dt) {
-            error!("BASIC runtime error in update (frame {}): {:?}", self.frame_count, e);
+    fn handle_input(&mut self, ctx: &mut Context, _dt: f32) {
+        // Clear all key states at the start of each frame
+        self.bridge.context_mut().clear_key_states();
+
+        // Process input events and forward to BASIC GameContext
+        // Only process the LAST key event to avoid conflicts when multiple keys are pressed
+        let mut last_direction_key: Option<String> = None;
+
+        for event in &ctx.input_events {
+            if let Event::Key(key_event) = event {
+                // Only process Press events (not Release)
+                if key_event.kind == KeyEventKind::Press {
+                    // Map KeyCode to BASIC key name
+                    let key_name = match key_event.code {
+                        KeyCode::Char(c) => c.to_ascii_uppercase().to_string(),
+                        KeyCode::Up => "UP".to_string(),
+                        KeyCode::Down => "DOWN".to_string(),
+                        KeyCode::Left => "LEFT".to_string(),
+                        KeyCode::Right => "RIGHT".to_string(),
+                        KeyCode::Esc => "ESC".to_string(),
+                        KeyCode::Enter => "ENTER".to_string(),
+                        KeyCode::Backspace => "BACKSPACE".to_string(),
+                        KeyCode::Tab => "TAB".to_string(),
+                        KeyCode::Delete => "DELETE".to_string(),
+                        KeyCode::Home => "HOME".to_string(),
+                        KeyCode::End => "END".to_string(),
+                        KeyCode::PageUp => "PAGEUP".to_string(),
+                        KeyCode::PageDown => "PAGEDOWN".to_string(),
+                        KeyCode::F(n) => format!("F{}", n),
+                        _ => continue,
+                    };
+
+                    // Handle space key specially (Char(' ') -> "SPACE")
+                    let key_name = if key_name == " " { "SPACE".to_string() } else { key_name };
+
+                    // For direction keys, only keep the last one
+                    if key_name == "W" || key_name == "S" || key_name == "A" || key_name == "D"
+                       || key_name == "UP" || key_name == "DOWN" || key_name == "LEFT" || key_name == "RIGHT" {
+                        last_direction_key = Some(key_name);
+                    } else {
+                        // Non-direction keys are set immediately
+                        self.bridge.context_mut().set_key_state(key_name, true);
+                    }
+                }
+            }
         }
 
-        // ESC key handling removed - will be handled by framework
+        // Only set the last direction key
+        if let Some(key) = last_direction_key {
+            self.bridge.context_mut().set_key_state(key, true);
+        }
+
+        // Clear input events after processing to prevent accumulation
+        ctx.input_events.clear();
     }
 
-    fn handle_input(&mut self, _ctx: &mut Context, _dt: f32) {
-        // Input handling is done by GameContext in the render layer
-    }
+    fn handle_auto(&mut self, _ctx: &mut Context, dt: f32) {
+        self.frame_count += 1;
 
-    fn handle_auto(&mut self, _ctx: &mut Context, _dt: f32) {
-        // Not used
+        // Update BASIC script execution
+        // This runs AFTER handle_input, so key states are already set
+        if let Err(e) = self.bridge.update(dt) {
+            error!("BASIC runtime error in handle_auto (frame {}): {:?}", self.frame_count, e);
+        }
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _dt: f32) {
