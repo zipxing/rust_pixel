@@ -25,8 +25,9 @@ rust_pixel 当前的渲染架构存在三种 Sprite 概念：
 **Goals:**
 - 建立清晰的 Widget + Sprite 二元模型
 - 去除 Normal Sprite 概念，简化架构
-- 更好的命名：Panel → Stage, Sprites → SpriteLayer
-- TUI Sprite 作为 mainbuffer 的明确载体
+- 更好的命名：Panel → Scene, Sprites → Layer
+- 保持 `layers: Vec<Layer>` 结构，支持多层扩展
+- 默认两层：tui 层（TUI 内容）+ sprite 层（图形精灵）
 - 统一 Sprite 类型（都是 pixel sprite，在文本模式下退化使用）
 
 **Non-Goals:**
@@ -63,27 +64,27 @@ rust_pixel 当前的渲染架构存在三种 Sprite 概念：
    - ✅ API 不重叠，易于理解
    - ✅ 代码简化，维护成本低
 
-### Decision 2: Panel → Stage 命名
+### Decision 2: Panel → Scene 命名
 
-**选择：** 将核心容器 `Panel` 重命名为 `Stage`（舞台）
+**选择：** 将核心容器 `Panel` 重命名为 `Scene`（场景）
 
 **理由：**
-- "舞台"比"面板"更形象：舞台上有演员（Sprite）、布景（TUI）
-- 游戏引擎常用术语，符合直觉
-- Stage 在 2D 游戏引擎中是常见概念（Phaser, Cocos2d 等）
+- "场景"是游戏引擎的通用术语（Unity/Godot 都用 Scene）
+- Scene 包含多个 Layer（层），概念清晰
+- 比 Stage（舞台）更通用，不仅限于表演隐喻
 
 **结构定义：**
 ```rust
-pub struct Stage {
+pub struct Scene {
     // 双缓冲（用于 diff 优化）
     pub buffers: [Buffer; 2],
     pub current: usize,
 
-    // TUI Sprite（mainbuffer 载体）
-    pub tui_sprite: Sprite,
+    // 层索引
+    pub layer_tag_index: HashMap<String, usize>,
 
-    // 图形精灵层
-    pub sprites: SpriteLayer,
+    // 多层支持
+    pub layers: Vec<Layer>,
 
     // 渲染顺序索引
     pub render_index: Vec<(usize, i32)>,
@@ -91,22 +92,22 @@ pub struct Stage {
 ```
 
 **关键变化：**
-- 去除 `layers: Vec<Sprites>` - 简化为两个明确的容器
-- `tui_sprite: Sprite` - TUI 内容的明确载体
-- `sprites: SpriteLayer` - 所有图形精灵的容器
+- `Panel` → `Scene` 重命名
+- 保持 `layers: Vec<Layer>` 结构，支持多层扩展
+- 默认初始化两层：tui 层和 sprite 层
 
-### Decision 3: Sprites → SpriteLayer 命名
+### Decision 3: Sprites → Layer 命名
 
-**选择：** 将 `Sprites` 重命名为 `SpriteLayer`（精灵层）
+**选择：** 将 `Sprites` 重命名为 `Layer`（层）
 
 **理由：**
 - `Sprites`（复数）作为类名不够清晰，容易与单个 `Sprite` 混淆
-- `SpriteLayer` 明确表示"这是一个包含多个 Sprite 的层"
+- `Layer` 更简洁，明确表示"这是一个渲染层"
 - Layer 概念在渲染系统中很常见，易于理解
 
 **结构定义：**
 ```rust
-pub struct SpriteLayer {
+pub struct Layer {
     pub name: String,
     // 去除 is_pixel 字段 - 所有 sprite 都是 pixel sprite
     pub is_hidden: bool,
@@ -118,44 +119,103 @@ pub struct SpriteLayer {
 ```
 
 **关键变化：**
+- `Sprites` → `Layer` 重命名
 - 去除 `is_pixel: bool` - 不再需要区分 Normal 和 Pixel Sprite
 - 简化逻辑，所有 Sprite 统一处理
 
-### Decision 4: TUI Sprite 作为 mainbuffer 载体
+### Decision 4: TUI Layer 作为 mainbuffer 载体
 
-**选择：** 创建特殊的 `tui_sprite`，其 `content` buffer 就是 mainbuffer
+**选择：** 创建 "tui" 层，包含一个全屏 buffer sprite 作为 mainbuffer 载体
 
 **理由：**
-- 明确 mainbuffer 的归属：它是 TUI Sprite 的 buffer
-- 统一渲染模型：TUI Sprite 和普通 Sprite 在渲染流程中平等对待
-- 简化架构：不再需要特殊的 "UI Buffer → mainbuffer" 合并逻辑
+- TUI 内容也是一个 Layer，概念统一
+- 明确 mainbuffer 的归属：它是 tui layer 中 "buffer" sprite 的 content
+- 保持多层扩展能力，未来可添加更多层
+
+**默认层结构：**
+```
+Scene
+├── layers[0]: "tui"      (render_weight: 100, 上层)
+│   └── sprites[0]: "buffer"  → TUI buffer 载体
+└── layers[1]: "sprite"   (render_weight: 0, 下层)
+    ├── sprites[0]: "player"
+    ├── sprites[1]: "enemy"
+    └── ...
+```
 
 **渲染流程：**
 ```rust
-impl Stage {
-    pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
-        // 1. Widget 系统渲染到 tui_sprite.content
-        // （在应用层完成，例如 model.ui_app.render_into(&mut stage.tui_sprite.content)）
+impl Scene {
+    pub fn new() -> Self {
+        let (width, height) = (180, 80);
+        let size = Rect::new(0, 0, width, height);
 
-        // 2. 渲染所有图形 Sprite
-        self.sprites.render_all_to_buffer(
-            &mut ctx.asset_manager,
-            &mut Buffer::empty(Rect::new(0, 0, 1, 1))  // 占位，pixel sprite 不 merge
-        );
+        let mut layers = vec![];
+        let mut layer_tag_index = HashMap::new();
+
+        // TUI 层 - 包含全屏 buffer sprite
+        let mut tui_layer = Layer::new("tui");
+        tui_layer.render_weight = 100;  // 在上层
+        let tui_sprite = Sprite::new(0, 0, width, height);
+        tui_layer.add(tui_sprite, "buffer");
+        layers.push(tui_layer);
+        layer_tag_index.insert("tui".to_string(), 0);
+
+        // Sprite 层 - 图形精灵
+        let mut sprite_layer = Layer::new("sprite");
+        sprite_layer.render_weight = 0;  // 在下层
+        layers.push(sprite_layer);
+        layer_tag_index.insert("sprite".to_string(), 1);
+
+        Scene {
+            buffers: [Buffer::empty(size), Buffer::empty(size)],
+            current: 0,
+            layer_tag_index,
+            layers,
+            render_index: vec![],
+        }
+    }
+
+    pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
+        // 1. Widget 系统渲染到 tui layer 的 buffer sprite
+        // （在应用层完成，例如 model.ui_app.render_into(scene.tui_buffer_mut())）
+
+        // 2. 渲染所有层
+        self.update_render_index();
+        for idx in &self.render_index {
+            if !self.layers[idx.0].is_hidden {
+                self.layers[idx.0].render_all_to_buffer(
+                    &mut ctx.asset_manager,
+                    &mut self.buffers[self.current]
+                );
+            }
+        }
 
         // 3. 统一提交到 adapter
-        ctx.adapter.draw_all(
-            &self.tui_sprite.content,  // TUI 内容（mainbuffer）
-            &self.buffers[1 - self.current],
-            &mut self.sprites,          // 图形精灵
-            ctx.stage
-        )?;
+        let cb = &self.buffers[self.current];
+        let pb = &self.buffers[1 - self.current];
+        ctx.adapter.draw_all(cb, pb, &mut self.layers, ctx.stage)?;
 
         // 4. 交换缓冲区
         self.buffers[1 - self.current].reset();
         self.current = 1 - self.current;
 
         Ok(())
+    }
+
+    // 便捷方法：获取 TUI buffer
+    pub fn tui_buffer_mut(&mut self) -> &mut Buffer {
+        &mut self.layers[0].get("buffer").content
+    }
+
+    // 便捷方法：添加图形精灵到 sprite 层
+    pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
+        self.layers[1].add(sp, tag);
+    }
+
+    // 便捷方法：获取图形精灵
+    pub fn get_sprite(&mut self, tag: &str) -> &mut Sprite {
+        self.layers[1].get(tag)
     }
 }
 ```
@@ -166,17 +226,17 @@ impl Stage {
 impl Render for MyRender {
     fn draw(&mut self, ctx: &mut Context, model: &mut MyModel, _dt: f32) {
         // 1. 清空 TUI buffer
-        self.stage.tui_sprite.content.reset();
+        self.scene.tui_buffer_mut().reset();
 
-        // 2. 渲染 UIApp 到 TUI Sprite
-        model.ui_app.render_into(&mut self.stage.tui_sprite.content)?;
+        // 2. 渲染 UIApp 到 TUI buffer
+        model.ui_app.render_into(self.scene.tui_buffer_mut())?;
 
         // 3. 或者使用独立 Widget
         let label = Label::new("Score: 100");
-        label.render(&mut self.stage.tui_sprite.content, ctx)?;
+        label.render(self.scene.tui_buffer_mut(), ctx)?;
 
-        // 4. Stage 统一渲染
-        self.stage.draw(ctx)?;
+        // 4. Scene 统一渲染
+        self.scene.draw(ctx)?;
     }
 }
 ```
@@ -260,45 +320,55 @@ model.ui_app.render_into(&mut stage.tui_sprite.content)?;
 ### Phase 1: 核心重构（1-2 天）
 
 **1.1 重命名核心类型**
-- `src/render/panel.rs` → `src/render/stage.rs`
-- `src/render/sprite/sprites.rs` → `src/render/sprite/sprite_layer.rs`
+- `src/render/panel.rs` → `src/render/scene.rs`
+- `src/render/sprite/sprites.rs` → `src/render/sprite/layer.rs`
 - 更新所有导入和引用
 
-**1.2 修改 Stage 结构**
+**1.2 修改 Scene 结构**
 ```rust
-pub struct Stage {
+pub struct Scene {
     pub buffers: [Buffer; 2],
     pub current: usize,
-    pub tui_sprite: Sprite,        // 新增
-    pub sprites: SpriteLayer,      // 简化
+    pub layer_tag_index: HashMap<String, usize>,
+    pub layers: Vec<Layer>,
     pub render_index: Vec<(usize, i32)>,
 }
 
-impl Stage {
+impl Scene {
     pub fn new() -> Self {
         let (width, height) = (180, 80);
         let size = Rect::new(0, 0, width, height);
 
-        // TUI Sprite
+        let mut layers = vec![];
+        let mut layer_tag_index = HashMap::new();
+
+        // TUI 层
+        let mut tui_layer = Layer::new("tui");
+        tui_layer.render_weight = 100;
         let tui_sprite = Sprite::new(0, 0, width, height);
+        tui_layer.add(tui_sprite, "buffer");
+        layers.push(tui_layer);
+        layer_tag_index.insert("tui".to_string(), 0);
 
-        // Sprite Layer
-        let sprites = SpriteLayer::new("main");
+        // Sprite 层
+        let sprite_layer = Layer::new("sprite");
+        layers.push(sprite_layer);
+        layer_tag_index.insert("sprite".to_string(), 1);
 
-        Stage {
+        Scene {
             buffers: [Buffer::empty(size), Buffer::empty(size)],
             current: 0,
-            tui_sprite,
-            sprites,
+            layer_tag_index,
+            layers,
             render_index: vec![],
         }
     }
 }
 ```
 
-**1.3 修改 SpriteLayer**
+**1.3 修改 Layer**
 - 去除 `is_pixel: bool` 字段
-- 简化构造函数：`SpriteLayer::new(name)` 不再需要 `is_pixel` 参数
+- 简化构造函数：`Layer::new(name)` 不再需要 `is_pixel` 参数
 
 **1.4 修改 Sprite**
 - 标记 `set_color_str()` 等 API 为 deprecated（或直接移除）
@@ -309,9 +379,9 @@ impl Stage {
 pub trait Adapter {
     fn draw_all(
         &mut self,
-        tui_buffer: &Buffer,           // TUI 内容（mainbuffer）
+        current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        sprites: &mut SpriteLayer,     // 图形精灵
+        layers: &mut Vec<Layer>,     // 多层支持
         stage: u32,
     ) -> Result<(), Box<dyn Error>>;
 }
@@ -330,26 +400,26 @@ pub trait Adapter {
 ```rust
 // apps/ui_demo/src/render_graphics.rs
 pub struct UiDemoRender {
-    pub stage: Stage,  // panel → stage
+    pub scene: Scene,  // panel → scene
 }
 
 impl Render for UiDemoRender {
     fn draw(&mut self, ctx: &mut Context, model: &mut UiDemoModel, _dt: f32) {
         // 清空 TUI buffer
-        self.stage.tui_sprite.content.reset();
+        self.scene.tui_buffer_mut().reset();
 
-        // 渲染 UIApp 到 TUI Sprite
-        model.ui_app.render_into(&mut self.stage.tui_sprite.content)?;
+        // 渲染 UIApp 到 TUI buffer
+        model.ui_app.render_into(self.scene.tui_buffer_mut())?;
 
-        // Stage 统一渲染
-        self.stage.draw(ctx)?;
+        // Scene 统一渲染
+        self.scene.draw(ctx)?;
     }
 }
 ```
 
 **2.2 迁移 snake**
-- 边框和消息文字：改为直接操作 `stage.tui_sprite.content`
-- 游戏画面：保持 Sprite（pixel sprite）
+- 边框和消息文字：改为直接操作 `scene.tui_buffer_mut()`
+- 游戏画面：使用 `scene.add_sprite()` 添加到 sprite 层
 
 **2.3 迁移 tetris**
 - 同 snake
@@ -385,28 +455,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_stage_creation() {
-        let stage = Stage::new();
-        assert_eq!(stage.tui_sprite.content.area().width, 180);
-        assert_eq!(stage.sprites.sprites.len(), 0);
+    fn test_scene_creation() {
+        let scene = Scene::new();
+        assert_eq!(scene.layers.len(), 2);  // tui + sprite
+        assert_eq!(scene.layers[0].name, "tui");
+        assert_eq!(scene.layers[1].name, "sprite");
     }
 
     #[test]
-    fn test_sprite_layer_add_sprite() {
-        let mut layer = SpriteLayer::new("test");
+    fn test_layer_add_sprite() {
+        let mut layer = Layer::new("test");
         let sprite = Sprite::new(10, 10, 20, 20);
         layer.add(sprite, "sprite1");
         assert_eq!(layer.sprites.len(), 1);
     }
 
     #[test]
-    fn test_tui_sprite_rendering() {
-        let mut stage = Stage::new();
-        stage.tui_sprite.content.set_string(
+    fn test_tui_buffer_rendering() {
+        let mut scene = Scene::new();
+        scene.tui_buffer_mut().set_string(
             0, 0, "Test",
             Style::default().fg(Color::White)
         );
         // 验证 buffer 内容
+    }
+
+    #[test]
+    fn test_add_sprite_to_sprite_layer() {
+        let mut scene = Scene::new();
+        let sprite = Sprite::new(10, 10, 32, 32);
+        scene.add_sprite(sprite, "player");
+        assert_eq!(scene.layers[1].sprites.len(), 1);
     }
 }
 ```
@@ -482,8 +561,19 @@ mod tests {
 ## Conclusion
 
 这次重构将简化 rust_pixel 的渲染架构，建立清晰的 Widget + Sprite 二元模型：
-- **Widget** 专注 TUI 渲染（文本、UI 组件）
-- **Sprite** 专注图形渲染（像素、图片、动画）
-- **Stage** 作为统一容器，概念清晰
+- **Widget** 专注 TUI 渲染（文本、UI 组件）→ 渲染到 tui layer
+- **Sprite** 专注图形渲染（像素、图片、动画）→ 添加到 sprite layer
+- **Scene** 作为统一容器，包含多个 Layer
+- **Layer** 统一的层概念，支持扩展
 
-通过去除 Normal Sprite 概念和更好的命名，架构将更加纯粹和易于理解。
+通过去除 Normal Sprite 概念和更好的命名（Panel→Scene, Sprites→Layer），架构将更加纯粹和易于理解。
+
+### 新旧命名对照
+
+| 旧命名 | 新命名 | 说明 |
+|--------|--------|------|
+| Panel | Scene | 场景容器 |
+| Sprites | Layer | 渲染层 |
+| layers[0] "main" | layers[0] "tui" | TUI 内容层 |
+| layers[1] "pixel" | layers[1] "sprite" | 图形精灵层 |
+| is_pixel: bool | 去除 | 不再区分 |

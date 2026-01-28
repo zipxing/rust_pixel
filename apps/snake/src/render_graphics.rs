@@ -99,7 +99,10 @@ impl SnakeRender {
             Color::Indexed(222),
             Color::Reset,
         );
+        #[cfg(not(graphics_mode))]
         t.add_sprite(l, "SNAKE-BORDER");
+        #[cfg(graphics_mode)]
+        t.add_pixel_sprite(l, "SNAKE-BORDER");
         #[cfg(graphics_mode)]
         t.add_pixel_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
         #[cfg(not(graphics_mode))]
@@ -177,8 +180,8 @@ impl Render for SnakeRender {
         context.adapter.init(
             SNAKEW as u16 + 2,
             SNAKEH as u16 + 4,
-            0.5,
-            0.5,
+            1.0,
+            1.0,
             "snake".to_string(),
         );
         self.create_sprites(context, data);
@@ -209,7 +212,7 @@ impl Render for SnakeRender {
     fn draw(&mut self, context: &mut Context, model: &mut Self::Model, _dt: f32) {
         #[cfg(graphics_mode)]
         {
-            let ss = &mut self.panel.get_sprite("SNAKE-BORDER");
+            let ss = &mut self.panel.get_pixel_sprite("SNAKE-BORDER");
             asset2sprite!(
                 ss,
                 context,

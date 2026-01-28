@@ -4,104 +4,116 @@
 
 ### 1.1 重命名和结构调整
 
-- [ ] 1.1.1 重命名 `src/render/panel.rs` → `src/render/stage.rs`
+- [ ] 1.1.1 重命名 `src/render/panel.rs` → `src/render/scene.rs`
   - 文件移动和重命名
   - 更新模块导出：`src/render/mod.rs`
 
-- [ ] 1.1.2 重命名 `src/render/sprite/sprites.rs` → `src/render/sprite/sprite_layer.rs`
+- [ ] 1.1.2 重命名 `src/render/sprite/sprites.rs` → `src/render/sprite/layer.rs`
   - 文件移动和重命名
   - 更新模块导出：`src/render/sprite/mod.rs`
 
-- [ ] 1.1.3 重命名类型：`Panel` → `Stage`
-  - 在 `stage.rs` 中重命名结构体
+- [ ] 1.1.3 重命名类型：`Panel` → `Scene`
+  - 在 `scene.rs` 中重命名结构体
   - 更新所有相关方法和注释
 
-- [ ] 1.1.4 重命名类型：`Sprites` → `SpriteLayer`
-  - 在 `sprite_layer.rs` 中重命名结构体
+- [ ] 1.1.4 重命名类型：`Sprites` → `Layer`
+  - 在 `layer.rs` 中重命名结构体
   - 更新所有相关方法和注释
 
 - [ ] 1.1.5 更新 `src/lib.rs` 中的重导出
   ```rust
-  pub use render::stage::Stage;
-  pub use render::sprite::SpriteLayer;
+  pub use render::scene::Scene;
+  pub use render::sprite::Layer;
   ```
 
-### 1.2 修改 Stage 结构
+### 1.2 修改 Scene 结构
 
-- [ ] 1.2.1 修改 `Stage` 结构定义
+- [ ] 1.2.1 修改 `Scene` 结构定义（保持 layers: Vec<Layer>）
   ```rust
-  pub struct Stage {
+  pub struct Scene {
       pub buffers: [Buffer; 2],
       pub current: usize,
-      pub tui_sprite: Sprite,        // 新增
-      pub sprites: SpriteLayer,      // 简化（原来是 Vec<Sprites>）
+      pub layer_tag_index: HashMap<String, usize>,  // 保留
+      pub layers: Vec<Layer>,                        // 保留多层支持
       pub render_index: Vec<(usize, i32)>,
   }
   ```
 
-- [ ] 1.2.2 去除 `layer_tag_index: HashMap<String, usize>` 字段
-  - 不再需要多层管理
+- [ ] 1.2.2 修改默认层名称
+  - layers[0]: "main" → "tui"（TUI 内容层）
+  - layers[1]: "pixel" → "sprite"（图形精灵层）
 
-- [ ] 1.2.3 修改 `Stage::new()` 构造函数
+- [ ] 1.2.3 修改 `Scene::new()` 构造函数
   ```rust
   pub fn new() -> Self {
       let (width, height) = (180, 80);
       let size = Rect::new(0, 0, width, height);
 
-      let tui_sprite = Sprite::new(0, 0, width, height);
-      let sprites = SpriteLayer::new("main");
+      let mut layers = vec![];
+      let mut layer_tag_index = HashMap::new();
 
-      Stage {
+      // TUI 层 - 包含全屏 buffer sprite
+      let mut tui_layer = Layer::new("tui");
+      tui_layer.render_weight = 100;  // 在上层
+      let tui_sprite = Sprite::new(0, 0, width, height);
+      tui_layer.add(tui_sprite, "buffer");
+      layers.push(tui_layer);
+      layer_tag_index.insert("tui".to_string(), 0);
+
+      // Sprite 层 - 图形精灵
+      let sprite_layer = Layer::new("sprite");
+      layers.push(sprite_layer);
+      layer_tag_index.insert("sprite".to_string(), 1);
+
+      Scene {
           buffers: [Buffer::empty(size), Buffer::empty(size)],
           current: 0,
-          tui_sprite,
-          sprites,
+          layer_tag_index,
+          layers,
           render_index: vec![],
       }
   }
   ```
 
-- [ ] 1.2.4 修改 `Stage::init()` 方法
-  - 初始化 tui_sprite 的 buffer 大小
+- [ ] 1.2.4 修改 `Scene::init()` 方法
+  - 初始化 tui layer 中 buffer sprite 的大小
 
 - [ ] 1.2.5 添加新的辅助方法
   ```rust
   // 获取 TUI buffer 的可变引用
   pub fn tui_buffer_mut(&mut self) -> &mut Buffer {
-      &mut self.tui_sprite.content
+      &mut self.layers[0].get("buffer").content
   }
 
-  // 添加 Sprite
+  // 添加 Sprite 到 sprite 层
   pub fn add_sprite(&mut self, sprite: Sprite, tag: &str) {
-      self.sprites.add(sprite, tag);
+      self.layers[1].add(sprite, tag);
   }
 
   // 获取 Sprite
   pub fn get_sprite(&mut self, tag: &str) -> &mut Sprite {
-      self.sprites.get(tag)
+      self.layers[1].get(tag)
   }
   ```
 
-- [ ] 1.2.6 修改 `Stage::draw()` 方法
+- [ ] 1.2.6 修改 `Scene::draw()` 方法（保持多层渲染逻辑）
   ```rust
   pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
       if ctx.stage > LOGO_FRAME {
-          // 渲染图形 sprites（不再 merge 到 buffer）
-          self.sprites.render_all_to_buffer(
-              &mut ctx.asset_manager,
-              &mut Buffer::empty(Rect::new(0, 0, 1, 1))  // 占位
-          );
+          self.update_render_index();
+          for idx in &self.render_index {
+              if !self.layers[idx.0].is_hidden {
+                  self.layers[idx.0].render_all_to_buffer(
+                      &mut ctx.asset_manager,
+                      &mut self.buffers[self.current]
+                  );
+              }
+          }
       }
 
-      let tui_buffer = &self.tui_sprite.content;
+      let cb = &self.buffers[self.current];
       let pb = &self.buffers[1 - self.current];
-
-      ctx.adapter.draw_all(
-          tui_buffer,
-          pb,
-          &mut self.sprites,
-          ctx.stage
-      ).unwrap();
+      ctx.adapter.draw_all(cb, pb, &mut self.layers, ctx.stage)?;
 
       if ctx.stage > LOGO_FRAME {
           self.buffers[1 - self.current].reset();
@@ -112,17 +124,19 @@
   }
   ```
 
-- [ ] 1.2.7 去除原来的层管理方法
-  - `add_layer()`, `add_pixel_layer()`, `get_layer()` 等
+- [ ] 1.2.7 更新层管理方法（使用新名称）
+  - `add_layer()` - 保留，添加自定义层
+  - `get_layer()` - 保留
+  - `set_layer_weight()` - 保留
 
-- [ ] 1.2.8 简化 `update_render_index()` 方法
-  - 现在只有一个 sprites 层
+- [ ] 1.2.8 保持 `update_render_index()` 方法
+  - 按 render_weight 排序所有层
 
-### 1.3 修改 SpriteLayer 结构
+### 1.3 修改 Layer 结构
 
-- [ ] 1.3.1 修改 `SpriteLayer` 结构定义
+- [ ] 1.3.1 修改 `Layer` 结构定义
   ```rust
-  pub struct SpriteLayer {
+  pub struct Layer {
       pub name: String,
       // 去除 is_pixel: bool 字段
       pub is_hidden: bool,
@@ -136,7 +150,7 @@
 - [ ] 1.3.2 简化构造函数
   ```rust
   pub fn new(name: &str) -> Self {
-      SpriteLayer {
+      Layer {
           name: name.to_string(),
           is_hidden: false,
           sprites: vec![],
@@ -156,7 +170,7 @@
       self.update_render_index();
       for idx in &self.render_index {
           if !self.sprites[idx.0].is_hidden() {
-              // 所有 sprite 都是 pixel sprite，不 merge 到 buffer
+              // 所有 sprite 都是 pixel sprite
               self.sprites[idx.0].check_asset_request(am);
           }
       }
@@ -197,20 +211,18 @@
   ```rust
   fn draw_all(
       &mut self,
-      tui_buffer: &Buffer,           // TUI 内容（mainbuffer）
+      current_buffer: &Buffer,
       previous_buffer: &Buffer,
-      sprites: &mut SpriteLayer,     // 图形精灵（原来是 &mut Vec<Sprites>）
+      layers: &mut Vec<Layer>,     // 保持多层支持
       stage: u32,
   ) -> Result<(), Box<dyn Error>>;
   ```
 
 - [ ] 1.5.2 更新 `cross_adapter.rs` 实现（文本模式）
-  - 合并 tui_buffer 到输出
-  - 渲染 sprites（字符模式）
+  - 渲染所有层到终端
 
 - [ ] 1.5.3 更新 `sdl_adapter.rs` 实现
-  - 渲染 tui_buffer（TUI 层）
-  - 渲染 sprites（pixel sprites）
+  - 渲染所有层（tui 层 + sprite 层）
 
 - [ ] 1.5.4 更新 `winit_glow_adapter.rs` 实现
   - 同 sdl_adapter
@@ -225,16 +237,16 @@
   ```rust
   fn draw_all_graph(
       &mut self,
-      tui_buffer: &Buffer,
+      current_buffer: &Buffer,
       previous_buffer: &Buffer,
-      sprites: &mut SpriteLayer,  // 改为单个 SpriteLayer
+      layers: &mut Vec<Layer>,  // 多层
       stage: u32,
   ) {
       // 生成 render buffer
       let rbuf = generate_render_buffer(
-          tui_buffer,
+          current_buffer,
           previous_buffer,
-          sprites,  // 直接传递 SpriteLayer
+          layers,
           stage,
           self.get_base(),
       );
@@ -252,7 +264,7 @@
   pub fn generate_render_buffer(
       current_buffer: &Buffer,
       previous_buffer: &Buffer,
-      sprites: &SpriteLayer,  // 改为单个 SpriteLayer
+      layers: &Vec<Layer>,  // 多层
       stage: u32,
       base: &RenderBase,
   ) -> Vec<RenderCell> {
@@ -264,25 +276,25 @@
 
 - [ ] 1.6.1 更新 `src/render/mod.rs`
   ```rust
-  pub mod stage;
-  pub use stage::Stage;
+  pub mod scene;
+  pub use scene::Scene;
 
   pub mod sprite;
-  pub use sprite::{Sprite, SpriteLayer};
+  pub use sprite::{Sprite, Layer};
   ```
 
 - [ ] 1.6.2 更新 `src/lib.rs`
   ```rust
-  pub use render::{Stage, Sprite, SpriteLayer};
+  pub use render::{Scene, Sprite, Layer};
   ```
 
 - [ ] 1.6.3 添加类型别名（可选，用于兼容）
   ```rust
-  #[deprecated(note = "使用 Stage 代替")]
-  pub type Panel = Stage;
+  #[deprecated(note = "使用 Scene 代替")]
+  pub type Panel = Scene;
 
-  #[deprecated(note = "使用 SpriteLayer 代替")]
-  pub type Sprites = SpriteLayer;
+  #[deprecated(note = "使用 Layer 代替")]
+  pub type Sprites = Layer;
   ```
 
 ## 2. Phase 2: 应用迁移（预计 2-3 天）
@@ -291,13 +303,13 @@
 
 - [ ] 2.1.1 更新导入
   ```rust
-  use rust_pixel::render::stage::Stage;
+  use rust_pixel::render::scene::Scene;
   ```
 
 - [ ] 2.1.2 修改 `UiDemoRender` 结构
   ```rust
   pub struct UiDemoRender {
-      pub stage: Stage,  // panel → stage
+      pub scene: Scene,  // panel → scene
   }
   ```
 
@@ -305,7 +317,7 @@
   ```rust
   pub fn new() -> Self {
       Self {
-          stage: Stage::new(),
+          scene: Scene::new(),
       }
   }
   ```
@@ -315,16 +327,16 @@
   fn init(&mut self, ctx: &mut Context, model: &mut UiDemoModel) {
       ctx.adapter.get_base().gr.set_use_tui_height(true);
       ctx.adapter.init(...);
-      self.stage.init(ctx);
+      self.scene.init(ctx);
   }
   ```
 
 - [ ] 2.1.5 修改 `draw()` 方法
   ```rust
   fn draw(&mut self, ctx: &mut Context, model: &mut UiDemoModel, _dt: f32) {
-      self.stage.tui_sprite.content.reset();
-      model.ui_app.render_into(&mut self.stage.tui_sprite.content)?;
-      self.stage.draw(ctx)?;
+      self.scene.tui_buffer_mut().reset();
+      model.ui_app.render_into(self.scene.tui_buffer_mut())?;
+      self.scene.draw(ctx)?;
   }
   ```
 
@@ -342,17 +354,17 @@
   t.add_sprite(l, "SNAKE-BORDER");
 
   // 新代码
-  self.stage.tui_sprite.content.set_string(
+  self.scene.tui_buffer_mut().set_string(
       20, 0, "SNAKE [RustPixel]",
       Style::default().fg(Color::Indexed(222))
   );
   ```
 
-- [ ] 2.2.3 保持游戏画面 Sprite（已经是 pixel sprite）
+- [ ] 2.2.3 保持游戏画面 Sprite（添加到 sprite 层）
   ```rust
-  // 保持不变
+  // 使用新 API
   #[cfg(graphics_mode)]
-  self.stage.add_sprite(
+  self.scene.add_sprite(
       Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16),
       "SNAKE"
   );
@@ -365,7 +377,7 @@
   ml.set_color_str(...);
 
   // 新代码
-  self.stage.tui_sprite.content.set_string(...);
+  self.scene.tui_buffer_mut().set_string(...);
   ```
 
 - [ ] 2.2.5 测试文本模式和图形模式
@@ -399,22 +411,22 @@
 
 ### 3.1 单元测试
 
-- [ ] 3.1.1 添加 `Stage` 单元测试
+- [ ] 3.1.1 添加 `Scene` 单元测试
   ```rust
   #[test]
-  fn test_stage_creation() { ... }
+  fn test_scene_creation() { ... }
 
   #[test]
-  fn test_tui_sprite_buffer() { ... }
+  fn test_tui_buffer() { ... }
 
   #[test]
-  fn test_sprite_layer_management() { ... }
+  fn test_layer_management() { ... }
   ```
 
-- [ ] 3.1.2 添加 `SpriteLayer` 单元测试
+- [ ] 3.1.2 添加 `Layer` 单元测试
   ```rust
   #[test]
-  fn test_sprite_layer_add_remove() { ... }
+  fn test_layer_add_remove() { ... }
 
   #[test]
   fn test_render_index_update() { ... }
@@ -470,32 +482,36 @@
   ```markdown
   ## Architecture
 
-  ### Core Design Pattern: Model-Render-Stage
+  ### Core Design Pattern: Model-Render-Scene
 
-  Stage (orchestrator)
-  ├── TUI Sprite (all widgets render here)
-  └── Sprites (all pixel sprites)
+  Scene (场景容器)
+  ├── layers[0]: "tui" (TUI 内容层)
+  │   └── sprites[0]: "buffer" (全屏 buffer)
+  └── layers[1]: "sprite" (图形精灵层)
+      └── sprites[...] (游戏精灵)
   ```
 
 - [ ] 3.4.2 更新 `README.md`
-  - 示例代码使用 Stage
+  - 示例代码使用 Scene
   - 更新架构图
 
 - [ ] 3.4.3 更新 `doc/` 技术文档
   - 渲染系统说明
   - API 参考
 
-- [ ] 3.4.4 创建迁移指南 `doc/migration/panel-to-stage.md`
+- [ ] 3.4.4 创建迁移指南 `doc/migration/panel-to-scene.md`
   ```markdown
-  # Panel → Stage 迁移指南
+  # Panel → Scene 迁移指南
 
   ## 背景
   ...
 
   ## 快速替换
-  1. Panel → Stage
-  2. panel.add_sprite() → stage.add_sprite()
-  3. Normal Sprite → Widget or stage.tui_sprite.content
+  1. Panel → Scene
+  2. Sprites → Layer
+  3. panel.add_sprite() → scene.add_sprite()
+  4. panel.add_pixel_sprite() → scene.add_sprite()
+  5. Normal Sprite 渲染 → scene.tui_buffer_mut().set_string()
 
   ## 详细示例
   ...
@@ -532,8 +548,9 @@
 
 - [ ] 4.1.2 分阶段提交
   ```bash
-  git commit -m "refactor: rename Panel to Stage, Sprites to SpriteLayer"
-  git commit -m "refactor: unify sprite architecture - remove Normal Sprite"
+  git commit -m "refactor: rename Panel to Scene, Sprites to Layer"
+  git commit -m "refactor: rename layers 'main' to 'tui', 'pixel' to 'sprite'"
+  git commit -m "refactor: remove is_pixel flag, unify Layer"
   git commit -m "refactor: migrate ui_demo to new architecture"
   git commit -m "refactor: migrate snake and tetris to new architecture"
   git commit -m "refactor: migrate remaining apps"
@@ -550,8 +567,8 @@
 
 - [ ] 4.2.1 创建 tag
   ```bash
-  git tag -a v1.1.0 -m "Release v1.1.0: Unified Sprite Architecture"
-  git push origin v1.1.0
+  git tag -a v2.0.0 -m "Release v2.0.0: Scene/Layer Architecture"
+  git push origin v2.0.0
   ```
 
 - [ ] 4.2.2 发布到 crates.io
