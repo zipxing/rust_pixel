@@ -7,7 +7,7 @@ use crate::{
         adapter::{Adapter, AdapterBase},
         buffer::Buffer,
         image::to_error,
-        sprite::Sprites,
+        sprite::Layer,
         style::{Color, Modifier, ModifierDiff},
     },
     util::Rand,
@@ -118,7 +118,7 @@ impl Adapter for CrosstermAdapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        _pix: &mut Vec<Sprites>,
+        _pix: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         if stage <= LOGO_FRAME {

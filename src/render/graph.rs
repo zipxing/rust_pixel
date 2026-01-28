@@ -74,7 +74,7 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, symbol_map::calc_linear_index, AdapterBase},
+    render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::Color, symbol_map::calc_linear_index, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -913,7 +913,7 @@ pub fn render_helper_with_scale(
 /// - `rx`: Horizontal scaling ratio for display compensation
 /// - `ry`: Vertical scaling ratio for display compensation
 /// - `f`: Callback function to process each sprite pixel
-pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
+pub fn render_pixel_sprites<F>(pixel_spt: &mut Layer, rx: f32, ry: f32, mut f: F)
 where
     // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32),
@@ -1320,7 +1320,7 @@ where
 pub fn generate_render_buffer(
     cb: &Buffer,
     _pb: &Buffer,
-    ps: &mut Vec<Sprites>,
+    ps: &mut Vec<Layer>,
     stage: u32,
     base: &mut AdapterBase,
 ) -> Vec<RenderCell> {
@@ -1365,8 +1365,9 @@ pub fn generate_render_buffer(
     if stage > LOGO_FRAME {
         // render pixel_sprites first (bottom layer)
         // 先渲染像素精灵（底层）
+        // Note: All layers are now uniform (is_pixel removed), render all non-hidden layers
         for item in ps {
-            if item.is_pixel && !item.is_hidden {
+            if !item.is_hidden {
                 render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
                     // Pixel sprites currently don't use modifier (0)
                     push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);

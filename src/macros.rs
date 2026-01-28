@@ -210,7 +210,7 @@ macro_rules! app {
             pub fn run() {
                 let mut g = init_game().g;
                 g.run().unwrap();
-                g.render.panel.reset(&mut g.context);
+                g.render.scene.reset(&mut g.context);
             }
         }
     };

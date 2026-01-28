@@ -1,31 +1,28 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022～2025
 
-//! Panel supports rendering in both text and graphics modes.
+//! Scene supports rendering in both text and graphics modes.
 //! The core of it is to draw whatever in the buffer on the screen.
+//!
+//! Scene contains multiple Layers:
+//! - "tui" layer: Contains the mainbuffer sprite for TUI/Widget content
+//! - "sprite" layer: Contains game sprites (pixel sprites)
 //!
 //! Terminal mode relies on the crossterm modules, and it has builtin double buffering.
 //!
-//! SDL is built on rustsdl2 module. To support opacity of sprites, buffer stores the char and color
-//! of each cell in every framework in SDL mode.
-//! During rendering, cell is rendered according to its opacity order first to render_texture,
-//! and later render_text displays on the canvas.
-//! To further enhance our functionality, a set of special sprites: pixel_sprites are provided in SDL mode.
-//! They can be set per pixel, and are managed in the same way as cell.
-//! During rendering, they can be rendered by its pixel position or can be rotated about its center.
-//! Please refer to the flush method or the tower defense game in games/tower where pixel_sprite is
-//! massively applied.
+//! Graphics mode uses OpenGL/WebGL. To support opacity of sprites, buffer stores the char
+//! and color of each cell. During rendering, cells are rendered according to their opacity
+//! order first to render_texture, and later displayed on the canvas.
 //!
-//! WEB mode is similar to SDL mode, both are graphics modes. However,
-//! in WEB mode, RustPixel renders buffer to a shared memory block and shares it
-//! with JavaScript in WEB, then JS calls webgl in the browser to render this memory block.
-//! Refer to the implementation in pixel.js
+//! WEB mode is similar to native graphics mode. However, in WEB mode, RustPixel renders
+//! buffer to a shared memory block and shares it with JavaScript, then JS calls WebGL
+//! in the browser to render this memory block.
 
 use crate::{
     context::Context,
     render::{
         buffer::Buffer,
-        sprite::{Sprite, Sprites},
+        sprite::{Sprite, Layer},
     },
     util::{
         objpool::{GObj, GameObjPool, GameObject},
@@ -37,42 +34,44 @@ use log::info;
 use std::{collections::HashMap, io};
 use std::cmp::Reverse;
 
-pub struct Panel {
+pub struct Scene {
     pub buffers: [Buffer; 2],
     pub current: usize,
     pub layer_tag_index: HashMap<String, usize>,
-    pub layers: Vec<Sprites>,
+    pub layers: Vec<Layer>,
 
     // layer index, render weight...
     pub render_index: Vec<(usize, i32)>,
 }
 
 #[allow(unused)]
-impl Default for Panel {
+impl Default for Scene {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Panel {
+impl Scene {
     #[allow(unused_mut)]
     pub fn new() -> Self {
         let (width, height) = (180, 80);
         let size = Rect::new(0, 0, width, height);
 
         let mut layers = vec![];
-        let nsc = Sprites::new("main");
-        layers.push(nsc);
-
-        let mut sc = Sprites::new("pixel");
-        sc.is_pixel = true;
-        layers.push(sc);
-
         let mut layer_tag_index = HashMap::new();
-        layer_tag_index.insert("main".to_string(), 0);
-        layer_tag_index.insert("pixel".to_string(), 1);
 
-        Panel {
+        // TUI layer - for UI elements (borders, messages, etc.)
+        let mut tui_layer = Layer::new("tui");
+        tui_layer.render_weight = 100;  // Higher weight = rendered on top
+        layers.push(tui_layer);
+        layer_tag_index.insert("tui".to_string(), 0);
+
+        // Sprite layer - for game sprites
+        let sprite_layer = Layer::new("sprite");
+        layers.push(sprite_layer);
+        layer_tag_index.insert("sprite".to_string(), 1);
+
+        Scene {
             buffers: [Buffer::empty(size), Buffer::empty(size)],
             current: 0,
             layer_tag_index,
@@ -85,72 +84,88 @@ impl Panel {
         let size = ctx.adapter.size();
         self.buffers[0].resize(size);
         self.buffers[1].resize(size);
-        info!("panel init size...{:?}", size);
+        info!("scene init size...{:?}", size);
     }
 
+    /// Get mutable reference to the current buffer (mainbuffer)
+    /// This is where Widget/UIApp content should be rendered
+    pub fn tui_buffer_mut(&mut self) -> &mut Buffer {
+        &mut self.buffers[self.current]
+    }
+
+    /// Get the current rendering buffer
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current]
     }
 
-    fn add_layer_inner(&mut self, name: &str, is_pixel: bool) {
-        let sps = if is_pixel {
-            Sprites::new_pixel(name)
-        } else {
-            Sprites::new(name)
-        };
-        self.layers.push(sps);
+    /// Add a new layer with the given name
+    pub fn add_layer(&mut self, name: &str) {
+        let layer = Layer::new(name);
+        self.layers.push(layer);
         self.layer_tag_index
             .insert(name.to_string(), self.layers.len() - 1);
     }
 
-    pub fn add_layer(&mut self, name: &str) {
-        self.add_layer_inner(name, false);
-    }
-
-    pub fn add_layer_pixel(&mut self, name: &str) {
-        self.add_layer_inner(name, true);
-    }
-
+    /// Add a sprite to a specific layer
     pub fn add_layer_sprite(&mut self, sp: Sprite, layer_name: &str, tag: &str) {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
-        self.layers[*idx].add_by_tag(sp, tag);
+        self.layers[*idx].add(sp, tag);
     }
 
+    /// Get a sprite from a specific layer
     pub fn get_layer_sprite(&mut self, layer_name: &str, tag: &str) -> &mut Sprite {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
-        self.layers[*idx].get_by_tag(tag)
+        self.layers[*idx].get(tag)
     }
 
+    /// Set the render weight of a layer
     pub fn set_layer_weight(&mut self, layer_name: &str, w: i32) {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
         self.layers[*idx].render_weight = w;
         self.render_index.clear();
     }
 
+    /// Deactivate (hide) a layer
     pub fn deactive_layer(&mut self, layer_name: &str) {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
         self.layers[*idx].deactive();
     }
 
+    /// Activate (show) a layer
     pub fn active_layer(&mut self, layer_name: &str) {
         let idx = self.layer_tag_index.get(layer_name).unwrap();
         self.layers[*idx].active();
     }
 
+    /// Add a sprite to the default sprite layer (for game objects)
     pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.layers[0].add_by_tag(sp, tag);
+        self.layers[1].add(sp, tag);
     }
 
+    /// Get a sprite from the default sprite layer
     pub fn get_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.layers[0].get_by_tag(tag)
+        self.layers[1].get(tag)
     }
 
+    /// Add a sprite to the TUI layer (for UI elements like borders, messages)
+    pub fn add_tui_sprite(&mut self, sp: Sprite, tag: &str) {
+        self.layers[0].add(sp, tag);
+    }
+
+    /// Get a sprite from the TUI layer
+    pub fn get_tui_sprite(&mut self, tag: &str) -> &mut Sprite {
+        self.layers[0].get(tag)
+    }
+
+    // Backward compatibility aliases
+    #[deprecated(note = "Use add_sprite instead - all sprites are now unified")]
     pub fn add_pixel_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.layers[1].add_by_tag(sp, tag);
+        self.add_sprite(sp, tag);
     }
 
+    #[deprecated(note = "Use get_sprite instead - all sprites are now unified")]
     pub fn get_pixel_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.layers[1].get_by_tag(tag)
+        self.get_sprite(tag)
     }
 
     pub fn reset(&mut self, ctx: &mut Context) {
@@ -171,8 +186,21 @@ impl Panel {
             self.update_render_index();
             for idx in &self.render_index {
                 if !self.layers[idx.0].is_hidden {
-                    self.layers[idx.0]
-                        .render_all_to_buffer(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                    // Terminal mode: all layers merge to buffer
+                    // Graphics mode: only TUI layer (idx 0) merges to buffer
+                    #[cfg(not(graphics_mode))]
+                    {
+                        self.layers[idx.0]
+                            .render_all_to_buffer(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                    }
+                    #[cfg(graphics_mode)]
+                    {
+                        // Only TUI layer merges to buffer in graphics mode
+                        if idx.0 == 0 {
+                            self.layers[idx.0]
+                                .render_all_to_buffer(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                        }
+                    }
                 }
             }
         }
@@ -192,8 +220,8 @@ impl Panel {
         Ok(())
     }
 
-    /// create a max number of sprites
-    /// and calls f closure to init
+    /// Create a max number of sprites in the sprite layer
+    /// and call closure f to init each one
     pub fn creat_objpool_sprites<T, F>(
         &mut self,
         pool: &GameObjPool<T>,
@@ -208,12 +236,12 @@ impl Panel {
             let mut bl = Sprite::new(0, 0, size_x, size_y);
             f(&mut bl);
             bl.set_hidden(true);
-            self.add_pixel_sprite(bl, &format!("{}{}", &pool.prefix, i));
+            self.add_sprite(bl, &format!("{}{}", &pool.prefix, i));
         }
     }
 
-    /// drawing sprites
-    /// and calls f closure to set content and pos
+    /// Draw sprites from object pool
+    /// and call closure f to set content and pos
     pub fn draw_objpool<T, F>(&mut self, os: &mut GameObjPool<T>, mut f: F)
     where
         T: GObj,
@@ -223,8 +251,7 @@ impl Panel {
             // clear inactive objects
             if !o.active {
                 if let Some(oid) = os.map.remove(&o.id) {
-                    //info!("render set hidden true...");
-                    self.get_pixel_sprite(&format!("{}{}", os.prefix, oid))
+                    self.get_sprite(&format!("{}{}", os.prefix, oid))
                         .set_hidden(true);
                 }
                 continue;
@@ -236,7 +263,7 @@ impl Panel {
                     let mut mi = 0;
                     // find an available sprite
                     for i in 0..os.max_count {
-                        let pp = self.get_pixel_sprite(&format!("{}{}", os.prefix, i));
+                        let pp = self.get_sprite(&format!("{}{}", os.prefix, i));
                         if pp.is_hidden() {
                             mi = i;
                             break;
@@ -248,9 +275,13 @@ impl Panel {
                 }
             };
             // concatenate pre and psid to get the sprite, set visible and draw
-            let pl = self.get_pixel_sprite(&format!("{}{}", os.prefix, psid));
+            let pl = self.get_sprite(&format!("{}{}", os.prefix, psid));
             pl.set_hidden(false);
             f(pl, o);
         }
     }
 }
+
+// Type alias for backward compatibility
+#[deprecated(note = "Use Scene instead")]
+pub type Panel = Scene;

@@ -9,11 +9,11 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixelRenderer, 
+        gl::pixel::GlPixelRenderer,
         Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
     },
     buffer::Buffer,
-    sprite::Sprites,
+    sprite::Layer,
 };
 use log::info;
 use std::any::Any;
@@ -108,7 +108,7 @@ impl Adapter for WebAdapter {
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);

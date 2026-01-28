@@ -11,7 +11,7 @@
 //! - `buffer`: Vector composed of cells, manages screen buffer
 //! - `sprite`: Basic rendering component, further encapsulates buffer
 //! - `style`: Defines rendering attributes such as foreground and background colors
-//! - `panel`: Rendering panel, compatible with text mode and graphics mode
+//! - `scene`: Rendering scene, compatible with text mode and graphics mode
 //! - `graph`: Graphics rendering related data structures and functions
 //! - `image`: Image processing functionality
 //! - `symbols`: Symbol and character processing
@@ -22,7 +22,7 @@ pub mod cell;
 #[cfg(graphics_mode)]
 pub mod graph;
 pub mod image;
-pub mod panel;
+pub mod scene;
 pub mod sprite;
 pub mod style;
 pub mod symbol_map;
@@ -38,7 +38,15 @@ pub use graph::{
     render_main_buffer, render_pixel_sprites, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
 };
-pub use panel::Panel;
-pub use sprite::Sprites;
+pub use scene::Scene;
+pub use sprite::Layer;
 pub use style::{Color, Style};
 pub use symbol_map::{SymbolIndex, SymbolMap, SymbolMapStats, SymbolRegion};
+
+// Backward compatibility aliases
+#[deprecated(note = "Use Scene instead")]
+#[allow(deprecated)]
+pub use scene::Panel;
+#[deprecated(note = "Use Layer instead")]
+#[allow(deprecated)]
+pub use sprite::Sprites;

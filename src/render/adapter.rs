@@ -161,7 +161,7 @@
 use crate::util::{ARect, PointI32};
 use crate::{
     event::Event,
-    render::{buffer::Buffer, sprite::Sprites},
+    render::{buffer::Buffer, sprite::Layer},
     util::{Rand, Rect},
 };
 
@@ -395,7 +395,7 @@ pub trait Adapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        layers: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String>;
 
@@ -499,14 +499,14 @@ pub trait Adapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        layers: &mut Vec<Layer>,
         stage: u32,
     ) {
-        // Pass 1: Convert game data (buffer + sprites) to GPU-ready format
+        // Pass 1: Convert game data (buffer + layers) to GPU-ready format
         let rbuf = generate_render_buffer(
             current_buffer,
             previous_buffer,
-            pixel_sprites,
+            layers,
             stage,
             self.get_base(),
         );

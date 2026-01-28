@@ -19,8 +19,13 @@ use bitflags::bitflags;
 // use log::info;
 // use std::f32;
 
-mod sprites;
-pub use sprites::Sprites;
+mod layer;
+pub use layer::Layer;
+
+// Type alias for backward compatibility
+#[deprecated(note = "Use Layer instead")]
+#[allow(deprecated)]
+pub type Sprites = Layer;
 
 /// Defines some common tabs symbol (in text mode)
 pub const SYMBOL_LINE: [&str; 37] = [

@@ -41,7 +41,7 @@ use crate::render::{
     },
     buffer::Buffer,
     graph::{UnifiedColor, UnifiedTransform},
-    sprite::Sprites,
+    sprite::Layer,
 };
 
 // WGPU backend imports
@@ -1201,7 +1201,7 @@ impl Adapter for WinitWgpuAdapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         // Handle window drag movement

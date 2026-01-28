@@ -13,7 +13,7 @@ use crate::render::{
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
-    sprite::Sprites,
+    sprite::Layer,
 };
 use log::info;
 use sdl2::{
@@ -306,7 +306,7 @@ impl Adapter for SdlAdapter {
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         // No custom window dragging needed (using OS window decoration)

@@ -40,7 +40,7 @@ use crate::render::{
         Adapter, AdapterBase,
     },
     buffer::Buffer,
-    sprite::Sprites,
+    sprite::Layer,
 };
 
 // OpenGL backend imports (glow + glutin)
@@ -765,7 +765,7 @@ impl Adapter for WinitGlowAdapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         // Handle window drag movement
