@@ -26,7 +26,7 @@ impl TowerRender {
 
         t.add_sprite(Sprite::new(1, 1, TOWERW as u16, TOWERH as u16), "TOWER");
         t.add_sprite(
-            Sprite::new(0, (TOWERH + 3) as u16, TOWERW as u16, 1u16),
+            Sprite::new(0, ((TOWERH + 3) * 16) as u16, TOWERW as u16, 1u16),
             "TOWER-MSG",
         );
         event_register("Tower.RedrawGrid", "draw_grid");

@@ -2,18 +2,18 @@
 // Only support graphics mode!!!
 //
 use crate::model::TowerModel;
-use rust_pixel::{context::Context, game::Render, render::panel::Panel};
+use rust_pixel::{context::Context, game::Render, render::scene::Scene};
 use tower_lib::*;
 // use log::info;
 
 pub struct TowerRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl TowerRender {
     pub fn new() -> Self {
-        let t = Panel::new();
-        Self { panel: t }
+        let t = Scene::new();
+        Self { scene: t }
     }
 }
 
@@ -28,7 +28,7 @@ impl Render for TowerRender {
             0.4,
             "tower".to_string(),
         );
-        self.panel.init(ctx);
+        self.scene.init(ctx);
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {}
@@ -36,6 +36,6 @@ impl Render for TowerRender {
     fn handle_timer(&mut self, _ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

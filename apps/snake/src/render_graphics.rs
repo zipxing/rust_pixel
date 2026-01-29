@@ -106,11 +106,9 @@ impl SnakeRender {
         // Game area sprite
         #[cfg(graphics_mode)]
         t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
-        #[cfg(not(graphics_mode))]
-        t.add_tui_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
         // Message area (TUI layer)
-        t.add_tui_sprite(
-            Sprite::new(0, (SNAKEH + 3) as u16, SNAKEW as u16, 1u16),
+        t.add_sprite(
+            Sprite::new(0, ((SNAKEH + 2) * 16) as u16, SNAKEW as u16, 1u16),
             "SNAKE-MSG",
         );
 
@@ -135,11 +133,8 @@ impl SnakeRender {
     }
 
     pub fn draw_grid(&mut self, context: &mut Context, d: &mut SnakeModel) {
-        let ml = self.scene.get_tui_sprite("SNAKE-MSG");
+        let ml = self.scene.get_sprite("SNAKE-MSG");
         ml.set_default_str("snake");
-        #[cfg(not(graphics_mode))]
-        let l = self.scene.get_tui_sprite("SNAKE");
-        #[cfg(graphics_mode)]
         let l = self.scene.get_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {
@@ -198,7 +193,7 @@ impl Render for SnakeRender {
 
     fn handle_timer(&mut self, context: &mut Context, _model: &mut Self::Model, _dt: f32) {
         if event_check("Snake.TestTimer", "test_timer") {
-            let ml = self.scene.get_tui_sprite("SNAKE-MSG");
+            let ml = self.scene.get_sprite("SNAKE-MSG");
             ml.set_color_str(
                 (context.stage / 6) as u16 % SNAKEW as u16,
                 0,

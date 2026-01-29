@@ -6,18 +6,18 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
 };
 
 pub struct PokerRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl PokerRender {
     pub fn new() -> Self {
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         let gb = Sprite::new(0, 0, 80, 20);
         t.add_sprite(gb, "back");
@@ -37,7 +37,7 @@ impl PokerRender {
 
         event_register("Poker.RedrawTile", "draw_tile");
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut PokerModel) {
@@ -45,7 +45,7 @@ impl PokerRender {
         let msg = ["msgred", "msgblack"];
         for n in 0..2usize {
             for i in 0..5 {
-                let l = self.panel.get_sprite(&format!("t{}", i + n * 5));
+                let l = self.scene.get_sprite(&format!("t{}", i + n * 5));
                 let bi = ts[n].best[i].to_u8() as usize;
 
                 #[cfg(graphics_mode)]
@@ -62,7 +62,7 @@ impl PokerRender {
                 let x = (i * CARDW) as u16 + 1u16 + n as u16 * 40u16;
                 l.set_pos(x, 7);
             }
-            let m = self.panel.get_sprite(msg[n]);
+            let m = self.scene.get_sprite(msg[n]);
             m.set_color_str(
                 0,
                 0,
@@ -81,10 +81,10 @@ impl Render for PokerRender {
         context
             .adapter
             .init(82, 20, 0.5, 0.5, "redblack".to_string());
-        self.panel.init(context);
+        self.scene.init(context);
         #[cfg(not(graphics_mode))]
         {
-            let gb = self.panel.get_sprite("back");
+            let gb = self.scene.get_sprite("back");
             asset2sprite!(gb, context, "back.txt");
         }
     }
@@ -98,6 +98,6 @@ impl Render for PokerRender {
     fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

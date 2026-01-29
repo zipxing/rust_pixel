@@ -158,25 +158,18 @@ impl Scene {
         self.layers[1].get(tag)
     }
 
-    /// Add a sprite to the TUI layer (for UI elements like borders, messages)
-    pub fn add_tui_sprite(&mut self, sp: Sprite, tag: &str) {
+    /// Add a sprite to the TUI layer (internal use only)
+    /// Users should use Widget system for TUI content
+    #[allow(dead_code)]
+    fn add_tui_sprite(&mut self, sp: Sprite, tag: &str) {
         self.layers[0].add(sp, tag);
     }
 
-    /// Get a sprite from the TUI layer
-    pub fn get_tui_sprite(&mut self, tag: &str) -> &mut Sprite {
+    /// Get a sprite from the TUI layer (internal use only)
+    /// Users should use Widget system for TUI content
+    #[allow(dead_code)]
+    fn get_tui_sprite(&mut self, tag: &str) -> &mut Sprite {
         self.layers[0].get(tag)
-    }
-
-    // Backward compatibility aliases
-    #[deprecated(note = "Use add_sprite instead - all sprites are now unified")]
-    pub fn add_pixel_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.add_sprite(sp, tag);
-    }
-
-    #[deprecated(note = "Use get_sprite instead - all sprites are now unified")]
-    pub fn get_pixel_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.get_sprite(tag)
     }
 
     pub fn reset(&mut self, ctx: &mut Context) {

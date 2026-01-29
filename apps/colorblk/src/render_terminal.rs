@@ -9,7 +9,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_percent, timer_rstage},
     game::{Model, Render},
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::{Color, Style},
     util::Rect,
@@ -36,13 +36,13 @@ const COLORS: [Color; 15] = [
 ];
 
 pub struct ColorblkRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl ColorblkRender {
     pub fn new() -> Self {
         info!("create colorblk render...");
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         // 创建背景精灵
         let tsback = Sprite::new(0, 0, COLORBLKW, COLORBLKH);
@@ -63,7 +63,7 @@ impl ColorblkRender {
         // 注册重绘网格事件
         event_register("redraw_grid", "draw_grid");
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn draw_cell(
@@ -80,7 +80,7 @@ impl ColorblkRender {
         // if id >= 60 {
         //     return;
         // }
-        let l = self.panel.get_sprite(&format!("cc{}", id));
+        let l = self.scene.get_sprite(&format!("cc{}", id));
         let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
         l.content.resize(area);
         l.content.reset();
