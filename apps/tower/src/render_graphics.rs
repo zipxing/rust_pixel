@@ -8,7 +8,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
     util::{shape::lightning, PointU16},
@@ -17,12 +17,12 @@ use tower_lib::*;
 // use log::info;
 
 pub struct TowerRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl TowerRender {
     pub fn new() -> Self {
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         t.add_sprite(Sprite::new(1, 1, TOWERW as u16, TOWERH as u16), "TOWER");
         t.add_sprite(
@@ -33,30 +33,30 @@ impl TowerRender {
         timer_register("Tower.TestTimer", 0.1, "test_timer");
         timer_fire("Tower.TestTimer", 8u8);
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn create_sprites(&mut self, ctx: &mut Context, d: &mut TowerModel) {
         let w = BW as u16;
         let h = BH as u16;
-        self.panel.creat_objpool_sprites(&d.blocks, w, h, |bl| {
+        self.scene.creat_objpool_sprites(&d.blocks, w, h, |bl| {
             asset2sprite!(bl, ctx, "pix/block.pix");
         });
-        self.panel.creat_objpool_sprites(&d.towers, w, h, |_bl| {});
-        self.panel.creat_objpool_sprites(&d.monsters, 1, 2, |pl| {
+        self.scene.creat_objpool_sprites(&d.towers, w, h, |_bl| {});
+        self.scene.creat_objpool_sprites(&d.monsters, 1, 2, |pl| {
             pl.set_graph_sym(0, 0, 2, 15, Color::Indexed(15));
             pl.set_graph_sym(0, 1, 2, 7, Color::Indexed(15));
         });
-        self.panel.creat_objpool_sprites(&d.bullets, 1, 1, |pl| {
+        self.scene.creat_objpool_sprites(&d.bullets, 1, 1, |pl| {
             pl.set_graph_sym(0, 0, 2, 29, Color::Indexed(10));
         });
-        self.panel
+        self.scene
             .creat_objpool_sprites(&d.lasers, TOWERW as u16, TOWERH as u16, |_pl| {});
-        self.panel.creat_objpool_sprites(&d.bombs, 1, 1, |_pl| {});
+        self.scene.creat_objpool_sprites(&d.bombs, 1, 1, |_pl| {});
     }
 
     pub fn draw_movie(&mut self, ctx: &mut Context, d: &mut TowerModel) {
-        self.panel.draw_objpool(&mut d.monsters, |pl, m| {
+        self.scene.draw_objpool(&mut d.monsters, |pl, m| {
             let li = [9u8, 10, 11, 12, 13, 14, 15, 22, 23];
             pl.set_pos(
                 m.obj.pixel_pos.x as u16,
@@ -77,7 +77,7 @@ impl TowerRender {
             }
         });
 
-        self.panel.draw_objpool(&mut d.bombs, |pl, b| {
+        self.scene.draw_objpool(&mut d.bombs, |pl, b| {
             let li = [27u8, 26, 25, 24];
             if b.obj.btype == 0 {
                 // 怪物死掉后的炸弹波纹...
@@ -94,7 +94,7 @@ impl TowerRender {
             }
         });
 
-        self.panel.draw_objpool(&mut d.lasers, |pl, l| {
+        self.scene.draw_objpool(&mut d.lasers, |pl, l| {
             pl.content.reset();
             pl.set_pos(0, 0);
             pl.set_alpha(150); // 降低透明度，减少刺眼感
@@ -114,7 +114,7 @@ impl TowerRender {
             }
         });
 
-        self.panel.draw_objpool(&mut d.bullets, |pl, b| {
+        self.scene.draw_objpool(&mut d.bullets, |pl, b| {
             if b.obj.btype == 0 {
                 pl.set_graph_sym(0, 0, 2, 8, Color::Indexed(15));
             } else {
@@ -126,7 +126,7 @@ impl TowerRender {
     }
 
     pub fn draw_tower(&mut self, ctx: &mut Context, d: &mut TowerModel) {
-        self.panel.draw_objpool(&mut d.towers, |pl, m| {
+        self.scene.draw_objpool(&mut d.towers, |pl, m| {
             asset2sprite!(pl, ctx, &format!("pix/tower{}.pix", m.obj.ttype + 1));
             pl.set_pos(
                 ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.cell_width()) as u16,
@@ -140,7 +140,7 @@ impl TowerRender {
     }
 
     pub fn draw_grid(&mut self, ctx: &mut Context, d: &mut TowerModel) {
-        let l = self.panel.get_sprite("TOWER");
+        let l = self.scene.get_sprite("TOWER");
         for i in 0..TOWERH {
             for j in 0..TOWERW {
                 if d.grid[i][j] == 0 {
@@ -153,7 +153,7 @@ impl TowerRender {
             }
         }
 
-        self.panel.draw_objpool(&mut d.blocks, |pl, m| {
+        self.scene.draw_objpool(&mut d.blocks, |pl, m| {
             pl.set_pos(
                 ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.cell_width()) as u16,
                 ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.cell_height()) as u16,
@@ -174,7 +174,7 @@ impl Render for TowerRender {
             "tower".to_string(),
         );
         self.create_sprites(ctx, data);
-        self.panel.init(ctx);
+        self.scene.init(ctx);
         // ctx.adapter.only_render_buffer();
     }
 
@@ -186,7 +186,7 @@ impl Render for TowerRender {
 
     fn handle_timer(&mut self, ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
         if event_check("Tower.TestTimer", "test_timer") {
-            let ml = self.panel.get_sprite("TOWER-MSG");
+            let ml = self.scene.get_sprite("TOWER-MSG");
             ml.set_color_str(
                 (ctx.stage / 6) as u16 % TOWERW as u16,
                 0,
@@ -201,6 +201,6 @@ impl Render for TowerRender {
     fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         self.draw_tower(ctx, model);
         self.draw_movie(ctx, model);
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }
