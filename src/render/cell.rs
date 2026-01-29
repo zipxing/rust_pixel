@@ -24,7 +24,18 @@ pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
     get_symbol_map().tui_idx(symbol)
 }
 
-/// sym_index, texture_index, fg_color, bg_color, modifier
+/// Cell rendering information: (symbol_index, block_index, fg_color, bg_color, modifier)
+///
+/// - symbol_index (u8): Index within the block (0-255)
+/// - block_index (u8): Texture block index (0-255):
+///   - 0-159: Sprite blocks
+///   - 160-169: TUI blocks
+///   - 170-175: Emoji blocks
+///   - 176-239: CJK blocks
+///   - 240-255: Reserved
+/// - fg_color: Foreground color
+/// - bg_color: Background color
+/// - modifier: Text modifiers (bold, italic, etc.)
 pub type CellInfo = (u8, u8, Color, Color, Modifier);
 
 /// returns a cellsym string by index
@@ -83,6 +94,17 @@ pub struct Cell {
     pub fg: Color,
     pub bg: Color,
     pub modifier: Modifier,
+    /// Texture block index (0-255) in the 4096x4096 unified texture.
+    ///
+    /// Block ranges:
+    /// - 0-159: Sprite region
+    /// - 160-169: TUI region
+    /// - 170-175: Emoji region
+    /// - 176-239: CJK region
+    /// - 240-255: Reserved
+    ///
+    /// For special characters (Emoji, TUI, CJK), this value is overridden
+    /// by `get_cell_info()` based on symbol_map lookups.
     pub tex: u8,
 }
 
@@ -93,15 +115,28 @@ impl Cell {
         self
     }
 
-    /// refers to the comments in buffer.rs, works in graphics mode
-    /// returns offset, texture id, colors, and modifier
+    /// Get cell rendering information for graphics mode.
     ///
-    /// maps to a 3 byte UTF8: 11100010 100010xx 10xxxxxx
-    /// an 8-digits index gets from the UTF8 code is used to mark the offset in its texture
+    /// Returns (symbol_index, block_index, fg, bg, modifier) where:
+    /// - symbol_index: Index within the block (0-255)
+    /// - block_index: Texture block index (0-255) in the unified 4096x4096 texture
     ///
-    /// refers to the flush method in panel.rs
+    /// # Block Index Resolution
     ///
-    /// sym_index, texture_index, fg_color, bg_color, modifier
+    /// The block_index is determined by priority:
+    /// 1. **Emoji** (170-175): Checked first via symbol_map
+    /// 2. **CJK** (176-239): Checked second via symbol_map
+    /// 3. **Sprite** (0-159): Uses self.tex field as fallback
+    ///
+    /// # Special Cases
+    ///
+    /// - Space character in Sprite texture (tex=0): Returns index 32 instead of symbol_map's 33
+    ///   to maintain compatibility with texture layout
+    ///
+    /// # See Also
+    ///
+    /// - `render::symbol_map` for block layout and character mappings
+    /// - `CellInfo` type for return value structure
     pub fn get_cell_info(&self) -> CellInfo {
         // Check for Emoji first
         if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
@@ -128,6 +163,19 @@ impl Cell {
         self
     }
 
+    /// Set the texture block index for this cell.
+    ///
+    /// # Arguments
+    ///
+    /// * `tex` - Block index (0-255) in the unified texture:
+    ///   - 0-159: Sprite blocks
+    ///   - 160-169: TUI blocks (typically auto-assigned by symbol_map)
+    ///   - 170-175: Emoji blocks (typically auto-assigned by symbol_map)
+    ///   - 176-239: CJK blocks (typically auto-assigned by symbol_map)
+    ///   - 240-255: Reserved
+    ///
+    /// Note: For special characters (Emoji, TUI, CJK), `get_cell_info()` may
+    /// override this value based on symbol_map lookups.
     pub fn set_texture(&mut self, tex: u8) -> &mut Cell {
         self.tex = tex;
         self
@@ -162,15 +210,28 @@ impl Cell {
             .add_modifier(self.modifier)
     }
 
+    /// Reset cell to blank state (space character).
+    ///
+    /// Sets:
+    /// - symbol: " " (space)
+    /// - colors: Reset
+    /// - tex: 0 (Sprite block 0)
+    /// - modifier: empty
     pub fn reset(&mut self) {
         self.symbol.clear();
         self.symbol.push(' ');
         self.fg = Color::Reset;
         self.bg = Color::Reset;
-        self.tex = 0;
+        self.tex = 0; // Block 0 (Sprite region)
         self.modifier = Modifier::empty();
     }
 
+    /// Check if this cell represents a blank space in graphics mode.
+    ///
+    /// A cell is considered blank if:
+    /// - Symbol is space (" " or cellsym(32))
+    /// - Block is 0 or 1 (Sprite region)
+    /// - Background is Reset (transparent)
     #[cfg(graphics_mode)]
     pub fn is_blank(&self) -> bool {
         (self.symbol == " " || self.symbol == cellsym(32))

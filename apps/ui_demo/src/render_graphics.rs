@@ -1,15 +1,15 @@
 use crate::model::{UiDemoModel, UI_DEMO_HEIGHT, UI_DEMO_WIDTH};
 use log::info;
-use rust_pixel::{context::Context, game::Render, render::panel::Panel};
+use rust_pixel::{context::Context, game::Render, render::scene::Scene};
 
 pub struct UiDemoRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl UiDemoRender {
     pub fn new() -> Self {
         Self {
-            panel: Panel::new(),
+            scene: Scene::new(),
         }
     }
 }
@@ -32,8 +32,8 @@ impl Render for UiDemoRender {
             String::new(),
         );
 
-        // Initialize the panel to cover the full screen
-        self.panel.init(ctx);
+        // Initialize the scene to cover the full screen
+        self.scene.init(ctx);
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _model: &mut UiDemoModel, _dt: f32) {
@@ -50,14 +50,14 @@ impl Render for UiDemoRender {
     }
 
     fn update(&mut self, ctx: &mut Context, model: &mut UiDemoModel, _dt: f32) {
-        // Clear the current buffer
-        let buffer = self.panel.current_buffer_mut();
+        // Clear the TUI buffer
+        let buffer = self.scene.tui_buffer_mut();
         buffer.reset();
 
-        // Render UI directly into the main buffer (TUI mode)
+        // Render UI directly into the TUI buffer
         let _ = model.ui_app.render_into(buffer);
 
         // Draw to screen
-        let _ = self.panel.draw(ctx);
+        let _ = self.scene.draw(ctx);
     }
 }

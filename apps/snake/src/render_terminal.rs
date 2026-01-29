@@ -64,8 +64,7 @@ impl SnakeRender {
     }
 
     pub fn draw_grid(&mut self, context: &mut Context, d: &mut SnakeModel) {
-        // Clear and set default message
-        self.msg_panel.set_str(0, 0, "snake", Color::White, Color::Reset);
+        // Message is handled by the timer, no need to set it here
 
         info!("draw_grid...");
         for i in 0..SNAKEH {

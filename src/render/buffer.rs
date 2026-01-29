@@ -17,37 +17,36 @@
 //! work uses iTerm2 in macOS). Moreover, bold and italics fonts are also supported in text mode.
 //!
 //! In graphics mode,
-//! 256 unicode chars mark the index of a symbol in a SDL texture
+//! 256 unicode chars mark the index of a symbol in a texture block
 //! unicode: 0xE000 ~ 0xE0FF (Private Use Area)
 //! maps to a 3 byte UTF8: 11101110 100000xx 10xxxxxx
-//! an 8-digits index gets from the UTF8 code is used to mark the offset in its texture
-//! 
+//! an 8-digits index gets from the UTF8 code is used to mark the offset in its block
+//!
 //! Using Private Use Area avoids conflicts with standard Unicode characters,
 //! allowing TUI mode to display mathematical symbols and other special characters.
 //!
-//! tex field is used to indicate texture
-//! 0: assets/c64l.png small case c64 char
-//! 1: assets/c64u.png capital case c64 char
-//! 2: assets/c64e1.png custom extension 1
-//! 3: assets/c64e2.png custom extension 2
-//! each texture is an image of 16 row * 16 row = 256 chars
-//! # Example
-//! ```
-//! my_buffer.set_str_tex(0, 0, sdlsym(0), Style::default().fg(Color::Red), 1)
-//! ```
-//! sets pos(0,0) in the buffer to the 1st char of texture1(assets/c64u.png)
+//! # Block System
 //!
-//! For some common chars, you can also search the char in SDL_SYM_MAP to get the offset in assets/c64l.png
-//! instead of using unicode chars
-//! Some common chars a-Z and tabs are preset in SDL_SYM_MAP,
-//! for easier set of latin letters using set_str in SDL mode
+//! The tex field indicates the texture block index (0-255) in the 4096x4096 unified texture:
+//! - **Block 0-159**: Sprite region (160 blocks, 256×256px each, 16×16 chars per block)
+//! - **Block 160-169**: TUI region (10 blocks, 256×512px each, 16×16 chars per block)
+//! - **Block 170-175**: Emoji region (6 blocks, 256×512px each, 8×16 emojis per block)
+//! - **Block 176-239**: CJK region (64 blocks, 256×256px each, 8×8 chars per block)
+//! - **Block 240-255**: Reserved for future use
+//!
+//! See `render::symbol_map` module for detailed block layout and symbol mapping.
+//!
 //! # Example
+//! ```ignore
+//! // Set a character using block 0 (Sprite region)
+//! my_buffer.set_str_tex(0, 0, cellsym(0), Style::default().fg(Color::Red), 0);
+//!
+//! // For common ASCII characters, use the default block (automatically mapped)
+//! my_buffer.set_str(0, 0, "Hello world.", Style::default().fg(Color::Red));
 //! ```
-//! my_buffer.set_str_tex(0, 0, "Hello world.",
-//!     Style::default().fg(Color::Red), 0)
-//! ```
-//! Warning! tex here must be set to 0, because the offset in SDL_SYM_MAP is preset based on
-//! texture0(assets/c64l.png). May have display issues if set to another texture.
+//!
+//! Note: When using symbol_map lookups (Emoji, TUI, CJK), the block index is automatically
+//! determined by `get_cell_info()` based on the character's region.
 //!
 #[allow(unused_imports)]
 use crate::{
@@ -108,30 +107,42 @@ impl Buffer {
         &self.content
     }
 
-    /// convert buffer to a rgba image buffer
-    /// use for opengl shader texture
+    /// Convert buffer to RGBA image data for OpenGL shader texture.
+    ///
+    /// Each cell is encoded as 4 bytes:
+    /// - Byte 0: symbol_index (0-255, index within block)
+    /// - Byte 1: block_index (0-255, texture block)
+    /// - Byte 2: foreground color
+    /// - Byte 3: background color
+    ///
+    /// Used by graphics adapters to pass buffer data to GPU shaders.
     pub fn get_rgba_image(&self) -> Vec<u8> {
         let mut dat = vec![];
         for c in &self.content {
-            // sym tex fg bg
+            // Get (symbol_index, block_index, fg, bg, modifier)
             let ci = c.get_cell_info();
-            dat.push(ci.0);
-            dat.push(ci.1);
-            dat.push(u8::from(ci.2));
-            dat.push(u8::from(ci.3));
+            dat.push(ci.0); // symbol_index
+            dat.push(ci.1); // block_index
+            dat.push(u8::from(ci.2)); // fg
+            dat.push(u8::from(ci.3)); // bg
         }
         dat
     }
 
-    /// convert rgba image to buffer
-    /// use for opengl shader output
+    /// Convert RGBA image data back to buffer (from OpenGL shader output).
+    ///
+    /// Each cell is decoded from 4 bytes:
+    /// - Byte 0: symbol_index → cellsym(index)
+    /// - Byte 1: block_index → set_texture(block)
+    /// - Byte 2: foreground color
+    /// - Byte 3: background color
     pub fn set_rgba_image(&mut self, dat: &[u8], w: u16, h: u16) {
         let mut idx = 0;
         for i in 0..h {
             for j in 0..w {
                 self.content[(i * w + j) as usize]
                     .set_symbol(&cellsym(dat[idx]))
-                    .set_texture(dat[idx + 1])
+                    .set_texture(dat[idx + 1]) // block_index
                     .set_fg(Color::Indexed(dat[idx + 2]))
                     .set_bg(Color::Indexed(dat[idx + 3]));
                 idx += 4;
@@ -189,7 +200,16 @@ impl Buffer {
         self.set_str(0, 0, string, Style::default());
     }
 
-    //relative pos in game sprite, easier to set content
+    /// Set string at relative position with specific texture block.
+    ///
+    /// Coordinates are relative to buffer's area (easier for sprite content).
+    ///
+    /// # Arguments
+    ///
+    /// * `x`, `y` - Relative coordinates (offset by self.area.x/y)
+    /// * `string` - Text to render
+    /// * `style` - Text style (colors, modifiers)
+    /// * `tex` - Texture block index (0-255), see module docs for block ranges
     pub fn set_str_tex<S>(&mut self, x: u16, y: u16, string: S, style: Style, tex: u8)
     where
         S: AsRef<str>,
@@ -219,7 +239,16 @@ impl Buffer {
         );
     }
 
-    //absolute pos
+    /// Set string at absolute position with specific texture block.
+    ///
+    /// Coordinates are absolute (global screen coordinates).
+    ///
+    /// # Arguments
+    ///
+    /// * `x`, `y` - Absolute coordinates (no offset)
+    /// * `string` - Text to render
+    /// * `style` - Text style (colors, modifiers)
+    /// * `tex` - Texture block index (0-255), see module docs for block ranges
     pub fn set_string_tex<S>(&mut self, x: u16, y: u16, string: S, style: Style, tex: u8)
     where
         S: AsRef<str>,
@@ -235,6 +264,28 @@ impl Buffer {
         self.set_stringn(x, y, string, usize::MAX, style, 0);
     }
 
+    /// Core method to set string with width limit and block index.
+    ///
+    /// Used internally by `set_str`, `set_string`, `set_str_tex`, and `set_string_tex`.
+    ///
+    /// # Arguments
+    ///
+    /// * `x`, `y` - Absolute coordinates
+    /// * `string` - Text to render
+    /// * `width` - Maximum width in characters (usize::MAX for no limit)
+    /// * `style` - Text style (colors, modifiers)
+    /// * `tex` - Texture block index (0-255):
+    ///   - For normal text: typically 0 (Sprite block 0)
+    ///   - For special symbols: use appropriate block index
+    ///   - For Emoji/TUI/CJK: block is auto-determined by `get_cell_info()`
+    ///
+    /// # Returns
+    ///
+    /// Final (x, y) position after rendering the string.
+    ///
+    /// # Note
+    ///
+    /// Coordinates are converted to buffer-local indices via `index_of(x, y)`.
     pub fn set_stringn<S>(
         &mut self,
         x: u16,

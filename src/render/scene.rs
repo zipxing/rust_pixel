@@ -35,7 +35,18 @@ use std::{collections::HashMap, io};
 use std::cmp::Reverse;
 
 pub struct Scene {
-    pub buffers: [Buffer; 2],
+    /// Double buffering for TUI content rendering.
+    ///
+    /// In text mode (Crossterm): Used for diff-based incremental rendering.
+    /// - Current buffer holds the new frame content
+    /// - Previous buffer holds the last frame content
+    /// - Only changed cells are sent to terminal (via buffer.diff())
+    ///
+    /// In graphics mode (OpenGL/WGPU): Only current buffer is used.
+    /// - Previous buffer is passed to adapter but not used (_pb parameter)
+    /// - Each frame does full screen clear (glClear) and complete re-render
+    /// - GPU rendering is fast enough that diff optimization is unnecessary
+    pub tui_buffers: [Buffer; 2],
     pub current: usize,
     pub layer_tag_index: HashMap<String, usize>,
     pub layers: Vec<Layer>,
@@ -72,7 +83,7 @@ impl Scene {
         layer_tag_index.insert("sprite".to_string(), 1);
 
         Scene {
-            buffers: [Buffer::empty(size), Buffer::empty(size)],
+            tui_buffers: [Buffer::empty(size), Buffer::empty(size)],
             current: 0,
             layer_tag_index,
             layers,
@@ -82,20 +93,20 @@ impl Scene {
 
     pub fn init(&mut self, ctx: &mut Context) {
         let size = ctx.adapter.size();
-        self.buffers[0].resize(size);
-        self.buffers[1].resize(size);
+        self.tui_buffers[0].resize(size);
+        self.tui_buffers[1].resize(size);
         info!("scene init size...{:?}", size);
     }
 
     /// Get mutable reference to the current buffer (mainbuffer)
     /// This is where Widget/UIApp content should be rendered
     pub fn tui_buffer_mut(&mut self) -> &mut Buffer {
-        &mut self.buffers[self.current]
+        &mut self.tui_buffers[self.current]
     }
 
     /// Get the current rendering buffer
     pub fn current_buffer_mut(&mut self) -> &mut Buffer {
-        &mut self.buffers[self.current]
+        &mut self.tui_buffers[self.current]
     }
 
     /// Add a new layer with the given name
@@ -191,21 +202,21 @@ impl Scene {
                     #[cfg(not(graphics_mode))]
                     {
                         self.layers[idx.0]
-                            .render_all_to_buffer(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                            .render_all_to_buffer(&mut ctx.asset_manager, &mut self.tui_buffers[self.current]);
                     }
                     #[cfg(graphics_mode)]
                     {
                         // Only TUI layer merges to buffer in graphics mode
                         if idx.0 == 0 {
                             self.layers[idx.0]
-                                .render_all_to_buffer(&mut ctx.asset_manager, &mut self.buffers[self.current]);
+                                .render_all_to_buffer(&mut ctx.asset_manager, &mut self.tui_buffers[self.current]);
                         }
                     }
                 }
             }
         }
-        let cb = &self.buffers[self.current];
-        let pb = &self.buffers[1 - self.current];
+        let cb = &self.tui_buffers[self.current];
+        let pb = &self.tui_buffers[1 - self.current];
         ctx.adapter
             .draw_all(cb, pb, &mut self.layers, ctx.stage)
             .unwrap();
@@ -213,7 +224,7 @@ impl Scene {
 
         // Swap buffers
         if ctx.stage > LOGO_FRAME {
-            self.buffers[1 - self.current].reset();
+            self.tui_buffers[1 - self.current].reset();
             self.current = 1 - self.current;
         }
 

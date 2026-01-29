@@ -315,6 +315,234 @@ stage.tui_sprite.content.set_string(
 model.ui_app.render_into(&mut stage.tui_sprite.content)?;
 ```
 
+### Decision 7: 统一 4096 纹理块系统与 tex/block 语义
+
+**选择：** 建立统一的块索引系统 (Block Index System)，明确 `tex` 字段语义为"块索引 (0-255)"
+
+#### 7.1 4096×4096 统一纹理布局
+
+RustPixel 使用单一 4096×4096 纹理存储所有字符和符号，分为 256 个块 (Block 0-255)：
+
+```
+4096×4096 统一纹理
+├── Sprite 区域 (Block 0-159): 160 块，每块 256×256px
+│   ├── Block 0: Sprite texture 0 (基础 ASCII/符号)
+│   ├── Block 1: Sprite texture 1
+│   └── ...
+├── TUI 区域 (Block 160-169): 10 块，每块 256×512px
+│   ├── Block 160: 数学符号 (∀∃∈∞...)
+│   ├── Block 161: 箭头符号 (←→↑↓...)
+│   └── ...
+├── Emoji 区域 (Block 170-175): 6 块，每块 256×512px
+│   ├── Block 170: 表情符号
+│   └── ...
+├── CJK 区域 (Block 176-239): 64 块，每块 256×256px
+│   ├── 16 列 × 4 行布局
+│   ├── 每块 8×8 个汉字 (64 字符)
+│   ├── 每个汉字 32×32px
+│   └── 总计 4096 个汉字
+└── 保留区域 (Block 240-255): 16 块
+```
+
+#### 7.2 CJK 块系统重新设计
+
+**背景：**
+- 旧设计：32 个线性块 (176-207)，每块 128×1 字符 (4096×32px)，布局极扁平
+- 新设计：64 个方形块 (176-239)，每块 8×8 字符 (256×256px)，布局统一
+
+**新 CJK 布局：**
+```
+CJK 区域: 2048×1024px (4096 个汉字)
+┌─────────────────────────────────────────────────────────────┐
+│ 16 列 × 4 行 = 64 blocks                                     │
+│ 每个 block: 256×256px (8×8 个 32×32px 汉字)                  │
+├─────────────────────────────────────────────────────────────┤
+│ Block 176 │ Block 177 │ ... │ Block 191 │  ← Row 0         │
+│ Block 192 │ Block 193 │ ... │ Block 207 │  ← Row 1         │
+│ Block 208 │ Block 209 │ ... │ Block 223 │  ← Row 2         │
+│ Block 224 │ Block 225 │ ... │ Block 239 │  ← Row 3         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**块索引计算算法：**
+```rust
+// symbol_map.rs: cjk_idx() 方法
+pub fn cjk_idx(&self, symbol: &str) -> Option<(u8, u8)> {
+    let ch = symbol.chars().next()?;
+    let (pixel_x, pixel_y) = self.cjk.get(&ch).copied()?;
+
+    // 1. 像素坐标转换为字符网格位置
+    let char_col = pixel_x / 32;         // 0-127 (全局列)
+    let char_row = (pixel_y - 3072) / 32; // 0-31  (全局行)
+
+    // 2. 转换为块位置 (16 列 × 4 行)
+    let block_col = char_col / 8;  // 0-15 (块列)
+    let block_row = char_row / 8;  // 0-3  (块行)
+    let block = (block_row * 16 + block_col) as u8;
+
+    // 3. 计算块内位置 (8×8 网格)
+    let in_block_col = char_col % 8;  // 0-7
+    let in_block_row = char_row % 8;  // 0-7
+    let idx = (in_block_row * 8 + in_block_col) as u8;
+
+    // 返回 (block_index, symbol_index)
+    Some((176 + block, idx))
+}
+```
+
+**常量更新：**
+```rust
+// symbol_map.rs: layout module
+pub const CJK_BLOCK_START: usize = 176;
+pub const CJK_BLOCKS: u32 = 64;           // 32 → 64
+pub const CJK_BLOCK_COLS: u32 = 16;       // 新增
+pub const CJK_BLOCK_ROWS: u32 = 4;        // 新增
+pub const CJK_SYMBOLS_PER_BLOCK: u32 = 64; // 128 → 64
+pub const CJK_CHARS_PER_BLOCK_ROW: u32 = 8;
+pub const CJK_CHARS_PER_BLOCK_COL: u32 = 8;
+pub const CJK_BLOCK_END: usize = 239;     // 207 → 239
+```
+
+#### 7.3 tex 字段语义统一
+
+**问题：**
+- 旧文档描述 `tex` 为"纹理文件索引 (0-3)"，指向 4 个 PNG 文件
+- 实际代码中 `get_cell_info()` 返回的是块索引 (0-255)
+- CellInfo 的第二个 u8 字段语义混乱 (有时是 0-3，有时是 160+)
+
+**解决方案：**
+- 保持字段名 `tex` 不变（向后兼容）
+- 统一语义为"块索引 (Block Index, 0-255)"
+- 更新所有文档和注释
+
+**Cell 结构更新：**
+```rust
+// cell.rs
+pub struct Cell {
+    pub symbol: String,
+    pub fg: Color,
+    pub bg: Color,
+    pub modifier: Modifier,
+
+    /// Texture block index (0-255) in the 4096x4096 unified texture.
+    ///
+    /// Block ranges:
+    /// - 0-159: Sprite region
+    /// - 160-169: TUI region
+    /// - 170-175: Emoji region
+    /// - 176-239: CJK region
+    /// - 240-255: Reserved
+    pub tex: u8,
+}
+```
+
+**CellInfo 类型明确：**
+```rust
+/// Cell rendering information: (symbol_index, block_index, fg_color, bg_color, modifier)
+///
+/// - symbol_index (u8): Index within the block (0-255)
+/// - block_index (u8): Texture block index (0-255):
+///   - 0-159: Sprite blocks
+///   - 160-169: TUI blocks
+///   - 170-175: Emoji blocks
+///   - 176-239: CJK blocks
+///   - 240-255: Reserved
+pub type CellInfo = (u8, u8, Color, Color, Modifier);
+```
+
+**块索引解析优先级：**
+```rust
+// cell.rs: get_cell_info() 方法
+pub fn get_cell_info(&self) -> CellInfo {
+    // 1. 优先检查 Emoji (Block 170-175)
+    if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
+        return (idx, block, self.fg, self.bg, self.modifier);
+    }
+
+    // 2. 检查 CJK (Block 176-239)
+    if let Some((block, idx)) = get_symbol_map().cjk_idx(&self.symbol) {
+        return (idx, block, self.fg, self.bg, self.modifier);
+    }
+
+    // 3. 兜底：使用 self.tex 作为块索引 (通常是 Sprite 0-159)
+    (symidx(&self.symbol), self.tex, self.fg, self.bg, self.modifier)
+}
+```
+
+**Buffer API 文档更新：**
+```rust
+// buffer.rs
+/// Set string with block index
+/// * `tex` - Texture block index (0-255):
+///   - For normal text: typically 0 (Sprite block 0)
+///   - For special symbols: use appropriate block index
+///   - For Emoji/TUI/CJK: block is auto-determined by `get_cell_info()`
+pub fn set_stringn_tex(&mut self, x: u16, y: u16, s: &str, w: u16, tex: u8, style: Style)
+```
+
+#### 7.4 SymbolIndex 枚举统一
+
+**背景：**
+- `SymbolIndex::Cjk` 使用 `(u16, u16)` 与其他变体不一致
+- 其他变体都是 `(u8, u8)` 格式
+
+**统一修改：**
+```rust
+// symbol_map.rs
+#[derive(Debug, Clone, PartialEq)]
+pub enum SymbolIndex {
+    Sprite(u8, u8),  // (block, index)
+    Tui(u8, u8),     // (block, index)
+    Emoji(u8, u8),   // (block, index)
+    Cjk(u8, u8),     // (block, index) - 从 (u16, u16) 改为 (u8, u8)
+    NotFound,
+}
+```
+
+#### 7.5 优势总结
+
+**1. 块大小统一**
+- Sprite 块：256×256px
+- CJK 块：256×256px (新)
+- 简化纹理管理和加载逻辑
+
+**2. 语义清晰**
+- `tex` 字段明确表示"块索引"
+- `CellInfo` 第二个字段统一为 `block_index`
+- 消除"纹理文件索引"的误导性概念
+
+**3. 扩展性强**
+- 64 个 CJK 块提供更细粒度的管理
+- 16 个保留块 (240-255) 可用于未来扩展
+- 统一的块索引系统易于添加新区域
+
+**4. 代码一致性**
+- `SymbolIndex` 枚举所有变体都是 `(u8, u8)`
+- 所有 `*_idx()` 方法都返回 `Option<(u8, u8)>`
+- 块索引计算算法清晰统一
+
+**5. 性能优化**
+- 方形块布局提高缓存局部性
+- 块内索引计算简单高效 (位运算)
+- 减少纹理切换次数
+
+#### 7.6 兼容性说明
+
+**向后兼容：**
+- `tex` 字段名保持不变
+- 现有代码中 `tex = 0` 或 `tex = 1` 等用法仍然有效
+- `get_cell_info()` 自动处理 Emoji/CJK 的块索引解析
+
+**文档迁移：**
+- 所有"纹理索引"描述改为"块索引"
+- 所有"texture index"改为"block index"
+- 更新示例代码中的注释
+
+**测试验证：**
+- 12/12 symbol_map 测试通过
+- CJK 字符索引计算正确
+- Emoji/TUI 块索引解析正常
+
 ## Implementation Plan
 
 ### Phase 1: 核心重构（1-2 天）
