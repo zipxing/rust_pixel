@@ -40,7 +40,7 @@ Cell → Buffer → Sprite → Panel
 
 Unified rendering abstraction
 
-High performance - One texture, one draw call 
+High performance - **One texture, one draw call** 
 
 </td>
 <td width="33%" align="center">
@@ -49,7 +49,7 @@ High performance - One texture, one draw call
 
 Terminal | Desktop | Web
 
-TUI in native windows — no terminal emulator required
+**TUI in native windows — no terminal emulator required**
 
 One codebase, multiple targets
 
@@ -60,9 +60,9 @@ One codebase, multiple targets
 
 `app!` macro scaffolding
 
-Built-in BASIC interpreter
+**Built-in BASIC interpreter**
 
-Model-Render-Game pattern
+Model-Render-Game pattern with Event driven
 
 </td>
 </tr>
