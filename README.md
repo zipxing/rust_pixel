@@ -74,11 +74,30 @@ Model-Render-Game pattern
 
 | Mode | Backend | Output |
 |------|---------|--------|
-| **Terminal** | crossterm | ASCII / Unicode / Emoji |
-| **SDL** | SDL2 + OpenGL | PETSCII / Custom Symbols |
-| **Glow** | winit + OpenGL | PETSCII / Custom Symbols |
-| **WGPU** | winit + wgpu | PETSCII / Custom Symbols |
-| **Web** | WASM + WebGL | PETSCII / Custom Symbols |
+| **Terminal** | crossterm | ASCII / CJK / Emoji |
+| **SDL** | SDL2 + OpenGL | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
+| **Glow** | winit + OpenGL | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
+| **WGPU** | winit + wgpu | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
+| **Web** | WASM + WebGL | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
+
+### Unified Texture Architecture
+
+**Single 4096×4096 texture, 256 blocks (0-255):**
+
+| Region | Blocks | Resolution | Content |
+|--------|--------|------------|---------|
+| **Sprite** | 0-159 (160 blocks) | 256×256px each | PETSCII & custom game sprites |
+| **TUI** | 160-169 (10 blocks) | 256×512px each | Terminal UI symbols (math, arrows, etc.) |
+| **Emoji** | 170-175 (6 blocks) | 256×512px each | Pre-rendered color emoji |
+| **CJK** | 176-239 (64 blocks) | 256×256px each | Chinese characters (4096 chars) |
+| **Reserved** | 240-255 (16 blocks) | - | Future expansion |
+
+**Performance Advantages:**
+- ✅ **Single texture binding** - One draw call for entire scene
+- ✅ **No texture switching** - All symbols in one unified atlas
+- ✅ **GPU cache friendly** - Maximizes texture cache hit rate
+- ✅ **Instance rendering** - Efficient batch rendering of all cells
+- ✅ **VRAM efficient** - 16MB total (4096² × 4 bytes RGBA)
 
 ---
 
