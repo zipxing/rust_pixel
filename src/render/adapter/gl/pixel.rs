@@ -389,63 +389,8 @@ impl GlPixelRenderer {
         }
     }
     
-    /// Render textures to screen without rebinding (convenience method for Winit)
-    ///
-    /// This method assumes the screen is already bound and viewport is set correctly.
-    /// It only performs the actual rendering operations.
-    pub fn render_textures_to_screen_no_bind(
-        &mut self,
-        ratio_x: f32,
-        ratio_y: f32,
-    ) -> Result<(), String> {
-        // Don't bind screen - assume it's already bound with correct viewport
-
-        // Inline unified rendering logic
-        let unified_color = crate::render::graph::UnifiedColor::white();
-
-        // Layer 1: Draw render_texture 2 (main game content)
-        if !self.gl_pixel.get_render_texture_hidden(2) {
-            self.gl_pixel.render_texture_to_screen_impl(
-                &self.gl,
-                2,
-                [0.0, 0.0, 1.0, 1.0], // Full-screen quad
-                &crate::render::graph::UnifiedTransform::new(),
-                &unified_color,
-            );
-        }
-
-        // Layer 2: Draw render_texture 3 (transition effects and overlays)
-        if !self.gl_pixel.get_render_texture_hidden(3) {
-            // Calculate proper scaling for high-DPI displays
-            let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
-            let pcw = canvas_width as f32;
-            let pch = canvas_height as f32;
-
-            // Calculate scaled dimensions for transition layer
-            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
-
-            // Create unified transform with proper scaling
-            let mut unified_transform = crate::render::graph::UnifiedTransform::new();
-            unified_transform.scale(pw / pcw, ph / pch);
-
-            // OpenGL Y-axis: bottom-left origin
-            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
-
-            self.gl_pixel.render_texture_to_screen_impl(
-                &self.gl,
-                3,
-                viewport,
-                &unified_transform,
-                &unified_color,
-            );
-        }
-
-        Ok(())
-    }
-
     // ========================================================================
-    // New RT API Methods
+    // RT API Methods
     // ========================================================================
 
     /// Set OpenGL blend mode based on BlendMode enum
@@ -558,11 +503,116 @@ impl GlPixelRenderer {
         self.set_blend_mode(BlendMode::Normal);
     }
 
-    /// Present with default settings (RT2 fullscreen)
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
     ///
-    /// This is a convenience method for simple games that just need
-    /// to display the main render texture (RT2) fullscreen.
-    pub fn present_default(&mut self) {
-        self.present(&[RtComposite::fullscreen(2)]);
+    /// Renders RT2 fullscreen and RT3 with proper viewport using float precision.
+    pub fn present_default(&mut self, ratio_x: f32, ratio_y: f32) {
+        // Bind screen framebuffer
+        self.gl_pixel.bind_screen(&self.gl);
+
+        // Clear screen
+        unsafe {
+            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+
+        let unified_color = UnifiedColor::white();
+
+        // Layer 1: Draw render_texture 2 (main game content) - fullscreen
+        if !self.gl_pixel.get_render_texture_hidden(2) {
+            self.gl_pixel.render_texture_to_screen_impl(
+                &self.gl,
+                2,
+                [0.0, 0.0, 1.0, 1.0], // Full-screen quad
+                &UnifiedTransform::new(),
+                &unified_color,
+            );
+        }
+
+        // Layer 2: Draw render_texture 3 (transition effects and overlays)
+        if !self.gl_pixel.get_render_texture_hidden(3) {
+            let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
+            let pcw = canvas_width as f32;
+            let pch = canvas_height as f32;
+
+            // Calculate scaled dimensions for transition layer (float precision)
+            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+
+            // Create unified transform with proper scaling
+            let mut unified_transform = UnifiedTransform::new();
+            unified_transform.scale(pw / pcw, ph / pch);
+
+            // OpenGL Y-axis: bottom-left origin
+            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
+
+            self.gl_pixel.render_texture_to_screen_impl(
+                &self.gl,
+                3,
+                viewport,
+                &unified_transform,
+                &unified_color,
+            );
+        }
+    }
+
+    /// Present with default settings and physical size for Retina displays
+    pub fn present_default_with_physical_size(
+        &mut self,
+        ratio_x: f32,
+        ratio_y: f32,
+        physical_size: Option<(u32, u32)>,
+    ) {
+        // Bind screen framebuffer
+        self.gl_pixel.bind_screen(&self.gl);
+
+        // Set viewport to physical size if provided (for Retina displays)
+        if let Some((pw, ph)) = physical_size {
+            unsafe {
+                self.gl.viewport(0, 0, pw as i32, ph as i32);
+            }
+        }
+
+        // Clear screen
+        unsafe {
+            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+
+        let unified_color = UnifiedColor::white();
+
+        // Layer 1: Draw render_texture 2 (main game content) - fullscreen
+        if !self.gl_pixel.get_render_texture_hidden(2) {
+            self.gl_pixel.render_texture_to_screen_impl(
+                &self.gl,
+                2,
+                [0.0, 0.0, 1.0, 1.0],
+                &UnifiedTransform::new(),
+                &unified_color,
+            );
+        }
+
+        // Layer 2: Draw render_texture 3 (transition effects and overlays)
+        if !self.gl_pixel.get_render_texture_hidden(3) {
+            let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
+            let pcw = canvas_width as f32;
+            let pch = canvas_height as f32;
+
+            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
+            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+
+            let mut unified_transform = UnifiedTransform::new();
+            unified_transform.scale(pw / pcw, ph / pch);
+
+            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
+
+            self.gl_pixel.render_texture_to_screen_impl(
+                &self.gl,
+                3,
+                viewport,
+                &unified_transform,
+                &unified_color,
+            );
+        }
     }
 }

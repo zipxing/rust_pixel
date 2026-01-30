@@ -859,57 +859,6 @@ impl Adapter for WinitGlowAdapter {
         }
     }
 
-    /// Override render texture to screen method, directly use our OpenGL renderer
-    ///
-    /// This method is specifically implemented for WinitGlowAdapter, handles final composition of transition effects
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            let ratio_x = self.base.gr.ratio_x;
-            let ratio_y = self.base.gr.ratio_y;
-
-            // Get physical window size for Retina display support
-            let physical_size = if let Some(window) = &self.window {
-                Some(window.inner_size())
-            } else {
-                None
-            };
-
-            // Bind screen and set correct viewport
-            if let Some(physical_size) = physical_size {
-                gl_pixel_renderer.bind_screen_with_viewport(
-                    physical_size.width as i32,
-                    physical_size.height as i32,
-                );
-            } else {
-                // Fallback: use standard binding
-                gl_pixel_renderer
-                    .gl_pixel
-                    .bind_screen(&gl_pixel_renderer.gl);
-            }
-
-            // Clear screen
-            use glow::HasContext;
-            let gl = gl_pixel_renderer.get_gl();
-            unsafe {
-                gl.clear_color(0.0, 0.0, 0.0, 1.0);
-                gl.clear(glow::COLOR_BUFFER_BIT);
-            }
-
-            // Directly call our rendering method, no need to bind screen
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!(
-                    "WinitGlowAdapter: Failed to render textures to screen: {}",
-                    e
-                );
-            }
-        } else {
-            eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized for texture rendering");
-        }
-    }
-
     /// WinitGlow adapter implementation of render texture visibility control
     fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
@@ -985,6 +934,25 @@ impl Adapter for WinitGlowAdapter {
             gl_pixel_renderer.present(composites);
         } else {
             eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized for present");
+        }
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with float precision and Retina support.
+    fn present_default(&mut self) {
+        // Get physical window size for Retina display support
+        let physical_size = if let Some(window) = &self.window {
+            let size = window.inner_size();
+            Some((size.width, size.height))
+        } else {
+            None
+        };
+
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            gl_pixel_renderer.present_default_with_physical_size(rx, ry, physical_size);
         }
     }
 }

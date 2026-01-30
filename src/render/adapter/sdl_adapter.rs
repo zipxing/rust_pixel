@@ -368,30 +368,6 @@ impl Adapter for SdlAdapter {
         }
     }
 
-    /// Direct implementation of draw_render_textures_to_screen for SDL
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            let ratio_x = self.base.gr.ratio_x;
-            let ratio_y = self.base.gr.ratio_y;
-
-            // Bind to screen framebuffer and render textures
-            gl_pixel_renderer.bind_screen_with_viewport(
-                self.base.gr.pixel_w as i32,
-                self.base.gr.pixel_h as i32,
-            );
-
-            // Use direct method call - no more trait objects!
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!("SdlAdapter: render_textures_to_screen error: {}", e);
-            }
-        } else {
-            eprintln!("SdlAdapter: gl_pixel_renderer not initialized for texture rendering");
-        }
-    }
-
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
@@ -457,6 +433,25 @@ impl Adapter for SdlAdapter {
             gl_pixel_renderer.present(composites);
         } else {
             eprintln!("SdlAdapter: gl_pixel_renderer not initialized for present");
+        }
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with float precision and Retina support.
+    fn present_default(&mut self) {
+        // Get drawable size for Retina display support (SDL)
+        let physical_size = if let Some(window) = &self.sdl_window {
+            let (w, h) = window.drawable_size();
+            Some((w, h))
+        } else {
+            None
+        };
+
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            gl_pixel_renderer.present_default_with_physical_size(rx, ry, physical_size);
         }
     }
 }

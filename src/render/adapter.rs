@@ -619,7 +619,7 @@ pub trait Adapter {
             // 1. Draw RenderCell array to render_texture 2 (main scene)
             self.draw_render_buffer_to_texture(&rbuf, 2, false);
             // 2. Composite render_texture 2 & 3 to screen (final output)
-            self.draw_render_textures_to_screen();
+            self.present_default();
         } else {
             // Buffered mode: Store render data for external access
             // Used by FFI interfaces and WASM exports to access raw render data
@@ -675,54 +675,6 @@ pub trait Adapter {
     fn only_render_buffer(&mut self) {
         self.get_base().gr.rflag = false;
     }
-
-    /// Render texture composition to screen - final rendering stage
-    ///
-    /// This method performs the final composite rendering step, combining multiple
-    /// render textures into the final screen output. It handles layer composition,
-    /// scaling for different display ratios, and transition effects.
-    ///
-    /// ## Unified Implementation for Both WGPU and OpenGL
-    ///
-    /// Both WGPU and OpenGL modes now use the same rendering logic through the
-    /// unified PixelRenderer interface. The main differences are:
-    /// - OpenGL uses `RenderContext::OpenGL`
-    /// - WGPU uses `RenderContext::Wgpu` with additional surface management
-    ///
-    /// ## Rendering Order and Layers
-    /// ```text
-    /// ┌─────────────────────────────────────────────────────────────┐
-    /// │                    Screen Composition                       │
-    /// │                                                             │
-    /// │  Background (Clear Color)                                   │
-    /// │      ▲                                                      │
-    /// │      │                                                      │
-    /// │  ┌───┴─────────────────────┐  ← Layer 1: Main Content       │
-    /// │  │   Render Texture 2      │    - Game buffer               │
-    /// │  │   (Main Game Content)   │    - Sprites                   │
-    /// │  │   - Characters & Tiles  │    - Logo (during startup)     │
-    /// │  │   - Sprites & Objects   │    - UI components (TUI mode)  │
-    /// │  │   - UI Components       │                                │
-    /// │  └─────────────────────────┘                                │
-    /// │      ▲                                                      │
-    /// │      │                                                      │
-    /// │  ┌───┴─────────────────────┐  ← Layer 2: Effects & Trans    │
-    /// │  │   Render Texture 3      │    - Transition effects        │
-    /// │  │   (Transitions & FX)    │    - Overlays                  │
-    /// │  │   - Screen transitions  │    - Post-processing           │
-    /// │  │   - Visual effects      │    - Special effects           │
-    /// │  │   - Overlays            │                                │
-    /// │  └─────────────────────────┘                                │
-    /// │      ▲                                                      │
-    /// │      │                                                      │
-    /// │  ┌───┴─────────────────────┐  ← Final Output                │
-    /// │  │      Screen Buffer      │                                │
-    /// │  │    (Framebuffer 0)      │                                │
-    /// │  └─────────────────────────┘                                │
-    /// └─────────────────────────────────────────────────────────────┘
-    /// ```
-    #[cfg(graphics_mode)]
-    fn draw_render_textures_to_screen(&mut self);
 
     fn as_any(&mut self) -> &mut dyn Any;
 

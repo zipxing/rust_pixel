@@ -1409,22 +1409,6 @@ impl Adapter for WinitWgpuAdapter {
         }
     }
 
-    /// Override render texture to screen method, directly use our WGPU renderer
-    ///
-    /// This method is specifically implemented for WinitWgpuAdapter, handles the final composition of transition effects
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        // Directly call our WGPU rendering method
-        if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
-            eprintln!(
-                "WinitWgpuAdapter: Failed to render textures to screen: {}",
-                e
-            );
-        }
-    }
-
     /// WinitWgpu adapter implementation of render texture visibility control
     fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
@@ -1475,6 +1459,16 @@ impl Adapter for WinitWgpuAdapter {
     fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
         if let Err(e) = self.present_wgpu(composites) {
             eprintln!("WinitWgpuAdapter: Failed to present: {}", e);
+        }
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with proper viewport calculation.
+    fn present_default(&mut self) {
+        // Call the existing working implementation
+        if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
+            eprintln!("WinitWgpuAdapter: Failed to present_default: {}", e);
         }
     }
 }

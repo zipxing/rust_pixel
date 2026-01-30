@@ -149,30 +149,6 @@ impl Adapter for WebAdapter {
         }
     }
 
-    /// Direct implementation of draw_render_textures_to_screen for Web
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            let ratio_x = self.base.gr.ratio_x;
-            let ratio_y = self.base.gr.ratio_y;
-            
-            // Bind to screen framebuffer and render textures
-            gl_pixel_renderer.bind_screen_with_viewport(
-                self.base.gr.pixel_w as i32,
-                self.base.gr.pixel_h as i32,
-            );
-            
-            // Use direct method call - no more trait objects!
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!("WebAdapter: render_textures_to_screen error: {}", e);
-            }
-        } else {
-            eprintln!("WebAdapter: gl_pixel_renderer not initialized for texture rendering");
-        }
-    }
-
     fn post_draw(&mut self) {
         // For WebGL, buffer swapping is handled automatically by the browser
         // No explicit action needed here
@@ -257,6 +233,18 @@ impl Adapter for WebAdapter {
             // Web console logging for debugging
             #[cfg(target_arch = "wasm32")]
             web_sys::console::error_1(&"WebAdapter: gl_pixel_renderer not initialized for present".into());
+        }
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with float precision.
+    fn present_default(&mut self) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            // Web doesn't need physical_size handling
+            gl_pixel_renderer.present_default(rx, ry);
         }
     }
 }
