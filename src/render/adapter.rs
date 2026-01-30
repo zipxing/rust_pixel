@@ -169,6 +169,108 @@ use std::any::Any;
 use std::time::Duration;
 // use log::info;
 
+// ============================================================================
+// RenderTexture API - Unified RT management for graphics mode
+// ============================================================================
+
+/// RT size strategy
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub enum RtSize {
+    /// Follow window size (default)
+    FollowWindow,
+    /// Fixed size in pixels
+    Fixed(u32, u32),
+}
+
+#[cfg(graphics_mode)]
+impl Default for RtSize {
+    fn default() -> Self {
+        RtSize::FollowWindow
+    }
+}
+
+/// RT configuration
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub struct RtConfig {
+    /// Size strategy
+    pub size: RtSize,
+}
+
+#[cfg(graphics_mode)]
+impl Default for RtConfig {
+    fn default() -> Self {
+        Self {
+            size: RtSize::FollowWindow,
+        }
+    }
+}
+
+/// Blend mode for RT composition
+#[cfg(graphics_mode)]
+#[derive(Clone, Copy, Debug, Default)]
+pub enum BlendMode {
+    /// Normal alpha blending (default)
+    #[default]
+    Normal,
+    /// Additive blending
+    Add,
+    /// Multiply blending
+    Multiply,
+    /// Screen blending
+    Screen,
+}
+
+/// RT composite item for present()
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub struct RtComposite {
+    /// RT index (0-3)
+    pub rt: usize,
+    /// Output viewport, None = fullscreen
+    pub viewport: Option<Rect>,
+    /// Blend mode
+    pub blend: BlendMode,
+    /// Alpha (0-255)
+    pub alpha: u8,
+}
+
+#[cfg(graphics_mode)]
+impl RtComposite {
+    /// Create a fullscreen composite with default settings
+    pub fn fullscreen(rt: usize) -> Self {
+        Self {
+            rt,
+            viewport: None,
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a composite with custom viewport
+    pub fn with_viewport(rt: usize, viewport: Rect) -> Self {
+        Self {
+            rt,
+            viewport: Some(viewport),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Set blend mode
+    pub fn blend(mut self, blend: BlendMode) -> Self {
+        self.blend = blend;
+        self
+    }
+
+    /// Set alpha
+    pub fn alpha(mut self, alpha: u8) -> Self {
+        self.alpha = alpha;
+        self
+    }
+}
+
 /// OpenGL rendering subsystem for glow, SDL and web modes
 #[cfg(any(sdl_backend, glow_backend, wasm))]
 pub mod gl;
@@ -715,5 +817,136 @@ pub trait Adapter {
     fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
         // Default implementation - no-op
         // Graphics adapters should override this with efficient blit/copy operations
+    }
+
+    // ========================================================================
+    // New RT API - Unified RenderTexture management
+    // ========================================================================
+
+    /// Configure a render texture
+    ///
+    /// Sets up RT with specified configuration (size strategy, etc.)
+    /// Call this during initialization for custom RT configurations.
+    ///
+    /// # Parameters
+    /// - `rt`: RT index (0-3)
+    /// - `config`: RT configuration
+    #[cfg(graphics_mode)]
+    fn configure_rt(&mut self, rt: usize, config: RtConfig) {
+        // Default implementation - store config for later use
+        // Graphics adapters can override with optimized implementations
+    }
+
+    /// Resize a render texture to specific dimensions
+    ///
+    /// Manually resize an RT. Only effective for RTs configured with Fixed size.
+    ///
+    /// # Parameters
+    /// - `rt`: RT index (0-3)
+    /// - `width`: New width in pixels
+    /// - `height`: New height in pixels
+    #[cfg(graphics_mode)]
+    fn resize_rt(&mut self, rt: usize, width: u32, height: u32) {
+        // Default implementation - no-op
+        // Graphics adapters should override with actual resize logic
+    }
+
+    /// Clear a render texture
+    ///
+    /// Clears the specified RT to transparent black.
+    ///
+    /// # Parameters
+    /// - `rt`: RT index (0-3)
+    #[cfg(graphics_mode)]
+    fn clear_rt(&mut self, rt: usize) {
+        // Default implementation - no-op
+        // Graphics adapters should override
+    }
+
+    /// Render buffer and layers to a render texture
+    ///
+    /// This is the main method to render game content to an RT.
+    /// Converts Buffer + Layers → RenderBuffer → RT.
+    ///
+    /// # Parameters
+    /// - `buffer`: Game buffer with character data
+    /// - `layers`: Sprite layers to render
+    /// - `rt`: Target RT index (0-3)
+    /// - `stage`: Current game stage (for logo/effects)
+    #[cfg(graphics_mode)]
+    fn render_to_rt(
+        &mut self,
+        buffer: &Buffer,
+        previous_buffer: &Buffer,
+        layers: &mut Vec<Layer>,
+        rt: usize,
+        stage: u32,
+    ) {
+        // Default implementation - use existing generate_render_buffer + draw_render_buffer_to_texture
+        let rbuf = generate_render_buffer(
+            buffer,
+            previous_buffer,
+            layers,
+            stage,
+            self.get_base(),
+        );
+        self.draw_render_buffer_to_texture(&rbuf, rt, false);
+    }
+
+    /// Blend two RTs with effect and render to target RT
+    ///
+    /// GPU shader-based transition effect.
+    ///
+    /// # Parameters
+    /// - `src1`: Source RT 1 index
+    /// - `src2`: Source RT 2 index
+    /// - `target`: Target RT index
+    /// - `effect`: Effect type (0=Mosaic, 1=Heart, etc.)
+    /// - `progress`: Transition progress (0.0-1.0)
+    #[cfg(graphics_mode)]
+    fn blend_rts(
+        &mut self,
+        src1: usize,
+        src2: usize,
+        target: usize,
+        effect: usize,
+        progress: f32,
+    ) {
+        // Default implementation - use existing render_advanced_transition
+        self.render_advanced_transition(src1, src2, target, effect, progress);
+    }
+
+    /// Present RT composite chain to screen
+    ///
+    /// This is the new unified method to composite RTs to screen.
+    /// Replaces the old draw_render_textures_to_screen() with flexible RT chain.
+    ///
+    /// # Parameters
+    /// - `composites`: Array of RtComposite items to render in order
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Simple: just render RT2
+    /// adapter.present(&[RtComposite::fullscreen(2)]);
+    ///
+    /// // Complex: RT3 first, then RT2 overlay
+    /// adapter.present(&[
+    ///     RtComposite::fullscreen(3),
+    ///     RtComposite::fullscreen(2).alpha(200),
+    /// ]);
+    /// ```
+    #[cfg(graphics_mode)]
+    fn present(&mut self, composites: &[RtComposite]) {
+        // Default implementation - render each composite in order
+        // Graphics adapters should override with optimized implementations
+    }
+
+    /// Present with default settings (RT2 fullscreen)
+    ///
+    /// Convenience method for simple cases - just renders RT2 to screen.
+    /// This maintains backward compatibility with Scene.draw().
+    #[cfg(graphics_mode)]
+    fn present_default(&mut self) {
+        self.present(&[RtComposite::fullscreen(2)]);
     }
 }

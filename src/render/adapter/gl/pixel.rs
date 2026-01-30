@@ -5,9 +5,9 @@ use crate::render::adapter::{
     gl::{
         render_general2d::GlRenderGeneral2d, render_symbols::GlRenderSymbols,
         render_transition::GlRenderTransition, texture::GlRenderTexture,
-        GlRender, 
+        GlRender,
     },
-    RenderCell,
+    BlendMode, RenderCell, RtComposite,
 };
 use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use glow::HasContext;
@@ -399,7 +399,7 @@ impl GlPixelRenderer {
         ratio_y: f32,
     ) -> Result<(), String> {
         // Don't bind screen - assume it's already bound with correct viewport
-        
+
         // Inline unified rendering logic
         let unified_color = crate::render::graph::UnifiedColor::white();
 
@@ -442,5 +442,127 @@ impl GlPixelRenderer {
         }
 
         Ok(())
+    }
+
+    // ========================================================================
+    // New RT API Methods
+    // ========================================================================
+
+    /// Set OpenGL blend mode based on BlendMode enum
+    fn set_blend_mode(&self, blend: BlendMode) {
+        unsafe {
+            match blend {
+                BlendMode::Normal => {
+                    self.gl.blend_func_separate(
+                        glow::SRC_ALPHA,
+                        glow::ONE_MINUS_SRC_ALPHA,
+                        glow::ONE,
+                        glow::ONE_MINUS_SRC_ALPHA,
+                    );
+                }
+                BlendMode::Add => {
+                    self.gl.blend_func(glow::SRC_ALPHA, glow::ONE);
+                }
+                BlendMode::Multiply => {
+                    self.gl.blend_func(glow::DST_COLOR, glow::ZERO);
+                }
+                BlendMode::Screen => {
+                    self.gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_COLOR);
+                }
+            }
+        }
+    }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    ///
+    /// # Arguments
+    /// * `composites` - Array of RtComposite items to render in order (back to front)
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Simple fullscreen RT2
+    /// renderer.present(&[RtComposite::fullscreen(2)]);
+    ///
+    /// // Multiple layers with custom viewport and alpha
+    /// renderer.present(&[
+    ///     RtComposite::fullscreen(2),
+    ///     RtComposite::with_viewport(3, Rect::new(0, 0, 640, 400)).alpha(200),
+    /// ]);
+    /// ```
+    pub fn present(&mut self, composites: &[RtComposite]) {
+        // Bind screen framebuffer
+        self.gl_pixel.bind_screen(&self.gl);
+
+        let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
+        let pcw = canvas_width as f32;
+        let pch = canvas_height as f32;
+
+        for composite in composites {
+            let rtidx = composite.rt;
+
+            // Skip hidden RTs
+            if self.gl_pixel.get_render_texture_hidden(rtidx) {
+                continue;
+            }
+
+            // Set blend mode
+            self.set_blend_mode(composite.blend);
+
+            // Calculate viewport and transform based on composite settings
+            let (area, transform) = if let Some(ref vp) = composite.viewport {
+                // Custom viewport specified
+                let vp_x = vp.x as f32;
+                let vp_y = vp.y as f32;
+                let vp_w = vp.width as f32;
+                let vp_h = vp.height as f32;
+
+                // Convert to normalized coordinates [0, 1]
+                // OpenGL Y-axis: bottom-left origin
+                let area = [
+                    vp_x / pcw,
+                    (pch - vp_y - vp_h) / pch,
+                    vp_w / pcw,
+                    vp_h / pch,
+                ];
+
+                // Create transform with proper scaling
+                let mut unified_transform = UnifiedTransform::new();
+                unified_transform.scale(vp_w / pcw, vp_h / pch);
+
+                (area, unified_transform)
+            } else {
+                // Fullscreen - use identity transform
+                let area = [0.0, 0.0, 1.0, 1.0];
+                let transform = UnifiedTransform::new();
+                (area, transform)
+            };
+
+            // Create color with alpha
+            let alpha_f = composite.alpha as f32 / 255.0;
+            let color = UnifiedColor::new(1.0, 1.0, 1.0, alpha_f);
+
+            // Render this RT to screen
+            self.gl_pixel.render_texture_to_screen_impl(
+                &self.gl,
+                rtidx,
+                area,
+                &transform,
+                &color,
+            );
+        }
+
+        // Restore normal blend mode
+        self.set_blend_mode(BlendMode::Normal);
+    }
+
+    /// Present with default settings (RT2 fullscreen)
+    ///
+    /// This is a convenience method for simple games that just need
+    /// to display the main render texture (RT2) fullscreen.
+    pub fn present_default(&mut self) {
+        self.present(&[RtComposite::fullscreen(2)]);
     }
 }

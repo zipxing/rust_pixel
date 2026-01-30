@@ -746,6 +746,10 @@ impl Adapter for WinitGlowAdapter {
             }
         }
 
+        // Frame rate control - sleep for remaining time to avoid CPU busy loop
+        // This matches SDL adapter behavior and reduces CPU usage significantly
+        std::thread::sleep(timeout);
+
         // Return exit status
         self.should_exit
     }
@@ -940,6 +944,47 @@ impl Adapter for WinitGlowAdapter {
     fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.copy_render_texture(src_index, dst_index);
+        }
+    }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            // Get physical window size for Retina display support
+            let physical_size = if let Some(window) = &self.window {
+                Some(window.inner_size())
+            } else {
+                None
+            };
+
+            // Bind screen and set correct viewport
+            if let Some(physical_size) = physical_size {
+                gl_pixel_renderer.bind_screen_with_viewport(
+                    physical_size.width as i32,
+                    physical_size.height as i32,
+                );
+            } else {
+                // Fallback: use standard binding
+                gl_pixel_renderer
+                    .gl_pixel
+                    .bind_screen(&gl_pixel_renderer.gl);
+            }
+
+            // Clear screen
+            use glow::HasContext;
+            let gl = gl_pixel_renderer.get_gl();
+            unsafe {
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+
+            // Use the new present() method
+            gl_pixel_renderer.present(composites);
+        } else {
+            eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized for present");
         }
     }
 }

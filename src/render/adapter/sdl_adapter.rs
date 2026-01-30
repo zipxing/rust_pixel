@@ -432,6 +432,33 @@ impl Adapter for SdlAdapter {
             gl_pixel_renderer.copy_render_texture(src_index, dst_index);
         }
     }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            // Bind screen and set viewport
+            gl_pixel_renderer.bind_screen_with_viewport(
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+            );
+
+            // Clear screen
+            use glow::HasContext;
+            let gl = gl_pixel_renderer.get_gl();
+            unsafe {
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+
+            // Use the new present() method
+            gl_pixel_renderer.present(composites);
+        } else {
+            eprintln!("SdlAdapter: gl_pixel_renderer not initialized for present");
+        }
+    }
 }
 
 pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {

@@ -233,6 +233,32 @@ impl Adapter for WebAdapter {
             gl_pixel_renderer.copy_render_texture(src_index, dst_index);
         }
     }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            // Bind screen framebuffer
+            gl_pixel_renderer.gl_pixel.bind_screen(&gl_pixel_renderer.gl);
+
+            // Clear screen
+            use glow::HasContext;
+            let gl = gl_pixel_renderer.get_gl();
+            unsafe {
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+
+            // Use the new present() method
+            gl_pixel_renderer.present(composites);
+        } else {
+            // Web console logging for debugging
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::error_1(&"WebAdapter: gl_pixel_renderer not initialized for present".into());
+        }
+    }
 }
 
 macro_rules! web_event {
