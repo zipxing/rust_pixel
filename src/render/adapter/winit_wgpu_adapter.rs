@@ -1314,14 +1314,6 @@ impl Adapter for WinitWgpuAdapter {
         }
     }
 
-    /// WinitWgpu adapter implementation of simple transition rendering
-    fn render_simple_transition(&mut self, target_texture: usize) {
-        // WGPU uses standard transition rendering, blends RT0+RT1 to target with shader=0, progress=1.0
-        if let Err(e) = self.render_transition_to_texture_wgpu(0, 1, target_texture, 0, 1.0) {
-            eprintln!("WinitWgpuAdapter: Simple transition error: {}", e);
-        }
-    }
-
     /// WinitWgpu adapter implementation of advanced transition rendering
     fn render_advanced_transition(
         &mut self,

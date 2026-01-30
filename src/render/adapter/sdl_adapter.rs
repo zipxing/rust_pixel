@@ -405,13 +405,6 @@ impl Adapter for SdlAdapter {
         }
     }
 
-    /// SDL adapter implementation of simple transition rendering
-    fn render_simple_transition(&mut self, target_texture: usize) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_normal_transition(target_texture);
-        }
-    }
-
     /// SDL adapter implementation of advanced transition rendering
     fn render_advanced_transition(
         &mut self,

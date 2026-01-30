@@ -641,19 +641,6 @@ pub trait Adapter {
         // Each adapter can override this with optimized implementations
     }
 
-    /// Render a simple transition effect
-    ///
-    /// Performs a basic transition rendering to the specified render texture.
-    /// This is used for fade-in/fade-out effects and simple transitions.
-    ///
-    /// # Parameters
-    /// - `target_texture`: Target render texture index
-    #[cfg(graphics_mode)]
-    fn render_simple_transition(&mut self, target_texture: usize) {
-        // Default implementation - no effect
-        // Graphics adapters should override this
-    }
-
     /// Render an advanced transition effect with parameters
     ///
     /// Performs complex transition rendering with customizable effects and progress.
@@ -679,8 +666,8 @@ pub trait Adapter {
         effect_type: usize,
         progress: f32,
     ) {
-        // Default implementation - fallback to simple transition
-        self.render_simple_transition(dst_texture);
+        // Default implementation - no effect
+        // Graphics adapters should override this
     }
 
     /// Get canvas size for advanced rendering calculations

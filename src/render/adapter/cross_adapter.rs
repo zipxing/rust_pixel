@@ -212,16 +212,6 @@ impl Adapter for CrosstermAdapter {
     #[cfg(any(
         feature = "sdl",
         feature = "glow",
-        feature = "wgpu", 
-        target_arch = "wasm32"
-    ))]
-    fn render_simple_transition(&mut self, _target_texture: usize) {
-        // Text mode - no transition effects
-    }
-
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
         feature = "wgpu",
         target_arch = "wasm32"
     ))]

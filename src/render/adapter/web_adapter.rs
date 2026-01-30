@@ -195,19 +195,6 @@ impl Adapter for WebAdapter {
         }
     }
 
-    /// Web adapter implementation of simple transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu", 
-        target_arch = "wasm32"
-    ))]
-    fn render_simple_transition(&mut self, target_texture: usize) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_normal_transition(target_texture);
-        }
-    }
-
     /// Web adapter implementation of advanced transition rendering
     #[cfg(any(
         feature = "sdl",

@@ -356,14 +356,7 @@ impl GlPixelRenderer {
 
         Ok(())
     }
-    
-    /// Render normal transition frame (convenience method for petview)
-    pub fn render_normal_transition(&mut self, rtidx: usize) {
-        self.gl_pixel.bind_target(&self.gl, rtidx);
-        self.gl_pixel.set_render_texture_hidden(rtidx, false);
-        self.gl_pixel.render_trans_frame(&self.gl, 0, 1, 0, 1.0);
-    }
-    
+
     /// Render GL transition frame with effect and progress (convenience method for petview)
     pub fn render_gl_transition(&mut self, src_tex1: usize, src_tex2: usize, dst_tex: usize, effect: usize, progress: f32) {
         self.gl_pixel.bind_target(&self.gl, dst_tex);
