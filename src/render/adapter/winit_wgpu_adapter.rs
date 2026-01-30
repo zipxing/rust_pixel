@@ -740,6 +740,8 @@ impl WinitWgpuAdapter {
     /// WGPU version of transition rendering to texture (provides advanced API for petview etc.)
     pub fn render_transition_to_texture_wgpu(
         &mut self,
+        src_texture1_idx: usize,
+        src_texture2_idx: usize,
         target_texture_idx: usize,
         shader_idx: usize,
         progress: f32,
@@ -759,6 +761,8 @@ impl WinitWgpuAdapter {
                 device,
                 queue,
                 &mut encoder,
+                src_texture1_idx,
+                src_texture2_idx,
                 target_texture_idx,
                 shader_idx,
                 progress,
@@ -1312,8 +1316,8 @@ impl Adapter for WinitWgpuAdapter {
 
     /// WinitWgpu adapter implementation of simple transition rendering
     fn render_simple_transition(&mut self, target_texture: usize) {
-        // WGPU uses standard transition rendering, parameters are (target, shader=0, progress=1.0)
-        if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, 0, 1.0) {
+        // WGPU uses standard transition rendering, blends RT0+RT1 to target with shader=0, progress=1.0
+        if let Err(e) = self.render_transition_to_texture_wgpu(0, 1, target_texture, 0, 1.0) {
             eprintln!("WinitWgpuAdapter: Simple transition error: {}", e);
         }
     }
@@ -1321,13 +1325,15 @@ impl Adapter for WinitWgpuAdapter {
     /// WinitWgpu adapter implementation of advanced transition rendering
     fn render_advanced_transition(
         &mut self,
-        target_texture: usize,
+        src_texture1: usize,
+        src_texture2: usize,
+        dst_texture: usize,
         effect_type: usize,
         progress: f32,
     ) {
         // WGPU uses full transition rendering API
         if let Err(e) =
-            self.render_transition_to_texture_wgpu(target_texture, effect_type, progress)
+            self.render_transition_to_texture_wgpu(src_texture1, src_texture2, dst_texture, effect_type, progress)
         {
             eprintln!("WinitWgpuAdapter: Advanced transition error: {}", e);
         }

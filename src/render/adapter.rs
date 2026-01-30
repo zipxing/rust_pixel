@@ -660,18 +660,27 @@ pub trait Adapter {
     /// Supports various shader-based transition effects like dissolve, wipe, etc.
     ///
     /// # Parameters
-    /// - `target_texture`: Target render texture index
-    /// - `effect_type`: Transition effect type (0=dissolve, 1=wipe, etc.)
+    /// - `src_texture1`: First source render texture index (0-3)
+    /// - `src_texture2`: Second source render texture index (0-3)
+    /// - `dst_texture`: Destination render texture index (0-3)
+    /// - `effect_type`: Transition effect type (0=Mosaic, 1=Heart, 2=Noise, 3=Rotation, 4=Curtain, 5=Glitch, 6=Ripple)
     /// - `progress`: Transition progress from 0.0 to 1.0
+    ///
+    /// # Use Cases
+    /// - Blend any two render textures with various transition effects
+    /// - Create custom multi-pass rendering pipelines
+    /// - Implement complex visual effects by chaining transitions
     #[cfg(graphics_mode)]
     fn render_advanced_transition(
         &mut self,
-        target_texture: usize,
+        src_texture1: usize,
+        src_texture2: usize,
+        dst_texture: usize,
         effect_type: usize,
         progress: f32,
     ) {
         // Default implementation - fallback to simple transition
-        self.render_simple_transition(target_texture);
+        self.render_simple_transition(dst_texture);
     }
 
     /// Get canvas size for advanced rendering calculations

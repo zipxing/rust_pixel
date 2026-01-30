@@ -307,7 +307,8 @@ impl Render for PetviewRender {
                     }
                 }
                 PetviewState::TransGl => {
-                    // Advanced transition - unified interface replaces all downcast code
+                    // Advanced transition - flexible source/destination texture selection
+                    // Blends RT0 (source image) and RT1 (target image) to RT3 (display) using selected effect
                     #[cfg(any(
                         feature = "sdl",
                         feature = "glow",
@@ -315,7 +316,7 @@ impl Render for PetviewRender {
                         target_arch = "wasm32"
                     ))]
                     {
-                        ctx.adapter.render_advanced_transition(3, model.trans_effect, model.progress);
+                        ctx.adapter.render_advanced_transition(0, 1, 3, model.trans_effect, model.progress);
                         let p3 = self.scene.get_sprite("petimg3");
                         p3.set_hidden(true);
                     }

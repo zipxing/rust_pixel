@@ -215,9 +215,9 @@ impl Adapter for WebAdapter {
         feature = "wgpu",
         target_arch = "wasm32"
     ))]
-    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
+    fn render_advanced_transition(&mut self, src_texture1: usize, src_texture2: usize, dst_texture: usize, effect_type: usize, progress: f32) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
+            gl_pixel_renderer.render_gl_transition(src_texture1, src_texture2, dst_texture, effect_type, progress);
         }
     }
 

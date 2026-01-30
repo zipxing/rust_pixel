@@ -158,14 +158,16 @@ impl GlPixel {
     pub fn render_trans_frame(
         &mut self,
         gl: &glow::Context,
+        src_idx1: usize,
+        src_idx2: usize,
         sidx: usize,
         progress: f32,
     ) {
         self.r_trans.set_texture(
             self.canvas_width,
             self.canvas_height,
-            self.render_textures[0].texture,
-            self.render_textures[1].texture,
+            self.render_textures[src_idx1].texture,
+            self.render_textures[src_idx2].texture,
         );
         self.r_trans.draw_trans(gl, sidx, progress);
     }
@@ -359,14 +361,14 @@ impl GlPixelRenderer {
     pub fn render_normal_transition(&mut self, rtidx: usize) {
         self.gl_pixel.bind_target(&self.gl, rtidx);
         self.gl_pixel.set_render_texture_hidden(rtidx, false);
-        self.gl_pixel.render_trans_frame(&self.gl, 0, 1.0);
+        self.gl_pixel.render_trans_frame(&self.gl, 0, 1, 0, 1.0);
     }
     
     /// Render GL transition frame with effect and progress (convenience method for petview)
-    pub fn render_gl_transition(&mut self, rtidx: usize, effect: usize, progress: f32) {
-        self.gl_pixel.bind_target(&self.gl, rtidx);
-        self.gl_pixel.set_render_texture_hidden(rtidx, false);
-        self.gl_pixel.render_trans_frame(&self.gl, effect, progress);
+    pub fn render_gl_transition(&mut self, src_tex1: usize, src_tex2: usize, dst_tex: usize, effect: usize, progress: f32) {
+        self.gl_pixel.bind_target(&self.gl, dst_tex);
+        self.gl_pixel.set_render_texture_hidden(dst_tex, false);
+        self.gl_pixel.render_trans_frame(&self.gl, src_tex1, src_tex2, effect, progress);
     }
     
     /// Setup transition buffer rendering (convenience method for petview)
