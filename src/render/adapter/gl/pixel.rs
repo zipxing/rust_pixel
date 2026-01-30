@@ -170,6 +170,37 @@ impl GlPixel {
         self.r_trans.draw_trans(gl, sidx, progress);
     }
 
+    /// Copy one render texture to another using framebuffer blit
+    ///
+    /// This is much more efficient than rendering through a shader for static copies.
+    /// Uses OpenGL's blit operation to directly copy framebuffer contents.
+    pub fn copy_render_texture(&mut self, gl: &glow::Context, src_index: usize, dst_index: usize) {
+        unsafe {
+            let src_tex = &self.render_textures[src_index];
+            let dst_tex = &self.render_textures[dst_index];
+
+            // Bind source framebuffer to READ_FRAMEBUFFER
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(src_tex.framebuffer));
+
+            // Bind destination framebuffer to DRAW_FRAMEBUFFER
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(dst_tex.framebuffer));
+
+            // Blit (copy) from source to destination
+            gl.blit_framebuffer(
+                0, 0, src_tex.width as i32, src_tex.height as i32,  // src rect
+                0, 0, dst_tex.width as i32, dst_tex.height as i32,  // dst rect
+                glow::COLOR_BUFFER_BIT,
+                glow::NEAREST,
+            );
+
+            // Restore normal framebuffer binding
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+            // Make destination texture visible, keep source as-is
+            self.render_textures[dst_index].is_hidden = false;
+        }
+    }
+
     pub fn get_canvas_size(&self) -> (u32, u32) {
         (self.canvas_width, self.canvas_height)
     }
@@ -342,6 +373,14 @@ impl GlPixelRenderer {
     pub fn setup_transbuf_rendering(&mut self, rtidx: usize) {
         self.gl_pixel.bind_target(&self.gl, rtidx);
         self.gl_pixel.set_render_texture_hidden(rtidx, true);
+    }
+
+    /// Copy one render texture to another
+    ///
+    /// Uses efficient framebuffer blit operation to copy texture contents.
+    /// Much faster than rendering with a shader for static display purposes.
+    pub fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+        self.gl_pixel.copy_render_texture(&self.gl, src_index, dst_index);
     }
     
     /// Bind screen and set viewport for Retina displays (convenience method for Winit)

@@ -430,6 +430,13 @@ impl Adapter for SdlAdapter {
             gl_pixel_renderer.setup_transbuf_rendering(target_texture);
         }
     }
+
+    /// SDL adapter implementation of render texture copy
+    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.copy_render_texture(src_index, dst_index);
+        }
+    }
 }
 
 pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {

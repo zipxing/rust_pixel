@@ -1340,4 +1340,15 @@ impl Adapter for WinitWgpuAdapter {
             wgpu_pixel_renderer.set_render_texture_hidden(target_texture, true);
         }
     }
+
+    /// WinitWgpu adapter implementation of render texture copy
+    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+        if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
+            &mut self.wgpu_pixel_renderer,
+            &self.wgpu_device,
+            &self.wgpu_queue,
+        ) {
+            wgpu_pixel_renderer.copy_render_texture(device, queue, src_index, dst_index);
+        }
+    }
 }

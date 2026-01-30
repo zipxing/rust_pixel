@@ -272,7 +272,8 @@ impl Render for PetviewRender {
             // Common transition logic for both OpenGL and WGPU modes
             match PetviewState::from_usize(ctx.state as usize).unwrap() {
                 PetviewState::Normal => {
-                    // Simple transition - unified interface replaces all downcast code
+                    // Copy RT1 (target image) to RT3 for display
+                    // Much more efficient than running a shader with progress=1.0
                     #[cfg(any(
                         feature = "sdl",
                         feature = "glow",
@@ -280,7 +281,7 @@ impl Render for PetviewRender {
                         target_arch = "wasm32"
                     ))]
                     {
-                        ctx.adapter.render_simple_transition(3);
+                        ctx.adapter.copy_render_texture(1, 3);
                         let p3 = self.scene.get_sprite("petimg3");
                         p3.set_hidden(true);
                     }

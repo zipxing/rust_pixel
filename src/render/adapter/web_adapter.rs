@@ -234,7 +234,18 @@ impl Adapter for WebAdapter {
         }
     }
 
-
+    /// Web adapter implementation of render texture copy
+    #[cfg(any(
+        feature = "sdl",
+        feature = "glow",
+        feature = "wgpu",
+        target_arch = "wasm32"
+    ))]
+    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.copy_render_texture(src_index, dst_index);
+        }
+    }
 }
 
 macro_rules! web_event {

@@ -700,4 +700,24 @@ pub trait Adapter {
         // Default implementation - no special setup needed
         // Graphics adapters can override this with optimized implementations
     }
+
+    /// Copy one render texture to another
+    ///
+    /// Efficiently copies the contents of one render texture to another without
+    /// going through the full shader pipeline. This is much faster than using
+    /// a transition shader with progress=1.0 for static display purposes.
+    ///
+    /// # Parameters
+    /// - `src_index`: Source render texture index (0-3)
+    /// - `dst_index`: Destination render texture index (0-3)
+    ///
+    /// # Use Cases
+    /// - Displaying static transition results without shader overhead
+    /// - Preparing render textures for subsequent operations
+    /// - Swapping/copying render texture contents
+    #[cfg(graphics_mode)]
+    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+        // Default implementation - no-op
+        // Graphics adapters should override this with efficient blit/copy operations
+    }
 }

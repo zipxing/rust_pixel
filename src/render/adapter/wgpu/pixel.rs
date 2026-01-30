@@ -248,6 +248,50 @@ impl WgpuPixelRender {
         }
     }
 
+    /// Copy one render texture to another
+    ///
+    /// Uses wgpu's copy_texture_to_texture for efficient GPU-side copy.
+    /// Much faster than rendering through a shader for static copies.
+    ///
+    /// # Parameters
+    /// - `device`: WGPU device handle
+    /// - `queue`: WGPU queue handle
+    /// - `src_index`: Source render texture index (0-3)
+    /// - `dst_index`: Destination render texture index (0-3)
+    pub fn copy_render_texture(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        src_index: usize,
+        dst_index: usize,
+    ) {
+        if src_index >= self.render_textures.len() || dst_index >= self.render_textures.len() {
+            return;
+        }
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Texture Copy Encoder"),
+        });
+
+        let src_texture = &self.render_textures[src_index].texture;
+        let dst_texture = &self.render_textures[dst_index].texture;
+
+        encoder.copy_texture_to_texture(
+            src_texture.as_image_copy(),
+            dst_texture.as_image_copy(),
+            wgpu::Extent3d {
+                width: self.canvas_width,
+                height: self.canvas_height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        queue.submit(Some(encoder.finish()));
+
+        // Make destination texture visible
+        self.render_textures[dst_index].set_hidden(false);
+    }
+
     /// Get canvas size (matches OpenGL GlPixel interface)
     ///
     /// # Returns
