@@ -345,7 +345,7 @@ impl Adapter for SdlAdapter {
     }
 
     /// Direct implementation of draw_render_buffer_to_texture for SDL
-    fn draw_render_buffer_to_texture(
+    fn rbuf2rt(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -382,7 +382,7 @@ impl Adapter for SdlAdapter {
     }
 
     /// SDL adapter implementation of advanced transition rendering
-    fn render_advanced_transition(
+    fn blend_rts(
         &mut self,
         src_texture1: usize,
         src_texture2: usize,

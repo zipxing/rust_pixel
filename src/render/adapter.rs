@@ -158,7 +158,7 @@
 
 #![allow(unused_variables)]
 #[cfg(graphics_mode)]
-use crate::util::{ARect, PointI32};
+use crate::render::graph::render_buffer_to_cells;
 use crate::{
     event::Event,
     render::{buffer::Buffer, sprite::Layer},
@@ -226,25 +226,6 @@ pub use crate::render::graph::{
     PIXEL_TEXTURE_FILE,
 };
 
-/// Path to the symbols texture file
-///
-/// The symbols texture is 4096×4096 pixels (256×256 grid, 16px per cell).
-/// Contains four regions for Sprite, TUI, Emoji, and CJK characters.
-///
-/// Layout (10 Sprite Rows):
-/// ```text
-/// ┌────────────────────────────────────────────────────┐
-/// │ Sprite Region (rows 0-159): 40,960 sprites 16×16   │ 2560px
-/// │ - Block 0-159: 16×16 chars/block                   │
-/// ├────────────────────────────────────────────────────┤
-/// │ TUI (rows 160-191, cols 0-159): 2,560 chars 16×32  │
-/// │ - Block 160-169                                    │ 512px
-/// │ Emoji (rows 160-191, cols 160-255): 768 32×32      │
-/// │ - Block 170-175                                    │
-/// ├────────────────────────────────────────────────────┤
-/// │ CJK Region (rows 192-255): 4,096 chars 32×32       │ 1024px
-/// └────────────────────────────────────────────────────┘
-/// ```
 /// Adapter base data structure containing shared information and OpenGL resources
 ///
 /// AdapterBase holds common data and OpenGL resources shared across all graphics
@@ -267,7 +248,7 @@ pub use crate::render::graph::{
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 /// Base data structure shared by all rendering adapters
-/// 
+///
 /// Note: `game_name` and `project_path` are now stored in the global `GAME_CONFIG`.
 /// Use `rust_pixel::get_game_config()` to access them from anywhere.
 pub struct AdapterBase {
@@ -403,35 +384,6 @@ pub trait Adapter {
     /// Post draw process
     fn post_draw(&mut self);
 
-    fn set_size(&mut self, w: u16, h: u16) -> &mut Self
-    where
-        Self: Sized,
-    {
-        let bs = self.get_base();
-        bs.cell_w = w;
-        bs.cell_h = h;
-        self
-    }
-
-    fn size(&mut self) -> Rect {
-        let bs = self.get_base();
-        Rect::new(0, 0, bs.cell_w, bs.cell_h)
-    }
-
-    fn set_title(&mut self, s: String) -> &mut Self
-    where
-        Self: Sized,
-    {
-        let bs = self.get_base();
-        bs.title = s;
-        self
-    }
-
-    fn hide_cursor(&mut self) -> Result<(), String>;
-    fn show_cursor(&mut self) -> Result<(), String>;
-    fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
-    fn get_cursor(&mut self) -> Result<(u16, u16), String>;
-
     /// Main OpenGL rendering pipeline with double buffering and render textures
     ///
     /// This method implements the core graphics rendering pipeline for SDL, Winit, and Web
@@ -516,7 +468,7 @@ pub trait Adapter {
         if self.get_base().gr.rflag {
             // Both OpenGL and WGPU use the same unified rendering pipeline
             // 1. Draw RenderCell array to render_texture 2 (main scene)
-            self.draw_render_buffer_to_texture(&rbuf, 2, false);
+            self.rbuf2rt(&rbuf, 2, false);
             // 2. Composite render_texture 2 & 3 to screen (final output)
             self.present_default();
         } else {
@@ -529,46 +481,86 @@ pub trait Adapter {
     // draw buffer to render texture - unified for both OpenGL and WGPU
     #[cfg(graphics_mode)]
     fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
-        // Convert buffer to render buffer first
-        let rbuf = self.buffer_to_render_buffer(buf);
+        let mut rbuf = vec![];
+        // Use default transformation (no scale, no rotation, full opacity)
+        self.buf2rbuf(buf, &mut rbuf, false, 255, 1.0, 1.0, 0.0);
 
         // Then draw render buffer to texture
-        self.draw_render_buffer_to_texture(&rbuf, rtidx, false);
+        self.rbuf2rt(&rbuf, rtidx, false);
     }
 
-    /// Graphics mode render buffer to texture - abstract method
-    ///
-    /// Each graphics adapter must implement this method to render RenderCell data
-    /// to the specified render texture. This method is only available in graphics modes.
-    ///
-    /// # Parameters  
-    /// - `rbuf`: Array of RenderCell data (GPU-ready format)
-    /// - `rtidx`: Target render texture index (typically 2 for main scene, 3 for transitions)
-    /// - `debug`: Enable debug mode rendering (colored backgrounds for debugging)
-    #[cfg(graphics_mode)]
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool);
+    // ========================================================================
+    // RENDERING PRIMITIVES
+    // ========================================================================
+    //
+    // These 4 primitives are the foundation of the entire rendering pipeline.
+    // All other rendering methods are combinations of these primitives.
+    //
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │  Primitive 1: buf2rbuf  - Buffer → RenderBuffer (with transforms)  │
+    // │  Primitive 2: rbuf2rt   - RenderBuffer → RenderTexture             │
+    // │  Primitive 3: blend_rts - RT₁ + RT₂ → RT₃ (shader blend)           │
+    // │  Primitive 4: present   - RT → Screen                              │
+    // └─────────────────────────────────────────────────────────────────────┘
+    //
+    // Composites: layer2rbuf, draw_buffer_to_texture, render_to_rt, etc.
+    // are combinations of these primitives.
 
-    // buffer to render buffer - unified for both OpenGL and WGPU
+    /// PRIMITIVE 1: buf2rbuf - Buffer → RenderBuffer with full transformation
+    ///
+    /// The most fundamental rendering primitive. Converts a Buffer's content
+    /// to RenderCell format and appends it to the render buffer.
+    /// Supports full transformation: alpha, scale, and rotation.
+    ///
+    /// # Parameters
+    /// - `buffer`: Source buffer (read-only, contains position in area.x/y)
+    /// - `rbuf`: Target render buffer to append to (mutable)
+    /// - `use_tui`: Use TUI characters (16×32) if true, Sprite (8×8) if false
+    /// - `alpha`: Overall transparency (0=transparent, 255=opaque)
+    /// - `scale_x`, `scale_y`: Overall scale factors (1.0 = no scaling)
+    /// - `angle`: Overall rotation angle in degrees (0.0 = no rotation)
     #[cfg(graphics_mode)]
-    fn buffer_to_render_buffer(&mut self, cb: &Buffer) -> Vec<RenderCell> {
-        let mut rbuf = vec![];
+    fn buf2rbuf(
+        &mut self,
+        buffer: &Buffer,
+        rbuf: &mut Vec<RenderCell>,
+        use_tui: bool,
+        alpha: u8,
+        scale_x: f32,
+        scale_y: f32,
+        angle: f64,
+    ) {
         let rx = self.get_base().gr.ratio_x;
         let ry = self.get_base().gr.ratio_y;
-        let pz = PointI32 { x: 0, y: 0 };
-        let mut rfunc = |fc: &(u8, u8, u8, u8),
-                         bc: &Option<(u8, u8, u8, u8)>,
-                         s2: ARect,
-                         texidx: usize,
-                         symidx: usize,
-                         modifier: u16| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
-        };
 
-        // Use Sprite characters (8×8) for pixel sprite buffers (backward compatibility)
-        render_main_buffer(cb, cb.area.width, rx, ry, false, &mut rfunc);
-
-        rbuf
+        render_buffer_to_cells(
+            buffer,
+            rx,
+            ry,
+            use_tui,
+            alpha,
+            scale_x,
+            scale_y,
+            angle,
+            |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
+                push_render_buffer(rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, modifier);
+            },
+        );
     }
+
+    /// PRIMITIVE 2: rbuf2rt - RenderBuffer → RenderTexture
+    ///
+    /// Second stage: Takes GPU-ready RenderCell array and renders it to
+    /// a specified render texture.
+    ///
+    /// # Parameters
+    /// - `rbuf`: Array of RenderCell data (from buf2rbuf)
+    /// - `rt`: Target render texture index (0-3)
+    /// - `debug`: Enable debug mode (colored backgrounds for debugging)
+    #[cfg(graphics_mode)]
+    fn rbuf2rt(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool);
+
+    // Primitives 3 (blend_rts) and 4 (present) are defined above in the RT section
 
     #[cfg(graphics_mode)]
     fn only_render_buffer(&mut self) {
@@ -589,39 +581,11 @@ pub trait Adapter {
     /// - `texture_index`: Render texture index (0-3, typically 2=main, 3=effects)
     /// - `visible`: Whether the texture should be visible
     #[cfg(graphics_mode)]
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
-        // Default implementation for graphics modes
-        // Each adapter can override this with optimized implementations
-    }
-
-    /// Render an advanced transition effect with parameters
-    ///
-    /// Performs complex transition rendering with customizable effects and progress.
-    /// Internal: Render transition between two render textures.
-    ///
-    /// **Note**: This is an internal implementation method. External code should use
-    /// [`blend_rts()`] instead, which provides the same functionality with a cleaner API.
-    ///
-    /// Supports various shader-based transition effects like dissolve, wipe, etc.
-    ///
-    /// # Parameters
-    /// - `src_texture1`: First source render texture index (0-3)
-    /// - `src_texture2`: Second source render texture index (0-3)
-    /// - `dst_texture`: Destination render texture index (0-3)
-    /// - `effect_type`: Transition effect type (0=Mosaic, 1=Heart, 2=Noise, 3=Rotation, 4=Curtain, 5=Glitch, 6=Ripple)
-    /// - `progress`: Transition progress from 0.0 to 1.0
-    #[cfg(graphics_mode)]
-    fn render_advanced_transition(
-        &mut self,
-        src_texture1: usize,
-        src_texture2: usize,
-        dst_texture: usize,
-        effect_type: usize,
-        progress: f32,
-    ) {
-        // Default implementation - no effect
-        // Graphics adapters should override this
-    }
+    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool);
+    // {
+    //     // Default implementation for graphics modes
+    //     // Each adapter can override this with optimized implementations
+    // }
 
     /// Get canvas size for advanced rendering calculations
     ///
@@ -645,10 +609,7 @@ pub trait Adapter {
     /// # Parameters
     /// - `target_texture`: Target render texture index for transition effects
     #[cfg(graphics_mode)]
-    fn setup_buffer_transition(&mut self, target_texture: usize) {
-        // Default implementation - no special setup needed
-        // Graphics adapters can override this with optimized implementations
-    }
+    fn setup_buffer_transition(&mut self, target_texture: usize);
 
     /// Copy one render texture to another
     ///
@@ -665,10 +626,7 @@ pub trait Adapter {
     /// - Preparing render textures for subsequent operations
     /// - Swapping/copying render texture contents
     #[cfg(graphics_mode)]
-    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
-        // Default implementation - no-op
-        // Graphics adapters should override this with efficient blit/copy operations
-    }
+    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize);
 
     // ========================================================================
     // New RT API - Unified RenderTexture management
@@ -714,36 +672,6 @@ pub trait Adapter {
         // Graphics adapters should override
     }
 
-    /// Render buffer and layers to a render texture
-    ///
-    /// This is the main method to render game content to an RT.
-    /// Converts Buffer + Layers → RenderBuffer → RT.
-    ///
-    /// # Parameters
-    /// - `buffer`: Game buffer with character data
-    /// - `layers`: Sprite layers to render
-    /// - `rt`: Target RT index (0-3)
-    /// - `stage`: Current game stage (for logo/effects)
-    #[cfg(graphics_mode)]
-    fn render_to_rt(
-        &mut self,
-        buffer: &Buffer,
-        previous_buffer: &Buffer,
-        layers: &mut Vec<Layer>,
-        rt: usize,
-        stage: u32,
-    ) {
-        // Default implementation - use existing generate_render_buffer + draw_render_buffer_to_texture
-        let rbuf = generate_render_buffer(
-            buffer,
-            previous_buffer,
-            layers,
-            stage,
-            self.get_base(),
-        );
-        self.draw_render_buffer_to_texture(&rbuf, rt, false);
-    }
-
     /// Blend two RTs with effect and render to target RT
     ///
     /// GPU shader-based transition effect.
@@ -755,17 +683,7 @@ pub trait Adapter {
     /// - `effect`: Effect type (0=Mosaic, 1=Heart, etc.)
     /// - `progress`: Transition progress (0.0-1.0)
     #[cfg(graphics_mode)]
-    fn blend_rts(
-        &mut self,
-        src1: usize,
-        src2: usize,
-        target: usize,
-        effect: usize,
-        progress: f32,
-    ) {
-        // Default implementation - use existing render_advanced_transition
-        self.render_advanced_transition(src1, src2, target, effect, progress);
-    }
+    fn blend_rts(&mut self, src1: usize, src2: usize, target: usize, effect: usize, progress: f32);
 
     /// Present RT composite chain to screen
     ///
@@ -787,10 +705,7 @@ pub trait Adapter {
     /// ]);
     /// ```
     #[cfg(graphics_mode)]
-    fn present(&mut self, composites: &[RtComposite]) {
-        // Default implementation - render each composite in order
-        // Graphics adapters should override with optimized implementations
-    }
+    fn present(&mut self, composites: &[RtComposite]);
 
     /// Present with default settings (RT2 fullscreen)
     ///
@@ -800,4 +715,33 @@ pub trait Adapter {
     fn present_default(&mut self) {
         self.present(&[RtComposite::fullscreen(2)]);
     }
+
+    fn set_size(&mut self, w: u16, h: u16) -> &mut Self
+    where
+        Self: Sized,
+    {
+        let bs = self.get_base();
+        bs.cell_w = w;
+        bs.cell_h = h;
+        self
+    }
+
+    fn size(&mut self) -> Rect {
+        let bs = self.get_base();
+        Rect::new(0, 0, bs.cell_w, bs.cell_h)
+    }
+
+    fn set_title(&mut self, s: String) -> &mut Self
+    where
+        Self: Sized,
+    {
+        let bs = self.get_base();
+        bs.title = s;
+        self
+    }
+
+    fn hide_cursor(&mut self) -> Result<(), String>;
+    fn show_cursor(&mut self) -> Result<(), String>;
+    fn set_cursor(&mut self, x: u16, y: u16) -> Result<(), String>;
+    fn get_cursor(&mut self) -> Result<(u16, u16), String>;
 }

@@ -786,7 +786,7 @@ impl WinitWgpuAdapter {
     /// - `rbuf`: RenderCell data array
     /// - `rtidx`: Target render texture index
     /// - `debug`: Whether to enable debug mode
-    pub fn draw_render_buffer_to_texture_wgpu(
+    pub fn rbuf2rt_wgpu(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -1392,7 +1392,7 @@ impl Adapter for WinitWgpuAdapter {
     /// Override render buffer to texture method, directly use our WGPU renderer
     ///
     /// This method is specifically implemented for WinitWgpuAdapter, does not rely on the unified pixel_renderer abstraction
-    fn draw_render_buffer_to_texture(
+    fn rbuf2rt(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -1401,7 +1401,7 @@ impl Adapter for WinitWgpuAdapter {
         Self: Sized,
     {
         // Directly call our WGPU rendering method
-        if let Err(e) = self.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
+        if let Err(e) = self.rbuf2rt_wgpu(rbuf, rtidx, debug) {
             eprintln!(
                 "WinitWgpuAdapter: Failed to render buffer to texture {}: {}",
                 rtidx, e
@@ -1417,7 +1417,7 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of advanced transition rendering
-    fn render_advanced_transition(
+    fn blend_rts(
         &mut self,
         src_texture1: usize,
         src_texture2: usize,

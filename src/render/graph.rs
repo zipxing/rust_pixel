@@ -966,7 +966,126 @@ pub fn render_helper_with_scale(
     )
 }
 
+/// Unified buffer to RenderCell conversion with full transformation support
+///
+/// This is the core rendering primitive that converts a Buffer's content to RenderCell
+/// format. It supports both TUI mode (16×32 characters) and Sprite mode (8×8 characters),
+/// with full transformation parameters (alpha, scale, rotation).
+///
+/// # Parameters
+/// - `buf`: Source buffer containing character data
+/// - `rx`, `ry`: Display ratio for scaling compensation
+/// - `use_tui`: Use TUI characters (16×32) if true, Sprite characters (8×8) if false
+/// - `alpha`: Overall transparency (0=transparent, 255=opaque)
+/// - `scale_x`, `scale_y`: Overall scale factors (1.0 = no scaling)
+/// - `angle`: Overall rotation angle in degrees (0.0 = no rotation)
+/// - `f`: Callback function to process each RenderCell
+///
+/// # TUI Mode Special Handling
+/// When `use_tui=true`:
+/// - Symbols in Sprite region (< 160) are remapped to TUI region (160+)
+/// - Emoji (block >= 170) are rendered with double width
+/// - Emoji preserve original colors (no color modulation)
+pub fn render_buffer_to_cells<F>(
+    buf: &Buffer,
+    rx: f32,
+    ry: f32,
+    use_tui: bool,
+    alpha: u8,
+    scale_x: f32,
+    scale_y: f32,
+    angle: f64,
+    mut f: F,
+) where
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32, u16),
+{
+    let px = buf.area.x;
+    let py = buf.area.y;
+    let pw = buf.area.width;
+    let ph = buf.area.height;
+
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
+    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
+
+    let mut skip_next = false;
+    for (i, cell) in buf.content.iter().enumerate() {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        // Extract CellInfo: symidx, texidx, fg, bg, modifier
+        let cell_info = cell.get_cell_info();
+        let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
+        let modifier = cell_info.4.bits();
+
+        // TUI mode: remap Sprite region symbols to TUI region
+        if use_tui && sh.1 < 160 {
+            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
+                sh.1 = block;
+                sh.0 = idx;
+            } else {
+                sh.1 = 160;
+                sh.0 = 0;
+            }
+        }
+
+        // Calculate destination rectangle with scaling
+        let (mut s2, texidx, symidx) = render_helper_with_scale(
+            pw,
+            PointF32 { x: rx, y: ry },
+            i,
+            &sh,
+            PointU16 { x: px, y: py },
+            use_tui,
+            scale_x,
+            scale_y,
+        );
+
+        // TUI mode: handle Emoji double-width
+        if use_tui && texidx >= 170 {
+            s2.w *= 2;
+            if (i + 1) % pw as usize != 0 {
+                skip_next = true;
+            }
+        }
+
+        // Calculate rotation center point
+        let x = i % pw as usize;
+        let y = i / pw as usize;
+        let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
+        let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
+        let ccp = PointI32 {
+            x: (original_offset_x * scale_x) as i32,
+            y: (original_offset_y * scale_y) as i32,
+        };
+
+        // Apply alpha to colors
+        // For Emoji in TUI mode, use white (no color modulation)
+        let fc = if use_tui && texidx >= 170 && texidx <= 175 {
+            (255, 255, 255, alpha)
+        } else {
+            let mut rgba = sh.2.get_rgba();
+            rgba.3 = alpha;
+            rgba
+        };
+
+        let bc = if sh.3 != Color::Reset {
+            let mut brgba = sh.3.get_rgba();
+            brgba.3 = alpha;
+            Some(brgba)
+        } else {
+            None
+        };
+
+        f(&fc, &bc, s2, texidx, symidx, angle, ccp, modifier);
+    }
+}
+
 /// Render pixel sprites with rotation and transformation support
+///
+/// **DEPRECATED**: Use `render_buffer_to_cells` instead. This function is kept
+/// for backward compatibility but internally uses the unified function.
 ///
 /// This function processes individual sprite objects and converts them to renderable
 /// format. It supports advanced features like rotation, scaling, and complex
@@ -1020,59 +1139,30 @@ where
     // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32),
 {
-    // sort by render_weight...
+    // Sort by render_weight
     pixel_spt.update_render_index();
-    for si in &pixel_spt.render_index {
+
+    for si in &pixel_spt.render_index.clone() {
         let s = &pixel_spt.sprites[si.0];
         if s.is_hidden() {
             continue;
         }
-        let px = s.content.area.x;
-        let py = s.content.area.y;
-        let pw = s.content.area.width;
-        let ph = s.content.area.height;
 
-        for (i, cell) in s.content.content.iter().enumerate() {
-            // Extract CellInfo (now includes modifier)
-            let cell_info = cell.get_cell_info();
-            let sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
-            let (s2, texidx, symidx) = render_helper_with_scale(
-                pw,
-                PointF32 { x: rx, y: ry },
-                i,
-                &sh,
-                PointU16 { x: px, y: py },
-                false,     // Pixel sprites use Sprite characters (8×8)
-                s.scale_x, // 应用sprite的X轴缩放
-                s.scale_y, // 应用sprite的Y轴缩放
-            );
-            let x = i % pw as usize;
-            let y = i / pw as usize;
-            // Center point for rotation — matching the scaled position.
-            // Since we scaled both symbol size and spacing, the rotation center must scale accordingly.
-            let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
-            let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
-
-            let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
-            let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
-
-            // Apply the same scaling to the rotation center offset
-            let ccp = PointI32 {
-                x: (original_offset_x * s.scale_x) as i32,
-                y: (original_offset_y * s.scale_y) as i32,
-            };
-            let mut fc = sh.2.get_rgba();
-            fc.3 = s.alpha;
-            let bc;
-            if sh.3 != Color::Reset {
-                let mut brgba = sh.3.get_rgba();
-                brgba.3 = s.alpha;
-                bc = Some(brgba);
-            } else {
-                bc = None;
-            }
-            f(&fc, &bc, s2, texidx, symidx, s.angle, ccp);
-        }
+        // Use unified function with sprite's transformation parameters
+        render_buffer_to_cells(
+            &s.content,
+            rx,
+            ry,
+            false,      // Sprites use 8×8 characters
+            s.alpha,
+            s.scale_x,
+            s.scale_y,
+            s.angle,
+            |fc, bc, s2, texidx, symidx, angle, ccp, _modifier| {
+                // Forward to original callback (ignore modifier for backward compatibility)
+                f(fc, bc, s2, texidx, symidx, angle, ccp);
+            },
+        );
     }
 }
 
@@ -1128,7 +1218,7 @@ where
 ///   Signature: (fg_color, bg_color, dest_rect, tex_idx, sym_idx, modifier)
 pub fn render_main_buffer<F>(
     buf: &Buffer,
-    width: u16,
+    _width: u16,  // Deprecated: width is now taken from buf.area.width
     rx: f32,
     ry: f32,
     use_tui: bool,
@@ -1136,81 +1226,21 @@ pub fn render_main_buffer<F>(
 ) where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, u16),
 {
-    let mut skip_next = false;
-    for (i, cell) in buf.content.iter().enumerate() {
-        if skip_next {
-            skip_next = false;
-            continue;
-        }
-
-        // Extract CellInfo: symidx, texidx, fg, bg, modifier
-        // CellInfo 现在包含 modifier
-        let cell_info = cell.get_cell_info();
-        let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
-        let modifier = cell_info.4.bits();  // Convert Modifier to u16
-
-        // If we are in TUI mode (use_tui = true) and the texture is in Sprite region (< 160),
-        // redirect it to the TUI block (Block 160+).
-        // Textures 0-159 are Sprite blocks.
-        // Texture 160-169 is TUI, 170-175 is Emoji (already in correct region).
-        if use_tui && sh.1 < 160 {
-            // Use TUI specific mapping
-            // Because TUI texture layout is different from standard ASCII or Sprite layout
-            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
-                sh.1 = block;
-                sh.0 = idx;
-            } else {
-                // Fallback to Block 160, Index 0 (Space) if not found
-                sh.1 = 160;
-                sh.0 = 0;
-            }
-            // if cell.is_blank() {
-            //     info!("sh....{} {}", sh.0, sh.1);
-            // }
-        }
-
-        // Pass use_tui flag directly to render_helper
-        // - false: 8×8 Sprite characters (for pixel sprites, backward compatibility)
-        // - true: 8×16 TUI characters (for UI components)
-        let (mut s2, texidx, symidx) = render_helper(
-            width,
-            PointF32 { x: rx, y: ry },
-            i,
-            &sh,
-            PointU16 { x: 0, y: 0 },
-            use_tui,
-        );
-
-        // Handle Emoji rendering in TUI mode
-        // Emoji (Block >= 170) are 32x32 source in 4096 texture,
-        // while TUI chars are 16x32 source in 4096 texture.
-        // render_helper calculated s2 based on TUI height (32px) and width (16px).
-        // For Emoji, we need double width (32px) to maintain 1:1 aspect ratio.
-        // We also skip the next cell rendering to avoid overlap/artifacts.
-        if use_tui && texidx >= 170 {
-            s2.w *= 2;
-            // Only skip next if we are not at the end of a row
-            if (i + 1) % width as usize != 0 {
-                skip_next = true;
-            }
-        }
-
-        // For Emoji, use white color (no color modulation) to preserve original colors
-        // For TUI/Sprite/CJK characters, use the cell's foreground color
-        // Emoji blocks are 170-175, CJK blocks are 176-207
-        let fc = if use_tui && texidx >= 170 && texidx <= 175 {
-            (255, 255, 255, 255)  // White - no color modulation for Emoji
-        } else {
-            sh.2.get_rgba()
-        };
-        
-        let bc = if sh.3 != Color::Reset {
-            Some(sh.3.get_rgba())
-        } else {
-            None
-        };
-        f(&fc, &bc, s2, texidx, symidx, modifier);
-    }
+    // Use unified function with default transformation (no scale, no rotation, full opacity)
+    render_buffer_to_cells(
+        buf,
+        rx,
+        ry,
+        use_tui,
+        255,   // alpha: fully opaque
+        1.0,   // scale_x: no scaling
+        1.0,   // scale_y: no scaling
+        0.0,   // angle: no rotation
+        |fc, bc, s2, texidx, symidx, _angle, _ccp, modifier| {
+            // Forward to original callback (ignore angle and ccp for backward compatibility)
+            f(fc, bc, s2, texidx, symidx, modifier);
+        },
+    );
 }
 
 /// Render window borders (DEPRECATED - Not used in current implementation)

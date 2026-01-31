@@ -833,7 +833,7 @@ impl Adapter for WinitGlowAdapter {
     /// Override render buffer to texture method, directly use our OpenGL renderer
     ///
     /// This method is specifically implemented for WinitGlowAdapter, does not rely on the unified pixel_renderer abstraction
-    fn draw_render_buffer_to_texture(
+    fn rbuf2rt(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -869,7 +869,7 @@ impl Adapter for WinitGlowAdapter {
     }
 
     /// WinitGlow adapter implementation of advanced transition rendering
-    fn render_advanced_transition(
+    fn blend_rts(
         &mut self,
         src_texture1: usize,
         src_texture2: usize,
