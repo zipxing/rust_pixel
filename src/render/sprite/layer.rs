@@ -136,13 +136,13 @@ impl Layer {
     pub fn render_all_to_buffer(&mut self, am: &mut AssetManager, buffer: &mut Buffer) {
         self.update_render_index();
         for v in &self.render_index {
-            // Always merge to buffer (is_pixel = false)
             // Scene::draw controls which layers are processed based on render mode
-            self.sprites[v.0].render(false, am, buffer);
+            self.sprites[v.0].render(am, buffer);
         }
     }
 }
 
 // Type alias for backward compatibility
 #[deprecated(note = "Use Layer instead")]
+#[allow(dead_code)]
 pub type Sprites = Layer;

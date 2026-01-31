@@ -148,8 +148,10 @@ rust_pixel/
 │   │   │   └── web_adapter.rs        # WASM/WebGL
 │   │   ├── buffer.rs       # Screen buffer
 │   │   ├── cell.rs         # Base rendering unit
-│   │   ├── panel.rs        # Layered drawing surface
-│   │   └── sprite.rs       # Sprite management
+│   │   ├── scene.rs        # Scene container (layers of sprites)
+│   │   └── sprite/         # Sprite management
+│   │       ├── mod.rs      # Sprite struct and Widget trait
+│   │       └── layer.rs    # Layer struct (sprite collection)
 │   ├── ui/                 # Terminal UI framework
 │   ├── util/               # Common utilities
 │   ├── asset.rs            # Asset loading (.pix, .ssf, .esc)
@@ -201,15 +203,20 @@ apps/my_game/
 
 ### Key Abstractions
 
-**Panel**: Multi-layer drawing surface supporting both text and graphics modes
-- Contains multiple layers, each holding sprites
-- Handles z-order rendering and dirty region tracking
-- Unified API across all rendering backends
+**Scene**: Top-level container for rendering, managing multiple layers
+- Contains layers (default: "tui" for UI, "sprite" for game objects)
+- Double-buffered rendering with dirty region optimization
+- Unified API: `scene.add_sprite()`, `scene.get_sprite()`, `scene.draw()`
+
+**Layer**: Collection of sprites with z-order management
+- Holds sprites in a vector with tag-based lookup
+- Supports render_weight for z-ordering within the scene
+- Methods: `add()`, `get()`, `set_weight()`, `render_all_to_buffer()`
 
 **Sprite**: Positioned drawable element
-- Contains a Buffer with Cells
-- Can be static or animated
-- Supports pixel-perfect positioning in graphics mode
+- Contains a Buffer with Cells for content
+- Dual coordinate system: cell-based (text) and pixel-based (graphics)
+- Supports transformations: position, alpha, scale, rotation (graphics mode)
 
 **Cell**: Smallest rendering unit
 - In text mode: a Unicode character with foreground/background colors
@@ -233,6 +240,48 @@ Each adapter implements platform-specific rendering:
 - **WebAdapter** (Web): WebGL via WASM
 
 All adapters expose the same `Adapter` trait interface, allowing games to work across platforms without modification.
+
+### Scene/Layer Architecture
+
+```
+Scene (render container)
+├── buffers[2]           # Double-buffered rendering
+├── layers[]             # Ordered by render_weight
+│   ├── layers[0]: "tui" (render_weight: 100)
+│   │   └── sprites[]: TUI content sprites
+│   └── layers[1]: "sprite" (render_weight: 0)
+│       └── sprites[]: Game object sprites
+└── layer_tag_index      # Name → index mapping
+```
+
+**Common Usage Pattern:**
+```rust
+pub struct MyRender {
+    pub scene: Scene,
+}
+
+impl MyRender {
+    pub fn new() -> Self {
+        let mut scene = Scene::new();
+        scene.add_sprite(Sprite::new(0, 0, 60, 40), "player");
+        scene.add_sprite(Sprite::new(10, 10, 20, 20), "enemy");
+        Self { scene }
+    }
+}
+
+impl Render for MyRender {
+    fn init(&mut self, ctx: &mut Context, _model: &mut Self::Model) {
+        ctx.adapter.init(60, 40, 1.0, 1.0, "my_game".to_string());
+        self.scene.init(ctx);
+    }
+
+    fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
+        let player = self.scene.get_sprite("player");
+        player.set_pos(model.player_x, model.player_y);
+        self.scene.draw(ctx).unwrap();
+    }
+}
+```
 
 ### GPU Rendering Pipeline (4-Stage Architecture)
 
@@ -410,4 +459,4 @@ To add new asset formats:
 - The engine uses a fixed 60 FPS game loop (configurable via `GAME_FRAME` constant)
 - Graphics mode supports PETSCII character sets and custom symbol atlases
 - The terminal UI system works in both terminal and graphics modes
-- All rendering is done through the unified Panel/Sprite/Buffer abstraction
+- All rendering is done through the unified Scene/Layer/Sprite/Buffer abstraction

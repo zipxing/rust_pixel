@@ -11,7 +11,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register},
     game::{Model, Render},
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::{Color, ColorData, ColorPro, ColorSpace::*, Style},
     util::Rect,
@@ -19,41 +19,41 @@ use rust_pixel::{
 use std::cell::Cell;
 
 pub struct PaletteRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl PaletteRender {
     pub fn new() -> Self {
-        let mut panel = Panel::new();
+        let mut scene = Scene::new();
 
         // creat main layer
-        panel.add_layer("main");
+        scene.add_layer("main");
 
         // background
         let gb = Sprite::new(0, 0, PALETTEW, PALETTEH);
-        panel.add_layer_sprite(gb, "main", "back");
+        scene.add_layer_sprite(gb, "main", "back");
 
         // top menu
         let mb = Sprite::new(MENUX, MENUY, MENUW, 1);
-        panel.add_layer_sprite(mb, "main", "menu");
+        scene.add_layer_sprite(mb, "main", "menu");
 
         // main color
         let pl = Sprite::new(4, 24, 12, 6);
-        panel.add_layer_sprite(pl, "main", "main_color");
+        scene.add_layer_sprite(pl, "main", "main_color");
 
         // 3 similar colors
         for i in 0..3 {
             let pl = Sprite::new(61, 25 + i * 2, C_WIDTH - 2, 1);
-            panel.add_layer_sprite(pl, "main", &format!("simi{}", i));
+            scene.add_layer_sprite(pl, "main", &format!("simi{}", i));
         }
 
         let pl = Sprite::new(2, 22, 40, 1);
-        panel.add_layer_sprite(pl, "main", "main_color_str");
+        scene.add_layer_sprite(pl, "main", "main_color_str");
 
         for i in 0..MAIN_COLOR_MSG_Y {
             for j in 0..MAIN_COLOR_MSG_X {
                 let pl = Sprite::new(j * 20 + 22, 23 + i, 40, 1);
-                panel.add_layer_sprite(
+                scene.add_layer_sprite(
                     pl,
                     "main",
                     &format!("main_color_str{}", i * MAIN_COLOR_MSG_X + j),
@@ -73,12 +73,12 @@ impl PaletteRender {
         ];
         for (i, item) in help_msg.iter().enumerate() {
             let ls = format!("{}", i);
-            panel.add_layer(&ls);
+            scene.add_layer(&ls);
             let mut pl = Sprite::new(ADJX + 1, ADJY + 30, C_WIDTH * 4, 1);
             pl.set_color_str(0, 0, item, Color::Gray, Color::Reset);
-            panel.add_layer_sprite(pl, &ls, "help_msg");
+            scene.add_layer_sprite(pl, &ls, "help_msg");
             if i != 0 {
-                panel.deactive_layer(&ls);
+                scene.deactive_layer(&ls);
             }
         }
 
@@ -91,7 +91,7 @@ impl PaletteRender {
                     if idx >= COLORS_WITH_NAME.len() {
                         break;
                     }
-                    panel.add_layer_sprite(pl, &format!("{}", i), &format!("{}", idx));
+                    scene.add_layer_sprite(pl, &format!("{}", i), &format!("{}", idx));
                 }
             }
         }
@@ -100,12 +100,12 @@ impl PaletteRender {
         for y in 0..PICKER_COUNT_Y {
             for x in 0..PICKER_COUNT_X {
                 let pl = Sprite::new(ADJX + x, ADJY + y, 1, 1);
-                panel.add_layer_sprite(pl, "2", &format!("pick{}", y * PICKER_COUNT_X + x));
+                scene.add_layer_sprite(pl, "2", &format!("pick{}", y * PICKER_COUNT_X + x));
             }
         }
         for i in 0..PICKER_COUNT_X {
             let pl = Sprite::new(2 + i, 20, 1, 1);
-            panel.add_layer_sprite(pl, "2", &format!("hsv_pick{}", i));
+            scene.add_layer_sprite(pl, "2", &format!("hsv_pick{}", i));
         }
 
         // color picker in layer3
@@ -114,7 +114,7 @@ impl PaletteRender {
             for x in 0..PICKER_COUNT_X {
                 let mut pl = Sprite::new(2 + x, 9 + y * 2, 1, 1);
                 pl.set_color_str(0, 0, " ", Color::Reset, pcs[y as usize]);
-                panel.add_layer_sprite(pl, "3", &format!("rgb_pick_{}_{}", y, x));
+                scene.add_layer_sprite(pl, "3", &format!("rgb_pick_{}_{}", y, x));
             }
         }
 
@@ -122,7 +122,7 @@ impl PaletteRender {
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
                 let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y, RANDOM_W - 1, 1);
-                panel.add_layer_sprite(pl, "4", &format!("random{}", y * RANDOM_X + x));
+                scene.add_layer_sprite(pl, "4", &format!("random{}", y * RANDOM_X + x));
             }
         }
 
@@ -130,7 +130,7 @@ impl PaletteRender {
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
                 let pl = Sprite::new(ADJX + x * RANDOM_W, ADJY + y, RANDOM_W - 1, 1);
-                panel.add_layer_sprite(pl, "6", &format!("random{}", y * RANDOM_X + x));
+                scene.add_layer_sprite(pl, "6", &format!("random{}", y * RANDOM_X + x));
             }
         }
 
@@ -138,29 +138,29 @@ impl PaletteRender {
         for y in 0..PICKER_COUNT_Y {
             for x in 0..PICKER_COUNT_X_GRADIENT {
                 let pl = Sprite::new(ADJX + x, ADJY + y, 1, 1);
-                panel.add_layer_sprite(pl, "5", &format!("pick{}", y * PICKER_COUNT_X + x));
+                scene.add_layer_sprite(pl, "5", &format!("pick{}", y * PICKER_COUNT_X + x));
             }
         }
         for i in 0..PICKER_COUNT_X_GRADIENT {
             let pl = Sprite::new(2 + i, 20, 1, 1);
-            panel.add_layer_sprite(pl, "5", &format!("hsv_pick{}", i));
+            scene.add_layer_sprite(pl, "5", &format!("hsv_pick{}", i));
         }
         for i in 0..GRADIENT_INPUT_COUNT {
             let pl = Sprite::new(60, i + ADJY, 8, 1);
-            panel.add_layer_sprite(pl, "5", &format!("gi_input{}", i));
+            scene.add_layer_sprite(pl, "5", &format!("gi_input{}", i));
         }
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
                 let pl = Sprite::new(67 + ADJX, y + ADJY, 9, 1);
-                panel.add_layer_sprite(pl, "5", &format!("gi{}", y * GRADIENT_X + x));
+                scene.add_layer_sprite(pl, "5", &format!("gi{}", y * GRADIENT_X + x));
             }
         }
 
         // creat select cursor layer
-        panel.add_layer("select");
+        scene.add_layer("select");
         for i in 0..5 {
             let pl = Sprite::new(0, 0, 1, 1);
-            panel.add_layer_sprite(pl, "select", &format!("cursor{}", i));
+            scene.add_layer_sprite(pl, "select", &format!("cursor{}", i));
         }
         event_register("Palette.RedrawSelect", "draw_select");
         event_register("Palette.RedrawMenu", "draw_menu");
@@ -170,14 +170,14 @@ impl PaletteRender {
         event_register("Palette.RedrawGradient", "draw_gradient");
         event_register("Palette.RedrawRandom", "draw_random");
 
-        Self { panel }
+        Self { scene }
     }
 
     pub fn draw_select(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         let state = PaletteState::from_usize(ctx.state as usize).unwrap();
         match state {
             NameA | NameB => {
-                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let pl = self.scene.get_layer_sprite("select", "cursor0");
                 let idx = d.select.cur().y * COL_COUNT as usize
                     + d.select.cur().x
                     + ctx.state as usize * 76;
@@ -189,13 +189,13 @@ impl PaletteRender {
                 );
                 for i in 1..5 {
                     let pl = self
-                        .panel
+                        .scene
                         .get_layer_sprite("select", &format!("cursor{}", i));
                     pl.set_hidden(true);
                 }
             }
             Random | Golden => {
-                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let pl = self.scene.get_layer_sprite("select", "cursor0");
                 let idx = d.select.cur().y * RANDOM_X as usize + d.select.cur().x;
                 let cr = d.random_colors[idx];
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
@@ -205,20 +205,20 @@ impl PaletteRender {
                 );
                 for i in 1..5 {
                     let pl = self
-                        .panel
+                        .scene
                         .get_layer_sprite("select", &format!("cursor{}", i));
                     pl.set_hidden(true);
                 }
             }
             PickerB => {
-                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let pl = self.scene.get_layer_sprite("select", "cursor0");
                 let idx = d.select.area;
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 pl.set_pos(1, 9 + idx as u16 * 2);
                 let bcs = [Color::Red, Color::Green, Color::Blue];
                 for (i, item) in bcs.iter().enumerate() {
                     let pl = self
-                        .panel
+                        .scene
                         .get_layer_sprite("select", &format!("cursor{}", i + 1));
                     pl.set_color_str(0, 0, "∙", Color::Black, *item);
                     let x = d.select.ranges[i].x;
@@ -230,7 +230,7 @@ impl PaletteRender {
                 }
             }
             PickerA | Gradient => {
-                let pl = self.panel.get_layer_sprite("select", "cursor0");
+                let pl = self.scene.get_layer_sprite("select", "cursor0");
                 let idx = d.select.area;
                 pl.set_color_str(0, 0, "", Color::Green, Color::Black);
                 if state == PickerA {
@@ -244,7 +244,7 @@ impl PaletteRender {
                     pl.set_pos(PICKER_COUNT_X_GRADIENT + 11, (idx - 1) as u16 % 2 * 18 + 2);
                 }
                 if state == Gradient {
-                    let pl = self.panel.get_layer_sprite("select", "cursor3");
+                    let pl = self.scene.get_layer_sprite("select", "cursor3");
                     if !d.gradient_input_colors.is_empty() {
                         let cr = d.gradient_input_colors[d.select.ranges[2].y];
                         pl.set_color_str(
@@ -266,7 +266,7 @@ impl PaletteRender {
                     } else {
                         pl.set_hidden(true);
                     }
-                    let pl = self.panel.get_layer_sprite("select", "cursor4");
+                    let pl = self.scene.get_layer_sprite("select", "cursor4");
                     if !d.gradient_colors.is_empty() {
                         let cr = d.gradient_colors[d.select.ranges[3].y];
                         pl.set_color_str(
@@ -291,12 +291,12 @@ impl PaletteRender {
                 } else {
                     for i in 3..5 {
                         let pl = self
-                            .panel
+                            .scene
                             .get_layer_sprite("select", &format!("cursor{}", i));
                         pl.set_hidden(true);
                     }
                 }
-                let pl = self.panel.get_layer_sprite("select", "cursor1");
+                let pl = self.scene.get_layer_sprite("select", "cursor1");
                 let cr = get_pick_color(
                     if ctx.state == 2 {
                         PICKER_COUNT_X as usize
@@ -324,7 +324,7 @@ impl PaletteRender {
                     d.select.ranges[0].y as u16 + 2,
                 );
                 pl.set_hidden(false);
-                let pl = self.panel.get_layer_sprite("select", "cursor2");
+                let pl = self.scene.get_layer_sprite("select", "cursor2");
                 let cr = get_pick_color(
                     if ctx.state == 2 {
                         PICKER_COUNT_X as usize
@@ -357,9 +357,9 @@ impl PaletteRender {
         info!("draw_panel_clear....");
         for i in 0..7 {
             if i != ctx.state as usize {
-                self.panel.deactive_layer(&format!("{}", i));
+                self.scene.deactive_layer(&format!("{}", i));
             } else {
-                self.panel.active_layer(&format!("{}", i));
+                self.scene.active_layer(&format!("{}", i));
             }
         }
     }
@@ -369,7 +369,7 @@ impl PaletteRender {
             return;
         }
         for i in 0..GRADIENT_INPUT_COUNT {
-            let pl = self.panel.get_layer_sprite("5", &format!("gi_input{}", i));
+            let pl = self.scene.get_layer_sprite("5", &format!("gi_input{}", i));
             if i < d.gradient_input_colors.len() as u16 {
                 pl.set_hidden(false);
                 pl.set_color_str(
@@ -386,7 +386,7 @@ impl PaletteRender {
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
                 let idx = y * GRADIENT_X + x;
-                let pl = self.panel.get_layer_sprite("5", &format!("gi{}", idx));
+                let pl = self.scene.get_layer_sprite("5", &format!("gi{}", idx));
                 if idx < d.gradient_colors.len() as u16 {
                     pl.set_hidden(false);
                     pl.set_color_str(
@@ -411,7 +411,7 @@ impl PaletteRender {
         for y in 0..RANDOM_Y {
             for x in 0..RANDOM_X {
                 let i = y * RANDOM_X + x;
-                let pl = self.panel.get_layer_sprite(&ls, &format!("random{}", i));
+                let pl = self.scene.get_layer_sprite(&ls, &format!("random{}", i));
                 pl.set_color_str(
                     0,
                     0,
@@ -434,7 +434,7 @@ impl PaletteRender {
                 };
                 for y in 0..PICKER_COUNT_Y {
                     for x in 0..w {
-                        let pl = self.panel.get_layer_sprite(
+                        let pl = self.scene.get_layer_sprite(
                             &format!("{}", ctx.state),
                             &format!("pick{}", y * PICKER_COUNT_X + x),
                         );
@@ -454,7 +454,7 @@ impl PaletteRender {
                 }
                 for i in 0..w {
                     let pl = self
-                        .panel
+                        .scene
                         .get_layer_sprite(&format!("{}", ctx.state), &format!("hsv_pick{}", i));
                     let cr = ColorPro::from_space_f64(
                         HSVA,
@@ -481,7 +481,7 @@ impl PaletteRender {
                         break;
                     }
                     let pl = self
-                        .panel
+                        .scene
                         .get_layer_sprite(&format!("{}", i), &format!("{}", idx));
                     let s = d.named_colors[idx].0;
                     let cr = d.named_colors[idx].1;
@@ -503,7 +503,7 @@ impl PaletteRender {
     }
 
     pub fn draw_main_color(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
-        let pl = self.panel.get_layer_sprite("main", "main_color");
+        let pl = self.scene.get_layer_sprite("main", "main_color");
         for i in 0..6 {
             pl.set_color_str(
                 0,
@@ -514,7 +514,7 @@ impl PaletteRender {
             );
         }
 
-        let pl = self.panel.get_layer_sprite("main", "main_color_str");
+        let pl = self.scene.get_layer_sprite("main", "main_color_str");
         let rgb = d.main_color.get_srgba_u8();
         pl.set_color_str(
             0,
@@ -526,7 +526,7 @@ impl PaletteRender {
 
         for i in 0..MAIN_COLOR_MSG_Y {
             for j in 0..MAIN_COLOR_MSG_X {
-                let pl = self.panel.get_layer_sprite(
+                let pl = self.scene.get_layer_sprite(
                     "main",
                     &format!("main_color_str{}", i * MAIN_COLOR_MSG_X + j),
                 );
@@ -554,7 +554,7 @@ impl PaletteRender {
         ids.push(d.main_color_similar.2);
 
         for i in 0..3 {
-            let pl = self.panel.get_layer_sprite("main", &format!("simi{}", i));
+            let pl = self.scene.get_layer_sprite("main", &format!("simi{}", i));
 
             let s = COLORS_WITH_NAME[ids[i]].0;
             let cr = COLORS_WITH_NAME[ids[i]].1;
@@ -576,7 +576,7 @@ impl PaletteRender {
 
     pub fn draw_menu(&mut self, ctx: &mut Context, d: &mut PaletteModel) {
         let state = PaletteState::from_usize(ctx.state as usize).unwrap();
-        let mb = self.panel.get_layer_sprite("main", "menu");
+        let mb = self.scene.get_layer_sprite("main", "menu");
         let cst = match state {
             NameA | NameB => 0,
             PickerA | PickerB => 1,
@@ -644,10 +644,10 @@ impl Render for PaletteRender {
         context
             .adapter
             .init(PALETTEW + 2, PALETTEH, 1.0, 1.0, "palette".to_string());
-        self.panel.init(context);
+        self.scene.init(context);
         self.draw_menu(context, data);
 
-        let gb = self.panel.get_layer_sprite("main", "back");
+        let gb = self.scene.get_layer_sprite("main", "back");
         asset2sprite!(gb, context, "back.txt");
 
         self.draw_named_colors(context, data);
@@ -680,6 +680,6 @@ impl Render for PaletteRender {
     fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

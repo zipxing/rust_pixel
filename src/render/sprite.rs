@@ -161,7 +161,7 @@ macro_rules! asset2sprite_raw {
 }
 
 pub trait Widget {
-    fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer);
+    fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer);
 }
 
 /// Sprite: A positioned drawable element with dual coordinate semantics.
@@ -210,12 +210,10 @@ pub struct Sprite {
 }
 
 impl Widget for Sprite {
-    fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer) {
+    fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer) {
         if !self.is_hidden() {
             self.check_asset_request(am);
-            if !is_pixel {
-                buf.merge(&self.content, self.alpha, true);
-            }
+            buf.merge(&self.content, self.alpha, true);
         }
     }
 }

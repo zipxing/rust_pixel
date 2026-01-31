@@ -2,31 +2,31 @@ use crate::model::BasicSnakeModel;
 use rust_pixel::{
     context::Context,
     game::Render,
-    render::{panel::Panel, sprite::Sprite, style::Color},
+    render::{scene::Scene, sprite::Sprite, style::Color},
 };
 use pixel_basic::DrawCommand;
 use log::{info, debug, error};
 
-/// BasicSnakeRender - Terminal rendering using Panel API
+/// BasicSnakeRender - Terminal rendering using Scene API
 pub struct BasicSnakeRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl BasicSnakeRender {
     pub fn new() -> Self {
-        let mut panel = Panel::new();
+        let mut scene = Scene::new();
 
         // Create a single sprite that covers the game area (60x25)
         // This sprite will be used as the canvas for BASIC drawing commands
         let canvas = Sprite::new(0, 0, 60, 25);
-        panel.add_sprite(canvas, "CANVAS");
+        scene.add_sprite(canvas, "CANVAS");
 
-        Self { panel }
+        Self { scene }
     }
 
     /// Apply draw commands from BASIC to the canvas sprite
     fn apply_draw_commands(&mut self, model: &mut BasicSnakeModel) {
-        let canvas = self.panel.get_sprite("CANVAS");
+        let canvas = self.scene.get_sprite("CANVAS");
 
         // Drain commands from the bridge's context and apply to sprite
         for cmd in model.bridge.context_mut().drain_commands() {
@@ -89,7 +89,7 @@ impl Render for BasicSnakeRender {
         info!("Adapter initialized: 60x25");
 
         // Initialize the panel
-        self.panel.init(ctx);
+        self.scene.init(ctx);
         info!("Panel initialized");
     }
 
@@ -113,7 +113,7 @@ impl Render for BasicSnakeRender {
         self.apply_draw_commands(model);
 
         // Draw the panel (which includes our updated canvas)
-        if let Err(e) = self.panel.draw(ctx) {
+        if let Err(e) = self.scene.draw(ctx) {
             error!("Failed to draw panel (frame {}): {:?}", model.frame_count, e);
         }
     }

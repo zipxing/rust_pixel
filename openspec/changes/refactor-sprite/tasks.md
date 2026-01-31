@@ -1,26 +1,26 @@
 # 任务清单：Sprite 架构统一重构
 
-## 1. Phase 1: 核心重构（预计 1-2 天）
+## 1. Phase 1: 核心重构（预计 1-2 天）✅ 已完成
 
 ### 1.1 重命名和结构调整
 
-- [ ] 1.1.1 重命名 `src/render/panel.rs` → `src/render/scene.rs`
+- [x] 1.1.1 重命名 `src/render/panel.rs` → `src/render/scene.rs`
   - 文件移动和重命名
   - 更新模块导出：`src/render/mod.rs`
 
-- [ ] 1.1.2 重命名 `src/render/sprite/sprites.rs` → `src/render/sprite/layer.rs`
+- [x] 1.1.2 重命名 `src/render/sprite/sprites.rs` → `src/render/sprite/layer.rs`
   - 文件移动和重命名
   - 更新模块导出：`src/render/sprite/mod.rs`
 
-- [ ] 1.1.3 重命名类型：`Panel` → `Scene`
+- [x] 1.1.3 重命名类型：`Panel` → `Scene`
   - 在 `scene.rs` 中重命名结构体
   - 更新所有相关方法和注释
 
-- [ ] 1.1.4 重命名类型：`Sprites` → `Layer`
+- [x] 1.1.4 重命名类型：`Sprites` → `Layer`
   - 在 `layer.rs` 中重命名结构体
   - 更新所有相关方法和注释
 
-- [ ] 1.1.5 更新 `src/lib.rs` 中的重导出
+- [x] 1.1.5 更新 `src/lib.rs` 中的重导出
   ```rust
   pub use render::scene::Scene;
   pub use render::sprite::Layer;
@@ -478,7 +478,7 @@
 
 ### 3.4 更新文档
 
-- [ ] 3.4.1 更新 `CLAUDE.md`
+- [x] 3.4.1 更新 `CLAUDE.md`
   ```markdown
   ## Architecture
 
@@ -499,7 +499,7 @@
   - 渲染系统说明
   - API 参考
 
-- [ ] 3.4.4 创建迁移指南 `doc/migration/panel-to-scene.md`
+- [x] 3.4.4 创建迁移指南 `doc/migration/panel-to-scene.md`
   ```markdown
   # Panel → Scene 迁移指南
 
@@ -519,10 +519,10 @@
 
 ### 3.5 代码清理
 
-- [ ] 3.5.1 移除 deprecated API（可选）
-  - 或保留一段时间，打印警告
+- [x] 3.5.1 保留 deprecated API（添加 #[allow(dead_code)]）
+  - Panel/Sprites 别名保留用于向后兼容
 
-- [ ] 3.5.2 运行 clippy
+- [x] 3.5.2 运行 clippy
   ```bash
   cargo clippy --all-features
   ```
@@ -582,12 +582,12 @@
 
 ## 进度追踪
 
-- Phase 1: ⬜ 0/47 (0%)
-- Phase 2: ⬜ 0/17 (0%)
-- Phase 3: ⬜ 0/24 (0%)
+- Phase 1: ✅ 47/47 (100%) - 核心重构完成
+- Phase 2: ✅ 17/17 (100%) - 应用迁移完成
+- Phase 3: ✅ 20/24 (83%) - 测试/文档进行中
 - Phase 4: ⬜ 0/7 (0%)
 
-**总进度：⬜ 0/95 (0%)**
+**总进度：✅ 84/95 (88%)**
 
 ---
 
@@ -679,13 +679,13 @@
 
 ## 进度追踪（更新）
 
-- Phase 1: ⬜ 0/47 (0%)
-- Phase 2: ⬜ 0/17 (0%)
-- Phase 3: ⬜ 0/24 (0%)
-- Phase 4: ⬜ 0/7 (0%)
-- Phase 5: ✅ 18/19 (95%)
+- Phase 1: ✅ 47/47 (100%) - 核心重构完成
+- Phase 2: ✅ 17/17 (100%) - 应用迁移完成
+- Phase 3: ✅ 20/24 (83%) - 文档和清理完成
+- Phase 4: ⬜ 0/7 (0%) - 待发布
+- Phase 5: ✅ 18/19 (95%) - GPU 渲染管线完成
 
-**总进度：⬜ 18/114 (16%)**
+**总进度：✅ 102/114 (89%)**
 
 ---
 
