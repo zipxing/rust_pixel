@@ -805,3 +805,331 @@ mod tests {
 | layers[0] "main" | layers[0] "tui" | TUI 内容层 |
 | layers[1] "pixel" | layers[1] "sprite" | 图形精灵层 |
 | is_pixel: bool | 去除 | 不再区分 |
+
+### Decision 8: 统一 GPU 渲染管线架构
+
+**选择：** 建立以 Buffer → RenderBuffer → RenderTexture → Screen 为核心的四阶段渲染管线
+
+**背景分析：**
+经过深入分析渲染流程，所有渲染源头本质上都是 Buffer：
+- TUI 内容：Widget 渲染到 Buffer
+- Sprite 内容：每个 Sprite 包含一个 Buffer (content 字段)
+
+因此，渲染管线可以统一为四个清晰的阶段。
+
+#### 8.1 四阶段渲染管线
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          统一 GPU 渲染管线架构                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+阶段1: 数据源 → RenderBuffer
+┌─────────────┐     ┌─────────────┐
+│ TUI Buffer  │────►│             │
+└─────────────┘     │ RenderBuffer│ ← Vec<RenderCell>
+┌─────────────┐     │  (统一格式)  │
+│ Sprite Layer│────►│             │
+└─────────────┘     └──────┬──────┘
+                           │
+阶段2: RenderBuffer → RT   │
+                           ▼
+              ┌────────────────────────┐
+              │  draw_to_rt(rbuf, rt)  │
+              └────────────────────────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+           ┌────┐       ┌────┐       ┌────┐
+           │RT0 │       │RT1 │       │RT2 │  ...
+           └────┘       └────┘       └────┘
+
+阶段3: RT 运算 (可选)
+              ┌─────────────────────────────┐
+              │  blend_rts(src1, src2, dst) │
+              │  copy_rt(src, dst)          │
+              │  clear_rt(rt)               │
+              └─────────────────────────────┘
+                           │
+                           ▼
+                        ┌────┐
+                        │RT3 │ ← 运算结果
+                        └────┘
+
+阶段4: RT[] → Screen
+              ┌─────────────────────────────┐
+              │  present([                  │
+              │    RtComposite(RT2, ...),   │
+              │    RtComposite(RT3, ...),   │
+              │  ])                         │
+              └─────────────────────────────┘
+                           │
+                           ▼
+                      ┌────────┐
+                      │ Screen │
+                      └────────┘
+```
+
+#### 8.2 各阶段 API 设计
+
+**阶段1: 数据转换**
+```rust
+/// 将 Buffer + Layers 转换为 GPU 渲染格式
+fn generate_render_buffer(
+    buffer: &Buffer,           // TUI buffer
+    previous_buffer: &Buffer,  // 上一帧 (用于 diff 优化)
+    layers: &mut Vec<Layer>,   // Sprite 层
+    stage: u32,                // 当前阶段 (logo 显示等)
+    base: &AdapterBase,        // 适配器基础数据
+) -> Vec<RenderCell>;
+```
+
+**阶段2: 渲染到 RT**
+```rust
+/// 将 RenderBuffer 渲染到指定的 RenderTexture
+fn draw_render_buffer_to_texture(
+    &mut self,
+    rbuf: &[RenderCell],  // GPU 渲染数据
+    rt: usize,            // 目标 RT 索引 (0-3)
+    debug: bool,          // 调试模式
+);
+
+/// 将 Buffer 直接渲染到 RT (便捷方法)
+fn draw_buffer_to_texture(&mut self, buf: &Buffer, rt: usize);
+```
+
+**阶段3: RT 运算**
+```rust
+/// 使用 GPU shader 混合两个 RT 到目标 RT
+fn blend_rts(
+    &mut self,
+    src1: usize,    // 源 RT 1
+    src2: usize,    // 源 RT 2
+    target: usize,  // 目标 RT
+    effect: usize,  // 效果类型 (0=Mosaic, 1=Heart, ...)
+    progress: f32,  // 过渡进度 (0.0-1.0)
+);
+
+/// 复制 RT 内容
+fn copy_rt(&mut self, src: usize, dst: usize);
+
+/// 清空 RT
+fn clear_rt(&mut self, rt: usize);
+```
+
+**阶段4: 输出到屏幕**
+```rust
+/// 将 RT 合成链输出到屏幕
+fn present(&mut self, composites: &[RtComposite]);
+
+/// 使用默认设置输出 (RT2 全屏 + RT3 覆盖层)
+fn present_default(&mut self);
+```
+
+#### 8.3 RtComposite 合成配置
+
+```rust
+/// RT 合成配置
+#[derive(Clone, Debug)]
+pub struct RtComposite {
+    pub rt: usize,              // RT 索引 (0-3)
+    pub viewport: Option<Rect>, // 输出视口，None = 全屏
+    pub blend: BlendMode,       // 混合模式
+    pub alpha: u8,              // 透明度 (0-255)
+}
+
+/// 混合模式
+pub enum BlendMode {
+    Normal,   // 正常 alpha 混合
+    Add,      // 加法混合
+    Multiply, // 乘法混合
+    Screen,   // 滤色混合
+}
+
+// 使用示例
+adapter.present(&[
+    RtComposite::fullscreen(2),                    // RT2 全屏
+    RtComposite::with_viewport(3, game_area)       // RT3 在游戏区域
+        .blend(BlendMode::Normal)
+        .alpha(200),
+]);
+```
+
+#### 8.4 RenderTexture 用途约定
+
+| RT 索引 | 用途 | 说明 |
+|---------|------|------|
+| RT0 | 源图像1 | 用于过渡效果的源图像 |
+| RT1 | 源图像2 | 用于过渡效果的目标图像 |
+| RT2 | 主场景 | 游戏主要内容 (TUI + Sprites) |
+| RT3 | 叠加层 | 过渡效果结果/特效层 |
+
+#### 8.5 典型渲染流程
+
+**普通游戏帧：**
+```rust
+// Scene::draw() 内部流程
+fn draw(&mut self, ctx: &mut Context) {
+    // 阶段1: 合并所有层数据
+    let rbuf = generate_render_buffer(
+        &self.tui_buffers[self.current],
+        &self.tui_buffers[1 - self.current],
+        &mut self.layers,
+        ctx.stage,
+        ctx.adapter.get_base(),
+    );
+
+    // 阶段2: 渲染到 RT2
+    ctx.adapter.draw_render_buffer_to_texture(&rbuf, 2, false);
+
+    // 阶段4: 输出到屏幕 (跳过阶段3，无特效)
+    ctx.adapter.present_default();
+}
+```
+
+**带过渡效果的帧 (如 petview)：**
+```rust
+// 阶段2: 渲染两个源图像到 RT0 和 RT1
+adapter.draw_buffer_to_texture(&source_image, 0);
+adapter.draw_buffer_to_texture(&target_image, 1);
+
+// 阶段3: 使用 GPU shader 混合到 RT3
+adapter.blend_rts(0, 1, 3, effect_type, progress);
+
+// 阶段4: 合成输出
+adapter.present(&[
+    RtComposite::fullscreen(2),  // 主场景
+    RtComposite::fullscreen(3),  // 过渡效果
+]);
+```
+
+#### 8.6 架构优势
+
+1. **统一数据源** - Buffer 是唯一的渲染源，概念简单
+2. **灵活的 RT 操作** - RT 之间可以任意运算 (blend, copy, clear)
+3. **清晰的输出控制** - present() 接收 RT 数组，按顺序合成
+4. **解耦** - 每个阶段职责单一，易于理解和维护
+5. **高性能** - 批量渲染，最小化 GPU 状态切换
+6. **可扩展** - 易于添加新的 RT 效果和混合模式
+
+#### 8.7 与现有代码的对应关系
+
+| 新 API | 现有实现 | 位置 |
+|--------|----------|------|
+| `generate_render_buffer()` | `generate_render_buffer()` | graph.rs |
+| `draw_render_buffer_to_texture()` | `draw_render_buffer_to_texture()` | adapter.rs |
+| `blend_rts()` | `render_advanced_transition()` | adapter.rs |
+| `copy_rt()` | `copy_render_texture()` | adapter.rs |
+| `present()` | `present()` | adapter.rs |
+| `present_default()` | `present_default()` | adapter.rs |
+
+#### 8.8 调用链与 App 自定义渲染
+
+**核心调用链：**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              渲染调用链                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Game Loop (game.rs)
+       │
+       ▼
+   game.tick()
+       │
+       ├──► model.update()           ← 游戏逻辑更新
+       │
+       └──► render.draw(ctx, model, dt)  ← App 的 Render::draw()
+                    │                       App 完全控制这里！
+                    ▼
+            ┌───────────────────────────────────────────┐
+            │  App 的 draw() 实现                        │
+            │                                           │
+            │  方式1: 默认流程                           │
+            │  self.scene.draw(ctx)?;                   │
+            │                                           │
+            │  方式2: 自定义流程                         │
+            │  ctx.adapter.draw_buffer_to_rt(...);      │
+            │  ctx.adapter.blend_rts(...);              │
+            │  ctx.adapter.present(...);                │
+            └───────────────────────────────────────────┘
+```
+
+**关键设计原则：Adapter 不调用 App，App 调用 Adapter！**
+
+App 的 `Render::draw()` 拥有完全的渲染控制权：
+- 可以调用 `scene.draw(ctx)` 走默认流程
+- 可以直接调用 `ctx.adapter.xxx()` 自定义流程
+- 可以混合使用（先调 scene.draw，再额外调 adapter API）
+
+**App 渲染模式示例：**
+
+**模式1：默认流程（大多数 app）**
+```rust
+impl Render for SnakeRender {
+    fn draw(&mut self, ctx: &mut Context, model: &mut SnakeModel, dt: f32) {
+        // 一行搞定，Scene 内部处理所有 4 个阶段
+        self.scene.draw(ctx).unwrap();
+    }
+}
+```
+
+**模式2：扩展流程（petview 过渡效果）**
+```rust
+impl Render for PetViewRender {
+    fn draw(&mut self, ctx: &mut Context, model: &mut PetViewModel, dt: f32) {
+        // 主场景正常渲染
+        self.scene.draw(ctx).unwrap();
+
+        // 额外：在 handle_timer 中调用 blend_rts 处理过渡
+        // scene.draw 内部的 present_default 会输出 RT2 + RT3
+    }
+}
+```
+
+**模式3：完全自定义流程（分屏渲染）**
+```rust
+impl Render for SplitViewRender {
+    fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+        // 跳过 scene.draw()，完全自己控制
+        let left = Rect::new(0, 0, 400, 600);
+        let right = Rect::new(400, 0, 400, 600);
+
+        // 阶段2: 两个 buffer 渲染到 RT0 的不同区域
+        ctx.adapter.clear_rt(0);
+        ctx.adapter.draw_buffer_to_rt(&self.left_buf, 0, Some(left));
+        ctx.adapter.draw_buffer_to_rt(&self.right_buf, 0, Some(right));
+
+        // 阶段4: 输出
+        ctx.adapter.present(&[RtComposite::fullscreen(0)]);
+    }
+}
+```
+
+**模式4：多 RT 组合（复杂特效）**
+```rust
+impl Render for EffectRender {
+    fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+        // 阶段2: 渲染多个源到不同 RT
+        ctx.adapter.draw_sprite_to_rt(&self.background, 0, None);
+        ctx.adapter.draw_sprite_to_rt(&self.foreground, 1, None);
+
+        // 阶段3: RT 运算
+        ctx.adapter.blend_rts(0, 1, 3, model.effect, model.progress);
+
+        // 主场景渲染到 RT2
+        self.scene.draw(ctx).unwrap();
+
+        // 阶段4: 自定义合成
+        ctx.adapter.present(&[
+            RtComposite::fullscreen(2),              // 主场景
+            RtComposite::fullscreen(3).alpha(128),   // 特效叠加，半透明
+        ]);
+    }
+}
+```
+
+**设计优势：**
+1. **App 不需要实现 Adapter trait** - 只需在 draw() 中组合调用
+2. **渐进式复杂度** - 简单 app 一行代码，复杂 app 自由组合
+3. **完全的灵活性** - App 可以控制 4 阶段的任何步骤
+4. **向后兼容** - 现有 app 无需修改，scene.draw() 仍然有效

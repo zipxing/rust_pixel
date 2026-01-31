@@ -234,6 +234,69 @@ Each adapter implements platform-specific rendering:
 
 All adapters expose the same `Adapter` trait interface, allowing games to work across platforms without modification.
 
+### GPU Rendering Pipeline (4-Stage Architecture)
+
+Graphics mode adapters use a unified 4-stage rendering pipeline:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 1: Data Sources → RenderBuffer                            │
+│   Buffer (TUI) ─┬─→ generate_render_buffer() → Vec<RenderCell>  │
+│   Layers (Sprites) ─┘                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 2: RenderBuffer → RenderTexture (RT)                      │
+│   draw_render_buffer_to_texture(rbuf, rt_index, debug)          │
+│   - Main scene → RT2                                            │
+│   - Transition sources → RT0, RT1                               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 3: RT Operations (Optional)                               │
+│   blend_rts(src1, src2, target, effect, progress)               │
+│   copy_rt(src, dst)                                             │
+│   clear_rt(rt)                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Stage 4: RT[] → Screen                                          │
+│   present(composites: &[RtComposite])                           │
+│   present_default()  // RT2 fullscreen + RT3 overlay            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**RenderTexture (RT) Usage Convention:**
+- **RT0**: Source image 1 (for transitions)
+- **RT1**: Source image 2 (for transitions)
+- **RT2**: Main scene content (TUI + Sprites)
+- **RT3**: Overlay layer (transition results, effects)
+
+**Key APIs:**
+```rust
+// Stage 1: Generate render data
+let rbuf = generate_render_buffer(current_buf, prev_buf, layers, stage, base);
+
+// Stage 2: Render to texture
+adapter.draw_render_buffer_to_texture(&rbuf, 2, false);  // Main scene to RT2
+
+// Stage 3: RT operations (optional, for transitions)
+adapter.blend_rts(0, 1, 3, effect_type, progress);  // Blend RT0+RT1 → RT3
+
+// Stage 4: Output to screen
+adapter.present_default();  // Or: adapter.present(&[...composites])
+```
+
+**RtComposite Configuration:**
+```rust
+RtComposite {
+    rt: usize,           // RT index (0-3)
+    viewport: Option<Rect>,  // None = fullscreen
+    blend: BlendMode,    // Normal, Add, Multiply, Screen
+    alpha: u8,           // 0-255 transparency
+}
+```
+
 ### The app! Macro
 
 The `app!` macro in `src/macros.rs` scaffolds the application entry point:

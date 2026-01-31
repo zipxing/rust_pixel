@@ -597,6 +597,11 @@ pub trait Adapter {
     /// Render an advanced transition effect with parameters
     ///
     /// Performs complex transition rendering with customizable effects and progress.
+    /// Internal: Render transition between two render textures.
+    ///
+    /// **Note**: This is an internal implementation method. External code should use
+    /// [`blend_rts()`] instead, which provides the same functionality with a cleaner API.
+    ///
     /// Supports various shader-based transition effects like dissolve, wipe, etc.
     ///
     /// # Parameters
@@ -605,11 +610,6 @@ pub trait Adapter {
     /// - `dst_texture`: Destination render texture index (0-3)
     /// - `effect_type`: Transition effect type (0=Mosaic, 1=Heart, 2=Noise, 3=Rotation, 4=Curtain, 5=Glitch, 6=Ripple)
     /// - `progress`: Transition progress from 0.0 to 1.0
-    ///
-    /// # Use Cases
-    /// - Blend any two render textures with various transition effects
-    /// - Create custom multi-pass rendering pipelines
-    /// - Implement complex visual effects by chaining transitions
     #[cfg(graphics_mode)]
     fn render_advanced_transition(
         &mut self,

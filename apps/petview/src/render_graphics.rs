@@ -316,7 +316,7 @@ impl Render for PetviewRender {
                         target_arch = "wasm32"
                     ))]
                     {
-                        ctx.adapter.render_advanced_transition(0, 1, 3, model.trans_effect, model.progress);
+                        ctx.adapter.blend_rts(0, 1, 3, model.trans_effect, model.progress);
                         let p3 = self.scene.get_sprite("petimg3");
                         p3.set_hidden(true);
                     }

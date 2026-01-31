@@ -1441,7 +1441,6 @@ pub fn generate_render_buffer(
             stage,
             |fc, s2, texidx, symidx| {
                 // Logo uses no modifier (0)
-                // Logo 不使用样式修饰符
                 push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz, 0);
             },
         );
@@ -1451,7 +1450,7 @@ pub fn generate_render_buffer(
     let rx = base.gr.ratio_x;
     let ry = base.gr.ratio_y;
 
-    // No custom border rendering - use OS window decoration instead
+    // Custom border rendering - use OS window decoration instead
     // #[cfg(graphics_backend)]
     // render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
@@ -1460,13 +1459,9 @@ pub fn generate_render_buffer(
     // 2. Main Buffer (TUI layer - always on top)
     //
     // This ensures TUI layer is rendered last and appears on top of all sprites.
-    // 渲染顺序（从后到前）：
-    // 1. 像素精灵（游戏对象、背景）
-    // 2. 主缓冲区（TUI 层 - 始终在最上层）
 
     if stage > LOGO_FRAME {
         // render pixel_sprites first (bottom layer)
-        // 先渲染像素精灵（底层）
         // Note: All layers are now uniform (is_pixel removed), render all non-hidden layers
         for item in ps {
             if !item.is_hidden {
@@ -1478,7 +1473,6 @@ pub fn generate_render_buffer(
         }
 
         // render main buffer last (TUI layer - top layer)
-        // 最后渲染主缓冲区（TUI 层 - 最上层）
         // Use TUI characters (8×16) for UI components in graphics mode
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
