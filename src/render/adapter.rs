@@ -169,107 +169,9 @@ use std::any::Any;
 use std::time::Duration;
 // use log::info;
 
-// ============================================================================
-// RenderTexture API - Unified RT management for graphics mode
-// ============================================================================
-
-/// RT size strategy
+// Re-export RT types from graph module for backward compatibility
 #[cfg(graphics_mode)]
-#[derive(Clone, Debug)]
-pub enum RtSize {
-    /// Follow window size (default)
-    FollowWindow,
-    /// Fixed size in pixels
-    Fixed(u32, u32),
-}
-
-#[cfg(graphics_mode)]
-impl Default for RtSize {
-    fn default() -> Self {
-        RtSize::FollowWindow
-    }
-}
-
-/// RT configuration
-#[cfg(graphics_mode)]
-#[derive(Clone, Debug)]
-pub struct RtConfig {
-    /// Size strategy
-    pub size: RtSize,
-}
-
-#[cfg(graphics_mode)]
-impl Default for RtConfig {
-    fn default() -> Self {
-        Self {
-            size: RtSize::FollowWindow,
-        }
-    }
-}
-
-/// Blend mode for RT composition
-#[cfg(graphics_mode)]
-#[derive(Clone, Copy, Debug, Default)]
-pub enum BlendMode {
-    /// Normal alpha blending (default)
-    #[default]
-    Normal,
-    /// Additive blending
-    Add,
-    /// Multiply blending
-    Multiply,
-    /// Screen blending
-    Screen,
-}
-
-/// RT composite item for present()
-#[cfg(graphics_mode)]
-#[derive(Clone, Debug)]
-pub struct RtComposite {
-    /// RT index (0-3)
-    pub rt: usize,
-    /// Output viewport, None = fullscreen
-    pub viewport: Option<Rect>,
-    /// Blend mode
-    pub blend: BlendMode,
-    /// Alpha (0-255)
-    pub alpha: u8,
-}
-
-#[cfg(graphics_mode)]
-impl RtComposite {
-    /// Create a fullscreen composite with default settings
-    pub fn fullscreen(rt: usize) -> Self {
-        Self {
-            rt,
-            viewport: None,
-            blend: BlendMode::Normal,
-            alpha: 255,
-        }
-    }
-
-    /// Create a composite with custom viewport
-    pub fn with_viewport(rt: usize, viewport: Rect) -> Self {
-        Self {
-            rt,
-            viewport: Some(viewport),
-            blend: BlendMode::Normal,
-            alpha: 255,
-        }
-    }
-
-    /// Set blend mode
-    pub fn blend(mut self, blend: BlendMode) -> Self {
-        self.blend = blend;
-        self
-    }
-
-    /// Set alpha
-    pub fn alpha(mut self, alpha: u8) -> Self {
-        self.alpha = alpha;
-        self
-    }
-}
+pub use crate::render::graph::{BlendMode, RtComposite, RtConfig, RtSize};
 
 /// OpenGL rendering subsystem for glow, SDL and web modes
 #[cfg(any(sdl_backend, glow_backend, wasm))]
@@ -332,15 +234,15 @@ pub use crate::render::graph::{
 /// Layout (10 Sprite Rows):
 /// ```text
 /// ┌────────────────────────────────────────────────────┐
-/// │ Sprite Region (rows 0-159): 40,960 sprites 16×16  │ 2560px
-/// │ - Block 0-159: 16×16 chars/block                  │
+/// │ Sprite Region (rows 0-159): 40,960 sprites 16×16   │ 2560px
+/// │ - Block 0-159: 16×16 chars/block                   │
 /// ├────────────────────────────────────────────────────┤
-/// │ TUI (rows 160-191, cols 0-159): 2,560 chars 16×32 │
-/// │ - Block 160-169                                   │ 512px
-/// │ Emoji (rows 160-191, cols 160-255): 768 32×32     │
-/// │ - Block 170-175                                   │
+/// │ TUI (rows 160-191, cols 0-159): 2,560 chars 16×32  │
+/// │ - Block 160-169                                    │ 512px
+/// │ Emoji (rows 160-191, cols 160-255): 768 32×32      │
+/// │ - Block 170-175                                    │
 /// ├────────────────────────────────────────────────────┤
-/// │ CJK Region (rows 192-255): 4,096 chars 32×32      │ 1024px
+/// │ CJK Region (rows 192-255): 4,096 chars 32×32       │ 1024px
 /// └────────────────────────────────────────────────────┘
 /// ```
 /// Adapter base data structure containing shared information and OpenGL resources
@@ -365,12 +267,9 @@ pub use crate::render::graph::{
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 /// Base data structure shared by all rendering adapters
-/// 所有渲染适配器共享的基础数据结构
 /// 
 /// Note: `game_name` and `project_path` are now stored in the global `GAME_CONFIG`.
 /// Use `rust_pixel::get_game_config()` to access them from anywhere.
-/// 注意：`game_name` 和 `project_path` 现在存储在全局 `GAME_CONFIG` 中。
-/// 使用 `rust_pixel::get_game_config()` 可以在任何地方访问它们。
 pub struct AdapterBase {
     /// Window title displayed in graphics mode
     pub title: String,

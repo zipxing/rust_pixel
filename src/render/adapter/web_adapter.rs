@@ -239,12 +239,22 @@ impl Adapter for WebAdapter {
     /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
     ///
     /// Uses the original working logic with float precision.
+    /// Web needs explicit viewport setup using pixel_w/pixel_h.
     fn present_default(&mut self) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             let rx = self.base.gr.ratio_x;
             let ry = self.base.gr.ratio_y;
-            // Web doesn't need physical_size handling
-            gl_pixel_renderer.present_default(rx, ry);
+            let (canvas_w, canvas_h) = gl_pixel_renderer.get_gl_pixel().get_canvas_size();
+            info!(
+                "WebAdapter::present_default - pixel_w: {}, pixel_h: {}, canvas_w: {}, canvas_h: {}, ratio: ({}, {})",
+                self.base.gr.pixel_w, self.base.gr.pixel_h, canvas_w, canvas_h, rx, ry
+            );
+            // Web mode: use pixel_w/pixel_h for viewport (same as before)
+            gl_pixel_renderer.present_default_with_physical_size(
+                rx,
+                ry,
+                Some((self.base.gr.pixel_w, self.base.gr.pixel_h)),
+            );
         }
     }
 }

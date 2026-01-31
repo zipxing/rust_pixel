@@ -75,11 +75,113 @@
 
 use crate::{
     render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::Color, symbol_map::calc_linear_index, AdapterBase},
-    util::{ARect, PointF32, PointI32, PointU16, Rand},
+    util::{ARect, PointF32, PointI32, PointU16, Rand, Rect},
     LOGO_FRAME,
 };
 // use log::info;
 use std::sync::OnceLock;
+
+// ============================================================================
+// RenderTexture API - Unified RT management for graphics mode
+// ============================================================================
+
+/// RT size strategy
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub enum RtSize {
+    /// Follow window size (default)
+    FollowWindow,
+    /// Fixed size in pixels
+    Fixed(u32, u32),
+}
+
+#[cfg(graphics_mode)]
+impl Default for RtSize {
+    fn default() -> Self {
+        RtSize::FollowWindow
+    }
+}
+
+/// RT configuration
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub struct RtConfig {
+    /// Size strategy
+    pub size: RtSize,
+}
+
+#[cfg(graphics_mode)]
+impl Default for RtConfig {
+    fn default() -> Self {
+        Self {
+            size: RtSize::FollowWindow,
+        }
+    }
+}
+
+/// Blend mode for RT composition
+#[cfg(graphics_mode)]
+#[derive(Clone, Copy, Debug, Default)]
+pub enum BlendMode {
+    /// Normal alpha blending (default)
+    #[default]
+    Normal,
+    /// Additive blending
+    Add,
+    /// Multiply blending
+    Multiply,
+    /// Screen blending
+    Screen,
+}
+
+/// RT composite item for present()
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub struct RtComposite {
+    /// RT index (0-3)
+    pub rt: usize,
+    /// Output viewport, None = fullscreen
+    pub viewport: Option<Rect>,
+    /// Blend mode
+    pub blend: BlendMode,
+    /// Alpha (0-255)
+    pub alpha: u8,
+}
+
+#[cfg(graphics_mode)]
+impl RtComposite {
+    /// Create a fullscreen composite with default settings
+    pub fn fullscreen(rt: usize) -> Self {
+        Self {
+            rt,
+            viewport: None,
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a composite with custom viewport
+    pub fn with_viewport(rt: usize, viewport: Rect) -> Self {
+        Self {
+            rt,
+            viewport: Some(viewport),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Set blend mode
+    pub fn blend(mut self, blend: BlendMode) -> Self {
+        self.blend = blend;
+        self
+    }
+
+    /// Set alpha
+    pub fn alpha(mut self, alpha: u8) -> Self {
+        self.alpha = alpha;
+        self
+    }
+}
 
 /// Symbol texture file path
 ///

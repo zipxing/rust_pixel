@@ -510,11 +510,7 @@ impl GlPixelRenderer {
         // Bind screen framebuffer
         self.gl_pixel.bind_screen(&self.gl);
 
-        // Clear screen
-        unsafe {
-            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-        }
+        // Note: Don't clear screen here - matches original behavior
 
         let unified_color = UnifiedColor::white();
 
@@ -573,11 +569,9 @@ impl GlPixelRenderer {
             }
         }
 
-        // Clear screen
-        unsafe {
-            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-        }
+        // Note: Don't clear screen here - matches original behavior
+        // Clearing would fill the entire viewport with black, which may
+        // affect transparent areas on web canvas
 
         let unified_color = UnifiedColor::white();
 
