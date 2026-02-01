@@ -288,8 +288,6 @@ impl Render for PetviewRender {
                     // Advanced transition - flexible source/destination texture selection
                     // Blends RT0 (source image) and RT1 (target image) to RT3 (display) using selected effect
                     ctx.adapter.blend_rts(0, 1, 3, model.trans_effect, model.progress);
-                    let p3 = self.scene.get_sprite("petimg3");
-                    p3.set_hidden(true);
                 }
             }
 
