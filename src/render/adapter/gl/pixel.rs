@@ -445,15 +445,11 @@ impl GlPixelRenderer {
         let pcw = canvas_width as f32;
         let pch = canvas_height as f32;
 
-        // DEBUG: Log canvas size
-        log::info!("GL present: canvas={}x{}", canvas_width, canvas_height);
-
         for composite in composites {
             let rtidx = composite.rt;
 
             // Skip hidden RTs
             if self.gl_pixel.get_render_texture_hidden(rtidx) {
-                log::info!("GL present: RT{} is hidden, skipping", rtidx);
                 continue;
             }
 

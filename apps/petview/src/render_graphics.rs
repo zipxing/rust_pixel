@@ -360,12 +360,6 @@ impl Render for PetviewRender {
                 // Use ARect instead of Rect to avoid clipping (Rect clips when w*h > u16::MAX)
                 let vp = ARect { x: rt3_x, y: rt3_y, w: rt3_w as u32, h: rt3_h as u32 };
 
-                // DEBUG: Print ALL values
-                info!(
-                    "petview: canvas={}x{}, vp.x={}, vp.y={}, vp.w={}, vp.h={}",
-                    canvas_w, canvas_h, vp.x, vp.y, vp.w, vp.h
-                );
-
                 ctx.adapter.present(&[
                     RtComposite::fullscreen(2),
                     RtComposite::with_viewport(3, vp),

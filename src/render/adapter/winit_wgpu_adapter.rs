@@ -1019,12 +1019,6 @@ impl WinitWgpuAdapter {
                     let pw = vp.w as f32;
                     let ph = vp.h as f32;
 
-                    // DEBUG: Print ALL viewport fields
-                    log::info!(
-                        "present_wgpu RT{}: vp.x={}, vp.y={}, vp.w={}, vp.h={}, rx={}, ry={}",
-                        rtidx, vp.x, vp.y, vp.w, vp.h, rx, ry
-                    );
-
                     // area controls TEXTURE SAMPLING (WGPU uses top-left origin)
                     let area = [0.0, 0.0, pw / pcw, ph / pch];
 
