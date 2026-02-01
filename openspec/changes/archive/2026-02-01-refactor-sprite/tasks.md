@@ -677,15 +677,41 @@
   - design.md: 8.8 调用链与 App 自定义渲染
   - spec.md: Requirement: App 可定制渲染流程
 
-## 进度追踪（更新）
+### 5.5 Viewport 辅助 API（新增）
+
+- [x] 5.5.1 添加 RtComposite 辅助方法
+  - `cells_to_pixel_size()` - Cell 到像素尺寸转换
+  - `centered()` - 居中 viewport
+  - `at_position()` - 指定位置 viewport
+  - `centered_cells()` - 从 cell 尺寸创建居中 viewport
+  - `x()`, `y()`, `offset()` - 链式位置调整
+
+- [x] 5.5.2 添加 Context 辅助方法
+  - `centered_viewport()` - 计算居中 viewport
+  - `centered_rt()` - 创建居中 RtComposite（最便捷 API）
+  - `canvas_size()` - 获取画布尺寸
+  - `ratio()` - 获取 DPI 缩放比例
+
+- [x] 5.5.3 修复 present() 的 viewport 位置支持
+  - OpenGL (gl/pixel.rs) 添加 NDC 平移
+  - WGPU (winit_wgpu_adapter.rs) 添加 NDC 平移
+
+- [x] 5.5.4 更新 petview 使用新 viewport API
+  - 使用 `ctx.centered_rt()` 简化代码
+
+- [x] 5.5.5 文档更新
+  - design.md: 8.9 Viewport 辅助方法与坐标系统
+  - design.md: Section 9 完整渲染 API 参考
+
+## 进度追踪（最终）
 
 - Phase 1: ✅ 47/47 (100%) - 核心重构完成
 - Phase 2: ✅ 17/17 (100%) - 应用迁移完成
-- Phase 3: ✅ 20/24 (83%) - 文档和清理完成
-- Phase 4: ⬜ 0/7 (0%) - 待发布
-- Phase 5: ✅ 18/19 (95%) - GPU 渲染管线完成
+- Phase 3: ✅ 24/24 (100%) - 测试/文档完成
+- Phase 4: ⬜ 0/7 (0%) - 待发布（可选）
+- Phase 5: ✅ 24/24 (100%) - GPU 渲染管线完成
 
-**总进度：✅ 102/114 (89%)**
+**总进度：✅ 112/119 (94%) - 功能完成，待发布**
 
 ---
 
