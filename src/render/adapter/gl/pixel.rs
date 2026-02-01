@@ -459,6 +459,8 @@ impl GlPixelRenderer {
             // Calculate viewport and transform based on composite settings
             let (area, transform) = if let Some(ref vp) = composite.viewport {
                 // Custom viewport specified (using ARect fields: w, h instead of width, height)
+                let vp_x = vp.x as f32;
+                let vp_y = vp.y as f32;
                 let vp_w = vp.w as f32;
                 let vp_h = vp.h as f32;
 
@@ -471,10 +473,17 @@ impl GlPixelRenderer {
                     vp_h / pch,
                 ];
 
-                // transform controls SCREEN POSITION via scaling
-                // The shader scales around origin, resulting in centered content
+                // transform controls SCREEN POSITION via scaling and translation
+                // NDC coordinates: -1 to 1, center is (0, 0)
+                // Convert viewport position to NDC offset:
+                //   tx = (2 * (vp_x + vp_w/2) - canvas_w) / canvas_w
+                //   ty = (canvas_h - 2 * (vp_y + vp_h/2)) / canvas_h  (Y is flipped in OpenGL)
+                let tx = (2.0 * vp_x + vp_w - pcw) / pcw;
+                let ty = (pch - 2.0 * vp_y - vp_h) / pch;
+
                 let mut unified_transform = UnifiedTransform::new();
                 unified_transform.scale(vp_w / pcw, vp_h / pch);
+                unified_transform.translate(tx, ty);
 
                 (area, unified_transform)
             } else {

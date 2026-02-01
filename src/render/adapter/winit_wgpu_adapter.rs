@@ -1016,14 +1016,25 @@ impl WinitWgpuAdapter {
                 let (area, transform) = if let Some(ref vp) = composite.viewport {
                     // Use viewport values from caller (calculated with current ratio)
                     // Note: Using ARect fields (w, h) instead of Rect (width, height)
+                    let vp_x = vp.x as f32;
+                    let vp_y = vp.y as f32;
                     let pw = vp.w as f32;
                     let ph = vp.h as f32;
 
                     // area controls TEXTURE SAMPLING (WGPU uses top-left origin)
                     let area = [0.0, 0.0, pw / pcw, ph / pch];
 
+                    // transform controls SCREEN POSITION via scaling and translation
+                    // NDC coordinates: -1 to 1, center is (0, 0)
+                    // Convert viewport position to NDC offset:
+                    //   tx = (2 * (vp_x + pw/2) - canvas_w) / canvas_w
+                    //   ty = (canvas_h - 2 * (vp_y + ph/2)) / canvas_h  (Y is flipped)
+                    let tx = (2.0 * vp_x + pw - pcw) / pcw;
+                    let ty = (pch - 2.0 * vp_y - ph) / pch;
+
                     let mut transform = UnifiedTransform::new();
                     transform.scale(pw / pcw, ph / pch);
+                    transform.translate(tx, ty);
 
                     (area, transform)
                 } else {

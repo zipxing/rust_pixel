@@ -343,27 +343,13 @@ impl Render for PetviewRender {
                 ctx.adapter.present(&[RtComposite::fullscreen(2)]);
             }
             PetviewState::Normal | PetviewState::TransGl => {
-                // Calculate viewport EVERY FRAME using current ratio
-                let rx = ctx.adapter.get_base().gr.ratio_x;
-                let ry = ctx.adapter.get_base().gr.ratio_y;
-                let sym_w = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
-                let sym_h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-
-                let rt3_w = (PIXW as f32 * sym_w / rx) as u16;
-                let rt3_h = (PIXH as f32 * sym_h / ry) as u16;
-
-                let canvas_w = ctx.adapter.get_base().gr.pixel_w as u32;
-                let canvas_h = ctx.adapter.get_base().gr.pixel_h as u32;
-
-                let rt3_x = ((canvas_w - rt3_w as u32) / 2) as i32;
-                let rt3_y = ((canvas_h - rt3_h as u32) / 2) as i32;
-                // Use ARect instead of Rect to avoid clipping (Rect clips when w*h > u16::MAX)
-                let vp = ARect { x: rt3_x, y: rt3_y, w: rt3_w as u32, h: rt3_h as u32 };
-
-                ctx.adapter.present(&[
-                    RtComposite::fullscreen(2),
-                    RtComposite::with_viewport(3, vp),
-                ]);
+                // Use ctx.centered_rt() helper for simplified viewport creation
+                // This automatically handles: sym_w/h, ratio_x/y, canvas size, centering
+                // Note: Must compute before present() call due to borrow checker
+                // Chain syntax: ctx.centered_rt().x(0) sets viewport x to 0
+                // let rt3 = ctx.centered_rt(3, PIXW, PIXH).x(0);
+                let rt3 = ctx.centered_rt(3, PIXW, PIXH);
+                ctx.adapter.present(&[RtComposite::fullscreen(2), rt3]);
             }
         }
     }

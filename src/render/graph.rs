@@ -185,6 +185,180 @@ impl RtComposite {
         self.alpha = alpha;
         self
     }
+
+    /// Offset viewport position by (dx, dy) pixels
+    ///
+    /// Adjusts the viewport position relative to its current location.
+    /// Useful for fine-tuning after using `centered_*` methods.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let rt3 = ctx.centered_rt(3, 40, 25).offset(-10, 0);  // shift left 10px
+    /// ```
+    pub fn offset(mut self, dx: i32, dy: i32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.x += dx;
+            vp.y += dy;
+        }
+        self
+    }
+
+    /// Set viewport x position directly
+    pub fn x(mut self, x: i32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.x = x;
+        }
+        self
+    }
+
+    /// Set viewport y position directly
+    pub fn y(mut self, y: i32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.y = y;
+        }
+        self
+    }
+
+    // ========================================================================
+    // Viewport Helper Methods
+    // ========================================================================
+    //
+    // Viewport positioning involves converting between coordinate systems:
+    //
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │  Cell Coordinates (40x25)                                           │
+    // │       │                                                             │
+    // │       │ cells_to_pixel_size()                                       │
+    // │       ▼                                                             │
+    // │  Pixel Dimensions (320x200 @ ratio 1.0)                             │
+    // │       │                                                             │
+    // │       │ centered() / at_position()                                  │
+    // │       ▼                                                             │
+    // │  Canvas Position (centered on screen)                               │
+    // └─────────────────────────────────────────────────────────────────────┘
+
+    /// Convert cell dimensions to pixel dimensions
+    ///
+    /// Transforms logical cell sizes to pixel sizes, accounting for
+    /// symbol size and DPI scaling ratio.
+    ///
+    /// # Parameters
+    /// - `cell_w`, `cell_h`: Size in cells (e.g., 40x25)
+    /// - `sym_w`, `sym_h`: Symbol pixel size (from PIXEL_SYM_WIDTH/HEIGHT)
+    /// - `rx`, `ry`: DPI scaling ratio (from adapter.get_base().gr.ratio_x/y)
+    ///
+    /// # Returns
+    /// (pixel_width, pixel_height) as u32 tuple
+    ///
+    /// # Example
+    /// ```ignore
+    /// let sym_w = *PIXEL_SYM_WIDTH.get().unwrap();
+    /// let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap();
+    /// let rx = ctx.adapter.get_base().gr.ratio_x;
+    /// let ry = ctx.adapter.get_base().gr.ratio_y;
+    /// let (pw, ph) = RtComposite::cells_to_pixel_size(40, 25, sym_w, sym_h, rx, ry);
+    /// ```
+    pub fn cells_to_pixel_size(
+        cell_w: u16,
+        cell_h: u16,
+        sym_w: f32,
+        sym_h: f32,
+        rx: f32,
+        ry: f32,
+    ) -> (u32, u32) {
+        let pw = (cell_w as f32 * sym_w / rx) as u32;
+        let ph = (cell_h as f32 * sym_h / ry) as u32;
+        (pw, ph)
+    }
+
+    /// Create a centered viewport composite
+    ///
+    /// Calculates the position to center a viewport of given size
+    /// within the canvas.
+    ///
+    /// # Parameters
+    /// - `rt`: Render texture index (0-3)
+    /// - `vp_w`, `vp_h`: Viewport size in pixels
+    /// - `canvas_w`, `canvas_h`: Canvas size in pixels
+    ///
+    /// # Example
+    /// ```ignore
+    /// let canvas_w = ctx.adapter.get_base().gr.pixel_w as u32;
+    /// let canvas_h = ctx.adapter.get_base().gr.pixel_h as u32;
+    /// ctx.adapter.present(&[
+    ///     RtComposite::fullscreen(2),
+    ///     RtComposite::centered(3, 320, 200, canvas_w, canvas_h),
+    /// ]);
+    /// ```
+    pub fn centered(rt: usize, vp_w: u32, vp_h: u32, canvas_w: u32, canvas_h: u32) -> Self {
+        let x = ((canvas_w.saturating_sub(vp_w)) / 2) as i32;
+        let y = ((canvas_h.saturating_sub(vp_h)) / 2) as i32;
+        Self {
+            rt,
+            viewport: Some(ARect { x, y, w: vp_w, h: vp_h }),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a viewport at a specific position
+    ///
+    /// Places the viewport at the given canvas coordinates.
+    ///
+    /// # Parameters
+    /// - `rt`: Render texture index (0-3)
+    /// - `x`, `y`: Position in canvas pixels
+    /// - `w`, `h`: Viewport size in pixels
+    pub fn at_position(rt: usize, x: i32, y: i32, w: u32, h: u32) -> Self {
+        Self {
+            rt,
+            viewport: Some(ARect { x, y, w, h }),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a centered viewport from cell dimensions (all-in-one helper)
+    ///
+    /// This is the highest-level API that handles all coordinate conversions
+    /// automatically. Just provide the cell dimensions and render context info.
+    ///
+    /// # Parameters
+    /// - `rt`: Render texture index (0-3)
+    /// - `cell_w`, `cell_h`: Size in cells (e.g., 40x25)
+    /// - `sym_w`, `sym_h`: Symbol pixel size (from PIXEL_SYM_WIDTH/HEIGHT)
+    /// - `rx`, `ry`: DPI scaling ratio
+    /// - `canvas_w`, `canvas_h`: Canvas size in pixels
+    ///
+    /// # Example
+    /// ```ignore
+    /// // In render draw():
+    /// let sym_w = *PIXEL_SYM_WIDTH.get().unwrap();
+    /// let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap();
+    /// let rx = ctx.adapter.get_base().gr.ratio_x;
+    /// let ry = ctx.adapter.get_base().gr.ratio_y;
+    /// let canvas_w = ctx.adapter.get_base().gr.pixel_w as u32;
+    /// let canvas_h = ctx.adapter.get_base().gr.pixel_h as u32;
+    ///
+    /// ctx.adapter.present(&[
+    ///     RtComposite::fullscreen(2),
+    ///     RtComposite::centered_cells(3, 40, 25, sym_w, sym_h, rx, ry, canvas_w, canvas_h),
+    /// ]);
+    /// ```
+    pub fn centered_cells(
+        rt: usize,
+        cell_w: u16,
+        cell_h: u16,
+        sym_w: f32,
+        sym_h: f32,
+        rx: f32,
+        ry: f32,
+        canvas_w: u32,
+        canvas_h: u32,
+    ) -> Self {
+        let (vp_w, vp_h) = Self::cells_to_pixel_size(cell_w, cell_h, sym_w, sym_h, rx, ry);
+        Self::centered(rt, vp_w, vp_h, canvas_w, canvas_h)
+    }
 }
 
 /// Symbol texture file path
