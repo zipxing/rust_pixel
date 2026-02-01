@@ -139,22 +139,6 @@
 //! - **Accurate coordinate conversion** accounting for TUI double-height characters
 //! - **Custom cursor** support
 //!
-//! ## 🔧 Configuration & Compilation
-//!
-//! Backend selection via cargo features:
-//! ```toml
-//! # Default: Terminal mode
-//! rust_pixel = "0.1"
-//!
-//! # SDL desktop mode  
-//! rust_pixel = { version = "0.1", features = ["sdl"] }
-//!
-//! # Winit + OpenGL mode (glow)
-//! rust_pixel = { version = "0.1", features = ["glow"] }
-//!
-//! # Winit + WGPU mode (cutting-edge)
-//! rust_pixel = { version = "0.1", features = ["wgpu"] }
-//! ```
 
 #![allow(unused_variables)]
 #[cfg(graphics_mode)]
@@ -214,8 +198,6 @@ pub use crate::render::graph::{
     push_render_buffer,
     render_border, // Deprecated: Kept for backward compatibility, use OS window decoration instead
     render_logo,
-    render_main_buffer,
-    render_pixel_sprites,
     Graph,
     RenderCell,
     PIXEL_LOGO,
@@ -293,12 +275,6 @@ impl AdapterBase {
 /// - **Winit Adapter**: Cross-platform window management with OpenGL  
 /// - **Web Adapter**: Browser rendering with WebGL
 /// - **Crossterm Adapter**: Terminal text mode rendering
-///
-/// ## Interface Design Principles
-/// 1. **Abstraction**: Hide backend-specific implementation details
-/// 2. **Consistency**: Same API across all platforms
-/// 3. **Performance**: Minimal overhead in the abstraction layer
-/// 4. **Flexibility**: Support for different rendering modes and features
 ///
 /// ## Typical Usage Flow
 /// ```text
@@ -384,7 +360,7 @@ pub trait Adapter {
     /// Post draw process
     fn post_draw(&mut self);
 
-    /// Main OpenGL rendering pipeline with double buffering and render textures
+    /// Main rendering pipeline with double buffering and render textures
     ///
     /// This method implements the core graphics rendering pipeline for SDL, Winit, and Web
     /// modes. It follows a two-pass rendering approach with multiple render targets:
@@ -503,8 +479,6 @@ pub trait Adapter {
     // │  Primitive 4: present   - RT → Screen                              │
     // └─────────────────────────────────────────────────────────────────────┘
     //
-    // Composites: layer2rbuf, draw_buffer_to_texture, render_to_rt, etc.
-    // are combinations of these primitives.
 
     /// PRIMITIVE 1: buf2rbuf - Buffer → RenderBuffer with full transformation
     ///
@@ -582,10 +556,6 @@ pub trait Adapter {
     /// - `visible`: Whether the texture should be visible
     #[cfg(graphics_mode)]
     fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool);
-    // {
-    //     // Default implementation for graphics modes
-    //     // Each adapter can override this with optimized implementations
-    // }
 
     /// Get canvas size for advanced rendering calculations
     ///

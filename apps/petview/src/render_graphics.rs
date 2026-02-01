@@ -217,12 +217,6 @@ impl Render for PetviewRender {
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         if !model.tex_ready {
             // Set render texture 3 visible - unified interface replaces all downcast code
-            #[cfg(any(
-                feature = "sdl",
-                feature = "glow",
-                feature = "wgpu",
-                target_arch = "wasm32"
-            ))]
             ctx.adapter.set_render_texture_visible(3, true);
 
             let p1 = self.scene.get_sprite("petimg1");
@@ -274,52 +268,28 @@ impl Render for PetviewRender {
                 PetviewState::Normal => {
                     // Copy RT1 (target image) to RT3 for display
                     // Much more efficient than running a shader with progress=1.0
-                    #[cfg(any(
-                        feature = "sdl",
-                        feature = "glow",
-                        feature = "wgpu",
-                        target_arch = "wasm32"
-                    ))]
-                    {
-                        ctx.adapter.copy_render_texture(1, 3);
-                        let p3 = self.scene.get_sprite("petimg3");
-                        p3.set_hidden(true);
-                    }
+                    ctx.adapter.copy_render_texture(1, 3);
+                    let p3 = self.scene.get_sprite("petimg3");
+                    p3.set_hidden(true);
                 }
                 PetviewState::TransBuf => {
                     // Buffer transition - unified interface replaces all downcast code
-                    #[cfg(any(
-                        feature = "sdl",
-                        feature = "glow",
-                        feature = "wgpu",
-                        target_arch = "wasm32"
-                    ))]
-                    {
-                        // Setup adapter-specific rendering pipeline
-                        ctx.adapter.setup_buffer_transition(3);
+                    // Setup adapter-specific rendering pipeline
+                    ctx.adapter.setup_buffer_transition(3);
 
-                        // Apply unified image distortion processing
-                        process_buffer_transition(
-                            &mut self.scene,
-                            ctx,
-                            model.transbuf_stage as usize,
-                        );
-                    }
+                    // Apply unified image distortion processing
+                    process_buffer_transition(
+                        &mut self.scene,
+                        ctx,
+                        model.transbuf_stage as usize,
+                    );
                 }
                 PetviewState::TransGl => {
                     // Advanced transition - flexible source/destination texture selection
                     // Blends RT0 (source image) and RT1 (target image) to RT3 (display) using selected effect
-                    #[cfg(any(
-                        feature = "sdl",
-                        feature = "glow",
-                        feature = "wgpu",
-                        target_arch = "wasm32"
-                    ))]
-                    {
-                        ctx.adapter.blend_rts(0, 1, 3, model.trans_effect, model.progress);
-                        let p3 = self.scene.get_sprite("petimg3");
-                        p3.set_hidden(true);
-                    }
+                    ctx.adapter.blend_rts(0, 1, 3, model.trans_effect, model.progress);
+                    let p3 = self.scene.get_sprite("petimg3");
+                    p3.set_hidden(true);
                 }
             }
 

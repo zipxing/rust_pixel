@@ -1134,16 +1134,16 @@ pub fn render_buffer_to_cells<F>(
 /// - `rx`: Horizontal scaling ratio for display compensation
 /// - `ry`: Vertical scaling ratio for display compensation
 /// - `f`: Callback function to process each sprite pixel
-pub fn render_pixel_sprites<F>(pixel_spt: &mut Layer, rx: f32, ry: f32, mut f: F)
+pub fn render_layers<F>(layers: &mut Layer, rx: f32, ry: f32, mut f: F)
 where
     // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32),
 {
     // Sort by render_weight
-    pixel_spt.update_render_index();
+    layers.update_render_index();
 
-    for si in &pixel_spt.render_index.clone() {
-        let s = &pixel_spt.sprites[si.0];
+    for si in &layers.render_index.clone() {
+        let s = &layers.sprites[si.0];
         if s.is_hidden() {
             continue;
         }
@@ -1495,7 +1495,7 @@ pub fn generate_render_buffer(
         // Note: All layers are now uniform (is_pixel removed), render all non-hidden layers
         for item in ps {
             if !item.is_hidden {
-                render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
+                render_layers(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
                     // Pixel sprites currently don't use modifier (0)
                     push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);
                 });

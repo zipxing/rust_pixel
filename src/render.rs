@@ -35,7 +35,7 @@ pub use cell::Cell;
 #[cfg(graphics_mode)]
 pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
-    render_main_buffer, render_pixel_sprites, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
+    render_main_buffer, render_layers, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
 };
 pub use scene::Scene;
@@ -43,10 +43,3 @@ pub use sprite::Layer;
 pub use style::{Color, Style};
 pub use symbol_map::{SymbolIndex, SymbolMap, SymbolMapStats, SymbolRegion};
 
-// Backward compatibility aliases
-#[deprecated(note = "Use Scene instead")]
-#[allow(deprecated)]
-pub use scene::Panel;
-#[deprecated(note = "Use Layer instead")]
-#[allow(deprecated)]
-pub use sprite::Sprites;
