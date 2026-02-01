@@ -258,7 +258,7 @@ impl WgpuPixelRender {
     /// - `queue`: WGPU queue handle
     /// - `src_index`: Source render texture index (0-3)
     /// - `dst_index`: Destination render texture index (0-3)
-    pub fn copy_render_texture(
+    pub fn copy_rt(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,

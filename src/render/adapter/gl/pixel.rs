@@ -176,7 +176,7 @@ impl GlPixel {
     ///
     /// This is much more efficient than rendering through a shader for static copies.
     /// Uses OpenGL's blit operation to directly copy framebuffer contents.
-    pub fn copy_render_texture(&mut self, gl: &glow::Context, src_index: usize, dst_index: usize) {
+    pub fn copy_rt(&mut self, gl: &glow::Context, src_index: usize, dst_index: usize) {
         unsafe {
             let src_tex = &self.render_textures[src_index];
             let dst_tex = &self.render_textures[dst_index];
@@ -374,8 +374,8 @@ impl GlPixelRenderer {
     ///
     /// Uses efficient framebuffer blit operation to copy texture contents.
     /// Much faster than rendering with a shader for static display purposes.
-    pub fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
-        self.gl_pixel.copy_render_texture(&self.gl, src_index, dst_index);
+    pub fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
+        self.gl_pixel.copy_rt(&self.gl, src_index, dst_index);
     }
     
     /// Bind screen and set viewport for Retina displays (convenience method for Winit)

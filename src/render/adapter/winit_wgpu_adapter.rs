@@ -1410,7 +1410,7 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of render texture visibility control
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
             wgpu_pixel_renderer.set_render_texture_hidden(texture_index, !visible);
         }
@@ -1442,13 +1442,13 @@ impl Adapter for WinitWgpuAdapter {
     }
 
     /// WinitWgpu adapter implementation of render texture copy
-    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
         if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
             &mut self.wgpu_pixel_renderer,
             &self.wgpu_device,
             &self.wgpu_queue,
         ) {
-            wgpu_pixel_renderer.copy_render_texture(device, queue, src_index, dst_index);
+            wgpu_pixel_renderer.copy_rt(device, queue, src_index, dst_index);
         }
     }
 

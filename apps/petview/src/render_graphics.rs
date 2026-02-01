@@ -217,7 +217,7 @@ impl Render for PetviewRender {
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         if !model.tex_ready {
             // Set render texture 3 visible - unified interface replaces all downcast code
-            ctx.adapter.set_render_texture_visible(3, true);
+            ctx.adapter.set_rt_visible(3, true);
 
             let p1 = self.scene.get_sprite("petimg1");
             asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
@@ -268,14 +268,10 @@ impl Render for PetviewRender {
                 PetviewState::Normal => {
                     // Copy RT1 (target image) to RT3 for display
                     // Much more efficient than running a shader with progress=1.0
-                    ctx.adapter.copy_render_texture(1, 3);
-                    let p3 = self.scene.get_sprite("petimg3");
-                    p3.set_hidden(true);
+                    ctx.adapter.copy_rt(1, 3);
                 }
                 PetviewState::TransBuf => {
-                    // Buffer transition - unified interface replaces all downcast code
-                    // Setup adapter-specific rendering pipeline
-                    ctx.adapter.setup_buffer_transition(3);
+                    ctx.adapter.set_rt_visible(3, false);
 
                     // Apply unified image distortion processing
                     process_buffer_transition(

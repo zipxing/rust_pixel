@@ -555,7 +555,7 @@ pub trait Adapter {
     /// - `texture_index`: Render texture index (0-3, typically 2=main, 3=effects)
     /// - `visible`: Whether the texture should be visible
     #[cfg(graphics_mode)]
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool);
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool);
 
     /// Get canvas size for advanced rendering calculations
     ///
@@ -596,7 +596,7 @@ pub trait Adapter {
     /// - Preparing render textures for subsequent operations
     /// - Swapping/copying render texture contents
     #[cfg(graphics_mode)]
-    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize);
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize);
 
     // ========================================================================
     // New RT API - Unified RenderTexture management

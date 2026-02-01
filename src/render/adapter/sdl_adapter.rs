@@ -373,7 +373,7 @@ impl Adapter for SdlAdapter {
     }
 
     /// SDL adapter implementation of render texture visibility control
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer
                 .get_gl_pixel_mut()
@@ -403,9 +403,9 @@ impl Adapter for SdlAdapter {
     }
 
     /// SDL adapter implementation of render texture copy
-    fn copy_render_texture(&mut self, src_index: usize, dst_index: usize) {
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.copy_render_texture(src_index, dst_index);
+            gl_pixel_renderer.copy_rt(src_index, dst_index);
         }
     }
 
