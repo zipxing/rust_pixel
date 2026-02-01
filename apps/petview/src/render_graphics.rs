@@ -1,9 +1,18 @@
 //! PetView - Custom Rendering Pipeline Demo
 //!
-//! This demonstrates mixing Scene-based rendering with direct primitive usage:
-//! - Scene.draw() for standard rendering pipeline
+//! This demonstrates mixing Scene-based rendering with custom present flow:
+//! - Scene.draw_to_rt() for rendering scene content to RT2
 //! - Direct RT operations (copy_rt, blend_rts) for advanced effects
-//! - buf2rbuf + rbuf2rt for custom sprite rendering in TransBuf mode
+//! - Custom present() with RtComposite for flexible RT compositing
+//!
+//! ## Custom Present Flow
+//! ```text
+//! ┌──────────────────────────────────────────────────────────────────┐
+//! │  1. RT operations (copy_rt, blend_rts) prepare RT0/RT1/RT3      │
+//! │  2. scene.draw_to_rt() renders sprites to RT2                    │
+//! │  3. present([RT2, RT3]) composites and displays to screen        │
+//! └──────────────────────────────────────────────────────────────────┘
+//! ```
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
@@ -25,6 +34,7 @@ use rust_pixel::{
         sprite::Sprite,
         style::Color,
     },
+    util::{ARect, Rect},
 };
 
 const PIXW: u16 = 40;
@@ -118,22 +128,24 @@ fn process_buffer_transition(
 
 /// PetView Render - Demonstrates custom rendering with RT primitives
 ///
-/// ## Rendering Pipeline
+/// ## Rendering Pipeline (Custom Present Flow)
 /// ```text
 /// ┌──────────────────────────────────────────────────────────────────┐
 /// │  Normal Mode:                                                     │
-/// │    copy_rt(1, 3) → scene.draw() (RT3 visible)                    │
+/// │    copy_rt(1, 3) → draw_to_rt() → present([RT2, RT3])           │
 /// │                                                                   │
 /// │  TransBuf Mode (CPU distortion):                                  │
-/// │    distort(p4→p3) → scene.draw() renders p3 with alpha           │
+/// │    distort(p4→p3) → draw_to_rt() → present([RT2]) (no RT3)      │
 /// │                                                                   │
 /// │  TransGl Mode (GPU shader):                                       │
-/// │    blend_rts(RT0, RT1, RT3) → scene.draw() (RT3 visible)         │
+/// │    blend_rts(RT0, RT1, RT3) → draw_to_rt() → present([RT2, RT3])│
 /// └──────────────────────────────────────────────────────────────────┘
 /// ```
 pub struct PetviewRender {
     pub scene: Scene,
     pub init: bool,
+    /// Cached viewport for RT3 (calculated once at init)
+    pub rt3_viewport: Option<Rect>,
 }
 
 impl PetviewRender {
@@ -173,7 +185,11 @@ impl PetviewRender {
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
-        Self { scene, init: false }
+        Self {
+            scene,
+            init: false,
+            rt3_viewport: None,
+        }
     }
 
     fn do_init(&mut self, ctx: &mut Context) {
@@ -183,27 +199,45 @@ impl PetviewRender {
 
         let rx = ctx.adapter.get_base().gr.ratio_x;
         let ry = ctx.adapter.get_base().gr.ratio_y;
+        let sym_w = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+        let sym_h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
 
         let p3 = self.scene.get_sprite("petimg3");
         p3.set_pos(
-            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+            (6.0 * sym_w / rx) as u16,
+            (2.5 * sym_h / ry) as u16,
         );
 
         let p4 = self.scene.get_sprite("petimg4");
         p4.set_pos(
-            (6.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (2.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u16,
+            (6.0 * sym_w / rx) as u16,
+            (2.5 * sym_h / ry) as u16,
         );
 
         let pmsg = self.scene.get_sprite("pet-msg");
         pmsg.set_pos(
-            (10.0 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u16,
-            (28.5 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / rx) as u16,
+            (10.0 * sym_w / rx) as u16,
+            (28.5 * sym_h / rx) as u16,
         );
 
+        // Calculate RT3 viewport for image display (40x25 cells)
+        // Center the image on screen
+        let rt3_w = (PIXW as f32 * sym_w / rx) as u16;
+        let rt3_h = (PIXH as f32 * sym_h / ry) as u16;
+
+        let canvas_w = ctx.adapter.get_base().gr.pixel_w as u16;
+        let canvas_h = ctx.adapter.get_base().gr.pixel_h as u16;
+
+        // Center position
+        let rt3_x = (canvas_w - rt3_w) / 2;
+        let rt3_y = (canvas_h - rt3_h) / 2;
+        self.rt3_viewport = Some(Rect::new(rt3_x, rt3_y, rt3_w, rt3_h));
+
         self.init = true;
-        info!("PETVIEW INIT OK...!!!!");
+        info!(
+            "PETVIEW INIT: rx={}, ry={}, sym_w={}, sym_h={}, RT3 viewport: ({},{}){}x{}, canvas: {}x{}",
+            rx, ry, sym_w, sym_h, rt3_x, rt3_y, rt3_w, rt3_h, canvas_w, canvas_h
+        );
     }
 }
 
@@ -263,6 +297,8 @@ impl Render for PetviewRender {
         if event_check("PetView.Timer", "pet_timer") {
             match PetviewState::from_usize(ctx.state as usize).unwrap() {
                 PetviewState::Normal => {
+                    // Ensure RT3 is visible for this mode
+                    ctx.adapter.set_rt_visible(3, true);
                     // RT primitive: copy RT1 to RT3
                     ctx.adapter.copy_rt(1, 3);
                     let p3 = self.scene.get_sprite("petimg3");
@@ -280,6 +316,8 @@ impl Render for PetviewRender {
                     );
                 }
                 PetviewState::TransGl => {
+                    // Ensure RT3 is visible for this mode
+                    ctx.adapter.set_rt_visible(3, true);
                     // RT primitive: GPU shader blend RT0 + RT1 → RT3
                     ctx.adapter.blend_rts(0, 1, 3, model.trans_effect, model.progress);
                     let p3 = self.scene.get_sprite("petimg3");
@@ -293,7 +331,46 @@ impl Render for PetviewRender {
 
     fn draw(&mut self, ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {
         self.do_init(ctx);
-        // scene.draw() handles: sprite layer → RT2 → present
-        self.scene.draw(ctx).unwrap();
+
+        // Step 1: Render scene content to RT2 (without present)
+        self.scene.draw_to_rt(ctx).unwrap();
+
+        // Step 2: Custom present based on state
+        let state = PetviewState::from_usize(ctx.state as usize).unwrap();
+        match state {
+            PetviewState::TransBuf => {
+                // TransBuf: RT3 hidden, only show RT2
+                ctx.adapter.present(&[RtComposite::fullscreen(2)]);
+            }
+            PetviewState::Normal | PetviewState::TransGl => {
+                // Calculate viewport EVERY FRAME using current ratio
+                let rx = ctx.adapter.get_base().gr.ratio_x;
+                let ry = ctx.adapter.get_base().gr.ratio_y;
+                let sym_w = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+                let sym_h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+
+                let rt3_w = (PIXW as f32 * sym_w / rx) as u16;
+                let rt3_h = (PIXH as f32 * sym_h / ry) as u16;
+
+                let canvas_w = ctx.adapter.get_base().gr.pixel_w as u32;
+                let canvas_h = ctx.adapter.get_base().gr.pixel_h as u32;
+
+                let rt3_x = ((canvas_w - rt3_w as u32) / 2) as i32;
+                let rt3_y = ((canvas_h - rt3_h as u32) / 2) as i32;
+                // Use ARect instead of Rect to avoid clipping (Rect clips when w*h > u16::MAX)
+                let vp = ARect { x: rt3_x, y: rt3_y, w: rt3_w as u32, h: rt3_h as u32 };
+
+                // DEBUG: Print ALL values
+                info!(
+                    "petview: canvas={}x{}, vp.x={}, vp.y={}, vp.w={}, vp.h={}",
+                    canvas_w, canvas_h, vp.x, vp.y, vp.w, vp.h
+                );
+
+                ctx.adapter.present(&[
+                    RtComposite::fullscreen(2),
+                    RtComposite::with_viewport(3, vp),
+                ]);
+            }
+        }
     }
 }

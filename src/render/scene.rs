@@ -185,7 +185,29 @@ impl Scene {
         }
     }
 
-    pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
+    /// Draw scene content to RT2 without presenting to screen.
+    ///
+    /// Use this method when you need to customize the present stage.
+    /// After calling this, use `ctx.adapter.present()` or `ctx.adapter.present_default()`
+    /// to display the content.
+    ///
+    /// # Example (Custom Present)
+    /// ```rust,ignore
+    /// fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
+    ///     // Custom RT operations
+    ///     ctx.adapter.blend_rts(0, 1, 3, effect, progress);
+    ///
+    ///     // Render to RT2 (no present)
+    ///     self.scene.draw_to_rt(ctx).unwrap();
+    ///
+    ///     // Custom present with specific viewport
+    ///     ctx.adapter.present(&[
+    ///         RtComposite::new(2),
+    ///         RtComposite::new(3).with_viewport(custom_vp),
+    ///     ]);
+    /// }
+    /// ```
+    pub fn draw_to_rt(&mut self, ctx: &mut Context) -> io::Result<()> {
         if ctx.stage > LOGO_FRAME {
             self.update_render_index();
             for idx in &self.render_index {
@@ -213,6 +235,7 @@ impl Scene {
         ctx.adapter
             .draw_all(cb, pb, &mut self.layers, ctx.stage)
             .unwrap();
+
         ctx.adapter.hide_cursor().unwrap();
 
         // Swap buffers
@@ -220,6 +243,22 @@ impl Scene {
             self.tui_buffers[1 - self.current].reset();
             self.current = 1 - self.current;
         }
+
+        Ok(())
+    }
+
+    /// Draw scene and present to screen with default settings.
+    ///
+    /// This is the standard rendering method for most apps.
+    /// It renders all content to RT2 and presents RT2 & RT3 to screen.
+    ///
+    /// For custom present behavior, use `draw_to_rt()` instead.
+    pub fn draw(&mut self, ctx: &mut Context) -> io::Result<()> {
+        self.draw_to_rt(ctx)?;
+
+        // Graphics mode: present RT2 & RT3 to screen
+        #[cfg(graphics_mode)]
+        ctx.adapter.present_default();
 
         Ok(())
     }

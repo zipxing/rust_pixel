@@ -440,13 +440,12 @@ pub trait Adapter {
             self.get_base(),
         );
 
-        // Pass 2: Render to screen or buffer based on mode
+        // Pass 2: Render to RT2 or buffer based on mode
         if self.get_base().gr.rflag {
-            // Both OpenGL and WGPU use the same unified rendering pipeline
-            // 1. Draw RenderCell array to render_texture 2 (main scene)
+            // Draw RenderCell array to render_texture 2 (main scene)
+            // Note: present_default() is called separately by Scene::draw()
+            // This allows apps to customize the present stage
             self.rbuf2rt(&rbuf, 2, false);
-            // 2. Composite render_texture 2 & 3 to screen (final output)
-            self.present_default();
         } else {
             // Buffered mode: Store render data for external access
             // Used by FFI interfaces and WASM exports to access raw render data

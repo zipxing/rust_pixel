@@ -953,6 +953,10 @@ impl WinitWgpuAdapter {
         &mut self,
         composites: &[crate::render::adapter::RtComposite],
     ) -> Result<(), String> {
+        // Get ratio values before borrowing self.wgpu_* fields
+        let rx = self.base.gr.ratio_x;
+        let ry = self.base.gr.ratio_y;
+
         if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
             &self.wgpu_device,
             &self.wgpu_queue,
@@ -1010,23 +1014,29 @@ impl WinitWgpuAdapter {
 
                 // Calculate area and transform based on viewport
                 let (area, transform) = if let Some(ref vp) = composite.viewport {
-                    // Custom viewport specified
-                    let vp_x = vp.x as f32;
-                    let vp_y = vp.y as f32;
-                    let vp_w = vp.width as f32;
-                    let vp_h = vp.height as f32;
+                    // Use viewport values from caller (calculated with current ratio)
+                    // Note: Using ARect fields (w, h) instead of Rect (width, height)
+                    let pw = vp.w as f32;
+                    let ph = vp.h as f32;
 
-                    // Convert to normalized coordinates [0, 1]
-                    // WGPU Y-axis: top-left origin
-                    let area = [vp_x / pcw, vp_y / pch, vp_w / pcw, vp_h / pch];
+                    // DEBUG: Print ALL viewport fields
+                    log::info!(
+                        "present_wgpu RT{}: vp.x={}, vp.y={}, vp.w={}, vp.h={}, rx={}, ry={}",
+                        rtidx, vp.x, vp.y, vp.w, vp.h, rx, ry
+                    );
 
-                    // Create transform with proper scaling
-                    let mut unified_transform = UnifiedTransform::new();
-                    unified_transform.scale(vp_w / pcw, vp_h / pch);
+                    // area controls TEXTURE SAMPLING (WGPU uses top-left origin)
+                    let area = [0.0, 0.0, pw / pcw, ph / pch];
 
-                    (area, unified_transform)
+                    let mut transform = UnifiedTransform::new();
+                    transform.scale(pw / pcw, ph / pch);
+                    // Translate left by one cell to correct position offset
+                    // In clip space after scaling: -2.0 / 40.0 = -0.05 (one cell = pw/40)
+                    transform.translate(-2.0 / 40.0, 0.0);
+
+                    (area, transform)
                 } else {
-                    // Fullscreen - use identity transform
+                    // Fullscreen - sample entire texture, identity transform
                     let area = [0.0, 0.0, 1.0, 1.0];
                     let transform = UnifiedTransform::new();
                     (area, transform)

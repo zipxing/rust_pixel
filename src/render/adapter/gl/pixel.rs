@@ -445,11 +445,15 @@ impl GlPixelRenderer {
         let pcw = canvas_width as f32;
         let pch = canvas_height as f32;
 
+        // DEBUG: Log canvas size
+        log::info!("GL present: canvas={}x{}", canvas_width, canvas_height);
+
         for composite in composites {
             let rtidx = composite.rt;
 
             // Skip hidden RTs
             if self.gl_pixel.get_render_texture_hidden(rtidx) {
+                log::info!("GL present: RT{} is hidden, skipping", rtidx);
                 continue;
             }
 
@@ -458,22 +462,21 @@ impl GlPixelRenderer {
 
             // Calculate viewport and transform based on composite settings
             let (area, transform) = if let Some(ref vp) = composite.viewport {
-                // Custom viewport specified
-                let vp_x = vp.x as f32;
-                let vp_y = vp.y as f32;
-                let vp_w = vp.width as f32;
-                let vp_h = vp.height as f32;
+                // Custom viewport specified (using ARect fields: w, h instead of width, height)
+                let vp_w = vp.w as f32;
+                let vp_h = vp.h as f32;
 
-                // Convert to normalized coordinates [0, 1]
-                // OpenGL Y-axis: bottom-left origin
+                // area controls TEXTURE SAMPLING, not screen position
+                // RT3 content is always at the bottom-left of the texture
                 let area = [
-                    vp_x / pcw,
-                    (pch - vp_y - vp_h) / pch,
+                    0.0,
+                    (pch - vp_h) / pch,
                     vp_w / pcw,
                     vp_h / pch,
                 ];
 
-                // Create transform with proper scaling
+                // transform controls SCREEN POSITION via scaling
+                // The shader scales around origin, resulting in centered content
                 let mut unified_transform = UnifiedTransform::new();
                 unified_transform.scale(vp_w / pcw, vp_h / pch);
 

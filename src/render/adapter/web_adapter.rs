@@ -234,6 +234,9 @@ impl Adapter for WebAdapter {
             #[cfg(target_arch = "wasm32")]
             web_sys::console::error_1(&"WebAdapter: gl_pixel_renderer not initialized for present".into());
         }
+
+        // For WebGL, buffer swapping is handled automatically by the browser
+        self.post_draw();
     }
 
     /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)

@@ -75,7 +75,7 @@
 
 use crate::{
     render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::Color, symbol_map::calc_linear_index, AdapterBase},
-    util::{ARect, PointF32, PointI32, PointU16, Rand, Rect},
+    util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
 // use log::info;
@@ -135,13 +135,16 @@ pub enum BlendMode {
 }
 
 /// RT composite item for present()
+/// Note: Uses ARect instead of Rect because Rect has automatic clipping
+/// when width*height > u16::MAX, which is inappropriate for viewport dimensions.
 #[cfg(graphics_mode)]
 #[derive(Clone, Debug)]
 pub struct RtComposite {
     /// RT index (0-3)
     pub rt: usize,
     /// Output viewport, None = fullscreen
-    pub viewport: Option<Rect>,
+    /// Uses ARect (no clipping) instead of Rect (has clipping)
+    pub viewport: Option<ARect>,
     /// Blend mode
     pub blend: BlendMode,
     /// Alpha (0-255)
@@ -161,7 +164,8 @@ impl RtComposite {
     }
 
     /// Create a composite with custom viewport
-    pub fn with_viewport(rt: usize, viewport: Rect) -> Self {
+    /// Uses ARect to avoid Rect's automatic clipping for large viewports
+    pub fn with_viewport(rt: usize, viewport: ARect) -> Self {
         Self {
             rt,
             viewport: Some(viewport),

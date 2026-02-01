@@ -434,6 +434,9 @@ impl Adapter for SdlAdapter {
         } else {
             eprintln!("SdlAdapter: gl_pixel_renderer not initialized for present");
         }
+
+        // Swap buffers to display
+        self.post_draw();
     }
 
     /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
