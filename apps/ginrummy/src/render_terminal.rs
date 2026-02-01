@@ -6,18 +6,18 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
 };
 
 pub struct GinRummyRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl GinRummyRender {
     pub fn new() -> Self {
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         let gb = Sprite::new(0, 0, 50, 35);
         t.add_sprite(gb, "back");
@@ -37,7 +37,7 @@ impl GinRummyRender {
 
         event_register("GinRummy.RedrawTile", "draw_tile");
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn draw_tile(&mut self, ctx: &mut Context, d: &mut GinRummyModel) {
@@ -65,7 +65,7 @@ impl GinRummyRender {
                 i += 1;
             }
 
-            let m = self.panel.get_sprite(msg[n]);
+            let m = self.scene.get_sprite(msg[n]);
             m.set_color_str(
                 0,
                 0,
@@ -80,7 +80,7 @@ impl GinRummyRender {
         }
         for p in pv {
             let (i, bi, n, xadj) = p;
-            let l = self.panel.get_sprite(&format!("t{}", i));
+            let l = self.scene.get_sprite(&format!("t{}", i));
             let ext = "txt";
             let cn = if bi == 0 {
                 format!("poker/back.{}", ext)
@@ -101,7 +101,7 @@ impl Render for GinRummyRender {
         context
             .adapter
             .init(65, 25, 0.5, 0.5, "gin_rummy".to_string());
-        self.panel.init(context);
+        self.scene.init(context);
     }
 
     fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
@@ -113,6 +113,6 @@ impl Render for GinRummyRender {
     fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

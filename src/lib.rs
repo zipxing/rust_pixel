@@ -121,8 +121,9 @@ pub mod log;
 /// - Cell: Base drawing unit (character in text mode; glyph/small bitmap in graphics mode).
 /// - Buffer: Screen buffer built from cells, with efficient updates.
 /// - Sprite: Higher‑level drawing primitive built on top of buffers.
+/// - Layer: Collection of sprites managed as a group.
 /// - Style: Foreground/background colors and other attributes.
-/// - Panel: Unified drawing surface that works in both modes.
+/// - Scene: Unified drawing surface that works in both modes.
 ///
 /// In text mode a cell is a Unicode character. In graphics mode a cell can be a fixed‑size dot
 /// matrix image, a PETSCII character, or a custom texture. Graphics mode also supports per‑sprite

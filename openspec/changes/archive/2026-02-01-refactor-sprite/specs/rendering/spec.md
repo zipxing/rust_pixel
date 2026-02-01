@@ -136,3 +136,96 @@
 - **则** 按 render_weight 从大到小排序（大的在上层）
 - **且** 默认 tui 层 weight=100，sprite 层 weight=0
 - **且** 应用可以自定义层的 weight 来控制顺序
+
+### Requirement: 统一 GPU 渲染管线
+渲染系统 SHALL 采用四阶段 GPU 渲染管线：Buffer → RenderBuffer → RenderTexture → Screen。
+
+#### Scenario: 阶段1 - 数据转换
+- **当** 渲染帧开始时
+- **则** 调用 `generate_render_buffer()` 将 Buffer + Layers 转换为 `Vec<RenderCell>`
+- **且** TUI Buffer 和 Sprite 内容统一转换为 GPU 渲染格式
+- **且** 保持渲染顺序（Sprite 层在下，TUI 层在上）
+
+#### Scenario: 阶段2 - 渲染到 RenderTexture
+- **当** RenderBuffer 准备好后
+- **则** 调用 `draw_render_buffer_to_texture(rbuf, rt)` 渲染到指定 RT
+- **且** 主场景内容渲染到 RT2
+- **且** 可选择渲染到其他 RT (RT0-RT3) 用于特效
+
+#### Scenario: 阶段3 - RT 运算（可选）
+- **当** 需要过渡效果时
+- **则** 使用 `blend_rts(src1, src2, target, effect, progress)` 混合两个 RT
+- **或者** 使用 `copy_rt(src, dst)` 复制 RT 内容
+- **或者** 使用 `clear_rt(rt)` 清空 RT
+- **且** RT 运算结果存储在目标 RT 中
+
+#### Scenario: 阶段4 - 输出到屏幕
+- **当** RT 内容准备好后
+- **则** 调用 `present(composites)` 将多个 RT 合成输出到屏幕
+- **或者** 调用 `present_default()` 使用默认设置（RT2 全屏 + RT3 覆盖）
+- **且** 支持自定义视口、混合模式和透明度
+
+### Requirement: RtComposite 合成配置
+渲染系统 SHALL 提供 `RtComposite` 类型配置 RT 输出参数。
+
+#### Scenario: 全屏输出
+- **当** 需要全屏显示某个 RT 时
+- **则** 使用 `RtComposite::fullscreen(rt_index)`
+- **且** RT 内容铺满整个屏幕
+
+#### Scenario: 自定义视口输出
+- **当** 需要在特定区域显示 RT 时
+- **则** 使用 `RtComposite::with_viewport(rt, rect)`
+- **且** RT 内容显示在指定的矩形区域
+
+#### Scenario: 混合模式和透明度
+- **当** 需要特殊混合效果时
+- **则** 使用 `.blend(BlendMode)` 设置混合模式（Normal/Add/Multiply/Screen）
+- **且** 使用 `.alpha(u8)` 设置透明度 (0-255)
+
+### Requirement: RenderTexture 用途约定
+渲染系统 SHALL 使用 4 个 RenderTexture (RT0-RT3) 用于不同用途。
+
+#### Scenario: RT 用途分配
+- **RT0**: 用于过渡效果的源图像1
+- **RT1**: 用于过渡效果的源图像2
+- **RT2**: 主场景内容（TUI + Sprites）
+- **RT3**: 叠加层（过渡效果结果/特效层）
+
+#### Scenario: 普通渲染流程
+- **当** 无特效渲染时
+- **则** 主内容渲染到 RT2
+- **且** 直接调用 `present_default()` 输出
+
+#### Scenario: 过渡效果流程
+- **当** 需要图像过渡效果时
+- **则** 源图像渲染到 RT0，目标图像渲染到 RT1
+- **且** 调用 `blend_rts(0, 1, 3, effect, progress)` 混合到 RT3
+- **且** 调用 `present()` 合成 RT2 + RT3 输出
+
+### Requirement: App 可定制渲染流程
+渲染系统 SHALL 允许 App 在 `Render::draw()` 中完全控制渲染流程，通过组合调用 Adapter API 实现自定义渲染。
+
+#### Scenario: 默认渲染流程
+- **当** App 使用默认渲染时
+- **则** 在 `draw()` 中调用 `scene.draw(ctx)`
+- **且** Scene 内部处理所有 4 个阶段
+- **且** App 无需关心底层细节
+
+#### Scenario: 扩展渲染流程
+- **当** App 需要额外的渲染效果时
+- **则** 可以在 `draw()` 中先调用 `scene.draw(ctx)`
+- **且** 然后调用 `ctx.adapter.xxx()` 添加额外效果
+- **且** 两者可以混合使用
+
+#### Scenario: 完全自定义渲染流程
+- **当** App 需要完全控制渲染时
+- **则** 可以跳过 `scene.draw()`
+- **且** 直接调用 `ctx.adapter` 的阶段 2、3、4 API
+- **且** App 负责管理整个渲染流程
+
+#### Scenario: 调用链原则
+- **当** 渲染系统执行时
+- **则** Game Loop 调用 `render.draw(ctx, model, dt)`
+- **且** App 的 `draw()` 调用 Adapter API
+- **且** Adapter 不主动调用 App（控制权在 App）

@@ -13,7 +13,7 @@ use crate::render::{
         PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
-    sprite::Sprites,
+    sprite::Layer,
 };
 use log::info;
 use sdl2::{
@@ -306,7 +306,7 @@ impl Adapter for SdlAdapter {
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         // No custom window dragging needed (using OS window decoration)
@@ -345,7 +345,7 @@ impl Adapter for SdlAdapter {
     }
 
     /// Direct implementation of draw_render_buffer_to_texture for SDL
-    fn draw_render_buffer_to_texture(
+    fn rbuf2rt(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -368,36 +368,12 @@ impl Adapter for SdlAdapter {
         }
     }
 
-    /// Direct implementation of draw_render_textures_to_screen for SDL
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            let ratio_x = self.base.gr.ratio_x;
-            let ratio_y = self.base.gr.ratio_y;
-
-            // Bind to screen framebuffer and render textures
-            gl_pixel_renderer.bind_screen_with_viewport(
-                self.base.gr.pixel_w as i32,
-                self.base.gr.pixel_h as i32,
-            );
-
-            // Use direct method call - no more trait objects!
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!("SdlAdapter: render_textures_to_screen error: {}", e);
-            }
-        } else {
-            eprintln!("SdlAdapter: gl_pixel_renderer not initialized for texture rendering");
-        }
-    }
-
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 
     /// SDL adapter implementation of render texture visibility control
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer
                 .get_gl_pixel_mut()
@@ -405,22 +381,17 @@ impl Adapter for SdlAdapter {
         }
     }
 
-    /// SDL adapter implementation of simple transition rendering
-    fn render_simple_transition(&mut self, target_texture: usize) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_normal_transition(target_texture);
-        }
-    }
-
     /// SDL adapter implementation of advanced transition rendering
-    fn render_advanced_transition(
+    fn blend_rts(
         &mut self,
-        target_texture: usize,
+        src_texture1: usize,
+        src_texture2: usize,
+        dst_texture: usize,
         effect_type: usize,
         progress: f32,
     ) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
+            gl_pixel_renderer.render_gl_transition(src_texture1, src_texture2, dst_texture, effect_type, progress);
         }
     }
 
@@ -428,6 +399,62 @@ impl Adapter for SdlAdapter {
     fn setup_buffer_transition(&mut self, target_texture: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.setup_transbuf_rendering(target_texture);
+        }
+    }
+
+    /// SDL adapter implementation of render texture copy
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.copy_rt(src_index, dst_index);
+        }
+    }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            // Bind screen and set viewport
+            gl_pixel_renderer.bind_screen_with_viewport(
+                self.base.gr.pixel_w as i32,
+                self.base.gr.pixel_h as i32,
+            );
+
+            // Clear screen
+            use glow::HasContext;
+            let gl = gl_pixel_renderer.get_gl();
+            unsafe {
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+
+            // Use the new present() method
+            gl_pixel_renderer.present(composites);
+        } else {
+            eprintln!("SdlAdapter: gl_pixel_renderer not initialized for present");
+        }
+
+        // Swap buffers to display
+        self.post_draw();
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with float precision and Retina support.
+    fn present_default(&mut self) {
+        // Get drawable size for Retina display support (SDL)
+        let physical_size = if let Some(window) = &self.sdl_window {
+            let (w, h) = window.drawable_size();
+            Some((w, h))
+        } else {
+            None
+        };
+
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            gl_pixel_renderer.present_default_with_physical_size(rx, ry, physical_size);
         }
     }
 }

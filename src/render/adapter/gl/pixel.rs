@@ -5,9 +5,9 @@ use crate::render::adapter::{
     gl::{
         render_general2d::GlRenderGeneral2d, render_symbols::GlRenderSymbols,
         render_transition::GlRenderTransition, texture::GlRenderTexture,
-        GlRender, 
+        GlRender,
     },
-    RenderCell,
+    BlendMode, RenderCell, RtComposite,
 };
 use crate::render::graph::{UnifiedColor, UnifiedTransform};
 use glow::HasContext;
@@ -158,16 +158,49 @@ impl GlPixel {
     pub fn render_trans_frame(
         &mut self,
         gl: &glow::Context,
+        src_idx1: usize,
+        src_idx2: usize,
         sidx: usize,
         progress: f32,
     ) {
         self.r_trans.set_texture(
             self.canvas_width,
             self.canvas_height,
-            self.render_textures[0].texture,
-            self.render_textures[1].texture,
+            self.render_textures[src_idx1].texture,
+            self.render_textures[src_idx2].texture,
         );
         self.r_trans.draw_trans(gl, sidx, progress);
+    }
+
+    /// Copy one render texture to another using framebuffer blit
+    ///
+    /// This is much more efficient than rendering through a shader for static copies.
+    /// Uses OpenGL's blit operation to directly copy framebuffer contents.
+    pub fn copy_rt(&mut self, gl: &glow::Context, src_index: usize, dst_index: usize) {
+        unsafe {
+            let src_tex = &self.render_textures[src_index];
+            let dst_tex = &self.render_textures[dst_index];
+
+            // Bind source framebuffer to READ_FRAMEBUFFER
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(src_tex.framebuffer));
+
+            // Bind destination framebuffer to DRAW_FRAMEBUFFER
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(dst_tex.framebuffer));
+
+            // Blit (copy) from source to destination
+            gl.blit_framebuffer(
+                0, 0, src_tex.width as i32, src_tex.height as i32,  // src rect
+                0, 0, dst_tex.width as i32, dst_tex.height as i32,  // dst rect
+                glow::COLOR_BUFFER_BIT,
+                glow::NEAREST,
+            );
+
+            // Restore normal framebuffer binding
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+            // Make destination texture visible, keep source as-is
+            self.render_textures[dst_index].is_hidden = false;
+        }
     }
 
     pub fn get_canvas_size(&self) -> (u32, u32) {
@@ -323,25 +356,26 @@ impl GlPixelRenderer {
 
         Ok(())
     }
-    
-    /// Render normal transition frame (convenience method for petview)
-    pub fn render_normal_transition(&mut self, rtidx: usize) {
-        self.gl_pixel.bind_target(&self.gl, rtidx);
-        self.gl_pixel.set_render_texture_hidden(rtidx, false);
-        self.gl_pixel.render_trans_frame(&self.gl, 0, 1.0);
-    }
-    
+
     /// Render GL transition frame with effect and progress (convenience method for petview)
-    pub fn render_gl_transition(&mut self, rtidx: usize, effect: usize, progress: f32) {
-        self.gl_pixel.bind_target(&self.gl, rtidx);
-        self.gl_pixel.set_render_texture_hidden(rtidx, false);
-        self.gl_pixel.render_trans_frame(&self.gl, effect, progress);
+    pub fn render_gl_transition(&mut self, src_tex1: usize, src_tex2: usize, dst_tex: usize, effect: usize, progress: f32) {
+        self.gl_pixel.bind_target(&self.gl, dst_tex);
+        self.gl_pixel.set_render_texture_hidden(dst_tex, false);
+        self.gl_pixel.render_trans_frame(&self.gl, src_tex1, src_tex2, effect, progress);
     }
     
     /// Setup transition buffer rendering (convenience method for petview)
     pub fn setup_transbuf_rendering(&mut self, rtidx: usize) {
         self.gl_pixel.bind_target(&self.gl, rtidx);
         self.gl_pixel.set_render_texture_hidden(rtidx, true);
+    }
+
+    /// Copy one render texture to another
+    ///
+    /// Uses efficient framebuffer blit operation to copy texture contents.
+    /// Much faster than rendering with a shader for static display purposes.
+    pub fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
+        self.gl_pixel.copy_rt(&self.gl, src_index, dst_index);
     }
     
     /// Bind screen and set viewport for Retina displays (convenience method for Winit)
@@ -355,47 +389,174 @@ impl GlPixelRenderer {
         }
     }
     
-    /// Render textures to screen without rebinding (convenience method for Winit)
+    // ========================================================================
+    // RT API Methods
+    // ========================================================================
+
+    /// Set OpenGL blend mode based on BlendMode enum
+    fn set_blend_mode(&self, blend: BlendMode) {
+        unsafe {
+            match blend {
+                BlendMode::Normal => {
+                    self.gl.blend_func_separate(
+                        glow::SRC_ALPHA,
+                        glow::ONE_MINUS_SRC_ALPHA,
+                        glow::ONE,
+                        glow::ONE_MINUS_SRC_ALPHA,
+                    );
+                }
+                BlendMode::Add => {
+                    self.gl.blend_func(glow::SRC_ALPHA, glow::ONE);
+                }
+                BlendMode::Multiply => {
+                    self.gl.blend_func(glow::DST_COLOR, glow::ZERO);
+                }
+                BlendMode::Screen => {
+                    self.gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_COLOR);
+                }
+            }
+        }
+    }
+
+    /// Present render textures to screen using RtComposite chain
     ///
-    /// This method assumes the screen is already bound and viewport is set correctly.
-    /// It only performs the actual rendering operations.
-    pub fn render_textures_to_screen_no_bind(
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    ///
+    /// # Arguments
+    /// * `composites` - Array of RtComposite items to render in order (back to front)
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Simple fullscreen RT2
+    /// renderer.present(&[RtComposite::fullscreen(2)]);
+    ///
+    /// // Multiple layers with custom viewport and alpha
+    /// renderer.present(&[
+    ///     RtComposite::fullscreen(2),
+    ///     RtComposite::with_viewport(3, Rect::new(0, 0, 640, 400)).alpha(200),
+    /// ]);
+    /// ```
+    pub fn present(&mut self, composites: &[RtComposite]) {
+        // Bind screen framebuffer
+        self.gl_pixel.bind_screen(&self.gl);
+
+        let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
+        let pcw = canvas_width as f32;
+        let pch = canvas_height as f32;
+
+        for composite in composites {
+            let rtidx = composite.rt;
+
+            // Skip hidden RTs
+            if self.gl_pixel.get_render_texture_hidden(rtidx) {
+                continue;
+            }
+
+            // Set blend mode
+            self.set_blend_mode(composite.blend);
+
+            // Calculate viewport and transform based on composite settings
+            let (area, transform) = if let Some(ref vp) = composite.viewport {
+                // Custom viewport specified (using ARect fields: w, h instead of width, height)
+                let vp_x = vp.x as f32;
+                let vp_y = vp.y as f32;
+                let vp_w = vp.w as f32;
+                let vp_h = vp.h as f32;
+
+                // area controls TEXTURE SAMPLING, not screen position
+                // RT3 content is always at the bottom-left of the texture
+                let area = [
+                    0.0,
+                    (pch - vp_h) / pch,
+                    vp_w / pcw,
+                    vp_h / pch,
+                ];
+
+                // transform controls SCREEN POSITION via scaling and translation
+                // NDC coordinates: -1 to 1, center is (0, 0)
+                // Convert viewport position to NDC offset:
+                //   tx = (2 * (vp_x + vp_w/2) - canvas_w) / canvas_w
+                //   ty = (canvas_h - 2 * (vp_y + vp_h/2)) / canvas_h  (Y is flipped in OpenGL)
+                let tx = (2.0 * vp_x + vp_w - pcw) / pcw;
+                let ty = (pch - 2.0 * vp_y - vp_h) / pch;
+
+                let mut unified_transform = UnifiedTransform::new();
+                unified_transform.scale(vp_w / pcw, vp_h / pch);
+                unified_transform.translate(tx, ty);
+
+                (area, unified_transform)
+            } else {
+                // Fullscreen - use identity transform
+                let area = [0.0, 0.0, 1.0, 1.0];
+                let transform = UnifiedTransform::new();
+                (area, transform)
+            };
+
+            // Create color with alpha
+            let alpha_f = composite.alpha as f32 / 255.0;
+            let color = UnifiedColor::new(1.0, 1.0, 1.0, alpha_f);
+
+            // Render this RT to screen
+            self.gl_pixel.render_texture_to_screen_impl(
+                &self.gl,
+                rtidx,
+                area,
+                &transform,
+                &color,
+            );
+        }
+
+        // Restore normal blend mode
+        self.set_blend_mode(BlendMode::Normal);
+    }
+
+    /// Present with default settings and physical size for Retina displays
+    pub fn present_default_with_physical_size(
         &mut self,
         ratio_x: f32,
         ratio_y: f32,
-    ) -> Result<(), String> {
-        // Don't bind screen - assume it's already bound with correct viewport
-        
-        // Inline unified rendering logic
-        let unified_color = crate::render::graph::UnifiedColor::white();
+        physical_size: Option<(u32, u32)>,
+    ) {
+        // Bind screen framebuffer
+        self.gl_pixel.bind_screen(&self.gl);
 
-        // Layer 1: Draw render_texture 2 (main game content)
+        // Set viewport to physical size if provided (for Retina displays)
+        if let Some((pw, ph)) = physical_size {
+            unsafe {
+                self.gl.viewport(0, 0, pw as i32, ph as i32);
+            }
+        }
+
+        // Note: Don't clear screen here - matches original behavior
+        // Clearing would fill the entire viewport with black, which may
+        // affect transparent areas on web canvas
+
+        let unified_color = UnifiedColor::white();
+
+        // Layer 1: Draw render_texture 2 (main game content) - fullscreen
         if !self.gl_pixel.get_render_texture_hidden(2) {
             self.gl_pixel.render_texture_to_screen_impl(
                 &self.gl,
                 2,
-                [0.0, 0.0, 1.0, 1.0], // Full-screen quad
-                &crate::render::graph::UnifiedTransform::new(),
+                [0.0, 0.0, 1.0, 1.0],
+                &UnifiedTransform::new(),
                 &unified_color,
             );
         }
 
         // Layer 2: Draw render_texture 3 (transition effects and overlays)
         if !self.gl_pixel.get_render_texture_hidden(3) {
-            // Calculate proper scaling for high-DPI displays
             let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
             let pcw = canvas_width as f32;
             let pch = canvas_height as f32;
 
-            // Calculate scaled dimensions for transition layer
             let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
             let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
 
-            // Create unified transform with proper scaling
-            let mut unified_transform = crate::render::graph::UnifiedTransform::new();
+            let mut unified_transform = UnifiedTransform::new();
             unified_transform.scale(pw / pcw, ph / pch);
 
-            // OpenGL Y-axis: bottom-left origin
             let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
 
             self.gl_pixel.render_texture_to_screen_impl(
@@ -406,7 +567,5 @@ impl GlPixelRenderer {
                 &unified_color,
             );
         }
-
-        Ok(())
     }
 }

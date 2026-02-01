@@ -9,11 +9,11 @@ use crate::event::{
 };
 use crate::render::{
     adapter::{
-        gl::pixel::GlPixelRenderer, 
-        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
+        gl::pixel::GlPixelRenderer,
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
-    sprite::Sprites,
+    sprite::Layer,
 };
 use log::info;
 use std::any::Any;
@@ -108,7 +108,7 @@ impl Adapter for WebAdapter {
         &mut self,
         current_buffer: &Buffer,
         _p: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
@@ -131,45 +131,17 @@ impl Adapter for WebAdapter {
         Ok((0, 0))
     }
 
-    /// Direct implementation of draw_render_buffer_to_texture for Web
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
-    where
-        Self: Sized,
-    {
+    /// Render buffer to RT (Web implementation)
+    fn rbuf2rt(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             let ratio_x = self.base.gr.ratio_x;
             let ratio_y = self.base.gr.ratio_y;
-            
-            // Use direct method call - no more trait objects!
+
             if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y) {
-                eprintln!("WebAdapter: render_buffer_to_texture error: {}", e);
+                eprintln!("WebAdapter: rbuf2rt error: {}", e);
             }
         } else {
             eprintln!("WebAdapter: gl_pixel_renderer not initialized");
-        }
-    }
-
-    /// Direct implementation of draw_render_textures_to_screen for Web
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            let ratio_x = self.base.gr.ratio_x;
-            let ratio_y = self.base.gr.ratio_y;
-            
-            // Bind to screen framebuffer and render textures
-            gl_pixel_renderer.bind_screen_with_viewport(
-                self.base.gr.pixel_w as i32,
-                self.base.gr.pixel_h as i32,
-            );
-            
-            // Use direct method call - no more trait objects!
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!("WebAdapter: render_textures_to_screen error: {}", e);
-            }
-        } else {
-            eprintln!("WebAdapter: gl_pixel_renderer not initialized for texture rendering");
         }
     }
 
@@ -182,59 +154,84 @@ impl Adapter for WebAdapter {
         self
     }
 
-    /// Web adapter implementation of render texture visibility control
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow", 
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+    /// Set RT visibility (Web implementation)
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(texture_index, !visible);
         }
     }
 
-    /// Web adapter implementation of simple transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu", 
-        target_arch = "wasm32"
-    ))]
-    fn render_simple_transition(&mut self, target_texture: usize) {
+    /// Blend two RTs with transition effect (Web implementation)
+    fn blend_rts(&mut self, src1: usize, src2: usize, target: usize, effect: usize, progress: f32) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_normal_transition(target_texture);
+            gl_pixel_renderer.render_gl_transition(src1, src2, target, effect, progress);
         }
     }
 
-    /// Web adapter implementation of advanced transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn render_advanced_transition(&mut self, target_texture: usize, effect_type: usize, progress: f32) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
-        }
-    }
-
-    /// Web adapter implementation of buffer transition setup
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    /// Setup buffer transition (Web implementation)
     fn setup_buffer_transition(&mut self, target_texture: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.setup_transbuf_rendering(target_texture);
         }
     }
 
+    /// Copy one RT to another (Web implementation)
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.copy_rt(src_index, dst_index);
+        }
+    }
 
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            // Bind screen framebuffer
+            gl_pixel_renderer.gl_pixel.bind_screen(&gl_pixel_renderer.gl);
+
+            // Clear screen
+            use glow::HasContext;
+            let gl = gl_pixel_renderer.get_gl();
+            unsafe {
+                gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+
+            // Use the new present() method
+            gl_pixel_renderer.present(composites);
+        } else {
+            // Web console logging for debugging
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::error_1(&"WebAdapter: gl_pixel_renderer not initialized for present".into());
+        }
+
+        // For WebGL, buffer swapping is handled automatically by the browser
+        self.post_draw();
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with float precision.
+    /// Web needs explicit viewport setup using pixel_w/pixel_h.
+    fn present_default(&mut self) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            let (canvas_w, canvas_h) = gl_pixel_renderer.get_gl_pixel().get_canvas_size();
+            info!(
+                "WebAdapter::present_default - pixel_w: {}, pixel_h: {}, canvas_w: {}, canvas_h: {}, ratio: ({}, {})",
+                self.base.gr.pixel_w, self.base.gr.pixel_h, canvas_w, canvas_h, rx, ry
+            );
+            // Web mode: use pixel_w/pixel_h for viewport (same as before)
+            gl_pixel_renderer.present_default_with_physical_size(
+                rx,
+                ry,
+                Some((self.base.gr.pixel_w, self.base.gr.pixel_h)),
+            );
+        }
+    }
 }
 
 macro_rules! web_event {

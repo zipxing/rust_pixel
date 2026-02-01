@@ -40,7 +40,7 @@ use crate::render::{
         Adapter, AdapterBase,
     },
     buffer::Buffer,
-    sprite::Sprites,
+    sprite::Layer,
 };
 
 // OpenGL backend imports (glow + glutin)
@@ -746,6 +746,10 @@ impl Adapter for WinitGlowAdapter {
             }
         }
 
+        // Frame rate control - sleep for remaining time to avoid CPU busy loop
+        // This matches SDL adapter behavior and reduces CPU usage significantly
+        std::thread::sleep(timeout);
+
         // Return exit status
         self.should_exit
     }
@@ -765,7 +769,7 @@ impl Adapter for WinitGlowAdapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         // Handle window drag movement
@@ -829,7 +833,7 @@ impl Adapter for WinitGlowAdapter {
     /// Override render buffer to texture method, directly use our OpenGL renderer
     ///
     /// This method is specifically implemented for WinitGlowAdapter, does not rely on the unified pixel_renderer abstraction
-    fn draw_render_buffer_to_texture(
+    fn rbuf2rt(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -855,17 +859,49 @@ impl Adapter for WinitGlowAdapter {
         }
     }
 
-    /// Override render texture to screen method, directly use our OpenGL renderer
-    ///
-    /// This method is specifically implemented for WinitGlowAdapter, handles final composition of transition effects
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
+    /// WinitGlow adapter implementation of render texture visibility control
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            let ratio_x = self.base.gr.ratio_x;
-            let ratio_y = self.base.gr.ratio_y;
+            gl_pixel_renderer
+                .get_gl_pixel_mut()
+                .set_render_texture_hidden(texture_index, !visible);
+        }
+    }
 
+    /// WinitGlow adapter implementation of advanced transition rendering
+    fn blend_rts(
+        &mut self,
+        src_texture1: usize,
+        src_texture2: usize,
+        dst_texture: usize,
+        effect_type: usize,
+        progress: f32,
+    ) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.render_gl_transition(src_texture1, src_texture2, dst_texture, effect_type, progress);
+        }
+    }
+
+    /// WinitGlow adapter implementation of buffer transition setup
+    fn setup_buffer_transition(&mut self, target_texture: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.setup_transbuf_rendering(target_texture);
+        }
+    }
+
+    /// WinitGlow adapter implementation of render texture copy
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
+            gl_pixel_renderer.copy_rt(src_index, dst_index);
+        }
+    }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             // Get physical window size for Retina display support
             let physical_size = if let Some(window) = &self.window {
                 Some(window.inner_size())
@@ -894,50 +930,32 @@ impl Adapter for WinitGlowAdapter {
                 gl.clear(glow::COLOR_BUFFER_BIT);
             }
 
-            // Directly call our rendering method, no need to bind screen
-            if let Err(e) = gl_pixel_renderer.render_textures_to_screen_no_bind(ratio_x, ratio_y) {
-                eprintln!(
-                    "WinitGlowAdapter: Failed to render textures to screen: {}",
-                    e
-                );
-            }
+            // Use the new present() method
+            gl_pixel_renderer.present(composites);
         } else {
-            eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized for texture rendering");
+            eprintln!("WinitGlowAdapter: gl_pixel_renderer not initialized for present");
         }
+
+        // Swap buffers to display
+        self.post_draw();
     }
 
-    /// WinitGlow adapter implementation of render texture visibility control
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer
-                .get_gl_pixel_mut()
-                .set_render_texture_hidden(texture_index, !visible);
-        }
-    }
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with float precision and Retina support.
+    fn present_default(&mut self) {
+        // Get physical window size for Retina display support
+        let physical_size = if let Some(window) = &self.window {
+            let size = window.inner_size();
+            Some((size.width, size.height))
+        } else {
+            None
+        };
 
-    /// WinitGlow adapter implementation of simple transition rendering
-    fn render_simple_transition(&mut self, target_texture: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_normal_transition(target_texture);
-        }
-    }
-
-    /// WinitGlow adapter implementation of advanced transition rendering
-    fn render_advanced_transition(
-        &mut self,
-        target_texture: usize,
-        effect_type: usize,
-        progress: f32,
-    ) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_gl_transition(target_texture, effect_type, progress);
-        }
-    }
-
-    /// WinitGlow adapter implementation of buffer transition setup
-    fn setup_buffer_transition(&mut self, target_texture: usize) {
-        if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.setup_transbuf_rendering(target_texture);
+            let rx = self.base.gr.ratio_x;
+            let ry = self.base.gr.ratio_y;
+            gl_pixel_renderer.present_default_with_physical_size(rx, ry, physical_size);
         }
     }
 }

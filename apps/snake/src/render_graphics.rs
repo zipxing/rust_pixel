@@ -5,7 +5,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_fire, timer_register},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
 };
@@ -29,13 +29,13 @@ const COLORS: [Color; 14] = [
 ];
 
 pub struct SnakeRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl SnakeRender {
     #[allow(unused_mut)]
     pub fn new() -> Self {
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         // Test pixel sprite scaling in graphic mode...
         #[cfg(graphics_mode)]
@@ -45,51 +45,51 @@ impl SnakeRender {
             pl1.set_graph_sym(0, 0, 1, 21, Color::Indexed(222));
             pl1.set_scale_x(2.0);
             pl1.set_scale_y(2.0);
-            t.add_pixel_sprite(pl1, "PL1");
+            t.add_sprite(pl1, "PL1");
 
             // // 半宽sprite测试
             // let mut pl2 = Sprite::new(52, 5, 1, 1);
             // pl2.set_graph_sym(0, 0, 1, 21, Color::Indexed(10));
             // pl2.set_scale_x(0.5);  // 半宽
-            // t.add_pixel_sprite(pl2, "PL2_HALF");
+            // t.add_sprite(pl2, "PL2_HALF");
 
 
             // // 双宽sprite测试
             // let mut pl3 = Sprite::new(54, 5, 1, 1);
             // pl3.set_graph_sym(0, 0, 1, 22, Color::Indexed(12));
             // pl3.set_scale_x(2.0);  // 双宽
-            // t.add_pixel_sprite(pl3, "PL3_DOUBLE");
+            // t.add_sprite(pl3, "PL3_DOUBLE");
 
             // // 半高sprite测试
             // let mut pl4 = Sprite::new(50, 7, 1, 1);
             // pl4.set_graph_sym(0, 0, 1, 23, Color::Indexed(14));
             // pl4.set_scale_y(0.5);  // 半高
-            // t.add_pixel_sprite(pl4, "PL4_HALF_HEIGHT");
+            // t.add_sprite(pl4, "PL4_HALF_HEIGHT");
 
             // // 完全缩小sprite测试
             // let mut pl5 = Sprite::new(52, 7, 1, 1);
             // pl5.set_graph_sym(0, 0, 1, 24, Color::Indexed(9));
             // pl5.set_scale(0.5);  // 半宽半高
-            // t.add_pixel_sprite(pl5, "PL5_SMALL");
+            // t.add_sprite(pl5, "PL5_SMALL");
 
             // // 文字sprite半宽测试
             // let mut text_sprite = Sprite::new(50, 10, 12, 1);
             // text_sprite.set_color_str(0, 0, "Half Width:", Color::Yellow, Color::Reset);
             // text_sprite.set_scale_x(0.5);  // 半宽文字
-            // t.add_pixel_sprite(text_sprite, "TEXT_HALF");
+            // t.add_sprite(text_sprite, "TEXT_HALF");
 
             // // 文字sprite正常宽度对比
             // let mut text_sprite_normal = Sprite::new(50, 12, 14, 1);
             // text_sprite_normal.set_color_str(0, 0, "Normal Width:", Color::Cyan, Color::Reset);
-            // t.add_pixel_sprite(text_sprite_normal, "TEXT_NORMAL");
+            // t.add_sprite(text_sprite_normal, "TEXT_NORMAL");
 
             // // 标签说明
             // let mut label = Sprite::new(50, 3, 20, 1);
             // label.set_color_str(0, 0, "Scale Test Area:", Color::White, Color::Reset);
-            // t.add_pixel_sprite(label, "LABEL");
+            // t.add_sprite(label, "LABEL");
         }
 
-        // Main screen sprite...
+        // Main screen sprite (TUI layer for border/UI)
         let mut l = Sprite::new(0, 0, (SNAKEW + 2) as u16, (SNAKEH + 2) as u16);
         // l.set_alpha(160);
         l.set_color_str(
@@ -100,15 +100,15 @@ impl SnakeRender {
             Color::Reset,
         );
         #[cfg(not(graphics_mode))]
+        t.add_tui_sprite(l, "SNAKE-BORDER");
+        #[cfg(graphics_mode)]
         t.add_sprite(l, "SNAKE-BORDER");
+        // Game area sprite
         #[cfg(graphics_mode)]
-        t.add_pixel_sprite(l, "SNAKE-BORDER");
-        #[cfg(graphics_mode)]
-        t.add_pixel_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
-        #[cfg(not(graphics_mode))]
         t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
+        // Message area (TUI layer)
         t.add_sprite(
-            Sprite::new(0, (SNAKEH + 3) as u16, SNAKEW as u16, 1u16),
+            Sprite::new(0, ((SNAKEH + 2) * 16) as u16, SNAKEW as u16, 1u16),
             "SNAKE-MSG",
         );
 
@@ -116,29 +116,26 @@ impl SnakeRender {
         timer_register("Snake.TestTimer", 0.1, "test_timer");
         timer_fire("Snake.TestTimer", 8u8);
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn create_sprites(&mut self, _ctx: &mut Context, d: &mut SnakeModel) {
-        self.panel
+        self.scene
             .creat_objpool_sprites(&d.pats.particles, 1, 1, |bl| {
                 bl.set_graph_sym(0, 0, 2, 25, Color::Indexed(10));
             });
     }
 
     pub fn draw_movie(&mut self, _ctx: &mut Context, d: &mut SnakeModel) {
-        self.panel.draw_objpool(&mut d.pats.particles, |pl, m| {
+        self.scene.draw_objpool(&mut d.pats.particles, |pl, m| {
             pl.set_pos(m.obj.loc[0] as u16, m.obj.loc[1] as u16);
         });
     }
 
     pub fn draw_grid(&mut self, context: &mut Context, d: &mut SnakeModel) {
-        let ml = self.panel.get_sprite("SNAKE-MSG");
+        let ml = self.scene.get_sprite("SNAKE-MSG");
         ml.set_default_str("snake");
-        #[cfg(not(graphics_mode))]
-        let l = self.panel.get_sprite("SNAKE");
-        #[cfg(graphics_mode)]
-        let l = self.panel.get_pixel_sprite("SNAKE");
+        let l = self.scene.get_sprite("SNAKE");
         info!("draw_grid...");
         for i in 0..SNAKEH {
             for j in 0..SNAKEW {
@@ -185,7 +182,7 @@ impl Render for SnakeRender {
             "snake".to_string(),
         );
         self.create_sprites(context, data);
-        self.panel.init(context);
+        self.scene.init(context);
     }
 
     fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
@@ -196,7 +193,7 @@ impl Render for SnakeRender {
 
     fn handle_timer(&mut self, context: &mut Context, _model: &mut Self::Model, _dt: f32) {
         if event_check("Snake.TestTimer", "test_timer") {
-            let ml = self.panel.get_sprite("SNAKE-MSG");
+            let ml = self.scene.get_sprite("SNAKE-MSG");
             ml.set_color_str(
                 (context.stage / 6) as u16 % SNAKEW as u16,
                 0,
@@ -212,7 +209,7 @@ impl Render for SnakeRender {
     fn draw(&mut self, context: &mut Context, model: &mut Self::Model, _dt: f32) {
         #[cfg(graphics_mode)]
         {
-            let ss = &mut self.panel.get_pixel_sprite("SNAKE-BORDER");
+            let ss = &mut self.scene.get_sprite("SNAKE-BORDER");
             asset2sprite!(
                 ss,
                 context,
@@ -222,12 +219,12 @@ impl Render for SnakeRender {
                 1
             );
             if context.stage % 8 == 0 {
-                let pl = self.panel.get_pixel_sprite("PL1");
+                let pl = self.scene.get_sprite("PL1");
                 pl.content.area.x += 2;
                 pl.content.area.y += 2;
             }
         }
         self.draw_movie(context, model);
-        self.panel.draw(context).unwrap();
+        self.scene.draw(context).unwrap();
     }
 }

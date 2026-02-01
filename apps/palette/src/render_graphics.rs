@@ -10,7 +10,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register},
     game::{Model, Render},
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::{Color, ColorData, ColorPro, ColorSpace::*, Style},
     util::Rect,
@@ -18,13 +18,13 @@ use rust_pixel::{
 use std::cell::Cell;
 
 pub struct PaletteRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl PaletteRender {
     pub fn new() -> Self {
-        let panel = Panel::new();
-        Self { panel }
+        let scene = Scene::new();
+        Self { scene }
     }
 }
 
@@ -33,7 +33,7 @@ impl Render for PaletteRender {
 
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         context.adapter.init(2, 2, 1.0, 1.0, "palette".to_string());
-        self.panel.init(context);
+        self.scene.init(context);
     }
 
     fn handle_event(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {}
@@ -41,6 +41,6 @@ impl Render for PaletteRender {
     fn handle_timer(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, dt: f32) {
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

@@ -8,7 +8,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_percent, timer_rstage},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::{Color, Style},
     util::Rect,
@@ -47,13 +47,13 @@ pub fn level_info(l: i16) -> String {
 }
 
 pub struct CityRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl CityRender {
     pub fn new() -> Self {
         info!("create city render...");
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         let tsback = Sprite::new(0, 0, 70, 40);
         t.add_sprite(tsback, "back");
@@ -65,7 +65,7 @@ impl CityRender {
         }
         t.add_sprite(Sprite::new(0, (NROW + 3) as u16, NCOL as u16, 1u16), "msg");
         event_register("redraw_grid", "draw_grid");
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn draw_movie(&mut self, ctx: &mut Context, data: &mut CityModel) {
@@ -98,7 +98,7 @@ impl CityRender {
         msg_color: i8,
         is_del: bool,
     ) {
-        let l = self.panel.get_sprite(&format!("cc{}", id));
+        let l = self.scene.get_sprite(&format!("cc{}", id));
         let area = Rect::new(0, 0, 10, 5);
         l.content.resize(area);
         l.content.reset();
@@ -234,8 +234,8 @@ impl Render for CityRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter.init(70, 40, 1.0, 1.0, "city".to_string());
-        self.panel.init(ctx);
-        let l = self.panel.get_sprite("back");
+        self.scene.init(ctx);
+        let l = self.scene.get_sprite("back");
         asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
@@ -249,6 +249,6 @@ impl Render for CityRender {
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
         self.draw_movie(ctx, data);
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

@@ -8,7 +8,7 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_percent, timer_rstage},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
     GAME_FRAME,
@@ -41,23 +41,23 @@ pub fn level_info(l: i16) -> String {
 }
 
 pub struct CityRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl CityRender {
     pub fn new() -> Self {
         info!("create city render...");
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         for i in 0..NCOL * NROW {
-            t.add_pixel_sprite(
+            t.add_sprite(
                 Sprite::new(0, 0, CELLW as u16, CELLH as u16),
                 &format!("cc{}", i),
             );
         }
 
         event_register("redraw_grid", "draw_grid");
-        Self { panel: t }
+        Self { scene: t }
     }
 
     pub fn draw_movie(&mut self, ctx: &mut Context, data: &mut CityModel) {
@@ -90,7 +90,7 @@ impl CityRender {
         msg_color: i8,
         is_del: bool,
     ) {
-        let l = self.panel.get_pixel_sprite(&format!("cc{}", id));
+        let l = self.scene.get_sprite(&format!("cc{}", id));
         let ss = ["cc", "dd", "ee", "ff", "gg"];
         if border_color <= 5 && border_color >= 1 {
             let cn = format!("pix/{}{}.pix", ss[border_color as usize - 1], border_type);
@@ -223,7 +223,7 @@ impl Render for CityRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter.init(60, 60, 1.0, 1.0, "city".to_string());
-        self.panel.init(ctx);
+        self.scene.init(ctx);
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
@@ -236,6 +236,6 @@ impl Render for CityRender {
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
         self.draw_movie(ctx, data);
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

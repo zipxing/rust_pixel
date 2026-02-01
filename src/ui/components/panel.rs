@@ -5,7 +5,7 @@
 
 use crate::context::Context;
 use crate::render::Buffer;
-use crate::render::style::Style;
+use crate::render::style::{Color, Style};
 use crate::util::Rect;
 use crate::ui::{
     Widget, Container, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,
@@ -31,6 +31,8 @@ pub struct Panel {
     layout_constraints: Vec<LayoutConstraints>,
     border_style: BorderStyle,
     title: Option<String>,
+    /// Optional canvas buffer for direct character drawing
+    canvas: Option<Buffer>,
 }
 
 impl Panel {
@@ -42,6 +44,7 @@ impl Panel {
             layout_constraints: Vec::new(),
             border_style: BorderStyle::None,
             title: None,
+            canvas: None,
         }
     }
     
@@ -99,7 +102,7 @@ impl Panel {
     pub fn content_area(&self) -> Rect {
         let bounds = self.bounds();
         let mut content = bounds;
-        
+
         // Account for border
         if self.border_style != BorderStyle::None {
             content.x += 1;
@@ -107,14 +110,64 @@ impl Panel {
             content.width = content.width.saturating_sub(2);
             content.height = content.height.saturating_sub(2);
         }
-        
+
         // Account for title
         if self.title.is_some() {
             content.y += 1;
             content.height = content.height.saturating_sub(1);
         }
-        
+
         content
+    }
+
+    // ========== Canvas methods for direct character drawing ==========
+
+    /// Enable canvas mode with specified size
+    /// Canvas coordinates are relative to the content area
+    pub fn enable_canvas(&mut self, width: u16, height: u16) {
+        let rect = Rect::new(0, 0, width, height);
+        self.canvas = Some(Buffer::empty(rect));
+        self.mark_dirty();
+    }
+
+    /// Check if canvas is enabled
+    pub fn has_canvas(&self) -> bool {
+        self.canvas.is_some()
+    }
+
+    /// Set a character at position (x, y) in the canvas
+    /// Similar to Sprite's set_color_str but for single character
+    pub fn set_char(&mut self, x: u16, y: u16, sym: &str, fg: Color, bg: Color) {
+        if let Some(ref mut canvas) = self.canvas {
+            let area = canvas.area();
+            if x < area.width && y < area.height {
+                let style = Style::default().fg(fg).bg(bg);
+                canvas.get_mut(x, y).set_symbol(sym).set_style(style);
+                self.mark_dirty();
+            }
+        }
+    }
+
+    /// Set a string at position (x, y) in the canvas
+    pub fn set_str(&mut self, x: u16, y: u16, s: &str, fg: Color, bg: Color) {
+        if let Some(ref mut canvas) = self.canvas {
+            let style = Style::default().fg(fg).bg(bg);
+            canvas.set_string(x, y, s, style);
+            self.mark_dirty();
+        }
+    }
+
+    /// Clear the canvas
+    pub fn clear_canvas(&mut self) {
+        if let Some(ref mut canvas) = self.canvas {
+            canvas.reset();
+            self.mark_dirty();
+        }
+    }
+
+    /// Get canvas buffer for direct manipulation
+    pub fn canvas_mut(&mut self) -> Option<&mut Buffer> {
+        self.canvas.as_mut()
     }
 }
 
@@ -130,33 +183,38 @@ impl Widget for Panel {
         if !self.state().visible {
             return Ok(());
         }
-        
+
         let bounds = self.bounds();
         if bounds.width == 0 || bounds.height == 0 {
             return Ok(());
         }
-        
+
         // Use base style for now
         let style = self.base.style;
-        
+
         // Clear background
         self.render_background(buffer, style)?;
-        
+
         // Render border
         if self.border_style != BorderStyle::None {
             self.render_border(buffer, style)?;
         }
-        
+
         // Render title
         if let Some(ref title) = self.title {
             self.render_title(buffer, title, style)?;
         }
-        
+
+        // Render canvas content if enabled
+        if let Some(ref canvas) = self.canvas {
+            self.render_canvas(buffer, canvas)?;
+        }
+
         // Render children
         for child in &self.children {
             child.render(buffer, ctx)?;
         }
-        
+
         Ok(())
     }
     
@@ -291,38 +349,58 @@ impl Panel {
     
     fn render_title(&self, buffer: &mut Buffer, title: &str, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
-        
+
         if title.is_empty() || bounds.width < 4 {
             return Ok(());
         }
-        
+
         let title_y = if self.border_style != BorderStyle::None {
             bounds.y
         } else {
             bounds.y
         };
-        
+
         let available_width = if self.border_style != BorderStyle::None {
             bounds.width.saturating_sub(4) // Account for border and padding
         } else {
             bounds.width
         };
-        
+
         let title_x = if self.border_style != BorderStyle::None {
             bounds.x + 2 // Start after border and padding
         } else {
             bounds.x
         };
-        
+
         // Truncate title if too long
         let display_title = if title.len() > available_width as usize {
             &title[..available_width as usize]
         } else {
             title
         };
-        
+
         buffer.set_string(title_x, title_y, display_title, style);
-        
+
+        Ok(())
+    }
+
+    /// Render canvas content to the target buffer
+    fn render_canvas(&self, buffer: &mut Buffer, canvas: &Buffer) -> UIResult<()> {
+        let content = self.content_area();
+        let canvas_area = canvas.area();
+
+        // Copy canvas content to buffer at content area position
+        for y in 0..canvas_area.height.min(content.height) {
+            for x in 0..canvas_area.width.min(content.width) {
+                let src_cell = canvas.get(x, y);
+                // Only copy non-empty cells
+                if !src_cell.symbol.is_empty() && src_cell.symbol != " " {
+                    let dst_cell = buffer.get_mut(content.x + x, content.y + y);
+                    dst_cell.set_symbol(&src_cell.symbol).set_style(src_cell.style());
+                }
+            }
+        }
+
         Ok(())
     }
 }

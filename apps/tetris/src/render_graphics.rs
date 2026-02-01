@@ -10,40 +10,40 @@ use rust_pixel::{
     game::Render,
     render::{
         adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
-        panel::Panel,
+        scene::Scene,
         sprite::Sprite,
         style::Color,
     },
 };
 
 pub struct TetrisRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl TetrisRender {
     pub fn new() -> Self {
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         let tsback = Sprite::new(0, 0, 35, 24);
-        t.add_pixel_sprite(tsback, "back");
+        t.add_sprite(tsback, "back");
 
         let l0 = Sprite::new(0, 0, HENG, ZONG);
-        t.add_pixel_sprite(l0, "grid0");
+        t.add_sprite(l0, "grid0");
 
         let l1 = Sprite::new(0, 0, HENG, ZONG);
-        t.add_pixel_sprite(l1, "grid1");
+        t.add_sprite(l1, "grid1");
 
         let l2 = Sprite::new(0, 0, 4, 4);
-        t.add_pixel_sprite(l2, "next");
+        t.add_sprite(l2, "next");
 
         let l3 = Sprite::new(0, 0, 4, 4);
-        t.add_pixel_sprite(l3, "hold");
+        t.add_sprite(l3, "hold");
 
         event_register("Tetris.RedrawNext", "redraw_next");
         event_register("Tetris.RedrawHold", "redraw_hold");
         event_register("Tetris.RedrawMsg", "redraw_msg");
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     fn set_block(&mut self, sname: &str, x: u16, y: u16, c: u8) {
@@ -63,7 +63,7 @@ impl TetrisRender {
 
         let fg: Color;
 
-        let l = self.panel.get_pixel_sprite(sname);
+        let l = self.scene.get_sprite(sname);
 
         match c {
             0 => {
@@ -197,8 +197,8 @@ impl Render for TetrisRender {
 
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context.adapter.init(35, 24, 0.5, 0.5, "tetris".to_string());
-        self.panel.init(context);
-        let l = self.panel.get_pixel_sprite("back");
+        self.scene.init(context);
+        let l = self.scene.get_sprite("back");
         let bp = "back.pix";
         asset2sprite!(l, context, &bp);
 
@@ -208,25 +208,25 @@ impl Render for TetrisRender {
         let sym_w = PIXEL_SYM_WIDTH.get().expect("lazylock init");
         let sym_h = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
 
-        let l0 = self.panel.get_pixel_sprite("grid0");
+        let l0 = self.scene.get_sprite("grid0");
         l0.set_pos(
             (1.0 * sym_w / rx) as u16,
             (2.0 * sym_h / ry) as u16,
         );
 
-        let l1 = self.panel.get_pixel_sprite("grid1");
+        let l1 = self.scene.get_sprite("grid1");
         l1.set_pos(
             (24.0 * sym_w / rx) as u16,
             (2.0 * sym_h / ry) as u16,
         );
 
-        let l2 = self.panel.get_pixel_sprite("next");
+        let l2 = self.scene.get_sprite("next");
         l2.set_pos(
             (13.0 * sym_w / rx) as u16,
             (8.0 * sym_h / ry) as u16,
         );
 
-        let l3 = self.panel.get_pixel_sprite("hold");
+        let l3 = self.scene.get_sprite("hold");
         l3.set_pos(
             (17.0 * sym_w / rx) as u16,
             (8.0 * sym_h / ry) as u16,
@@ -235,7 +235,7 @@ impl Render for TetrisRender {
 
     fn draw(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         self.draw_grid(context, data);
-        self.panel.draw(context).unwrap();
+        self.scene.draw(context).unwrap();
     }
 
     fn handle_event(&mut self, _context: &mut Context, data: &mut Self::Model, _dt: f32) {

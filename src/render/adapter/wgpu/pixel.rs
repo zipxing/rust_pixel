@@ -248,6 +248,50 @@ impl WgpuPixelRender {
         }
     }
 
+    /// Copy one render texture to another
+    ///
+    /// Uses wgpu's copy_texture_to_texture for efficient GPU-side copy.
+    /// Much faster than rendering through a shader for static copies.
+    ///
+    /// # Parameters
+    /// - `device`: WGPU device handle
+    /// - `queue`: WGPU queue handle
+    /// - `src_index`: Source render texture index (0-3)
+    /// - `dst_index`: Destination render texture index (0-3)
+    pub fn copy_rt(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        src_index: usize,
+        dst_index: usize,
+    ) {
+        if src_index >= self.render_textures.len() || dst_index >= self.render_textures.len() {
+            return;
+        }
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Texture Copy Encoder"),
+        });
+
+        let src_texture = &self.render_textures[src_index].texture;
+        let dst_texture = &self.render_textures[dst_index].texture;
+
+        encoder.copy_texture_to_texture(
+            src_texture.as_image_copy(),
+            dst_texture.as_image_copy(),
+            wgpu::Extent3d {
+                width: self.canvas_width,
+                height: self.canvas_height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        queue.submit(Some(encoder.finish()));
+
+        // Make destination texture visible
+        self.render_textures[dst_index].set_hidden(false);
+    }
+
     /// Get canvas size (matches OpenGL GlPixel interface)
     ///
     /// # Returns
@@ -407,12 +451,14 @@ impl WgpuPixelRender {
         Ok(())
     }
 
-    /// Render transition frame (matches OpenGL GlPixel::render_trans_frame interface)
+    /// Render transition frame to a specific render texture
     ///
     /// # Parameters
     /// - `device`: WGPU device handle
     /// - `queue`: WGPU queue handle
     /// - `encoder`: Command encoder for rendering
+    /// - `src_texture1_idx`: First source render texture index
+    /// - `src_texture2_idx`: Second source render texture index
     /// - `target_texture_idx`: Target render texture index for rendering
     /// - `shader_idx`: Transition shader index (0-6)
     /// - `progress`: Transition progress (0.0 to 1.0)
@@ -421,6 +467,8 @@ impl WgpuPixelRender {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
+        src_texture1_idx: usize,
+        src_texture2_idx: usize,
         target_texture_idx: usize,
         shader_idx: usize,
         progress: f32,
@@ -437,9 +485,13 @@ impl WgpuPixelRender {
             ));
         }
 
-        // Get texture views for render textures 0 and 1 (source textures)
-        let texture1_view = &self.render_textures[0].view;
-        let texture2_view = &self.render_textures[1].view;
+        if src_texture1_idx >= self.render_textures.len() || src_texture2_idx >= self.render_textures.len() {
+            return Err("Source texture index out of range".to_string());
+        }
+
+        // Get texture views for specified source textures
+        let texture1_view = &self.render_textures[src_texture1_idx].view;
+        let texture2_view = &self.render_textures[src_texture2_idx].view;
 
         // Get target texture view
         let target_view = &self.render_textures[target_texture_idx].view;
@@ -469,6 +521,8 @@ impl WgpuPixelRender {
     /// - `queue`: WGPU queue handle
     /// - `encoder`: Command encoder for rendering
     /// - `target_view`: Target view for rendering
+    /// - `src_texture1_idx`: First source render texture index
+    /// - `src_texture2_idx`: Second source render texture index
     /// - `shader_idx`: Transition shader index (0-6)
     /// - `progress`: Transition progress (0.0 to 1.0)
     pub fn render_trans_frame(
@@ -477,6 +531,8 @@ impl WgpuPixelRender {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         target_view: &wgpu::TextureView,
+        src_texture1_idx: usize,
+        src_texture2_idx: usize,
         shader_idx: usize,
         progress: f32,
     ) -> Result<(), String> {
@@ -485,9 +541,13 @@ impl WgpuPixelRender {
             return Err("Not enough render textures for transition effect".to_string());
         }
 
-        // Get texture views for render textures 0 and 1
-        let texture1_view = &self.render_textures[0].view;
-        let texture2_view = &self.render_textures[1].view;
+        if src_texture1_idx >= self.render_textures.len() || src_texture2_idx >= self.render_textures.len() {
+            return Err("Source texture index out of range".to_string());
+        }
+
+        // Get texture views for specified source textures
+        let texture1_view = &self.render_textures[src_texture1_idx].view;
+        let texture2_view = &self.render_textures[src_texture2_idx].view;
 
         // Set textures on transition renderer
         self.transition_renderer

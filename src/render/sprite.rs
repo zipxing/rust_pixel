@@ -19,8 +19,13 @@ use bitflags::bitflags;
 // use log::info;
 // use std::f32;
 
-mod sprites;
-pub use sprites::Sprites;
+mod layer;
+pub use layer::Layer;
+
+// Type alias for backward compatibility
+#[deprecated(note = "Use Layer instead")]
+#[allow(deprecated)]
+pub type Sprites = Layer;
 
 /// Defines some common tabs symbol (in text mode)
 pub const SYMBOL_LINE: [&str; 37] = [
@@ -156,9 +161,43 @@ macro_rules! asset2sprite_raw {
 }
 
 pub trait Widget {
-    fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer);
+    fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer);
 }
 
+/// Sprite: A positioned drawable element with dual coordinate semantics.
+///
+/// # Coordinate System
+///
+/// Sprite uses **dual coordinate semantics** that automatically adapt to the rendering mode:
+///
+/// ## Text Mode (Terminal/Crossterm)
+/// - Position coordinates (`content.area.x/y`) are in **Cell units** (character grid)
+/// - Each unit represents one character cell in the terminal
+/// - Position is automatically aligned to the character grid
+/// - Graphics-specific features (rotation, transparency, scaling) are ignored
+/// - Example: `set_pos(10, 5)` places sprite at column 10, row 5
+///
+/// ## Graphics Mode (SDL/Glow/WGPU/Web)
+/// - Position coordinates are in **Pixel units** (sub-pixel precision)
+/// - Values are cast from u16 to f32 for rendering calculations
+/// - Supports pixel-perfect positioning, rotation, transparency, and scaling
+/// - Example: `set_pos(100, 50)` places sprite at pixel position (100.0, 50.0)
+///
+/// ## Helper Methods
+///
+/// For code clarity, use these helper methods:
+/// - `set_cell_pos(x, y)` - Explicitly set position in cell units (text mode intent)
+/// - `set_pixel_pos(x, y)` - Explicitly set position in pixel units (graphics mode intent)
+/// - `pixel_pos()` - Get current position as floating-point pixels
+///
+/// ## Field Details
+///
+/// - `content.area.x/y`: Position coordinates (dual semantics: cells in text, pixels in graphics)
+/// - `angle`: Rotation angle in degrees (graphics mode only)
+/// - `alpha`: Transparency level 0-255 (graphics mode only, text mode uses merge logic)
+/// - `scale_x/scale_y`: Scaling factors (graphics mode only)
+/// - `render_weight`: Controls rendering order (negative = hidden)
+///
 #[derive(Clone)]
 pub struct Sprite {
     pub content: Buffer,
@@ -166,17 +205,15 @@ pub struct Sprite {
     pub alpha: u8,
     pub scale_x: f32,  // X-axis scaling factor: 1.0 = normal, 0.5 = half width
     pub scale_y: f32,  // Y-axis scaling factor: 1.0 = normal, 2.0 = double height
-    pub asset_request: Option<(AssetType, String, usize, u16, u16)>,
+    asset_request: Option<(AssetType, String, usize, u16, u16)>,
     render_weight: i32,
 }
 
 impl Widget for Sprite {
-    fn render(&mut self, is_pixel: bool, am: &mut AssetManager, buf: &mut Buffer) {
+    fn render(&mut self, am: &mut AssetManager, buf: &mut Buffer) {
         if !self.is_hidden() {
             self.check_asset_request(am);
-            if !is_pixel {
-                buf.merge(&self.content, self.alpha, true);
-            }
+            buf.merge(&self.content, self.alpha, true);
         }
     }
 }
@@ -390,6 +427,51 @@ impl Sprite {
 
     pub fn set_pos(&mut self, x: u16, y: u16) {
         self.content.area = Rect::new(x, y, self.content.area.width, self.content.area.height);
+    }
+
+    /// Set sprite position in cell units (text mode semantic).
+    ///
+    /// This is a semantic helper that makes text mode intent explicit.
+    /// In text mode: positions sprite at the specified character grid cell.
+    /// In graphics mode: same as set_pos() - coordinates are interpreted as pixels.
+    ///
+    /// # Example
+    /// ```ignore
+    /// sprite.set_cell_pos(10, 5);  // Text mode: column 10, row 5
+    /// ```
+    pub fn set_cell_pos(&mut self, x: u16, y: u16) {
+        self.set_pos(x, y);
+    }
+
+    /// Set sprite position in pixel units (graphics mode semantic).
+    ///
+    /// This is a semantic helper that makes graphics mode intent explicit.
+    /// Accepts floating-point coordinates for sub-pixel precision, then rounds
+    /// to integer values for storage.
+    ///
+    /// In graphics mode: enables pixel-perfect positioning.
+    /// In text mode: coordinates are still aligned to character grid.
+    ///
+    /// # Example
+    /// ```ignore
+    /// sprite.set_pixel_pos(100.5, 50.25);  // Graphics mode: precise pixel positioning
+    /// ```
+    pub fn set_pixel_pos(&mut self, x: f32, y: f32) {
+        self.set_pos(x.round() as u16, y.round() as u16);
+    }
+
+    /// Get sprite position as floating-point pixel coordinates.
+    ///
+    /// Returns the current position converted to f32 for graphics calculations.
+    /// Useful when working with pixel-based positioning in graphics mode.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let (px, py) = sprite.pixel_pos();
+    /// sprite.set_pixel_pos(px + 10.5, py + 5.25);
+    /// ```
+    pub fn pixel_pos(&self) -> (f32, f32) {
+        (self.content.area.x as f32, self.content.area.y as f32)
     }
 
     pub fn draw_circle(

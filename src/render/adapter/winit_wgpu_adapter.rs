@@ -41,7 +41,7 @@ use crate::render::{
     },
     buffer::Buffer,
     graph::{UnifiedColor, UnifiedTransform},
-    sprite::Sprites,
+    sprite::Layer,
 };
 
 // WGPU backend imports
@@ -740,6 +740,8 @@ impl WinitWgpuAdapter {
     /// WGPU version of transition rendering to texture (provides advanced API for petview etc.)
     pub fn render_transition_to_texture_wgpu(
         &mut self,
+        src_texture1_idx: usize,
+        src_texture2_idx: usize,
         target_texture_idx: usize,
         shader_idx: usize,
         progress: f32,
@@ -759,6 +761,8 @@ impl WinitWgpuAdapter {
                 device,
                 queue,
                 &mut encoder,
+                src_texture1_idx,
+                src_texture2_idx,
                 target_texture_idx,
                 shader_idx,
                 progress,
@@ -782,7 +786,7 @@ impl WinitWgpuAdapter {
     /// - `rbuf`: RenderCell data array
     /// - `rtidx`: Target render texture index
     /// - `debug`: Whether to enable debug mode
-    pub fn draw_render_buffer_to_texture_wgpu(
+    pub fn rbuf2rt_wgpu(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -928,6 +932,132 @@ impl WinitWgpuAdapter {
                     [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // Game area, WGPU Y-axis starts from top
                     &unified_transform,
                     &unified_color,
+                )?;
+            }
+
+            // Submit screen composition commands and present frame
+            queue.submit(std::iter::once(screen_encoder.finish()));
+            output.present();
+        } else {
+            return Err("WGPU components not initialized".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Present render textures to screen using RtComposite chain (WGPU implementation)
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    pub fn present_wgpu(
+        &mut self,
+        composites: &[crate::render::adapter::RtComposite],
+    ) -> Result<(), String> {
+        // Get ratio values before borrowing self.wgpu_* fields
+        let rx = self.base.gr.ratio_x;
+        let ry = self.base.gr.ratio_y;
+
+        if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
+            &self.wgpu_device,
+            &self.wgpu_queue,
+            &self.wgpu_surface,
+            &mut self.wgpu_pixel_renderer,
+        ) {
+            // Get current surface texture
+            let output = surface
+                .get_current_texture()
+                .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
+
+            let view = output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            // Bind screen as render target
+            pixel_renderer.bind_screen();
+
+            // Create command encoder for screen composition
+            let mut screen_encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Present Encoder"),
+                });
+
+            // Clear screen
+            {
+                let _clear_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Clear Screen Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+            }
+
+            let pcw = pixel_renderer.canvas_width as f32;
+            let pch = pixel_renderer.canvas_height as f32;
+
+            // Render each composite in order
+            for composite in composites {
+                let rtidx = composite.rt;
+
+                // Skip hidden RTs
+                if pixel_renderer.get_render_texture_hidden(rtidx) {
+                    continue;
+                }
+
+                // Calculate area and transform based on viewport
+                let (area, transform) = if let Some(ref vp) = composite.viewport {
+                    // Use viewport values from caller (calculated with current ratio)
+                    // Note: Using ARect fields (w, h) instead of Rect (width, height)
+                    let vp_x = vp.x as f32;
+                    let vp_y = vp.y as f32;
+                    let pw = vp.w as f32;
+                    let ph = vp.h as f32;
+
+                    // area controls TEXTURE SAMPLING (WGPU uses top-left origin)
+                    let area = [0.0, 0.0, pw / pcw, ph / pch];
+
+                    // transform controls SCREEN POSITION via scaling and translation
+                    // NDC coordinates: -1 to 1, center is (0, 0)
+                    // Convert viewport position to NDC offset:
+                    //   tx = (2 * (vp_x + pw/2) - canvas_w) / canvas_w
+                    //   ty = (canvas_h - 2 * (vp_y + ph/2)) / canvas_h  (Y is flipped)
+                    let tx = (2.0 * vp_x + pw - pcw) / pcw;
+                    let ty = (pch - 2.0 * vp_y - ph) / pch;
+
+                    let mut transform = UnifiedTransform::new();
+                    transform.scale(pw / pcw, ph / pch);
+                    transform.translate(tx, ty);
+
+                    (area, transform)
+                } else {
+                    // Fullscreen - sample entire texture, identity transform
+                    let area = [0.0, 0.0, 1.0, 1.0];
+                    let transform = UnifiedTransform::new();
+                    (area, transform)
+                };
+
+                // Create color with alpha
+                let alpha_f = composite.alpha as f32 / 255.0;
+                let color = UnifiedColor::new(1.0, 1.0, 1.0, alpha_f);
+
+                // Render this RT to screen
+                pixel_renderer.render_texture_to_screen_impl(
+                    device,
+                    queue,
+                    &mut screen_encoder,
+                    &view,
+                    rtidx,
+                    area,
+                    &transform,
+                    &color,
                 )?;
             }
 
@@ -1184,6 +1314,10 @@ impl Adapter for WinitWgpuAdapter {
             }
         }
 
+        // Frame rate control - sleep for remaining time to avoid CPU busy loop
+        // This matches SDL adapter behavior and reduces CPU usage significantly
+        std::thread::sleep(timeout);
+
         // Return exit status
         self.should_exit
     }
@@ -1201,7 +1335,7 @@ impl Adapter for WinitWgpuAdapter {
         &mut self,
         current_buffer: &Buffer,
         previous_buffer: &Buffer,
-        pixel_sprites: &mut Vec<Sprites>,
+        pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
         // Handle window drag movement
@@ -1270,7 +1404,7 @@ impl Adapter for WinitWgpuAdapter {
     /// Override render buffer to texture method, directly use our WGPU renderer
     ///
     /// This method is specifically implemented for WinitWgpuAdapter, does not rely on the unified pixel_renderer abstraction
-    fn draw_render_buffer_to_texture(
+    fn rbuf2rt(
         &mut self,
         rbuf: &[crate::render::adapter::RenderCell],
         rtidx: usize,
@@ -1279,7 +1413,7 @@ impl Adapter for WinitWgpuAdapter {
         Self: Sized,
     {
         // Directly call our WGPU rendering method
-        if let Err(e) = self.draw_render_buffer_to_texture_wgpu(rbuf, rtidx, debug) {
+        if let Err(e) = self.rbuf2rt_wgpu(rbuf, rtidx, debug) {
             eprintln!(
                 "WinitWgpuAdapter: Failed to render buffer to texture {}: {}",
                 rtidx, e
@@ -1287,47 +1421,25 @@ impl Adapter for WinitWgpuAdapter {
         }
     }
 
-    /// Override render texture to screen method, directly use our WGPU renderer
-    ///
-    /// This method is specifically implemented for WinitWgpuAdapter, handles the final composition of transition effects
-    fn draw_render_textures_to_screen(&mut self)
-    where
-        Self: Sized,
-    {
-        // Directly call our WGPU rendering method
-        if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
-            eprintln!(
-                "WinitWgpuAdapter: Failed to render textures to screen: {}",
-                e
-            );
-        }
-    }
-
     /// WinitWgpu adapter implementation of render texture visibility control
-    fn set_render_texture_visible(&mut self, texture_index: usize, visible: bool) {
+    fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
             wgpu_pixel_renderer.set_render_texture_hidden(texture_index, !visible);
         }
     }
 
-    /// WinitWgpu adapter implementation of simple transition rendering
-    fn render_simple_transition(&mut self, target_texture: usize) {
-        // WGPU uses standard transition rendering, parameters are (target, shader=0, progress=1.0)
-        if let Err(e) = self.render_transition_to_texture_wgpu(target_texture, 0, 1.0) {
-            eprintln!("WinitWgpuAdapter: Simple transition error: {}", e);
-        }
-    }
-
     /// WinitWgpu adapter implementation of advanced transition rendering
-    fn render_advanced_transition(
+    fn blend_rts(
         &mut self,
-        target_texture: usize,
+        src_texture1: usize,
+        src_texture2: usize,
+        dst_texture: usize,
         effect_type: usize,
         progress: f32,
     ) {
         // WGPU uses full transition rendering API
         if let Err(e) =
-            self.render_transition_to_texture_wgpu(target_texture, effect_type, progress)
+            self.render_transition_to_texture_wgpu(src_texture1, src_texture2, dst_texture, effect_type, progress)
         {
             eprintln!("WinitWgpuAdapter: Advanced transition error: {}", e);
         }
@@ -1338,6 +1450,37 @@ impl Adapter for WinitWgpuAdapter {
         if let Some(wgpu_pixel_renderer) = &mut self.wgpu_pixel_renderer {
             // WGPU uses texture visibility to setup buffer transitions
             wgpu_pixel_renderer.set_render_texture_hidden(target_texture, true);
+        }
+    }
+
+    /// WinitWgpu adapter implementation of render texture copy
+    fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
+        if let (Some(wgpu_pixel_renderer), Some(device), Some(queue)) = (
+            &mut self.wgpu_pixel_renderer,
+            &self.wgpu_device,
+            &self.wgpu_queue,
+        ) {
+            wgpu_pixel_renderer.copy_rt(device, queue, src_index, dst_index);
+        }
+    }
+
+    /// Present render textures to screen using RtComposite chain
+    ///
+    /// This is the new unified API for presenting RTs to the screen.
+    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    fn present(&mut self, composites: &[crate::render::adapter::RtComposite]) {
+        if let Err(e) = self.present_wgpu(composites) {
+            eprintln!("WinitWgpuAdapter: Failed to present: {}", e);
+        }
+    }
+
+    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
+    ///
+    /// Uses the original working logic with proper viewport calculation.
+    fn present_default(&mut self) {
+        // Call the existing working implementation
+        if let Err(e) = self.draw_render_textures_to_screen_wgpu() {
+            eprintln!("WinitWgpuAdapter: Failed to present_default: {}", e);
         }
     }
 }

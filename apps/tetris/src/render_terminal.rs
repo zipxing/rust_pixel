@@ -8,18 +8,18 @@ use rust_pixel::{
     context::Context,
     event::{event_check, event_register, timer_exdata, timer_stage},
     game::Render,
-    render::panel::Panel,
+    render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
 };
 
 pub struct TetrisRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl TetrisRender {
     pub fn new() -> Self {
-        let mut t = Panel::new();
+        let mut t = Scene::new();
 
         let tsback = Sprite::new(0, 0, 80, 30);
         t.add_sprite(tsback, "back");
@@ -40,7 +40,7 @@ impl TetrisRender {
         event_register("Tetris.RedrawHold", "redraw_hold");
         event_register("Tetris.RedrawMsg", "redraw_msg");
 
-        Self { panel: t }
+        Self { scene: t }
     }
 
     fn set_block(&mut self, sname: &str, x: u16, y: u16, c: u8) {
@@ -60,7 +60,7 @@ impl TetrisRender {
         let bg: Color;
         let fg: Color;
 
-        let l = self.panel.get_sprite(sname);
+        let l = self.scene.get_sprite(sname);
 
         match c {
             0 => {
@@ -202,15 +202,15 @@ impl Render for TetrisRender {
 
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
         context.adapter.init(80, 30, 1.0, 1.0, "tetris".to_string());
-        self.panel.init(context);
-        let l = self.panel.get_sprite("back");
+        self.scene.init(context);
+        let l = self.scene.get_sprite("back");
         let bp = "back.txt";
         asset2sprite!(l, context, &bp);
     }
 
     fn draw(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
         self.draw_grid(context, data);
-        self.panel.draw(context).unwrap();
+        self.scene.draw(context).unwrap();
     }
 
     fn handle_event(&mut self, _context: &mut Context, data: &mut Self::Model, _dt: f32) {

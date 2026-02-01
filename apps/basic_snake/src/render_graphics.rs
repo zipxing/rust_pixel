@@ -2,7 +2,7 @@ use crate::model::BasicSnakeModel;
 use rust_pixel::{
     context::Context,
     game::Render,
-    render::{panel::Panel, sprite::Sprite, style::Color},
+    render::{scene::Scene, sprite::Sprite, style::Color},
     LOGO_FRAME,
 };
 use pixel_basic::DrawCommand;
@@ -10,24 +10,24 @@ use log::error;
 
 /// BasicSnakeRender - Graphics rendering
 pub struct BasicSnakeRender {
-    pub panel: Panel,
+    pub scene: Scene,
 }
 
 impl BasicSnakeRender {
     pub fn new() -> Self {
-        let mut panel = Panel::new();
+        let mut scene = Scene::new();
 
         // Create a single sprite that covers the game area (60x50)
         // Canvas needs to be double height for proper rendering
         let canvas = Sprite::new(0, 0, 60, 50);
-        panel.add_sprite(canvas, "CANVAS");
+        scene.add_sprite(canvas, "CANVAS");
 
-        Self { panel }
+        Self { scene }
     }
 
     /// Apply draw commands from BASIC to the canvas sprite
     fn apply_draw_commands(&mut self, model: &mut BasicSnakeModel) {
-        let canvas = self.panel.get_sprite("CANVAS");
+        let canvas = self.scene.get_sprite("CANVAS");
 
         // Drain commands from the bridge's context and apply to sprite
         for cmd in model.bridge.context_mut().drain_commands() {
@@ -85,7 +85,7 @@ impl Render for BasicSnakeRender {
             1.0, // scale_y
             "Basic Snake".to_string(),
         );
-        self.panel.init(ctx);
+        self.scene.init(ctx);
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _model: &mut Self::Model, _dt: f32) {
@@ -109,9 +109,9 @@ impl Render for BasicSnakeRender {
             self.apply_draw_commands(model);
         }
 
-        // Draw the panel (which includes our updated canvas)
-        if let Err(e) = self.panel.draw(ctx) {
-            error!("Failed to draw panel (frame {}): {:?}", model.frame_count, e);
+        // Draw the scene (which includes our updated canvas)
+        if let Err(e) = self.scene.draw(ctx) {
+            error!("Failed to draw scene (frame {}): {:?}", model.frame_count, e);
         }
     }
 }

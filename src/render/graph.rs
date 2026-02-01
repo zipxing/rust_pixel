@@ -74,12 +74,292 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, cell::tui_symidx, sprite::Sprites, style::Color, symbol_map::calc_linear_index, AdapterBase},
+    render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::Color, symbol_map::calc_linear_index, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
 // use log::info;
 use std::sync::OnceLock;
+
+// ============================================================================
+// RenderTexture API - Unified RT management for graphics mode
+// ============================================================================
+
+/// RT size strategy
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub enum RtSize {
+    /// Follow window size (default)
+    FollowWindow,
+    /// Fixed size in pixels
+    Fixed(u32, u32),
+}
+
+#[cfg(graphics_mode)]
+impl Default for RtSize {
+    fn default() -> Self {
+        RtSize::FollowWindow
+    }
+}
+
+/// RT configuration
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub struct RtConfig {
+    /// Size strategy
+    pub size: RtSize,
+}
+
+#[cfg(graphics_mode)]
+impl Default for RtConfig {
+    fn default() -> Self {
+        Self {
+            size: RtSize::FollowWindow,
+        }
+    }
+}
+
+/// Blend mode for RT composition
+#[cfg(graphics_mode)]
+#[derive(Clone, Copy, Debug, Default)]
+pub enum BlendMode {
+    /// Normal alpha blending (default)
+    #[default]
+    Normal,
+    /// Additive blending
+    Add,
+    /// Multiply blending
+    Multiply,
+    /// Screen blending
+    Screen,
+}
+
+/// RT composite item for present()
+/// Note: Uses ARect instead of Rect because Rect has automatic clipping
+/// when width*height > u16::MAX, which is inappropriate for viewport dimensions.
+#[cfg(graphics_mode)]
+#[derive(Clone, Debug)]
+pub struct RtComposite {
+    /// RT index (0-3)
+    pub rt: usize,
+    /// Output viewport, None = fullscreen
+    /// Uses ARect (no clipping) instead of Rect (has clipping)
+    pub viewport: Option<ARect>,
+    /// Blend mode
+    pub blend: BlendMode,
+    /// Alpha (0-255)
+    pub alpha: u8,
+}
+
+#[cfg(graphics_mode)]
+impl RtComposite {
+    /// Create a fullscreen composite with default settings
+    pub fn fullscreen(rt: usize) -> Self {
+        Self {
+            rt,
+            viewport: None,
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a composite with custom viewport
+    /// Uses ARect to avoid Rect's automatic clipping for large viewports
+    pub fn with_viewport(rt: usize, viewport: ARect) -> Self {
+        Self {
+            rt,
+            viewport: Some(viewport),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Set blend mode
+    pub fn blend(mut self, blend: BlendMode) -> Self {
+        self.blend = blend;
+        self
+    }
+
+    /// Set alpha
+    pub fn alpha(mut self, alpha: u8) -> Self {
+        self.alpha = alpha;
+        self
+    }
+
+    /// Offset viewport position by (dx, dy) pixels
+    ///
+    /// Adjusts the viewport position relative to its current location.
+    /// Useful for fine-tuning after using `centered_*` methods.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let rt3 = ctx.centered_rt(3, 40, 25).offset(-10, 0);  // shift left 10px
+    /// ```
+    pub fn offset(mut self, dx: i32, dy: i32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.x += dx;
+            vp.y += dy;
+        }
+        self
+    }
+
+    /// Set viewport x position directly
+    pub fn x(mut self, x: i32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.x = x;
+        }
+        self
+    }
+
+    /// Set viewport y position directly
+    pub fn y(mut self, y: i32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.y = y;
+        }
+        self
+    }
+
+    // ========================================================================
+    // Viewport Helper Methods
+    // ========================================================================
+    //
+    // Viewport positioning involves converting between coordinate systems:
+    //
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │  Cell Coordinates (40x25)                                           │
+    // │       │                                                             │
+    // │       │ cells_to_pixel_size()                                       │
+    // │       ▼                                                             │
+    // │  Pixel Dimensions (320x200 @ ratio 1.0)                             │
+    // │       │                                                             │
+    // │       │ centered() / at_position()                                  │
+    // │       ▼                                                             │
+    // │  Canvas Position (centered on screen)                               │
+    // └─────────────────────────────────────────────────────────────────────┘
+
+    /// Convert cell dimensions to pixel dimensions
+    ///
+    /// Transforms logical cell sizes to pixel sizes, accounting for
+    /// symbol size and DPI scaling ratio.
+    ///
+    /// # Parameters
+    /// - `cell_w`, `cell_h`: Size in cells (e.g., 40x25)
+    /// - `sym_w`, `sym_h`: Symbol pixel size (from PIXEL_SYM_WIDTH/HEIGHT)
+    /// - `rx`, `ry`: DPI scaling ratio (from adapter.get_base().gr.ratio_x/y)
+    ///
+    /// # Returns
+    /// (pixel_width, pixel_height) as u32 tuple
+    ///
+    /// # Example
+    /// ```ignore
+    /// let sym_w = *PIXEL_SYM_WIDTH.get().unwrap();
+    /// let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap();
+    /// let rx = ctx.adapter.get_base().gr.ratio_x;
+    /// let ry = ctx.adapter.get_base().gr.ratio_y;
+    /// let (pw, ph) = RtComposite::cells_to_pixel_size(40, 25, sym_w, sym_h, rx, ry);
+    /// ```
+    pub fn cells_to_pixel_size(
+        cell_w: u16,
+        cell_h: u16,
+        sym_w: f32,
+        sym_h: f32,
+        rx: f32,
+        ry: f32,
+    ) -> (u32, u32) {
+        let pw = (cell_w as f32 * sym_w / rx) as u32;
+        let ph = (cell_h as f32 * sym_h / ry) as u32;
+        (pw, ph)
+    }
+
+    /// Create a centered viewport composite
+    ///
+    /// Calculates the position to center a viewport of given size
+    /// within the canvas.
+    ///
+    /// # Parameters
+    /// - `rt`: Render texture index (0-3)
+    /// - `vp_w`, `vp_h`: Viewport size in pixels
+    /// - `canvas_w`, `canvas_h`: Canvas size in pixels
+    ///
+    /// # Example
+    /// ```ignore
+    /// let canvas_w = ctx.adapter.get_base().gr.pixel_w as u32;
+    /// let canvas_h = ctx.adapter.get_base().gr.pixel_h as u32;
+    /// ctx.adapter.present(&[
+    ///     RtComposite::fullscreen(2),
+    ///     RtComposite::centered(3, 320, 200, canvas_w, canvas_h),
+    /// ]);
+    /// ```
+    pub fn centered(rt: usize, vp_w: u32, vp_h: u32, canvas_w: u32, canvas_h: u32) -> Self {
+        let x = ((canvas_w.saturating_sub(vp_w)) / 2) as i32;
+        let y = ((canvas_h.saturating_sub(vp_h)) / 2) as i32;
+        Self {
+            rt,
+            viewport: Some(ARect { x, y, w: vp_w, h: vp_h }),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a viewport at a specific position
+    ///
+    /// Places the viewport at the given canvas coordinates.
+    ///
+    /// # Parameters
+    /// - `rt`: Render texture index (0-3)
+    /// - `x`, `y`: Position in canvas pixels
+    /// - `w`, `h`: Viewport size in pixels
+    pub fn at_position(rt: usize, x: i32, y: i32, w: u32, h: u32) -> Self {
+        Self {
+            rt,
+            viewport: Some(ARect { x, y, w, h }),
+            blend: BlendMode::Normal,
+            alpha: 255,
+        }
+    }
+
+    /// Create a centered viewport from cell dimensions (all-in-one helper)
+    ///
+    /// This is the highest-level API that handles all coordinate conversions
+    /// automatically. Just provide the cell dimensions and render context info.
+    ///
+    /// # Parameters
+    /// - `rt`: Render texture index (0-3)
+    /// - `cell_w`, `cell_h`: Size in cells (e.g., 40x25)
+    /// - `sym_w`, `sym_h`: Symbol pixel size (from PIXEL_SYM_WIDTH/HEIGHT)
+    /// - `rx`, `ry`: DPI scaling ratio
+    /// - `canvas_w`, `canvas_h`: Canvas size in pixels
+    ///
+    /// # Example
+    /// ```ignore
+    /// // In render draw():
+    /// let sym_w = *PIXEL_SYM_WIDTH.get().unwrap();
+    /// let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap();
+    /// let rx = ctx.adapter.get_base().gr.ratio_x;
+    /// let ry = ctx.adapter.get_base().gr.ratio_y;
+    /// let canvas_w = ctx.adapter.get_base().gr.pixel_w as u32;
+    /// let canvas_h = ctx.adapter.get_base().gr.pixel_h as u32;
+    ///
+    /// ctx.adapter.present(&[
+    ///     RtComposite::fullscreen(2),
+    ///     RtComposite::centered_cells(3, 40, 25, sym_w, sym_h, rx, ry, canvas_w, canvas_h),
+    /// ]);
+    /// ```
+    pub fn centered_cells(
+        rt: usize,
+        cell_w: u16,
+        cell_h: u16,
+        sym_w: f32,
+        sym_h: f32,
+        rx: f32,
+        ry: f32,
+        canvas_w: u32,
+        canvas_h: u32,
+    ) -> Self {
+        let (vp_w, vp_h) = Self::cells_to_pixel_size(cell_w, cell_h, sym_w, sym_h, rx, ry);
+        Self::centered(rt, vp_w, vp_h, canvas_w, canvas_h)
+    }
+}
 
 /// Symbol texture file path
 ///
@@ -864,7 +1144,126 @@ pub fn render_helper_with_scale(
     )
 }
 
+/// Unified buffer to RenderCell conversion with full transformation support
+///
+/// This is the core rendering primitive that converts a Buffer's content to RenderCell
+/// format. It supports both TUI mode (16×32 characters) and Sprite mode (8×8 characters),
+/// with full transformation parameters (alpha, scale, rotation).
+///
+/// # Parameters
+/// - `buf`: Source buffer containing character data
+/// - `rx`, `ry`: Display ratio for scaling compensation
+/// - `use_tui`: Use TUI characters (16×32) if true, Sprite characters (8×8) if false
+/// - `alpha`: Overall transparency (0=transparent, 255=opaque)
+/// - `scale_x`, `scale_y`: Overall scale factors (1.0 = no scaling)
+/// - `angle`: Overall rotation angle in degrees (0.0 = no rotation)
+/// - `f`: Callback function to process each RenderCell
+///
+/// # TUI Mode Special Handling
+/// When `use_tui=true`:
+/// - Symbols in Sprite region (< 160) are remapped to TUI region (160+)
+/// - Emoji (block >= 170) are rendered with double width
+/// - Emoji preserve original colors (no color modulation)
+pub fn render_buffer_to_cells<F>(
+    buf: &Buffer,
+    rx: f32,
+    ry: f32,
+    use_tui: bool,
+    alpha: u8,
+    scale_x: f32,
+    scale_y: f32,
+    angle: f64,
+    mut f: F,
+) where
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32, u16),
+{
+    let px = buf.area.x;
+    let py = buf.area.y;
+    let pw = buf.area.width;
+    let ph = buf.area.height;
+
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
+    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
+
+    let mut skip_next = false;
+    for (i, cell) in buf.content.iter().enumerate() {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        // Extract CellInfo: symidx, texidx, fg, bg, modifier
+        let cell_info = cell.get_cell_info();
+        let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
+        let modifier = cell_info.4.bits();
+
+        // TUI mode: remap Sprite region symbols to TUI region
+        if use_tui && sh.1 < 160 {
+            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
+                sh.1 = block;
+                sh.0 = idx;
+            } else {
+                sh.1 = 160;
+                sh.0 = 0;
+            }
+        }
+
+        // Calculate destination rectangle with scaling
+        let (mut s2, texidx, symidx) = render_helper_with_scale(
+            pw,
+            PointF32 { x: rx, y: ry },
+            i,
+            &sh,
+            PointU16 { x: px, y: py },
+            use_tui,
+            scale_x,
+            scale_y,
+        );
+
+        // TUI mode: handle Emoji double-width
+        if use_tui && texidx >= 170 {
+            s2.w *= 2;
+            if (i + 1) % pw as usize != 0 {
+                skip_next = true;
+            }
+        }
+
+        // Calculate rotation center point
+        let x = i % pw as usize;
+        let y = i / pw as usize;
+        let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
+        let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
+        let ccp = PointI32 {
+            x: (original_offset_x * scale_x) as i32,
+            y: (original_offset_y * scale_y) as i32,
+        };
+
+        // Apply alpha to colors
+        // For Emoji in TUI mode, use white (no color modulation)
+        let fc = if use_tui && texidx >= 170 && texidx <= 175 {
+            (255, 255, 255, alpha)
+        } else {
+            let mut rgba = sh.2.get_rgba();
+            rgba.3 = alpha;
+            rgba
+        };
+
+        let bc = if sh.3 != Color::Reset {
+            let mut brgba = sh.3.get_rgba();
+            brgba.3 = alpha;
+            Some(brgba)
+        } else {
+            None
+        };
+
+        f(&fc, &bc, s2, texidx, symidx, angle, ccp, modifier);
+    }
+}
+
 /// Render pixel sprites with rotation and transformation support
+///
+/// **DEPRECATED**: Use `render_buffer_to_cells` instead. This function is kept
+/// for backward compatibility but internally uses the unified function.
 ///
 /// This function processes individual sprite objects and converts them to renderable
 /// format. It supports advanced features like rotation, scaling, and complex
@@ -913,64 +1312,35 @@ pub fn render_helper_with_scale(
 /// - `rx`: Horizontal scaling ratio for display compensation
 /// - `ry`: Vertical scaling ratio for display compensation
 /// - `f`: Callback function to process each sprite pixel
-pub fn render_pixel_sprites<F>(pixel_spt: &mut Sprites, rx: f32, ry: f32, mut f: F)
+pub fn render_layers<F>(layers: &mut Layer, rx: f32, ry: f32, mut f: F)
 where
     // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32),
 {
-    // sort by render_weight...
-    pixel_spt.update_render_index();
-    for si in &pixel_spt.render_index {
-        let s = &pixel_spt.sprites[si.0];
+    // Sort by render_weight
+    layers.update_render_index();
+
+    for si in &layers.render_index.clone() {
+        let s = &layers.sprites[si.0];
         if s.is_hidden() {
             continue;
         }
-        let px = s.content.area.x;
-        let py = s.content.area.y;
-        let pw = s.content.area.width;
-        let ph = s.content.area.height;
 
-        for (i, cell) in s.content.content.iter().enumerate() {
-            // Extract CellInfo (now includes modifier)
-            let cell_info = cell.get_cell_info();
-            let sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
-            let (s2, texidx, symidx) = render_helper_with_scale(
-                pw,
-                PointF32 { x: rx, y: ry },
-                i,
-                &sh,
-                PointU16 { x: px, y: py },
-                false,     // Pixel sprites use Sprite characters (8×8)
-                s.scale_x, // 应用sprite的X轴缩放
-                s.scale_y, // 应用sprite的Y轴缩放
-            );
-            let x = i % pw as usize;
-            let y = i / pw as usize;
-            // Center point for rotation — matching the scaled position.
-            // Since we scaled both symbol size and spacing, the rotation center must scale accordingly.
-            let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
-            let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
-
-            let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
-            let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
-
-            // Apply the same scaling to the rotation center offset
-            let ccp = PointI32 {
-                x: (original_offset_x * s.scale_x) as i32,
-                y: (original_offset_y * s.scale_y) as i32,
-            };
-            let mut fc = sh.2.get_rgba();
-            fc.3 = s.alpha;
-            let bc;
-            if sh.3 != Color::Reset {
-                let mut brgba = sh.3.get_rgba();
-                brgba.3 = s.alpha;
-                bc = Some(brgba);
-            } else {
-                bc = None;
-            }
-            f(&fc, &bc, s2, texidx, symidx, s.angle, ccp);
-        }
+        // Use unified function with sprite's transformation parameters
+        render_buffer_to_cells(
+            &s.content,
+            rx,
+            ry,
+            false,      // Sprites use 8×8 characters
+            s.alpha,
+            s.scale_x,
+            s.scale_y,
+            s.angle,
+            |fc, bc, s2, texidx, symidx, angle, ccp, _modifier| {
+                // Forward to original callback (ignore modifier for backward compatibility)
+                f(fc, bc, s2, texidx, symidx, angle, ccp);
+            },
+        );
     }
 }
 
@@ -1026,7 +1396,7 @@ where
 ///   Signature: (fg_color, bg_color, dest_rect, tex_idx, sym_idx, modifier)
 pub fn render_main_buffer<F>(
     buf: &Buffer,
-    width: u16,
+    _width: u16,  // Deprecated: width is now taken from buf.area.width
     rx: f32,
     ry: f32,
     use_tui: bool,
@@ -1034,81 +1404,21 @@ pub fn render_main_buffer<F>(
 ) where
     F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, u16),
 {
-    let mut skip_next = false;
-    for (i, cell) in buf.content.iter().enumerate() {
-        if skip_next {
-            skip_next = false;
-            continue;
-        }
-
-        // Extract CellInfo: symidx, texidx, fg, bg, modifier
-        // CellInfo 现在包含 modifier
-        let cell_info = cell.get_cell_info();
-        let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
-        let modifier = cell_info.4.bits();  // Convert Modifier to u16
-
-        // If we are in TUI mode (use_tui = true) and the texture is in Sprite region (< 160),
-        // redirect it to the TUI block (Block 160+).
-        // Textures 0-159 are Sprite blocks.
-        // Texture 160-169 is TUI, 170-175 is Emoji (already in correct region).
-        if use_tui && sh.1 < 160 {
-            // Use TUI specific mapping
-            // Because TUI texture layout is different from standard ASCII or Sprite layout
-            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
-                sh.1 = block;
-                sh.0 = idx;
-            } else {
-                // Fallback to Block 160, Index 0 (Space) if not found
-                sh.1 = 160;
-                sh.0 = 0;
-            }
-            // if cell.is_blank() {
-            //     info!("sh....{} {}", sh.0, sh.1);
-            // }
-        }
-
-        // Pass use_tui flag directly to render_helper
-        // - false: 8×8 Sprite characters (for pixel sprites, backward compatibility)
-        // - true: 8×16 TUI characters (for UI components)
-        let (mut s2, texidx, symidx) = render_helper(
-            width,
-            PointF32 { x: rx, y: ry },
-            i,
-            &sh,
-            PointU16 { x: 0, y: 0 },
-            use_tui,
-        );
-
-        // Handle Emoji rendering in TUI mode
-        // Emoji (Block >= 170) are 32x32 source in 4096 texture,
-        // while TUI chars are 16x32 source in 4096 texture.
-        // render_helper calculated s2 based on TUI height (32px) and width (16px).
-        // For Emoji, we need double width (32px) to maintain 1:1 aspect ratio.
-        // We also skip the next cell rendering to avoid overlap/artifacts.
-        if use_tui && texidx >= 170 {
-            s2.w *= 2;
-            // Only skip next if we are not at the end of a row
-            if (i + 1) % width as usize != 0 {
-                skip_next = true;
-            }
-        }
-
-        // For Emoji, use white color (no color modulation) to preserve original colors
-        // For TUI/Sprite/CJK characters, use the cell's foreground color
-        // Emoji blocks are 170-175, CJK blocks are 176-207
-        let fc = if use_tui && texidx >= 170 && texidx <= 175 {
-            (255, 255, 255, 255)  // White - no color modulation for Emoji
-        } else {
-            sh.2.get_rgba()
-        };
-        
-        let bc = if sh.3 != Color::Reset {
-            Some(sh.3.get_rgba())
-        } else {
-            None
-        };
-        f(&fc, &bc, s2, texidx, symidx, modifier);
-    }
+    // Use unified function with default transformation (no scale, no rotation, full opacity)
+    render_buffer_to_cells(
+        buf,
+        rx,
+        ry,
+        use_tui,
+        255,   // alpha: fully opaque
+        1.0,   // scale_x: no scaling
+        1.0,   // scale_y: no scaling
+        0.0,   // angle: no rotation
+        |fc, bc, s2, texidx, symidx, _angle, _ccp, modifier| {
+            // Forward to original callback (ignore angle and ccp for backward compatibility)
+            f(fc, bc, s2, texidx, symidx, modifier);
+        },
+    );
 }
 
 /// Render window borders (DEPRECATED - Not used in current implementation)
@@ -1320,7 +1630,7 @@ where
 pub fn generate_render_buffer(
     cb: &Buffer,
     _pb: &Buffer,
-    ps: &mut Vec<Sprites>,
+    ps: &mut Vec<Layer>,
     stage: u32,
     base: &mut AdapterBase,
 ) -> Vec<RenderCell> {
@@ -1339,7 +1649,6 @@ pub fn generate_render_buffer(
             stage,
             |fc, s2, texidx, symidx| {
                 // Logo uses no modifier (0)
-                // Logo 不使用样式修饰符
                 push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz, 0);
             },
         );
@@ -1349,7 +1658,7 @@ pub fn generate_render_buffer(
     let rx = base.gr.ratio_x;
     let ry = base.gr.ratio_y;
 
-    // No custom border rendering - use OS window decoration instead
+    // Custom border rendering - use OS window decoration instead
     // #[cfg(graphics_backend)]
     // render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
@@ -1358,16 +1667,13 @@ pub fn generate_render_buffer(
     // 2. Main Buffer (TUI layer - always on top)
     //
     // This ensures TUI layer is rendered last and appears on top of all sprites.
-    // 渲染顺序（从后到前）：
-    // 1. 像素精灵（游戏对象、背景）
-    // 2. 主缓冲区（TUI 层 - 始终在最上层）
 
     if stage > LOGO_FRAME {
         // render pixel_sprites first (bottom layer)
-        // 先渲染像素精灵（底层）
+        // Note: All layers are now uniform (is_pixel removed), render all non-hidden layers
         for item in ps {
-            if item.is_pixel && !item.is_hidden {
-                render_pixel_sprites(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
+            if !item.is_hidden {
+                render_layers(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
                     // Pixel sprites currently don't use modifier (0)
                     push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);
                 });
@@ -1375,7 +1681,6 @@ pub fn generate_render_buffer(
         }
 
         // render main buffer last (TUI layer - top layer)
-        // 最后渲染主缓冲区（TUI 层 - 最上层）
         // Use TUI characters (8×16) for UI components in graphics mode
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
