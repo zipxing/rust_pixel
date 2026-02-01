@@ -10,7 +10,7 @@ use crate::event::{
 use crate::render::{
     adapter::{
         gl::pixel::GlPixelRenderer,
-        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, init_sym_width, init_sym_height,
+        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
     buffer::Buffer,
     sprite::Layer,
@@ -131,18 +131,14 @@ impl Adapter for WebAdapter {
         Ok((0, 0))
     }
 
-    /// Direct implementation of draw_render_buffer_to_texture for Web
-    fn draw_render_buffer_to_texture(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) 
-    where
-        Self: Sized,
-    {
+    /// Render buffer to RT (Web implementation)
+    fn rbuf2rt(&mut self, rbuf: &[crate::render::adapter::RenderCell], rtidx: usize, debug: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             let ratio_x = self.base.gr.ratio_x;
             let ratio_y = self.base.gr.ratio_y;
-            
-            // Use direct method call - no more trait objects!
+
             if let Err(e) = gl_pixel_renderer.render_buffer_to_texture_self_contained(rbuf, rtidx, debug, ratio_x, ratio_y) {
-                eprintln!("WebAdapter: render_buffer_to_texture error: {}", e);
+                eprintln!("WebAdapter: rbuf2rt error: {}", e);
             }
         } else {
             eprintln!("WebAdapter: gl_pixel_renderer not initialized");
@@ -158,52 +154,28 @@ impl Adapter for WebAdapter {
         self
     }
 
-    /// Web adapter implementation of render texture visibility control
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow", 
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    /// Set RT visibility (Web implementation)
     fn set_rt_visible(&mut self, texture_index: usize, visible: bool) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.get_gl_pixel_mut().set_render_texture_hidden(texture_index, !visible);
         }
     }
 
-    /// Web adapter implementation of advanced transition rendering
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
-    fn render_advanced_transition(&mut self, src_texture1: usize, src_texture2: usize, dst_texture: usize, effect_type: usize, progress: f32) {
+    /// Blend two RTs with transition effect (Web implementation)
+    fn blend_rts(&mut self, src1: usize, src2: usize, target: usize, effect: usize, progress: f32) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
-            gl_pixel_renderer.render_gl_transition(src_texture1, src_texture2, dst_texture, effect_type, progress);
+            gl_pixel_renderer.render_gl_transition(src1, src2, target, effect, progress);
         }
     }
 
-    /// Web adapter implementation of buffer transition setup
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    /// Setup buffer transition (Web implementation)
     fn setup_buffer_transition(&mut self, target_texture: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.setup_transbuf_rendering(target_texture);
         }
     }
 
-    /// Web adapter implementation of render texture copy
-    #[cfg(any(
-        feature = "sdl",
-        feature = "glow",
-        feature = "wgpu",
-        target_arch = "wasm32"
-    ))]
+    /// Copy one RT to another (Web implementation)
     fn copy_rt(&mut self, src_index: usize, dst_index: usize) {
         if let Some(gl_pixel_renderer) = &mut self.gl_pixel_renderer {
             gl_pixel_renderer.copy_rt(src_index, dst_index);
