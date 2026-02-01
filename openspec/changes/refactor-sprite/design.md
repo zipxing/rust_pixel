@@ -1133,3 +1133,419 @@ impl Render for EffectRender {
 2. **渐进式复杂度** - 简单 app 一行代码，复杂 app 自由组合
 3. **完全的灵活性** - App 可以控制 4 阶段的任何步骤
 4. **向后兼容** - 现有 app 无需修改，scene.draw() 仍然有效
+
+#### 8.9 Viewport 辅助方法与坐标系统
+
+**背景：**
+在 present() 阶段自定义 RT 的显示位置时，需要处理多种坐标系统的转换，这是一个容易出错且繁琐的过程。我们添加了一系列辅助方法来简化这一流程。
+
+##### 8.9.1 坐标系统说明
+
+RustPixel 涉及四种坐标系统：
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              坐标系统层次                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. Cell 坐标 (逻辑单元)
+   ┌───────────────────────────────┐
+   │  (0,0)  (1,0)  (2,0) ...     │  ← 字符/符号网格
+   │  (0,1)  (1,1)  (2,1) ...     │    例如：40×25 cells
+   │   ...                         │
+   └───────────────────────────────┘
+   用途：游戏逻辑、Buffer 操作
+
+2. Pixel 坐标 (纹理像素)
+   ┌───────────────────────────────┐
+   │  Cell × sym_size             │  ← 每个 cell 对应 sym_w×sym_h 像素
+   │  例如：40×8 = 320px 宽       │    (通常 sym_w=8, sym_h=8)
+   │       25×8 = 200px 高        │
+   └───────────────────────────────┘
+   用途：RT 纹理尺寸、精灵定位
+
+3. Canvas 坐标 (屏幕像素)
+   ┌───────────────────────────────┐
+   │  Pixel × ratio               │  ← HiDPI 缩放后的实际屏幕像素
+   │  例如：320×2.0 = 640px       │    ratio_x, ratio_y 通常 > 1.0
+   │       200×2.0 = 400px        │
+   └───────────────────────────────┘
+   用途：Viewport 定位、屏幕布局
+
+4. NDC 坐标 (归一化设备坐标)
+   ┌───────────────────────────────┐
+   │  范围：-1.0 到 +1.0          │  ← GPU 着色器使用
+   │  原点：屏幕中心              │    OpenGL/WGPU 标准
+   │  Y 轴：向上为正              │
+   └───────────────────────────────┘
+   用途：GPU 顶点变换、present() 内部
+```
+
+**坐标转换公式：**
+```rust
+// Cell → Pixel
+pixel_w = cell_w * sym_w / ratio_x
+pixel_h = cell_h * sym_h / ratio_y
+
+// Pixel → Canvas (viewport)
+// 对于居中定位：
+vp_x = (canvas_w - pixel_w) / 2
+vp_y = (canvas_h - pixel_h) / 2
+
+// Canvas → NDC (present 内部使用)
+// 用于 viewport 位置转换：
+tx = (2 * vp_x + vp_w - canvas_w) / canvas_w
+ty = (canvas_h - 2 * vp_y - vp_h) / canvas_h
+```
+
+##### 8.9.2 RtComposite 辅助方法
+
+**基础创建方法：**
+```rust
+// graph.rs 中定义
+
+/// 全屏显示 RT
+pub fn fullscreen(rt: usize) -> Self
+
+/// 在指定 viewport 显示 RT
+pub fn with_viewport(rt: usize, viewport: ARect) -> Self
+
+/// 在指定位置和尺寸显示 RT
+pub fn at_position(rt: usize, x: i32, y: i32, w: u32, h: u32) -> Self
+
+/// 居中显示 (需要提供画布尺寸)
+pub fn centered(rt: usize, vp_w: u32, vp_h: u32, canvas_w: u32, canvas_h: u32) -> Self
+
+/// 从 cell 尺寸创建居中 viewport (高级方法)
+pub fn centered_cells(
+    rt: usize,
+    cell_w: u16, cell_h: u16,
+    sym_w: f32, sym_h: f32,
+    rx: f32, ry: f32,
+    canvas_w: u32, canvas_h: u32,
+) -> Self
+```
+
+**链式修改方法：**
+```rust
+/// 设置 viewport 的 x 位置
+pub fn x(mut self, x: i32) -> Self
+
+/// 设置 viewport 的 y 位置
+pub fn y(mut self, y: i32) -> Self
+
+/// 相对偏移 viewport 位置
+pub fn offset(mut self, dx: i32, dy: i32) -> Self
+
+/// 设置混合模式 (预留)
+pub fn blend(mut self, mode: BlendMode) -> Self
+
+/// 设置透明度 (预留)
+pub fn alpha(mut self, alpha: u8) -> Self
+```
+
+**使用示例：**
+```rust
+// 创建居中 RT，然后左移到 x=0
+let rt3 = RtComposite::centered(3, 320, 200, 640, 480).x(0);
+
+// 创建居中 RT，然后相对偏移
+let rt3 = RtComposite::centered(3, 320, 200, 640, 480).offset(-50, 0);
+```
+
+##### 8.9.3 Context 辅助方法 (推荐使用)
+
+为了避免用户手动获取所有渲染参数，Context 提供了更高层的辅助方法：
+
+```rust
+// context.rs 中定义 (仅 graphics_mode)
+
+/// 从 cell 尺寸计算居中 viewport
+/// 自动获取 sym_w/h, ratio, canvas_size
+pub fn centered_viewport(&mut self, cell_w: u16, cell_h: u16) -> ARect
+
+/// 创建居中的 RtComposite (最便捷的 API)
+pub fn centered_rt(&mut self, rt: usize, cell_w: u16, cell_h: u16) -> RtComposite
+
+/// 获取画布尺寸 (width, height)
+pub fn canvas_size(&mut self) -> (u32, u32)
+
+/// 获取 DPI 缩放比例 (ratio_x, ratio_y)
+pub fn ratio(&mut self) -> (f32, f32)
+```
+
+**最佳实践示例：**
+```rust
+impl Render for MyRender {
+    fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+        // 渲染场景到 RT2
+        self.scene.draw_to_rt(ctx).unwrap();
+
+        // 方式1: 最简单 - 使用 ctx.centered_rt()
+        let rt3 = ctx.centered_rt(3, CELL_W, CELL_H);
+        ctx.adapter.present(&[
+            RtComposite::fullscreen(2),
+            rt3,
+        ]);
+
+        // 方式2: 自定义位置 - 先获取居中，再调整
+        let rt3 = ctx.centered_rt(3, CELL_W, CELL_H).x(0);  // 左对齐
+        ctx.adapter.present(&[
+            RtComposite::fullscreen(2),
+            rt3,
+        ]);
+
+        // 方式3: 完全自定义
+        let vp = ctx.centered_viewport(CELL_W, CELL_H);
+        let rt3 = RtComposite::with_viewport(3, ARect {
+            x: 0,
+            y: vp.y,
+            w: vp.w,
+            h: vp.h,
+        });
+        ctx.adapter.present(&[
+            RtComposite::fullscreen(2),
+            rt3,
+        ]);
+    }
+}
+```
+
+##### 8.9.4 Viewport 位置生效原理
+
+**问题背景：**
+早期实现中，`present()` 仅使用 viewport 的 `w` 和 `h` 进行缩放，忽略了 `x` 和 `y` 位置。
+
+**解决方案：**
+在 OpenGL 和 WGPU 的 present 实现中，添加 NDC 坐标平移：
+
+```rust
+// gl/pixel.rs 和 winit_wgpu_adapter.rs
+
+// 从 viewport 位置计算 NDC 平移量
+let vp_x = viewport.x as f32;
+let vp_y = viewport.y as f32;
+let vp_w = viewport.w as f32;
+let vp_h = viewport.h as f32;
+let canvas_w = pixel_canvas_width;
+let canvas_h = pixel_canvas_height;
+
+// NDC 平移公式 (将 viewport 中心映射到正确位置)
+let tx = (2.0 * vp_x + vp_w - canvas_w) / canvas_w;
+let ty = (canvas_h - 2.0 * vp_y - vp_h) / canvas_h;
+
+// 应用变换：先缩放，再平移
+let mut transform = UnifiedTransform::new();
+transform.scale(vp_w / canvas_w, vp_h / canvas_h);
+transform.translate(tx, ty);
+```
+
+**公式推导：**
+```
+NDC 坐标范围: -1.0 到 +1.0, 原点在中心
+
+全屏时 (vp_x=0, vp_w=canvas_w):
+  tx = (0 + canvas_w - canvas_w) / canvas_w = 0  ✓
+
+居中时 (vp_x = (canvas_w - vp_w) / 2):
+  tx = (2 * (canvas_w - vp_w) / 2 + vp_w - canvas_w) / canvas_w
+     = (canvas_w - vp_w + vp_w - canvas_w) / canvas_w
+     = 0  ✓
+
+左对齐 (vp_x = 0, vp_w < canvas_w):
+  tx = (0 + vp_w - canvas_w) / canvas_w
+     = (vp_w - canvas_w) / canvas_w < 0  (向左偏移) ✓
+```
+
+##### 8.9.5 注意事项
+
+**借用检查器限制：**
+```rust
+// ❌ 错误：不能在 present() 参数中调用 ctx.centered_rt()
+ctx.adapter.present(&[
+    RtComposite::fullscreen(2),
+    ctx.centered_rt(3, CELL_W, CELL_H),  // 编译错误！
+]);
+
+// ✅ 正确：先计算，再传入
+let rt3 = ctx.centered_rt(3, CELL_W, CELL_H);
+ctx.adapter.present(&[
+    RtComposite::fullscreen(2),
+    rt3,
+]);
+```
+
+**ARect vs Rect：**
+- `Rect`: 有裁剪保护，当 `w * h > u16::MAX` 时会调整尺寸
+- `ARect`: 无裁剪，直接存储值，用于 viewport (可能超过 u16 范围)
+
+**graphics_mode 条件编译：**
+```rust
+// viewport 辅助方法仅在图形模式可用
+#[cfg(graphics_mode)]
+pub fn centered_viewport(&mut self, ...) -> ARect { ... }
+
+// 文本模式不需要这些方法
+```
+
+### Section 9: 完整渲染 API 参考
+
+#### 9.1 渲染流程总览
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           完整渲染流程                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+App.Render::draw(ctx, model, dt)
+       │
+       ├─── 方式A: 使用 Scene (推荐)
+       │    │
+       │    └──► scene.draw(ctx)
+       │              │
+       │              ├── 生成 RenderBuffer
+       │              ├── draw_to_rt(RT2)
+       │              └── present_default()
+       │
+       └─── 方式B: 完全自定义
+            │
+            ├──► 1. 数据准备
+            │    ctx.adapter.buf2rt(&buffer, rt)
+            │    ctx.adapter.draw_sprite_to_rt(&sprite, rt)
+            │
+            ├──► 2. RT 运算 (可选)
+            │    ctx.adapter.blend_rts(src1, src2, dst, effect, progress)
+            │    ctx.adapter.copy_rt(src, dst)
+            │    ctx.adapter.clear_rt(rt)
+            │
+            └──► 3. 输出到屏幕
+                 let rt3 = ctx.centered_rt(3, CELL_W, CELL_H);
+                 ctx.adapter.present(&[
+                     RtComposite::fullscreen(2),
+                     rt3,
+                 ]);
+```
+
+#### 9.2 核心 API 速查表
+
+| 方法 | 所属 | 用途 |
+|------|------|------|
+| `scene.draw(ctx)` | Scene | 完整渲染流程 (TUI + Sprites → RT2 → Screen) |
+| `scene.draw_to_rt(ctx)` | Scene | 仅渲染到 RT2，不 present |
+| `ctx.adapter.buf2rt(&buf, rt)` | Adapter | Buffer 渲染到指定 RT |
+| `ctx.adapter.copy_rt(src, dst)` | Adapter | 复制 RT 内容 |
+| `ctx.adapter.blend_rts(...)` | Adapter | GPU 混合两个 RT |
+| `ctx.adapter.clear_rt(rt)` | Adapter | 清空 RT |
+| `ctx.adapter.set_rt_visible(rt, visible)` | Adapter | 设置 RT 可见性 |
+| `ctx.adapter.present(&[...])` | Adapter | 合成 RT 并输出到屏幕 |
+| `ctx.adapter.present_default()` | Adapter | 默认输出 (RT2 + RT3) |
+| `ctx.centered_rt(rt, w, h)` | Context | 创建居中 RtComposite |
+| `ctx.centered_viewport(w, h)` | Context | 计算居中 viewport |
+| `RtComposite::fullscreen(rt)` | RtComposite | 创建全屏 composite |
+| `RtComposite::with_viewport(rt, vp)` | RtComposite | 创建带 viewport 的 composite |
+| `composite.x(val)` | RtComposite | 设置 viewport x 位置 |
+| `composite.y(val)` | RtComposite | 设置 viewport y 位置 |
+| `composite.offset(dx, dy)` | RtComposite | 相对偏移 viewport |
+
+#### 9.3 典型使用场景
+
+**场景1: 普通游戏 (大多数情况)**
+```rust
+fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+    self.scene.draw(ctx).unwrap();
+}
+```
+
+**场景2: 带图片过渡效果 (如 petview)**
+```rust
+fn handle_timer(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+    // 准备源图像
+    ctx.adapter.buf2rt(&source_image, 0);
+    ctx.adapter.buf2rt(&target_image, 1);
+
+    // GPU 混合
+    ctx.adapter.blend_rts(0, 1, 3, model.effect, model.progress);
+}
+
+fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+    self.scene.draw_to_rt(ctx).unwrap();
+
+    let rt3 = ctx.centered_rt(3, CELL_W, CELL_H);
+    ctx.adapter.present(&[
+        RtComposite::fullscreen(2),
+        rt3,
+    ]);
+}
+```
+
+**场景3: 分屏渲染**
+```rust
+fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+    // 渲染左半屏
+    ctx.adapter.buf2rt(&self.left_buf, 0);
+
+    // 渲染右半屏
+    ctx.adapter.buf2rt(&self.right_buf, 1);
+
+    let (cw, ch) = ctx.canvas_size();
+    let half_w = cw / 2;
+
+    ctx.adapter.present(&[
+        RtComposite::at_position(0, 0, 0, half_w, ch),
+        RtComposite::at_position(1, half_w as i32, 0, half_w, ch),
+    ]);
+}
+```
+
+**场景4: Picture-in-Picture (画中画)**
+```rust
+fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+    // 主场景
+    self.scene.draw_to_rt(ctx).unwrap();
+
+    // 小窗口渲染到 RT3
+    ctx.adapter.buf2rt(&self.pip_buffer, 3);
+
+    let (cw, ch) = ctx.canvas_size();
+    let pip_w = cw / 4;
+    let pip_h = ch / 4;
+
+    ctx.adapter.present(&[
+        RtComposite::fullscreen(2),
+        RtComposite::at_position(3, (cw - pip_w - 20) as i32, 20, pip_w, pip_h),
+    ]);
+}
+```
+
+#### 9.4 调试技巧
+
+**查看渲染参数：**
+```rust
+fn draw(&mut self, ctx: &mut Context, model: &mut Model, dt: f32) {
+    let (cw, ch) = ctx.canvas_size();
+    let (rx, ry) = ctx.ratio();
+    log::info!("Canvas: {}x{}, Ratio: {}x{}", cw, ch, rx, ry);
+
+    let vp = ctx.centered_viewport(40, 25);
+    log::info!("Viewport: ({},{}) {}x{}", vp.x, vp.y, vp.w, vp.h);
+}
+```
+
+**测试不同 viewport 位置：**
+```rust
+// 居中
+let rt3 = ctx.centered_rt(3, 40, 25);
+
+// 左上角
+let rt3 = ctx.centered_rt(3, 40, 25).x(0).y(0);
+
+// 右下角
+let vp = ctx.centered_viewport(40, 25);
+let (cw, ch) = ctx.canvas_size();
+let rt3 = RtComposite::with_viewport(3, ARect {
+    x: (cw - vp.w) as i32,
+    y: (ch - vp.h) as i32,
+    w: vp.w,
+    h: vp.h,
+});
+```
