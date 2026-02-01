@@ -456,11 +456,10 @@ pub trait Adapter {
 
     // draw buffer to render texture - unified for both OpenGL and WGPU
     #[cfg(graphics_mode)]
-    fn draw_buffer_to_texture(&mut self, buf: &Buffer, rtidx: usize) {
+    fn buf2rt(&mut self, buf: &Buffer, rtidx: usize) {
         let mut rbuf = vec![];
         // Use default transformation (no scale, no rotation, full opacity)
         self.buf2rbuf(buf, &mut rbuf, false, 255, 1.0, 1.0, 0.0);
-
         // Then draw render buffer to texture
         self.rbuf2rt(&rbuf, rtidx, false);
     }

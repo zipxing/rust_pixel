@@ -503,55 +503,6 @@ impl GlPixelRenderer {
         self.set_blend_mode(BlendMode::Normal);
     }
 
-    /// Present with default settings (RT2 fullscreen, RT3 with game area viewport)
-    ///
-    /// Renders RT2 fullscreen and RT3 with proper viewport using float precision.
-    pub fn present_default(&mut self, ratio_x: f32, ratio_y: f32) {
-        // Bind screen framebuffer
-        self.gl_pixel.bind_screen(&self.gl);
-
-        // Note: Don't clear screen here - matches original behavior
-
-        let unified_color = UnifiedColor::white();
-
-        // Layer 1: Draw render_texture 2 (main game content) - fullscreen
-        if !self.gl_pixel.get_render_texture_hidden(2) {
-            self.gl_pixel.render_texture_to_screen_impl(
-                &self.gl,
-                2,
-                [0.0, 0.0, 1.0, 1.0], // Full-screen quad
-                &UnifiedTransform::new(),
-                &unified_color,
-            );
-        }
-
-        // Layer 2: Draw render_texture 3 (transition effects and overlays)
-        if !self.gl_pixel.get_render_texture_hidden(3) {
-            let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
-            let pcw = canvas_width as f32;
-            let pch = canvas_height as f32;
-
-            // Calculate scaled dimensions for transition layer (float precision)
-            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
-
-            // Create unified transform with proper scaling
-            let mut unified_transform = UnifiedTransform::new();
-            unified_transform.scale(pw / pcw, ph / pch);
-
-            // OpenGL Y-axis: bottom-left origin
-            let viewport = [0.0 / pcw, (pch - ph) / pch, pw / pcw, ph / pch];
-
-            self.gl_pixel.render_texture_to_screen_impl(
-                &self.gl,
-                3,
-                viewport,
-                &unified_transform,
-                &unified_color,
-            );
-        }
-    }
-
     /// Present with default settings and physical size for Retina displays
     pub fn present_default_with_physical_size(
         &mut self,
