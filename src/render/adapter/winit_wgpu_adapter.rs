@@ -1030,9 +1030,6 @@ impl WinitWgpuAdapter {
 
                     let mut transform = UnifiedTransform::new();
                     transform.scale(pw / pcw, ph / pch);
-                    // Translate left by one cell to correct position offset
-                    // In clip space after scaling: -2.0 / 40.0 = -0.05 (one cell = pw/40)
-                    transform.translate(-2.0 / 40.0, 0.0);
 
                     (area, transform)
                 } else {
