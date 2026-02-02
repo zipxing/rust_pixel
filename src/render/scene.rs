@@ -158,6 +158,24 @@ impl Scene {
         self.layers[1].get(tag)
     }
 
+    /// Execute a closure with multiple sprites simultaneously
+    ///
+    /// # Example
+    /// ```ignore
+    /// scene.with_sprites(&["sprite1", "sprite2", "sprite3"], |sprites| {
+    ///     let p1 = &mut sprites[0];
+    ///     let p2 = &mut sprites[1];
+    ///     let p3 = &mut sprites[2];
+    ///     // Use p1, p2, p3...
+    /// });
+    /// ```
+    pub fn with_sprites<F, R>(&mut self, tags: &[&str], f: F) -> R
+    where
+        F: FnOnce(&mut [&mut Sprite]) -> R,
+    {
+        self.layers[1].with_sprites(tags, f)
+    }
+
     /// Add a sprite to the TUI layer (internal use only)
     /// Users should use Widget system for TUI content
     #[allow(dead_code)]

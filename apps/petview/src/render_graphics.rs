@@ -263,33 +263,30 @@ impl Render for PetviewRender {
             // Enable RT3 for transition effects
             ctx.adapter.set_rt_visible(3, true);
 
-            // Load current image to RT0
-            let p1 = self.scene.get_sprite("petimg1");
-            let l1 = asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
-            if l1 {
-                ctx.adapter.buf2rt(&p1.content, 0);
-            }
+            // Load all 4 sprites at once
+            self.scene.with_sprites(&["petimg1", "petimg2", "petimg3", "petimg4"], |sprites| {
+                let l1 = asset2sprite!(sprites[0], ctx, &format!("{}.pix", model.img_count - model.img_cur));
+                let l2 = asset2sprite!(sprites[1], ctx, &format!("{}.pix", model.img_count - model.img_next));
 
-            // Load next image to RT1
-            let p2 = self.scene.get_sprite("petimg2");
-            let l2 = asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
-            if l2 {
-                ctx.adapter.buf2rt(&p2.content, 1);
-            }
+                if l1 {
+                    ctx.adapter.buf2rt(&sprites[0].content, 0);
+                }
+                if l2 {
+                    ctx.adapter.buf2rt(&sprites[1].content, 1);
+                }
 
-            // Load distortion sources
-            let p3 = self.scene.get_sprite("petimg3");
-            asset2sprite!(p3, ctx, &format!("{}.pix", model.img_count - model.img_next));
-            p3.set_hidden(true);
+                // Load distortion sources
+                asset2sprite!(sprites[2], ctx, &format!("{}.pix", model.img_count - model.img_next));
+                sprites[2].set_hidden(true);
 
-            let p4 = self.scene.get_sprite("petimg4");
-            asset2sprite!(p4, ctx, &format!("{}.pix", model.img_count - model.img_next));
-            p4.set_hidden(true);
+                asset2sprite!(sprites[3], ctx, &format!("{}.pix", model.img_count - model.img_next));
+                sprites[3].set_hidden(true);
 
-            if l1 && l2 {
-                model.tex_ready = true;
-                info!("tex_ready.........");
-            }
+                if l1 && l2 {
+                    model.tex_ready = true;
+                    info!("tex_ready.........");
+                }
+            });
         }
 
         if event_check("PetView.Timer", "pet_timer") {

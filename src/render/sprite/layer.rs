@@ -101,6 +101,43 @@ impl Layer {
         &mut self.sprites[*idx]
     }
 
+    /// Execute a closure with multiple sprites simultaneously
+    ///
+    /// This method allows you to work with multiple sprites at once.
+    /// Panics if any tags are duplicated.
+    ///
+    /// # Safety
+    /// Uses unsafe code internally but ensures safety by checking for duplicate indices.
+    pub fn with_sprites<F, R>(&mut self, tags: &[&str], f: F) -> R
+    where
+        F: FnOnce(&mut [&mut Sprite]) -> R,
+    {
+        // Get all indices and check for duplicates
+        let indices: Vec<usize> = tags
+            .iter()
+            .map(|tag| *self.tag_index.get(*tag).unwrap())
+            .collect();
+
+        // Check for duplicates
+        let mut sorted = indices.clone();
+        sorted.sort_unstable();
+        for i in 1..sorted.len() {
+            assert_ne!(sorted[i-1], sorted[i], "Cannot get multiple references to the same sprite");
+        }
+
+        // SAFETY: We've verified that all indices are unique, so we can safely
+        // create multiple mutable references to different sprites
+        let mut sprite_refs: Vec<&mut Sprite> = Vec::with_capacity(indices.len());
+        for &idx in &indices {
+            unsafe {
+                let sprite_ptr = self.sprites.as_mut_ptr().add(idx);
+                sprite_refs.push(&mut *sprite_ptr);
+            }
+        }
+
+        f(&mut sprite_refs)
+    }
+
     // to get a non-referencable variable, usually used to
     // copy_content an image from an image set
     pub fn get_immut(&self, name: &str) -> &Sprite {
