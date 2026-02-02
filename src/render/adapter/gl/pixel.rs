@@ -418,77 +418,130 @@ impl GlPixelRenderer {
         }
     }
 
-    /// Present render textures to screen using RtComposite chain
+    /// 将 RenderTexture(s) 合成输出到屏幕
     ///
-    /// This is the new unified API for presenting RTs to the screen.
-    /// Each RtComposite specifies which RT to draw, viewport, blend mode, and alpha.
+    /// # RT 渲染流程图
+    /// ```text
+    /// ┌─────────────────────────────────────────────────────────────────────────┐
+    /// │                        RT Present 渲染流程                               │
+    /// ├─────────────────────────────────────────────────────────────────────────┤
+    /// │                                                                         │
+    /// │  1. RT Texture (canvas_w × canvas_h)     2. 纹理采样 (area)             │
+    /// │  ┌────────────────────────────┐          ┌─────────────────┐            │
+    /// │  │                            │          │   content_w     │            │
+    /// │  │  ┌──────────────┐          │   ───►   │  ┌───────────┐  │            │
+    /// │  │  │   Content    │ content_h│   area   │  │  Sampled  │  │ content_h  │
+    /// │  │  │   (实际内容)  │          │   采样   │  │   Area    │  │            │
+    /// │  │  └──────────────┘          │          │  └───────────┘  │            │
+    /// │  │         Empty Space        │          └─────────────────┘            │
+    /// │  └────────────────────────────┘                                         │
+    /// │                                                                         │
+    /// │  3. 变换矩阵 (transform)              4. 最终屏幕输出                    │
+    /// │  ┌─────────────────┐                  ┌────────────────────────┐        │
+    /// │  │ Scale:          │                  │        Screen          │        │
+    /// │  │   vp_w/canvas_w │    ───►          │  ┌────────────────┐    │        │
+    /// │  │   vp_h/canvas_h │  Transform       │  │    Viewport    │    │        │
+    /// │  │                 │    变换          │  │   (vp_x,vp_y)  │    │        │
+    /// │  │ Translate:      │                  │  │   vp_w × vp_h  │    │        │
+    /// │  │   tx, ty (NDC)  │                  │  └────────────────┘    │        │
+    /// │  └─────────────────┘                  └────────────────────────┘        │
+    /// │                                                                         │
+    /// └─────────────────────────────────────────────────────────────────────────┘
+    /// ```
     ///
-    /// # Arguments
-    /// * `composites` - Array of RtComposite items to render in order (back to front)
+    /// # 关键概念
+    /// - **area**: 控制从 RT 纹理中采样哪一部分 (UV 坐标, 0.0-1.0)
+    /// - **transform**: 控制采样后的内容显示在屏幕的什么位置、多大尺寸
+    /// - **content_size**: 原始内容尺寸，用于 area 计算（缩放时保持不变）
+    /// - **viewport**: 显示区域尺寸，用于 transform 计算（缩放时会变化）
     ///
-    /// # Example
-    /// ```ignore
-    /// // Simple fullscreen RT2
-    /// renderer.present(&[RtComposite::fullscreen(2)]);
-    ///
-    /// // Multiple layers with custom viewport and alpha
-    /// renderer.present(&[
-    ///     RtComposite::fullscreen(2),
-    ///     RtComposite::with_viewport(3, Rect::new(0, 0, 640, 400)).alpha(200),
-    /// ]);
+    /// # 缩放原理
+    /// ```text
+    /// scale_uniform(0.5) 的效果:
+    ///   content_size = (320, 200)  // 不变，采样整个内容
+    ///   viewport = (160, 100)       // 缩小，显示更小
+    ///   结果: 采样完整内容，但显示为 50% 大小
     /// ```
     pub fn present(&mut self, composites: &[RtComposite]) {
-        // Bind screen framebuffer
+        // ═══════════════════════════════════════════════════════════════════════
+        // Step 1: 绑定屏幕帧缓冲 (后续渲染直接输出到屏幕)
+        // ═══════════════════════════════════════════════════════════════════════
         self.gl_pixel.bind_screen(&self.gl);
 
+        // 获取画布尺寸 (RT 纹理的实际大小)
         let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
-        let pcw = canvas_width as f32;
-        let pch = canvas_height as f32;
+        let pcw = canvas_width as f32;  // pixel canvas width
+        let pch = canvas_height as f32; // pixel canvas height
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // Step 2: 遍历所有 RtComposite，依次渲染到屏幕
+        // ═══════════════════════════════════════════════════════════════════════
         for composite in composites {
             let rtidx = composite.rt;
 
-            // Skip hidden RTs
+            // 跳过隐藏的 RT
             if self.gl_pixel.get_render_texture_hidden(rtidx) {
                 continue;
             }
 
-            // Set blend mode
+            // 设置混合模式 (Normal, Add, Multiply, Screen)
             self.set_blend_mode(composite.blend);
 
-            // Calculate viewport and transform based on composite settings
+            // ═══════════════════════════════════════════════════════════════════
+            // Step 3: 计算 area (纹理采样区域) 和 transform (屏幕变换矩阵)
+            // ═══════════════════════════════════════════════════════════════════
             let (area, transform) = if let Some(ref vp) = composite.viewport {
-                // Custom viewport specified (using ARect fields: w, h instead of width, height)
-                let vp_x = vp.x as f32;
-                let vp_y = vp.y as f32;
-                let vp_w = vp.w as f32;
-                let vp_h = vp.h as f32;
+                // ─────────────────────────────────────────────────────────────────
+                // 自定义 viewport 模式
+                // ─────────────────────────────────────────────────────────────────
 
-                // Get content size for texture sampling (original size before scaling)
-                // If not set, fall back to viewport dimensions
+                // viewport 参数 (显示位置和大小，可能被 scale() 修改过)
+                let vp_x = vp.x as f32;  // 显示位置 X
+                let vp_y = vp.y as f32;  // 显示位置 Y
+                let vp_w = vp.w as f32;  // 显示宽度 (缩放后)
+                let vp_h = vp.h as f32;  // 显示高度 (缩放后)
+
+                // 获取 content_size (原始内容尺寸，用于纹理采样)
+                // 这是缩放功能的关键：content_size 保持不变，viewport 变化
                 let (content_w, content_h) = composite.content_size
                     .map(|(w, h)| (w as f32, h as f32))
                     .unwrap_or((vp_w, vp_h));
 
-                // area controls TEXTURE SAMPLING - sample the content portion of the RT
-                // Uses content_size (original dimensions) for sampling, NOT viewport (scaled)
-                // UV coordinates: x=0, y=(canvas_h - content_h)/canvas_h (OpenGL Y-flip)
+                // ─────────────────────────────────────────────────────────────────
+                // 计算 area: 纹理采样区域 [x, y, width, height] (UV 坐标 0.0-1.0)
+                // ─────────────────────────────────────────────────────────────────
+                // OpenGL 纹理坐标系: (0,0) 在左下角, (1,1) 在右上角
+                // 但内容渲染在 RT 的左上角，所以需要 Y 轴翻转
+                //
+                // area[0] = 0.0                       // 采样起始 X (左边缘)
+                // area[1] = (pch - content_h) / pch   // 采样起始 Y (从上往下算)
+                // area[2] = content_w / pcw           // 采样宽度
+                // area[3] = content_h / pch           // 采样高度
                 let area = [0.0, (pch - content_h) / pch, content_w / pcw, content_h / pch];
 
-                // transform controls SCREEN POSITION via scaling and translation
-                // Uses viewport (possibly scaled) for display positioning
+                // ─────────────────────────────────────────────────────────────────
+                // 计算 transform: 屏幕变换矩阵 (决定显示位置和大小)
+                // ─────────────────────────────────────────────────────────────────
                 let mut base_transform = UnifiedTransform::new();
+
+                // 缩放: 将 [-1,1] 的全屏四边形缩放到 viewport 大小
+                // vp_w/pcw 和 vp_h/pch 决定显示区域相对于画布的比例
                 base_transform.scale(vp_w / pcw, vp_h / pch);
 
-                // NDC coordinates: -1 to 1, center is (0, 0)
-                // Convert viewport position to NDC offset:
+                // 平移: 将缩放后的四边形移动到正确位置
+                // NDC (Normalized Device Coordinates) 坐标系:
+                //   中心 (0,0), 范围 [-1,1], Y 轴向上
+                // 屏幕坐标系:
+                //   左上角 (0,0), Y 轴向下
+                // 转换公式:
+                //   tx = (2 * vp_x + vp_w - pcw) / pcw  // X 方向偏移
+                //   ty = (pch - 2 * vp_y - vp_h) / pch  // Y 方向偏移 (翻转)
                 let tx = (2.0 * vp_x + vp_w - pcw) / pcw;
                 let ty = (pch - 2.0 * vp_y - vp_h) / pch;
                 base_transform.translate(tx, ty);
 
-                // Step 2: Apply composite transform if specified
+                // 如果用户指定了额外的变换（旋转等），与基础变换组合
                 let final_transform = if let Some(ref user_transform) = composite.transform {
-                    // Compose: first base_transform, then user_transform
                     base_transform.compose(user_transform)
                 } else {
                     base_transform
@@ -496,17 +549,28 @@ impl GlPixelRenderer {
 
                 (area, final_transform)
             } else {
-                // Fullscreen - use user transform or identity
-                let area = [0.0, 0.0, 1.0, 1.0];
+                // ─────────────────────────────────────────────────────────────────
+                // 全屏模式: 采样整个纹理，无变换（或使用用户指定的变换）
+                // ─────────────────────────────────────────────────────────────────
+                let area = [0.0, 0.0, 1.0, 1.0];  // 采样整个纹理
                 let transform = composite.transform.unwrap_or_else(UnifiedTransform::new);
                 (area, transform)
             };
 
-            // Create color with alpha
+            // ═══════════════════════════════════════════════════════════════════
+            // Step 4: 执行实际渲染
+            // ═══════════════════════════════════════════════════════════════════
+            // 设置颜色（包含 alpha 透明度）
             let alpha_f = composite.alpha as f32 / 255.0;
             let color = UnifiedColor::new(1.0, 1.0, 1.0, alpha_f);
 
-            // Render this RT to screen
+            // 调用底层渲染函数，将 RT 纹理绘制到屏幕
+            // 内部流程:
+            //   1. 绑定 RT 纹理
+            //   2. 设置 uniform: area, transform, color
+            //   3. 绘制全屏四边形 (2个三角形, 4个顶点)
+            //   4. Vertex Shader: 根据 area 计算纹理坐标, 根据 transform 计算顶点位置
+            //   5. Fragment Shader: 采样纹理颜色，乘以 color (应用 alpha)
             self.gl_pixel.render_texture_to_screen_impl(
                 &self.gl,
                 rtidx,
@@ -516,7 +580,7 @@ impl GlPixelRenderer {
             );
         }
 
-        // Restore normal blend mode
+        // 恢复默认混合模式
         self.set_blend_mode(BlendMode::Normal);
     }
 

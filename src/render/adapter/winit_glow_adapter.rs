@@ -781,8 +781,9 @@ impl Adapter for WinitGlowAdapter {
         );
 
         // Use unified graphics rendering process - consistent with SdlAdapter
+        // Note: Do NOT call post_draw() here! Buffer swap should happen after
+        // present_default() renders RT to screen. See Scene::draw() flow.
         self.draw_all_graph(current_buffer, previous_buffer, pixel_sprites, stage);
-        self.post_draw();
         Ok(())
     }
 
@@ -957,5 +958,8 @@ impl Adapter for WinitGlowAdapter {
             let ry = self.base.gr.ratio_y;
             gl_pixel_renderer.present_default_with_physical_size(rx, ry, physical_size);
         }
+
+        // Swap buffers to display the rendered content
+        self.post_draw();
     }
 }

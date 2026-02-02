@@ -134,28 +134,70 @@ pub enum BlendMode {
     Screen,
 }
 
-/// RT composite item for present()
+/// RT 合成项，用于 present() 函数
+///
+/// # 渲染流程
+/// ```text
+/// ┌────────────────────────────────────────────────────────────────────┐
+/// │  RtComposite 控制 RT 纹理如何显示到屏幕                             │
+/// ├────────────────────────────────────────────────────────────────────┤
+/// │                                                                    │
+/// │  content_size (纹理采样)          viewport (屏幕显示)              │
+/// │  ┌───────────────────┐            ┌───────────────────┐           │
+/// │  │ 原始内容尺寸       │    ───►   │ 显示位置和大小     │           │
+/// │  │ 决定从 RT 采样多少 │            │ 决定显示在屏幕哪里 │           │
+/// │  │ (缩放时不变)       │            │ (缩放时会变化)     │           │
+/// │  └───────────────────┘            └───────────────────┘           │
+/// │                                                                    │
+/// │  scale_uniform(0.5) 的效果:                                        │
+/// │    content_size = (320, 200)  // 保持不变，采样完整内容             │
+/// │    viewport = (160, 100)       // 缩小一半，显示更小                │
+/// │                                                                    │
+/// └────────────────────────────────────────────────────────────────────┘
+/// ```
+///
+/// # 使用示例
+/// ```ignore
+/// // 全屏显示 RT2
+/// RtComposite::fullscreen(2)
+///
+/// // 居中显示 RT3，带 50% 缩放
+/// ctx.centered_rt(3, 40, 25).scale_uniform(0.5)
+///
+/// // 自定义位置和透明度
+/// RtComposite::at_position(3, 100, 100, 320, 200).alpha(128)
+/// ```
+///
 /// Note: Uses ARect instead of Rect because Rect has automatic clipping
 /// when width*height > u16::MAX, which is inappropriate for viewport dimensions.
 #[cfg(graphics_mode)]
 #[derive(Clone, Debug)]
 pub struct RtComposite {
-    /// RT index (0-3)
+    /// RT 纹理索引 (0-3)
+    /// - RT0, RT1: 通常用于 transition 效果的源纹理
+    /// - RT2: 主渲染内容 (Scene 渲染目标)
+    /// - RT3: 叠加层/特效层
     pub rt: usize,
-    /// Output viewport, None = fullscreen
-    /// Uses ARect (no clipping) instead of Rect (has clipping)
+
+    /// 显示区域 (屏幕坐标)
+    /// - None = 全屏显示
+    /// - Some(rect) = 自定义位置和大小
+    /// 调用 scale() 后此值会变化
     pub viewport: Option<ARect>,
-    /// Original content size for texture sampling (before any scaling)
-    /// This is separate from viewport to enable true scaling:
-    /// - content_size: determines what portion of RT to sample
-    /// - viewport: determines where/how large to display on screen
+
+    /// 原始内容尺寸 (像素)
+    /// 用于纹理采样计算，决定从 RT 中采样多少区域
+    /// 调用 scale() 后此值保持不变，这是实现真正缩放的关键
     pub content_size: Option<(u32, u32)>,
-    /// Blend mode
+
+    /// 混合模式 (Normal, Add, Multiply, Screen)
     pub blend: BlendMode,
-    /// Alpha (0-255)
+
+    /// 透明度 (0-255, 255=完全不透明)
     pub alpha: u8,
-    /// Transform for scaling, rotation, translation
-    /// None = identity transform (no transformation)
+
+    /// 额外变换 (旋转等)
+    /// 会与基础变换（viewport 位置/大小）组合
     pub transform: Option<UnifiedTransform>,
 }
 

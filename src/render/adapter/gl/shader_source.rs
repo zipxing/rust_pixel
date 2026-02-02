@@ -182,32 +182,88 @@ pub fn get_trans_fragment_src() -> Vec<String> {
     tfs
 }
 
+/// General2D 顶点着色器
+///
+/// # 输入顶点数据 (全屏四边形)
+/// ```text
+/// aPos (顶点位置, NDC坐标):        aTexCoord (纹理坐标):
+///   (-1, 1)───(1, 1)                 (0, 1)───(1, 1)
+///      │         │                      │         │
+///      │         │         ───►         │         │
+///      │         │                      │         │
+///   (-1,-1)───(1,-1)                 (0, 0)───(1, 0)
+/// ```
+///
+/// # Uniform 参数
+/// - **transform**: 4x4 变换矩阵，控制顶点位置（缩放+平移）
+/// - **area**: [x, y, w, h] 纹理采样区域，UV 坐标 (0.0-1.0)
+///
+/// # 纹理坐标计算
+/// ```text
+/// TexCoord.x = mix(area.x, area.x + area.z, aTexCoord.x)
+///            = area.x + area.z * aTexCoord.x
+///            = 采样起始X + 采样宽度 * 插值
+///
+/// TexCoord.y = mix(area.y, area.y + area.w, aTexCoord.y)
+///            = area.y + area.w * aTexCoord.y
+///            = 采样起始Y + 采样高度 * 插值
+/// ```
 pub const GENERAL2D_VERTEX_SRC: &str = r#"
             precision mediump float;
-            layout(location = 0) in vec2 aPos;
-            layout(location = 1) in vec2 aTexCoord;
-            out vec2 TexCoord;  
-            uniform mat4 transform; 
-            uniform vec4 area;      
+
+            // 顶点属性
+            layout(location = 0) in vec2 aPos;       // 顶点位置 (NDC: -1 到 1)
+            layout(location = 1) in vec2 aTexCoord;  // 纹理坐标 (UV: 0 到 1)
+
+            // 传递给片段着色器
+            out vec2 TexCoord;
+
+            // Uniform 参数
+            uniform mat4 transform;  // 变换矩阵 (scale + translate)
+            uniform vec4 area;       // 纹理采样区域 [x, y, width, height]
+
             void main()
             {
+                // 计算实际纹理坐标
+                // mix(a, b, t) = a + (b - a) * t = a * (1-t) + b * t
+                // 当 aTexCoord = (0,0) 时, TexCoord = (area.x, area.y)
+                // 当 aTexCoord = (1,1) 时, TexCoord = (area.x+area.z, area.y+area.w)
                 TexCoord = vec2(
                     mix(area.x, area.x + area.z, aTexCoord.x),
                     mix(area.y, area.y + area.w, aTexCoord.y)
                 );
+
+                // 应用变换矩阵计算最终顶点位置
+                // transform 包含: scale(vp_w/pcw, vp_h/pch) + translate(tx, ty)
                 gl_Position = transform * vec4(aPos, 0.0, 1.0);
             }
         "#;
 
+/// General2D 片段着色器
+///
+/// # 功能
+/// 从纹理采样颜色，乘以 color uniform（用于 alpha 混合）
+///
+/// # 参数
+/// - **texture1**: RT 纹理
+/// - **color**: 颜色乘数 (通常是 [1, 1, 1, alpha])
 pub const GENERAL2D_FRAGMENT_SRC: &str = r#"
             precision mediump float;
-            out vec4 FragColor;
-            in vec2 TexCoord;
-            uniform sampler2D texture1;  
-            uniform vec4 color;          
+
+            out vec4 FragColor;           // 输出颜色
+            in vec2 TexCoord;             // 从顶点着色器传入的纹理坐标
+
+            uniform sampler2D texture1;   // RT 纹理
+            uniform vec4 color;           // 颜色乘数 (用于 alpha)
+
             void main()
             {
+                // 采样纹理
                 vec4 texColor = texture(texture1, TexCoord);
+
+                // 乘以颜色 (应用 alpha 透明度)
+                // color = (1.0, 1.0, 1.0, alpha)
+                // 所以 FragColor.a = texColor.a * alpha
                 FragColor = texColor * color;
             }
         "#;
