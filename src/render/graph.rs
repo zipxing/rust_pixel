@@ -145,6 +145,11 @@ pub struct RtComposite {
     /// Output viewport, None = fullscreen
     /// Uses ARect (no clipping) instead of Rect (has clipping)
     pub viewport: Option<ARect>,
+    /// Original content size for texture sampling (before any scaling)
+    /// This is separate from viewport to enable true scaling:
+    /// - content_size: determines what portion of RT to sample
+    /// - viewport: determines where/how large to display on screen
+    pub content_size: Option<(u32, u32)>,
     /// Blend mode
     pub blend: BlendMode,
     /// Alpha (0-255)
@@ -161,6 +166,7 @@ impl RtComposite {
         Self {
             rt,
             viewport: None,
+            content_size: None,
             blend: BlendMode::Normal,
             alpha: 255,
             transform: None,
@@ -170,9 +176,12 @@ impl RtComposite {
     /// Create a composite with custom viewport
     /// Uses ARect to avoid Rect's automatic clipping for large viewports
     pub fn with_viewport(rt: usize, viewport: ARect) -> Self {
+        // Store original size for texture sampling
+        let content_size = Some((viewport.w, viewport.h));
         Self {
             rt,
             viewport: Some(viewport),
+            content_size,
             blend: BlendMode::Normal,
             alpha: 255,
             transform: None,
@@ -410,6 +419,7 @@ impl RtComposite {
         Self {
             rt,
             viewport: Some(ARect { x, y, w: vp_w, h: vp_h }),
+            content_size: Some((vp_w, vp_h)),
             blend: BlendMode::Normal,
             alpha: 255,
             transform: None,
@@ -428,6 +438,7 @@ impl RtComposite {
         Self {
             rt,
             viewport: Some(ARect { x, y, w, h }),
+            content_size: Some((w, h)),
             blend: BlendMode::Normal,
             alpha: 255,
             transform: None,

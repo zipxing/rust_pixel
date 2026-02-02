@@ -464,13 +464,19 @@ impl GlPixelRenderer {
                 let vp_w = vp.w as f32;
                 let vp_h = vp.h as f32;
 
-                // area controls TEXTURE SAMPLING - sample only the content portion of the RT
-                // Content is rendered at top-left of RT with size matching viewport dimensions
+                // Get content size for texture sampling (original size before scaling)
+                // If not set, fall back to viewport dimensions
+                let (content_w, content_h) = composite.content_size
+                    .map(|(w, h)| (w as f32, h as f32))
+                    .unwrap_or((vp_w, vp_h));
+
+                // area controls TEXTURE SAMPLING - sample the content portion of the RT
+                // Uses content_size (original dimensions) for sampling, NOT viewport (scaled)
                 // UV coordinates: x=0, y=(canvas_h - content_h)/canvas_h (OpenGL Y-flip)
-                let area = [0.0, (pch - vp_h) / pch, vp_w / pcw, vp_h / pch];
+                let area = [0.0, (pch - content_h) / pch, content_w / pcw, content_h / pch];
 
                 // transform controls SCREEN POSITION via scaling and translation
-                // Step 1: Calculate base transform from viewport
+                // Uses viewport (possibly scaled) for display positioning
                 let mut base_transform = UnifiedTransform::new();
                 base_transform.scale(vp_w / pcw, vp_h / pch);
 
