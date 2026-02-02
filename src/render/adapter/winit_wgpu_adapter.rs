@@ -1021,26 +1021,34 @@ impl WinitWgpuAdapter {
                     let pw = vp.w as f32;
                     let ph = vp.h as f32;
 
-                    // area controls TEXTURE SAMPLING (WGPU uses top-left origin)
-                    let area = [0.0, 0.0, pw / pcw, ph / pch];
+                    // area controls TEXTURE SAMPLING - always sample full texture
+                    // This allows transform to do true scaling instead of clipping
+                    let area = [0.0, 0.0, 1.0, 1.0];
 
                     // transform controls SCREEN POSITION via scaling and translation
+                    // Step 1: Calculate base transform from viewport
+                    let mut base_transform = UnifiedTransform::new();
+                    base_transform.scale(pw / pcw, ph / pch);
+
                     // NDC coordinates: -1 to 1, center is (0, 0)
                     // Convert viewport position to NDC offset:
-                    //   tx = (2 * (vp_x + pw/2) - canvas_w) / canvas_w
-                    //   ty = (canvas_h - 2 * (vp_y + ph/2)) / canvas_h  (Y is flipped)
                     let tx = (2.0 * vp_x + pw - pcw) / pcw;
                     let ty = (pch - 2.0 * vp_y - ph) / pch;
+                    base_transform.translate(tx, ty);
 
-                    let mut transform = UnifiedTransform::new();
-                    transform.scale(pw / pcw, ph / pch);
-                    transform.translate(tx, ty);
+                    // Step 2: Apply composite transform if specified
+                    let final_transform = if let Some(ref user_transform) = composite.transform {
+                        // Compose: first base_transform, then user_transform
+                        base_transform.compose(user_transform)
+                    } else {
+                        base_transform
+                    };
 
-                    (area, transform)
+                    (area, final_transform)
                 } else {
-                    // Fullscreen - sample entire texture, identity transform
+                    // Fullscreen - use user transform or identity
                     let area = [0.0, 0.0, 1.0, 1.0];
-                    let transform = UnifiedTransform::new();
+                    let transform = composite.transform.unwrap_or_else(UnifiedTransform::new);
                     (area, transform)
                 };
 

@@ -464,32 +464,34 @@ impl GlPixelRenderer {
                 let vp_w = vp.w as f32;
                 let vp_h = vp.h as f32;
 
-                // area controls TEXTURE SAMPLING, not screen position
-                // RT3 content is always at the bottom-left of the texture
-                let area = [
-                    0.0,
-                    (pch - vp_h) / pch,
-                    vp_w / pcw,
-                    vp_h / pch,
-                ];
+                // area controls TEXTURE SAMPLING - always sample full texture
+                // This allows transform to do true scaling instead of clipping
+                let area = [0.0, 0.0, 1.0, 1.0];
 
                 // transform controls SCREEN POSITION via scaling and translation
+                // Step 1: Calculate base transform from viewport
+                let mut base_transform = UnifiedTransform::new();
+                base_transform.scale(vp_w / pcw, vp_h / pch);
+
                 // NDC coordinates: -1 to 1, center is (0, 0)
                 // Convert viewport position to NDC offset:
-                //   tx = (2 * (vp_x + vp_w/2) - canvas_w) / canvas_w
-                //   ty = (canvas_h - 2 * (vp_y + vp_h/2)) / canvas_h  (Y is flipped in OpenGL)
                 let tx = (2.0 * vp_x + vp_w - pcw) / pcw;
                 let ty = (pch - 2.0 * vp_y - vp_h) / pch;
+                base_transform.translate(tx, ty);
 
-                let mut unified_transform = UnifiedTransform::new();
-                unified_transform.scale(vp_w / pcw, vp_h / pch);
-                unified_transform.translate(tx, ty);
+                // Step 2: Apply composite transform if specified
+                let final_transform = if let Some(ref user_transform) = composite.transform {
+                    // Compose: first base_transform, then user_transform
+                    base_transform.compose(user_transform)
+                } else {
+                    base_transform
+                };
 
-                (area, unified_transform)
+                (area, final_transform)
             } else {
-                // Fullscreen - use identity transform
+                // Fullscreen - use user transform or identity
                 let area = [0.0, 0.0, 1.0, 1.0];
-                let transform = UnifiedTransform::new();
+                let transform = composite.transform.unwrap_or_else(UnifiedTransform::new);
                 (area, transform)
             };
 

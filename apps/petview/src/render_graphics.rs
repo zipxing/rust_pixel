@@ -348,7 +348,7 @@ impl Render for PetviewRender {
                 // Note: Must compute before present() call due to borrow checker
                 // Chain syntax: ctx.centered_rt().x(0) sets viewport x to 0
                 // let rt3 = ctx.centered_rt(3, PIXW, PIXH).x(0);
-                let rt3 = ctx.centered_rt(3, PIXW, PIXH);
+                let rt3 = ctx.centered_rt(3, PIXW, PIXH).scale_uniform(0.5).rotate(100.5);
                 ctx.adapter.present(&[RtComposite::fullscreen(2), rt3]);
             }
         }

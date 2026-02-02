@@ -149,6 +149,9 @@ pub struct RtComposite {
     pub blend: BlendMode,
     /// Alpha (0-255)
     pub alpha: u8,
+    /// Transform for scaling, rotation, translation
+    /// None = identity transform (no transformation)
+    pub transform: Option<UnifiedTransform>,
 }
 
 #[cfg(graphics_mode)]
@@ -160,6 +163,7 @@ impl RtComposite {
             viewport: None,
             blend: BlendMode::Normal,
             alpha: 255,
+            transform: None,
         }
     }
 
@@ -171,6 +175,7 @@ impl RtComposite {
             viewport: Some(viewport),
             blend: BlendMode::Normal,
             alpha: 255,
+            transform: None,
         }
     }
 
@@ -215,6 +220,115 @@ impl RtComposite {
     pub fn y(mut self, y: i32) -> Self {
         if let Some(ref mut vp) = self.viewport {
             vp.y = y;
+        }
+        self
+    }
+
+    /// Scale rendering by factors (viewport-based scaling)
+    ///
+    /// This method scales the viewport size while maintaining its center position.
+    /// The texture will be scaled to fill the new viewport size (true scaling, not clipping).
+    ///
+    /// # Parameters
+    /// - `scale_x`: Horizontal scale factor (e.g., 0.5 = half size, 2.0 = double size)
+    /// - `scale_y`: Vertical scale factor
+    ///
+    /// # Example
+    /// ```ignore
+    /// let rt3 = ctx.centered_rt(3, 40, 25).scale(2.0, 2.0);  // 2x larger, stays centered
+    /// ```
+    pub fn scale(mut self, scale_x: f32, scale_y: f32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            let old_w = vp.w;
+            let old_h = vp.h;
+
+            vp.w = (vp.w as f32 * scale_x) as u32;
+            vp.h = (vp.h as f32 * scale_y) as u32;
+
+            // Keep center position unchanged
+            vp.x += (old_w as i32 - vp.w as i32) / 2;
+            vp.y += (old_h as i32 - vp.h as i32) / 2;
+        }
+
+        self
+    }
+
+    /// Scale uniformly (same scale for both axes)
+    ///
+    /// # Parameters
+    /// - `scale`: Scale factor applied to both width and height
+    ///
+    /// # Example
+    /// ```ignore
+    /// let rt3 = ctx.centered_rt(3, 40, 25).scale_uniform(1.5);  // 150% size
+    /// ```
+    pub fn scale_uniform(self, scale: f32) -> Self {
+        self.scale(scale, scale)
+    }
+
+    /// Rotate the rendering (angle in degrees)
+    ///
+    /// # Parameters
+    /// - `degrees`: Rotation angle in degrees (positive = counter-clockwise)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let rt3 = ctx.centered_rt(3, 40, 25).rotate(45.0);  // 45° rotation
+    /// ```
+    pub fn rotate(mut self, degrees: f32) -> Self {
+        let mut transform = self.transform.unwrap_or_else(UnifiedTransform::new);
+        transform.rotate(degrees.to_radians());
+        self.transform = Some(transform);
+        self
+    }
+
+    /// Translate the rendering (offset position)
+    ///
+    /// Note: This is different from offset() which moves the viewport.
+    /// translate() applies GPU-side transformation.
+    ///
+    /// # Parameters
+    /// - `dx`: Horizontal offset in pixels
+    /// - `dy`: Vertical offset in pixels
+    pub fn translate(mut self, dx: f32, dy: f32) -> Self {
+        let mut transform = self.transform.unwrap_or_else(UnifiedTransform::new);
+        transform.translate(dx, dy);
+        self.transform = Some(transform);
+        self
+    }
+
+    /// Set viewport width directly
+    ///
+    /// Note: This changes width but keeps the x position, so the viewport
+    /// will expand/shrink from the left edge. Use with `offset()` or after
+    /// `centered_rt()` if you need to maintain centering.
+    pub fn width(mut self, w: u32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.w = w;
+        }
+        self
+    }
+
+    /// Set viewport height directly
+    ///
+    /// Note: This changes height but keeps the y position, so the viewport
+    /// will expand/shrink from the top edge. Use with `offset()` or after
+    /// `centered_rt()` if you need to maintain centering.
+    pub fn height(mut self, h: u32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.h = h;
+        }
+        self
+    }
+
+    /// Set viewport size directly
+    ///
+    /// Note: This changes size but keeps position unchanged. Use with
+    /// `offset()` or after `centered_rt()` if you need to maintain centering.
+    pub fn size(mut self, w: u32, h: u32) -> Self {
+        if let Some(ref mut vp) = self.viewport {
+            vp.w = w;
+            vp.h = h;
         }
         self
     }
@@ -298,6 +412,7 @@ impl RtComposite {
             viewport: Some(ARect { x, y, w: vp_w, h: vp_h }),
             blend: BlendMode::Normal,
             alpha: 255,
+            transform: None,
         }
     }
 
@@ -315,6 +430,7 @@ impl RtComposite {
             viewport: Some(ARect { x, y, w, h }),
             blend: BlendMode::Normal,
             alpha: 255,
+            transform: None,
         }
     }
 
@@ -677,6 +793,32 @@ impl UnifiedTransform {
     /// Create a copy of this transform
     pub fn copy(&self) -> Self {
         *self
+    }
+
+    /// Compose (multiply) this transform with another
+    ///
+    /// Returns a new transform that is the result of applying `self` first, then `other`.
+    /// This is matrix multiplication: result = other * self
+    ///
+    /// # Parameters
+    /// - `other`: The transform to apply after this one
+    ///
+    /// # Returns
+    /// A new composed transform
+    pub fn compose(&self, other: &UnifiedTransform) -> Self {
+        // Matrix multiplication of 2D affine transforms
+        // [a c tx]   [a' c' tx']   [a*a'+c*b'  a*c'+c*d'  a*tx'+c*ty'+tx]
+        // [b d ty] * [b' d' ty'] = [b*a'+d*b'  b*c'+d*d'  b*tx'+d*ty'+ty]
+        // [0 0  1]   [0  0   1]    [0          0          1              ]
+
+        Self {
+            m00: self.m00 * other.m00 + self.m10 * other.m01,
+            m01: self.m01 * other.m00 + self.m11 * other.m01,
+            m10: self.m00 * other.m10 + self.m10 * other.m11,
+            m11: self.m01 * other.m10 + self.m11 * other.m11,
+            m20: self.m00 * other.m20 + self.m10 * other.m21 + self.m20,
+            m21: self.m01 * other.m20 + self.m11 * other.m21 + self.m21,
+        }
     }
 
     /// Multiply with another transform
