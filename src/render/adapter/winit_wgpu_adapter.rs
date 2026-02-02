@@ -1021,9 +1021,12 @@ impl WinitWgpuAdapter {
                     let pw = vp.w as f32;
                     let ph = vp.h as f32;
 
-                    // area controls TEXTURE SAMPLING - always sample full texture
-                    // This allows transform to do true scaling instead of clipping
-                    let area = [0.0, 0.0, 1.0, 1.0];
+                    // area controls TEXTURE SAMPLING - sample only the content portion of the RT
+                    // Content is rendered at top-left of RT with size matching viewport dimensions
+                    // WGPU uses Vulkan-style coordinates where texture (0,0) is top-left
+                    // (Unlike OpenGL where (0,0) is bottom-left)
+                    // So for WGPU, we sample from y=0 (top) to y=ph/pch
+                    let area = [0.0, 0.0, pw / pcw, ph / pch];
 
                     // transform controls SCREEN POSITION via scaling and translation
                     // Step 1: Calculate base transform from viewport

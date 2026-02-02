@@ -464,9 +464,10 @@ impl GlPixelRenderer {
                 let vp_w = vp.w as f32;
                 let vp_h = vp.h as f32;
 
-                // area controls TEXTURE SAMPLING - always sample full texture
-                // This allows transform to do true scaling instead of clipping
-                let area = [0.0, 0.0, 1.0, 1.0];
+                // area controls TEXTURE SAMPLING - sample only the content portion of the RT
+                // Content is rendered at top-left of RT with size matching viewport dimensions
+                // UV coordinates: x=0, y=(canvas_h - content_h)/canvas_h (OpenGL Y-flip)
+                let area = [0.0, (pch - vp_h) / pch, vp_w / pcw, vp_h / pch];
 
                 // transform controls SCREEN POSITION via scaling and translation
                 // Step 1: Calculate base transform from viewport
