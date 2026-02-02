@@ -54,6 +54,7 @@ pub enum BorderType {
 }
 
 /// Used to simplify the call to set_content_by_asset method
+/// Returns true if asset is loaded and ready, false if still loading (web mode)
 #[macro_export]
 macro_rules! asset2sprite {
     ($spr:expr, $ctx:expr, $loc:expr $(, $arg:expr)* ) => {{
@@ -86,7 +87,7 @@ macro_rules! asset2sprite {
             },
             _ => {},
         }
-        
+
         // Use global GAME_CONFIG for project path
         // 使用全局 GAME_CONFIG 获取项目路径
         let nl = if cfg!(not(target_arch = "wasm32")) {
@@ -98,7 +99,7 @@ macro_rules! asset2sprite {
         } else {
             &format!("assets{}{}", std::path::MAIN_SEPARATOR, $loc)
         };
-        
+
         // call spr.set_content_by_asset...
         $spr.set_content_by_asset(
             &mut $ctx.asset_manager,
@@ -108,6 +109,9 @@ macro_rules! asset2sprite {
             x,
             y,
         );
+
+        // Return loading status
+        $spr.check_asset_request(&mut $ctx.asset_manager)
     }};
 }
 

@@ -265,16 +265,14 @@ impl Render for PetviewRender {
 
             // Load current image to RT0
             let p1 = self.scene.get_sprite("petimg1");
-            asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
-            let l1 = p1.check_asset_request(&mut ctx.asset_manager);
+            let l1 = asset2sprite!(p1, ctx, &format!("{}.pix", model.img_count - model.img_cur));
             if l1 {
                 ctx.adapter.buf2rt(&p1.content, 0);
             }
 
             // Load next image to RT1
             let p2 = self.scene.get_sprite("petimg2");
-            asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
-            let l2 = p2.check_asset_request(&mut ctx.asset_manager);
+            let l2 = asset2sprite!(p2, ctx, &format!("{}.pix", model.img_count - model.img_next));
             if l2 {
                 ctx.adapter.buf2rt(&p2.content, 1);
             }
