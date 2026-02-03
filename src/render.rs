@@ -15,10 +15,12 @@
 //! - `graph`: Graphics rendering related data structures and functions
 //! - `image`: Image processing functionality
 //! - `symbols`: Symbol and character processing
+//! - `effect`: CPU-based buffer effects (distortion, noise, blur, etc.)
 
 pub mod adapter;
 pub mod buffer;
 pub mod cell;
+pub mod effect;
 #[cfg(graphics_mode)]
 pub mod graph;
 pub mod image;
@@ -37,6 +39,14 @@ pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
     render_main_buffer, render_layers, RenderCell, PIXEL_LOGO, PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+};
+pub use effect::{
+    // CPU Effects (Buffer级别)
+    apply_distortion, BufferEffect, EffectChain, EffectParams,
+    BlurEffect, FadeEffect, NoiseEffect, PixelateEffect, RippleEffect, SwirlEffect, WaveEffect,
+    dissolve_chain, distortion_chain, glitch_chain,
+    // GPU Effects (RenderTexture级别)
+    GpuTransition, GpuBlendEffect,
 };
 pub use scene::Scene;
 pub use sprite::Layer;

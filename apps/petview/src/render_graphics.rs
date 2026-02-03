@@ -29,7 +29,10 @@ use rust_pixel::{
     render::{
         adapter::{Adapter, RenderCell, RtComposite, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
         buffer::Buffer,
-        cell::cellsym,
+        // CPU Effects (Buffer级别)
+        effect::{BufferEffect, EffectChain, EffectParams, NoiseEffect, RippleEffect, WaveEffect},
+        // GPU Effects (RenderTexture级别)
+        effect::{GpuTransition, GpuBlendEffect},
         scene::Scene,
         sprite::Sprite,
         style::Color,
@@ -40,60 +43,7 @@ use rust_pixel::{
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
 
-fn wave_distortion(x: f32, y: f32, time: f32, amplitude: f32, frequency: f32) -> (f32, f32) {
-    let offset_x = x + amplitude * (frequency * y + time).sin();
-    let offset_y = y;
-    (offset_x, offset_y)
-}
-
-fn ripple_distortion(u: f32, v: f32, time: f32, amplitude: f32, frequency: f32) -> (f32, f32) {
-    let cx = 0.5;
-    let cy = 0.5;
-    let dx = u - cx;
-    let dy = v - cy;
-    let distance = (dx * dx + dy * dy).sqrt();
-
-    let offset = amplitude * (frequency * distance - time).sin();
-    let du = u + (dx / distance) * offset;
-    let dv = v + (dy / distance) * offset;
-    (du, dv)
-}
-
-fn apply_distortion(
-    src_buffer: &Buffer,
-    dest_buffer: &mut Buffer,
-    distortion_fn: &dyn Fn(f32, f32) -> (f32, f32),
-) {
-    let width = src_buffer.area.width as i32;
-    let height = src_buffer.area.height as i32;
-
-    for y in 0..height {
-        for x in 0..width {
-            let u = x as f32 / width as f32;
-            let v = y as f32 / height as f32;
-
-            let (du, dv) = distortion_fn(u, v);
-
-            let src_x = (du * width as f32).round() as i32;
-            let src_y = (dv * height as f32).round() as i32;
-
-            let src_x = src_x.clamp(0, width - 1);
-            let src_y = src_y.clamp(0, height - 1);
-
-            let src_index = (src_y * width + src_x) as usize;
-            let dest_index = (y * width + x) as usize;
-
-            if let (Some(src_cell), Some(dest_cell)) = (
-                src_buffer.content.get(src_index),
-                dest_buffer.content.get_mut(dest_index),
-            ) {
-                *dest_cell = src_cell.clone();
-            }
-        }
-    }
-}
-
-/// Apply CPU-based buffer distortion and render using primitives
+/// Apply CPU-based buffer distortion using the new effect system
 fn process_buffer_transition(
     scene: &mut Scene,
     ctx: &mut Context,
@@ -102,22 +52,21 @@ fn process_buffer_transition(
     let p4 = scene.get_sprite("petimg4");
     let time = (ctx.rand.rand() % 300) as f32 / 100.0;
 
-    // Apply ripple distortion
-    let distortion_fn1 = |u: f32, v: f32| ripple_distortion(u, v, 0.5 - time, 0.05, 10.0);
+    // Create effect chain with ripple + wave + noise
+    let mut chain = EffectChain::new();
+    chain.add(Box::new(RippleEffect::new(0.05, 10.0)));
+    chain.add(Box::new(WaveEffect::new(0.03, 15.0)));
+
+    // Add noise based on transition stage
+    let noise_density = (transbuf_stage as f32 / 120.0).min(0.3);
+    chain.add(Box::new(NoiseEffect::new(noise_density)));
+
+    // Apply effects
+    let params = EffectParams::new(0.5 - time, ctx.stage as usize)
+        .with_seed(ctx.rand.rand());
+
     let mut tbuf = p4.content.clone();
-    let clen = tbuf.content.len();
-    apply_distortion(&p4.content, &mut tbuf, &distortion_fn1);
-
-    // Apply wave distortion
-    let distortion_fn2 = |u: f32, v: f32| wave_distortion(u, v, 0.5 - time, 0.03, 15.0);
-    apply_distortion(&p4.content, &mut tbuf, &distortion_fn2);
-
-    // Add random noise symbols
-    for _ in 0..transbuf_stage / 2 {
-        tbuf.content[ctx.rand.rand() as usize % clen]
-            .set_symbol(&cellsym((ctx.rand.rand() % 255) as u8))
-            .set_fg(Color::Rgba(155, 155, 155, 155));
-    }
+    chain.apply(&p4.content, &mut tbuf, &params);
 
     // Update p3 sprite with distorted content
     let p3 = scene.get_sprite("petimg3");
@@ -144,8 +93,6 @@ fn process_buffer_transition(
 pub struct PetviewRender {
     pub scene: Scene,
     pub init: bool,
-    /// Cached viewport for RT3 (calculated once at init)
-    pub rt3_viewport: Option<Rect>,
 }
 
 impl PetviewRender {
@@ -188,7 +135,6 @@ impl PetviewRender {
         Self {
             scene,
             init: false,
-            rt3_viewport: None,
         }
     }
 
@@ -220,24 +166,7 @@ impl PetviewRender {
             (28.5 * sym_h / rx) as u16,
         );
 
-        // Calculate RT3 viewport for image display (40x25 cells)
-        // Center the image on screen
-        let rt3_w = (PIXW as f32 * sym_w / rx) as u16;
-        let rt3_h = (PIXH as f32 * sym_h / ry) as u16;
-
-        let canvas_w = ctx.adapter.get_base().gr.pixel_w as u16;
-        let canvas_h = ctx.adapter.get_base().gr.pixel_h as u16;
-
-        // Center position
-        let rt3_x = (canvas_w - rt3_w) / 2;
-        let rt3_y = (canvas_h - rt3_h) / 2;
-        self.rt3_viewport = Some(Rect::new(rt3_x, rt3_y, rt3_w, rt3_h));
-
         self.init = true;
-        info!(
-            "PETVIEW INIT: rx={}, ry={}, sym_w={}, sym_h={}, RT3 viewport: ({},{}){}x{}, canvas: {}x{}",
-            rx, ry, sym_w, sym_h, rt3_x, rt3_y, rt3_w, rt3_h, canvas_w, canvas_h
-        );
     }
 }
 
@@ -314,7 +243,12 @@ impl Render for PetviewRender {
                     // Ensure RT3 is visible for this mode
                     ctx.adapter.set_rt_visible(3, true);
                     // RT primitive: GPU shader blend RT0 + RT1 → RT3
-                    ctx.adapter.blend_rts(0, 1, 3, model.trans_effect, model.progress);
+                    // 使用新的GpuBlendEffect获取特效类型和进度
+                    ctx.adapter.blend_rts(
+                        0, 1, 3,
+                        model.gpu_effect.effect_type(),
+                        model.gpu_effect.progress,
+                    );
                     let p3 = self.scene.get_sprite("petimg3");
                     p3.set_hidden(true);
                 }
@@ -343,7 +277,7 @@ impl Render for PetviewRender {
                 // Note: Must compute before present() call due to borrow checker
                 // Chain syntax: ctx.centered_rt().x(0) sets viewport x to 0
                 // let rt3 = ctx.centered_rt(3, PIXW, PIXH).x(0);
-                let rt3 = ctx.centered_rt(3, PIXW, PIXH).scale_uniform(0.5);
+                let rt3 = ctx.centered_rt(3, PIXW, PIXH).scale_uniform(1.0);
                 ctx.adapter.present(&[RtComposite::fullscreen(2), rt3]);
             }
         }

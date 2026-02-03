@@ -5,7 +5,11 @@ use rust_pixel::event::Event;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use petview_lib::PetviewData;
-use rust_pixel::{context::Context, game::Model};
+use rust_pixel::{
+    context::Context,
+    game::Model,
+    render::effect::{GpuTransition, GpuBlendEffect},
+};
 
 pub const PETW: u16 = 50;
 pub const PETH: u16 = 30;
@@ -25,9 +29,9 @@ pub struct PetviewModel {
     pub img_cur: usize,
     pub img_next: usize,
     pub img_count: usize,
-    pub trans_effect: usize,
+    /// GPU混合特效 (使用新的GpuBlendEffect类型)
+    pub gpu_effect: GpuBlendEffect,
     pub tex_ready: bool,
-    pub progress: f32,
 }
 
 impl PetviewModel {
@@ -39,9 +43,8 @@ impl PetviewModel {
             img_cur: 0,
             img_next: 1,
             img_count: 31,
-            trans_effect: 0,
+            gpu_effect: GpuBlendEffect::default(),
             tex_ready: false,
-            progress: 0.0,
         }
     }
 }
@@ -81,14 +84,16 @@ impl Model for PetviewModel {
                 self.transbuf_stage += 1;
                 if self.transbuf_stage > 20 {
                     ctx.state = PetviewState::TransGl as u8;
-                    self.trans_effect = (ctx.rand.rand() % 7) as usize;
-                    self.progress = 0.0;
+                    // 使用新的GpuBlendEffect创建随机GPU过渡特效
+                    let random_idx = (ctx.rand.rand() % GpuTransition::count() as u32) as usize;
+                    self.gpu_effect = GpuBlendEffect::from_index(random_idx, 0.0);
                     self.tex_ready = false;
                 }
             }
             PetviewState::TransGl => {
-                self.progress += 0.01;
-                if self.progress >= 1.0 {
+                // 更新GPU特效进度
+                self.gpu_effect.progress += 0.01;
+                if self.gpu_effect.progress >= 1.0 {
                     ctx.state = PetviewState::Normal as u8;
                     self.normal_stage = 0;
                     self.img_cur = (self.img_cur + 1) % self.img_count;
