@@ -1,10 +1,5 @@
-mod model;
-mod render;
 use std::env;
 use std::error::Error;
-use log::info;
-use rust_pixel::game::Game;
-use crate::{model::TeditModel, render::TeditRender};
 
 fn print_edit_usage() {
     eprintln!("RustPixel Image/Sprite Editor");
@@ -83,14 +78,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let m = TeditModel::new();
-    let r = TeditRender::new(escfile);
-    let mut g = Game::new(m, r, "pixel_edit", apath);
-    info!("pixel_edit(rust_pixel) start...{:?}", args);
-
-    g.init();
-    g.run()?;
-    g.render.panel.reset(&mut g.context);
-
-    Ok(())
+    edit::run_with_file(apath, escfile)
 }
