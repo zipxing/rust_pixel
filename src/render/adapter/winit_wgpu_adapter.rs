@@ -783,104 +783,26 @@ impl WinitWgpuAdapter {
     /// 1. Render RenderCell data to render texture 2 (main buffer)
     /// 2. Synthesize render texture 2 onto the screen (if not hidden)
     /// 3. Synthesize render texture 3 onto the screen (if not hidden, for transition effects)
+    ///
+    /// This method now delegates to `present_wgpu` to avoid code duplication.
     pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
-        if let (Some(device), Some(queue), Some(surface), Some(pixel_renderer)) = (
-            &self.wgpu_device,
-            &self.wgpu_queue,
-            &self.wgpu_surface,
-            &mut self.wgpu_pixel_renderer,
-        ) {
-            // Get current surface texture
-            let output = surface
-                .get_current_texture()
-                .map_err(|e| format!("Failed to acquire next swap chain texture: {}", e))?;
+        use crate::render::graph::RtComposite;
+        use crate::util::ARect;
 
-            let view = output
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
+        let rx = self.base.gr.ratio_x;
+        let ry = self.base.gr.ratio_y;
 
-            // Use unified WgpuPixelRender wrapper to match OpenGL version interface
-            // Bind screen as render target
-            pixel_renderer.bind_screen();
+        // Calculate game area dimensions (matching OpenGL version)
+        let pw = (40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u32;
+        let ph = (25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u32;
 
-            // Create command encoder for screen composition
-            let mut screen_encoder =
-                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Screen Composition Encoder"),
-                });
+        // Build composites: RT2 fullscreen + RT3 game area
+        let composites = vec![
+            RtComposite::fullscreen(2),
+            RtComposite::with_viewport(3, ARect { x: 0, y: 0, w: pw, h: ph }),
+        ];
 
-            // Clear screen
-            {
-                let _clear_pass = screen_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Clear Screen Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Store,
-                        },
-                        depth_slice: None,
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-                // clear_pass automatically drops
-            }
-
-            // Draw render texture 2 (main buffer) to screen - using low-level WGPU method
-            if !pixel_renderer.get_render_texture_hidden(2) {
-                let unified_transform = UnifiedTransform::new();
-                let unified_color = UnifiedColor::white();
-
-                pixel_renderer.render_texture_to_screen_impl(
-                    device,
-                    queue,
-                    &mut screen_encoder,
-                    &view,
-                    2,                    // render texture 2
-                    [0.0, 0.0, 1.0, 1.0], // Full screen area
-                    &unified_transform,
-                    &unified_color,
-                )?;
-            }
-
-            // Draw render texture 3 (transition effect) to screen - using unified interface
-            if !pixel_renderer.get_render_texture_hidden(3) {
-                let pcw = pixel_renderer.canvas_width as f32;
-                let pch = pixel_renderer.canvas_height as f32;
-                let rx = self.base.gr.ratio_x;
-                let ry = self.base.gr.ratio_y;
-
-                // Use actual game area dimensions (matching OpenGL version)
-                let pw = 40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-                let ph = 25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
-
-                let mut unified_transform = UnifiedTransform::new();
-                unified_transform.scale(pw / pcw, ph / pch);
-                let unified_color = UnifiedColor::white();
-
-                pixel_renderer.render_texture_to_screen_impl(
-                    device,
-                    queue,
-                    &mut screen_encoder,
-                    &view,
-                    3,                                          // render texture 3
-                    [0.0 / pcw, 0.0 / pch, pw / pcw, ph / pch], // Game area, WGPU Y-axis starts from top
-                    &unified_transform,
-                    &unified_color,
-                )?;
-            }
-
-            // Submit screen composition commands and present frame
-            queue.submit(std::iter::once(screen_encoder.finish()));
-            output.present();
-        } else {
-            return Err("WGPU components not initialized".to_string());
-        }
-
-        Ok(())
+        self.present_wgpu(&composites)
     }
 
     /// Present render textures to screen using RtComposite chain (WGPU implementation)
@@ -1023,181 +945,6 @@ impl WinitWgpuAdapter {
         }
 
         Ok(())
-    }
-
-    /// Debug method: save render texture as PNG image file
-    ///
-    /// This method saves the specified render texture as a PNG file for debugging rendering issues
-    pub fn debug_save_render_texture_to_file(
-        &mut self,
-        rt_index: usize,
-        filename: &str,
-    ) -> Result<(), String> {
-        if let (Some(device), Some(queue), Some(pixel_renderer)) = (
-            &self.wgpu_device,
-            &self.wgpu_queue,
-            &mut self.wgpu_pixel_renderer,
-        ) {
-            info!("Saving render texture {} to {}", rt_index, filename);
-
-            // Get render texture
-            let render_texture = pixel_renderer
-                .get_render_texture(rt_index)
-                .ok_or_else(|| format!("Render texture {} not found", rt_index))?;
-
-            let texture_width = render_texture.width;
-            let texture_height = render_texture.height;
-            let bytes_per_pixel = 4; // RGBA
-            let unpadded_bytes_per_row = texture_width * bytes_per_pixel;
-
-            // WGPU requires bytes_per_row to be a multiple of COPY_BYTES_PER_ROW_ALIGNMENT (256)
-            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-            let bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
-            let buffer_size = (bytes_per_row * texture_height) as u64;
-
-            info!(
-                "Texture copy info: {}x{}, unpadded: {}, aligned: {}, buffer_size: {}",
-                texture_width, texture_height, unpadded_bytes_per_row, bytes_per_row, buffer_size
-            );
-
-            // Create staging buffer for reading texture data
-            let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Render Texture Staging Buffer"),
-                size: buffer_size,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            });
-
-            // Create command encoder
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Texture Copy Encoder"),
-            });
-
-            // Copy texture to buffer
-            encoder.copy_texture_to_buffer(
-                render_texture.texture.as_image_copy(),
-                wgpu::TexelCopyBufferInfo {
-                    buffer: &staging_buffer,
-                    layout: wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(bytes_per_row),
-                        rows_per_image: Some(texture_height),
-                    },
-                },
-                wgpu::Extent3d {
-                    width: texture_width,
-                    height: texture_height,
-                    depth_or_array_layers: 1,
-                },
-            );
-
-            // Submit commands
-            queue.submit(std::iter::once(encoder.finish()));
-
-            // Map buffer and read data (asynchronous operation)
-            let buffer_slice = staging_buffer.slice(..);
-            let (sender, receiver) = std::sync::mpsc::channel();
-
-            buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-                sender.send(result).unwrap();
-            });
-
-            // Wait for mapping to complete
-            // device.poll() is no longer needed in newer wgpu versions
-
-            match receiver.recv() {
-                Ok(Ok(())) => {
-                    // Read data
-                    let data = buffer_slice.get_mapped_range();
-                    let mut rgba_data = vec![0u8; (texture_width * texture_height * 4) as usize];
-
-                    // Copy data (handling padding)
-                    for y in 0..texture_height {
-                        let src_start = (y * bytes_per_row) as usize;
-                        let dst_start = (y * texture_width * 4) as usize;
-                        let row_size = (texture_width * 4) as usize;
-
-                        // Only copy actual pixel data, skipping padding
-                        rgba_data[dst_start..dst_start + row_size]
-                            .copy_from_slice(&data[src_start..src_start + row_size]);
-                    }
-
-                    // Unmap
-                    drop(data);
-                    staging_buffer.unmap();
-
-                    // Save as PNG file
-                    match image::save_buffer(
-                        filename,
-                        &rgba_data,
-                        texture_width,
-                        texture_height,
-                        image::ColorType::Rgba8,
-                    ) {
-                        Ok(()) => {
-                            info!(
-                                "Successfully saved render texture {} to {}",
-                                rt_index, filename
-                            );
-                            Ok(())
-                        }
-                        Err(e) => Err(format!("Failed to save image: {}", e)),
-                    }
-                }
-                Ok(Err(e)) => Err(format!("Failed to map buffer: {:?}", e)),
-                Err(e) => Err(format!("Failed to receive mapping result: {}", e)),
-            }
-        } else {
-            Err("WGPU components not initialized".to_string())
-        }
-    }
-
-    /// Debug method: print current render state information
-    pub fn debug_print_render_info(&self) {
-        info!("=== WGPU Render State Information ===");
-
-        // Base parameters
-        info!("Base Parameters:");
-        info!("  Cell count: {}x{}", self.base.cell_w, self.base.cell_h);
-        info!(
-            "  Window pixel size: {}x{}",
-            self.base.gr.pixel_w, self.base.gr.pixel_h
-        );
-        info!(
-            "  Ratio: {:.3}x{:.3}",
-            self.base.gr.ratio_x, self.base.gr.ratio_y
-        );
-
-        // Symbol dimensions
-        if let (Some(sym_w), Some(sym_h)) = (PIXEL_SYM_WIDTH.get(), PIXEL_SYM_HEIGHT.get()) {
-            info!("  Symbol dimensions: {}x{}", sym_w, sym_h);
-
-            // Calculate game area
-            let game_area_w = self.base.cell_w as f32 * sym_w / self.base.gr.ratio_x;
-            let game_area_h = self.base.cell_h as f32 * sym_h / self.base.gr.ratio_y;
-            info!("  Game area: {:.2}x{:.2}", game_area_w, game_area_h);
-        }
-
-        // WGPU state
-        if let Some(pixel_renderer) = &self.wgpu_pixel_renderer {
-            info!("WGPU State:");
-            info!(
-                "  Canvas size: {}x{}",
-                pixel_renderer.canvas_width, pixel_renderer.canvas_height
-            );
-
-            // Render texture state
-            for i in 0..4 {
-                let hidden = pixel_renderer.get_render_texture_hidden(i);
-                info!(
-                    "  RenderTexture{}: {}",
-                    i,
-                    if hidden { "Hidden" } else { "Visible" }
-                );
-            }
-        }
-
-        info!("================================");
     }
 }
 
