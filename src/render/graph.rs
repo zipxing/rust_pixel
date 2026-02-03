@@ -568,6 +568,30 @@ pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 /// - TUI layer: uses double this value (32 pixels = PIXEL_SYM_HEIGHT * 2)
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
+/// X-axis DPI scaling ratio for coordinate conversion
+///
+/// Used to convert cell coordinates to pixel coordinates in graphics mode.
+/// Typically set during adapter initialization.
+/// Default value is 1.0 if not explicitly set.
+pub static PIXEL_RATIO_X: OnceLock<f32> = OnceLock::new();
+
+/// Y-axis DPI scaling ratio for coordinate conversion
+///
+/// Used to convert cell coordinates to pixel coordinates in graphics mode.
+/// Typically set during adapter initialization.
+/// Default value is 1.0 if not explicitly set.
+pub static PIXEL_RATIO_Y: OnceLock<f32> = OnceLock::new();
+
+/// Get X-axis ratio with default value of 1.0 if not set
+pub fn get_ratio_x() -> f32 {
+    *PIXEL_RATIO_X.get().unwrap_or(&1.0)
+}
+
+/// Get Y-axis ratio with default value of 1.0 if not set
+pub fn get_ratio_y() -> f32 {
+    *PIXEL_RATIO_Y.get().unwrap_or(&1.0)
+}
+
 /// Calculate the width of a single symbol (in pixels) based on the full texture width
 ///
 /// # Parameters
@@ -1067,22 +1091,26 @@ impl Graph {
     ///
     /// Used for handling scaling adaptation for different DPI displays.
     /// This value affects pixel width calculation and rendering coordinate conversion.
+    /// Also sets the global PIXEL_RATIO_X for use in Sprite coordinate conversion.
     ///
     /// # Parameters
     /// - `rx`: X-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratiox(&mut self, rx: f32) {
         self.ratio_x = rx;
+        let _ = PIXEL_RATIO_X.set(rx);
     }
 
     /// Set Y-axis scaling ratio
     ///
     /// Used for handling scaling adaptation for different DPI displays.
     /// This value affects pixel height calculation and rendering coordinate conversion.
+    /// Also sets the global PIXEL_RATIO_Y for use in Sprite coordinate conversion.
     ///
     /// # Parameters
     /// - `ry`: Y-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratioy(&mut self, ry: f32) {
         self.ratio_y = ry;
+        let _ = PIXEL_RATIO_Y.set(ry);
     }
 
     /// Set whether to use TUI character height mode

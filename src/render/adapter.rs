@@ -193,6 +193,8 @@ pub mod cross_adapter;
 #[cfg(graphics_mode)]
 pub use crate::render::graph::{
     generate_render_buffer,
+    get_ratio_x,
+    get_ratio_y,
     init_sym_height,
     init_sym_width,
     push_render_buffer,
@@ -203,6 +205,8 @@ pub use crate::render::graph::{
     PIXEL_LOGO,
     PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH,
+    PIXEL_RATIO_X,
+    PIXEL_RATIO_Y,
     PIXEL_SYM_HEIGHT,
     PIXEL_SYM_WIDTH,
     PIXEL_TEXTURE_FILE,

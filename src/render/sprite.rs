@@ -15,6 +15,8 @@ use crate::{
     util::shape::{circle, line, prepare_line},
     util::{PointU16, PointF32, Rect},
 };
+#[cfg(graphics_mode)]
+use crate::render::graph::{get_ratio_x, get_ratio_y, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use bitflags::bitflags;
 // use log::info;
 // use std::f32;
@@ -433,18 +435,39 @@ impl Sprite {
         self.content.area = Rect::new(x, y, self.content.area.width, self.content.area.height);
     }
 
-    /// Set sprite position in cell units (text mode semantic).
+    /// Set sprite position in cell units.
     ///
-    /// This is a semantic helper that makes text mode intent explicit.
     /// In text mode: positions sprite at the specified character grid cell.
-    /// In graphics mode: same as set_pos() - coordinates are interpreted as pixels.
+    /// In graphics mode: automatically converts cell coordinates to pixel coordinates
+    /// using PIXEL_SYM_WIDTH/HEIGHT and ratio_x/y.
     ///
     /// # Example
     /// ```ignore
-    /// sprite.set_cell_pos(10, 5);  // Text mode: column 10, row 5
+    /// sprite.set_cell_pos(10, 5);  // Cell position (10, 5)
+    /// // In graphics mode: converted to pixel position (10 * sym_w / rx, 5 * sym_h / ry)
     /// ```
+    #[cfg(not(graphics_mode))]
     pub fn set_cell_pos(&mut self, x: u16, y: u16) {
         self.set_pos(x, y);
+    }
+
+    /// Set sprite position in cell units (graphics mode version).
+    ///
+    /// Automatically converts cell coordinates to pixel coordinates using:
+    /// - PIXEL_SYM_WIDTH/HEIGHT: Symbol dimensions from texture
+    /// - PIXEL_RATIO_X/Y: DPI scaling ratios
+    ///
+    /// Formula: pixel_pos = cell_pos * sym_size / ratio
+    #[cfg(graphics_mode)]
+    pub fn set_cell_pos(&mut self, x: u16, y: u16) {
+        let sym_w = PIXEL_SYM_WIDTH.get().copied().unwrap_or(16.0);
+        let sym_h = PIXEL_SYM_HEIGHT.get().copied().unwrap_or(16.0);
+        let rx = get_ratio_x();
+        let ry = get_ratio_y();
+
+        let pixel_x = (x as f32 * sym_w / rx) as u16;
+        let pixel_y = (y as f32 * sym_h / ry) as u16;
+        self.set_pos(pixel_x, pixel_y);
     }
 
     /// Set sprite position in pixel units (graphics mode semantic).

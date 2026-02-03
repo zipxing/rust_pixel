@@ -10,7 +10,6 @@ use rust_pixel::{
     event::{event_check, event_register, timer_fire, timer_register},
     game::Render,
     render::{
-        adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
         cell::cellsym,
         scene::Scene,
         sprite::{BorderType, Borders, Sprite},
@@ -774,44 +773,35 @@ impl TeditRender {
     }
 
     /// Initialize sprite positions after adapter is initialized
-    /// Converts cell coordinates to pixel coordinates
-    fn do_init(&mut self, ctx: &mut Context) {
+    /// Uses set_cell_pos which auto-converts cell coordinates to pixel coordinates
+    fn do_init(&mut self, _ctx: &mut Context) {
         if self.init {
             return;
         }
 
-        let rx = ctx.adapter.get_base().gr.ratio_x;
-        let ry = ctx.adapter.get_base().gr.ratio_y;
-        let sym_w = *PIXEL_SYM_WIDTH.get().expect("PIXEL_SYM_WIDTH not initialized");
-        let sym_h = *PIXEL_SYM_HEIGHT.get().expect("PIXEL_SYM_HEIGHT not initialized");
-
-        // Helper to convert cell coords to pixel coords
-        let to_pixel_x = |cell_x: f32| -> u16 { (cell_x * sym_w / rx) as u16 };
-        let to_pixel_y = |cell_y: f32| -> u16 { (cell_y * sym_h / ry) as u16 };
-
-        // COLOR box: was at (0, SYMH + 2)
+        // COLOR box: cell position (0, SYMH + 2)
         let color_sprite = self.scene.get_sprite("COLOR");
-        color_sprite.set_pos(to_pixel_x(0.0), to_pixel_y((SYMH + 2) as f32));
+        color_sprite.set_cell_pos(0, SYMH + 2);
 
-        // SYMBOL box: was at (0, 0)
+        // SYMBOL box: cell position (0, 0)
         let symbol_sprite = self.scene.get_sprite("SYMBOL");
-        symbol_sprite.set_pos(to_pixel_x(0.0), to_pixel_y(0.0));
+        symbol_sprite.set_cell_pos(0, 0);
 
-        // EDIT-BORDER: was at (SYMW + 2, 0)
+        // EDIT-BORDER: cell position (SYMW + 2, 0)
         let edit_border = self.scene.get_sprite("EDIT-BORDER");
-        edit_border.set_pos(to_pixel_x((SYMW + 2) as f32), to_pixel_y(0.0));
+        edit_border.set_cell_pos(SYMW + 2, 0);
 
-        // EDIT content: was at (SYMW + 3, 1)
+        // EDIT content: cell position (SYMW + 3, 1)
         let edit_sprite = self.scene.get_sprite("EDIT");
-        edit_sprite.set_pos(to_pixel_x((SYMW + 3) as f32), to_pixel_y(1.0));
+        edit_sprite.set_cell_pos(SYMW + 3, 1);
 
-        // MSG1: was at (0, EDITH + 2)
+        // MSG1: cell position (0, EDITH + 2)
         let msg1 = self.scene.get_sprite("MSG1");
-        msg1.set_pos(to_pixel_x(0.0), to_pixel_y((EDITH + 2) as f32));
+        msg1.set_cell_pos(0, EDITH + 2);
 
-        // MSG3: was at (SYMW + 2, EDITH + 2)
+        // MSG3: cell position (SYMW + 2, EDITH + 2)
         let msg3 = self.scene.get_sprite("MSG3");
-        msg3.set_pos(to_pixel_x((SYMW + 2) as f32), to_pixel_y((EDITH + 2) as f32));
+        msg3.set_cell_pos(SYMW + 2, EDITH + 2);
 
         self.init = true;
     }
