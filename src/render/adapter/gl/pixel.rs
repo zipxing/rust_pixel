@@ -464,9 +464,10 @@ impl GlPixelRenderer {
     /// ```
     pub fn present(&mut self, composites: &[RtComposite]) {
         // ═══════════════════════════════════════════════════════════════════════
-        // Step 1: 绑定屏幕帧缓冲 (后续渲染直接输出到屏幕)
+        // Note: Caller must bind screen and set viewport before calling this method.
+        // Do NOT call bind_screen() here - it resets viewport to canvas_size,
+        // which breaks Retina display support where physical_size != canvas_size.
         // ═══════════════════════════════════════════════════════════════════════
-        self.gl_pixel.bind_screen(&self.gl);
 
         // 获取画布尺寸 (RT 纹理的实际大小)
         let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();

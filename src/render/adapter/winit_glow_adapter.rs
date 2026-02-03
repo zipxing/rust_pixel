@@ -381,6 +381,26 @@ impl ApplicationHandler for WinitGlowAppHandler {
                     }
                 }
             }
+            WindowEvent::Resized(new_size) => {
+                // Handle window resize (including when moving between displays with different DPI)
+                unsafe {
+                    let adapter = &mut *self.adapter_ref;
+                    if let (Some(gl_surface), Some(gl_context)) =
+                        (&adapter.gl_surface, &adapter.gl_context)
+                    {
+                        // Resize the glutin surface to match the new physical size
+                        gl_surface.resize(
+                            gl_context,
+                            std::num::NonZeroU32::new(new_size.width.max(1)).unwrap(),
+                            std::num::NonZeroU32::new(new_size.height.max(1)).unwrap(),
+                        );
+                        log::info!(
+                            "Glow surface resized to {}x{}",
+                            new_size.width, new_size.height
+                        );
+                    }
+                }
+            }
             _ => {
                 // Convert other winit events to RustPixel events
                 let winit_event = WinitEvent::WindowEvent {
