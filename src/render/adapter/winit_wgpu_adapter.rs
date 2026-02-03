@@ -35,7 +35,9 @@ use crate::event::Event;
 use crate::render::{
     adapter::{
         winit_common::{
-            input_events_from_winit, winit_init_common, winit_move_win, Drag, WindowInitParams,
+            apply_cursor_to_window, check_border_area, input_events_from_winit,
+            load_custom_cursor, winit_init_common, winit_move_win, BorderArea, Drag,
+            WindowInitParams,
         },
         Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
     },
@@ -60,19 +62,7 @@ pub use winit::{
     window::{Cursor, CustomCursor, Window},
 };
 
-/// Border area enumeration
-///
-/// Defines the type of mouse click area to determine if a drag operation should be triggered.
-pub enum WinitBorderArea {
-    /// Invalid area
-    NOPE,
-    /// Close button area
-    CLOSE,
-    /// Top title bar area (draggable)
-    TOPBAR,
-    /// Other border areas (draggable)
-    OTHER,
-}
+// Note: BorderArea enum is now defined in winit_common.rs
 
 /// Winit adapter main structure
 ///
@@ -286,13 +276,13 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                             let bs =
                                 adapter.in_border(self.cursor_position.0, self.cursor_position.1);
                             match bs {
-                                WinitBorderArea::TOPBAR | WinitBorderArea::OTHER => {
+                                BorderArea::TopBar | BorderArea::Other => {
                                     // Start dragging when left button is pressed in border area
                                     adapter.drag.draging = true;
                                     adapter.drag.mouse_x = self.cursor_position.0;
                                     adapter.drag.mouse_y = self.cursor_position.1;
                                 }
-                                WinitBorderArea::CLOSE => {
+                                BorderArea::Close => {
                                     // Exit program when clicking close button area
                                     self.should_exit = true;
                                     event_loop.exit();
@@ -668,73 +658,21 @@ impl WinitWgpuAdapter {
     /// Set custom mouse cursor
     ///
     /// Loads the cursor image from assets/pix/cursor.png and sets it as the window's custom cursor.
-    /// - Automatically converted to RGBA8 format
-    /// - Hotspot position set to (0, 0)
-    /// - Handles transparency and pre-multiplied alpha
+    /// Uses shared implementation from winit_common.
     fn set_mouse_cursor(&mut self) {
-        // Build cursor image file path using global GAME_CONFIG
-        // 使用全局 GAME_CONFIG 构建光标图像文件路径
-        let project_path = &crate::get_game_config().project_path;
-        let cursor_path = format!(
-            "{}{}{}",
-            project_path,
-            std::path::MAIN_SEPARATOR,
-            "assets/pix/cursor.png"
-        );
-
-        if let Ok(cursor_img) = image::open(&cursor_path) {
-            let cursor_rgba = cursor_img.to_rgba8();
-            let (width, height) = cursor_rgba.dimensions();
-            let mut cursor_data = cursor_rgba.into_raw();
-
-            // Pre-multiply alpha - this is a common method to solve cursor transparency issues
-            for chunk in cursor_data.chunks_exact_mut(4) {
-                let alpha = chunk[3] as f32 / 255.0;
-                chunk[0] = (chunk[0] as f32 * alpha) as u8; // R * alpha
-                chunk[1] = (chunk[1] as f32 * alpha) as u8; // G * alpha
-                chunk[2] = (chunk[2] as f32 * alpha) as u8; // B * alpha
-            }
-
-            // Create CustomCursor source from image data
-            let cursor_source =
-                CustomCursor::from_rgba(cursor_data, width as u16, height as u16, 0, 0).unwrap();
-
-            // Need to create the actual cursor from the source using event_loop
-            if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
-                let custom_cursor = event_loop.create_custom_cursor(cursor_source);
-                self.custom_cursor = Some(custom_cursor.clone());
-                window.as_ref().set_cursor(custom_cursor);
-                // Ensure cursor is visible after setting custom cursor
-                window.as_ref().set_cursor_visible(true);
+        if let (Some(window), Some(event_loop)) = (&self.window, &self.event_loop) {
+            if let Some(cursor) = load_custom_cursor(event_loop) {
+                self.custom_cursor = Some(cursor.clone());
+                apply_cursor_to_window(window, &cursor);
             }
         }
     }
 
     /// Check if mouse position is in border area
     ///
-    /// Used to determine the type of border area for the mouse click position, deciding whether to trigger a drag operation.
-    ///
-    /// # Parameters
-    /// - `x`: Mouse X coordinate
-    /// - `y`: Mouse Y coordinate
-    ///
-    /// # Returns
-    /// Returns the corresponding border area type
-    fn in_border(&self, x: f64, y: f64) -> WinitBorderArea {
-        let w = self.base.gr.cell_width();
-        let h = self.base.gr.cell_height();
-        let sw = self.base.cell_w + 2;
-        if y >= 0.0 && y < h as f64 {
-            if x >= 0.0 && x <= ((sw - 1) as f32 * w) as f64 {
-                return WinitBorderArea::TOPBAR;
-            }
-            if x > ((sw - 1) as f32 * w) as f64 && x <= (sw as f32 * w) as f64 {
-                return WinitBorderArea::CLOSE;
-            }
-        } else if x > w as f64 && x <= ((sw - 1) as f32 * w) as f64 {
-            return WinitBorderArea::NOPE;
-        }
-        WinitBorderArea::OTHER
+    /// Uses shared implementation from winit_common.
+    fn in_border(&self, x: f64, y: f64) -> BorderArea {
+        check_border_area(x, y, &self.base)
     }
 
     /// WGPU version of transition rendering to texture (provides advanced API for petview etc.)

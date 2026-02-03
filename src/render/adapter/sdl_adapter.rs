@@ -22,26 +22,11 @@ use sdl2::{
     keyboard::Keycode as SKeycode,
     mouse::*,
     surface::Surface,
-    video::{Window, WindowPos::Positioned},
+    video::Window,
     EventPump, Sdl,
 };
 use std::any::Any;
 use std::time::Duration;
-
-/// DEPRECATED: Window dragging state for custom borderless windows
-///
-/// This struct is no longer used as RustPixel now uses OS window decoration
-/// with native window dragging. Kept for backward compatibility.
-#[allow(dead_code)]
-#[derive(Default)]
-struct Drag {
-    need: bool,
-    draging: bool,
-    mouse_x: i32,
-    mouse_y: i32,
-    dx: i32,
-    dy: i32,
-}
 
 pub struct SdlAdapter {
     pub base: AdapterBase,
@@ -59,21 +44,6 @@ pub struct SdlAdapter {
 
     // custom cursor
     pub cursor: Option<Cursor>,
-
-    // DEPRECATED: Window dragging state (no longer used with OS decoration)
-    drag: Drag,
-}
-
-/// DEPRECATED: Border area detection for custom window borders
-///
-/// This enum is no longer used as RustPixel now uses OS window decoration.
-/// Kept for backward compatibility.
-#[allow(dead_code)]
-pub enum SdlBorderArea {
-    NOPE,
-    CLOSE,
-    TOPBAR,
-    OTHER,
 }
 
 impl SdlAdapter {
@@ -86,7 +56,6 @@ impl SdlAdapter {
             sdl_window: None,
             gl_context: None,
             gl_pixel_renderer: None,
-            drag: Default::default(),
         }
     }
 
@@ -102,77 +71,6 @@ impl SdlAdapter {
         self.sdl_context.mouse().show_cursor(true);
     }
 
-    /// DEPRECATED: Check if mouse position is in custom border area
-    ///
-    /// This method is no longer used as RustPixel now uses OS window decoration
-    /// instead of custom borders. Kept for backward compatibility.
-    #[allow(dead_code)]
-    fn in_border(&self, x: i32, y: i32) -> SdlBorderArea {
-        let w = self.base.gr.cell_width();
-        let h = self.base.gr.cell_height();
-        let sw = self.base.cell_w + 2;
-        if y >= 0 && y < h as i32 {
-            if x >= 0 && x <= ((sw - 1) as f32 * w) as i32 {
-                return SdlBorderArea::TOPBAR;
-            }
-            if x > ((sw - 1) as f32 * w) as i32 && x <= (sw as f32 * w) as i32 {
-                return SdlBorderArea::CLOSE;
-            }
-        } else if x > w as i32 && x <= ((sw - 1) as f32 * w) as i32 {
-            return SdlBorderArea::NOPE;
-        }
-        SdlBorderArea::OTHER
-    }
-
-    /// DEPRECATED: Handle custom window dragging for borderless windows
-    ///
-    /// This method is no longer used as RustPixel now uses OS window decoration
-    /// with native window dragging. Kept for backward compatibility.
-    #[allow(dead_code)]
-    fn drag_window(&mut self, event: &SEvent) -> bool {
-        match *event {
-            SEvent::Quit { .. }
-            | SEvent::KeyDown {
-                keycode: Some(SKeycode::Q),
-                ..
-            } => return true,
-            SEvent::MouseButtonDown {
-                mouse_btn: sdl2::mouse::MouseButton::Left,
-                x,
-                y,
-                ..
-            } => {
-                let bs = self.in_border(x, y);
-                match bs {
-                    SdlBorderArea::TOPBAR | SdlBorderArea::OTHER => {
-                        // start dragging when mouse left click
-                        self.drag.draging = true;
-                        self.drag.mouse_x = x;
-                        self.drag.mouse_y = y;
-                    }
-                    SdlBorderArea::CLOSE => {
-                        return true;
-                    }
-                    _ => {}
-                }
-            }
-            SEvent::MouseButtonUp {
-                mouse_btn: sdl2::mouse::MouseButton::Left,
-                ..
-            } => {
-                // stop dragging when mouse left button is release
-                self.drag.draging = false;
-            }
-            SEvent::MouseMotion { x, y, .. } if self.drag.draging => {
-                self.drag.need = true;
-                // dragging window when mouse left button is hold and moving
-                self.drag.dx = x - self.drag.mouse_x;
-                self.drag.dy = y - self.drag.mouse_y;
-            }
-            _ => {}
-        }
-        false
-    }
 }
 
 impl Adapter for SdlAdapter {
@@ -272,29 +170,22 @@ impl Adapter for SdlAdapter {
     fn reset(&mut self) {}
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
-        let mut ses: Vec<SEvent> = vec![];
         if let Some(ref mut ep) = self.event_pump {
             for event in ep.poll_iter() {
-                ses.push(event.clone());
-                // convert sdl events to pixel events, providing a unified processing interfaces
-                if let Some(et) =
-                    input_events_from_sdl(&event, self.base.gr.ratio_x, self.base.gr.ratio_y, self.base.gr.use_tui_height)
-                {
-                    if !self.drag.draging {
-                        es.push(et);
-                    }
-                }
-            }
-            for event in ses {
-                // Using OS window decoration, no need for custom drag/close handling
-                // Just check for quit events
-                match event {
+                // Check for quit events
+                match &event {
                     SEvent::Quit { .. } => return true,
                     SEvent::KeyDown {
                         keycode: Some(SKeycode::Q),
                         ..
                     } => return true,
                     _ => {}
+                }
+                // Convert SDL events to RustPixel events
+                if let Some(et) =
+                    input_events_from_sdl(&event, self.base.gr.ratio_x, self.base.gr.ratio_y, self.base.gr.use_tui_height)
+                {
+                    es.push(et);
                 }
             }
             ::std::thread::sleep(timeout);
@@ -309,18 +200,9 @@ impl Adapter for SdlAdapter {
         pixel_sprites: &mut Vec<Layer>,
         stage: u32,
     ) -> Result<(), String> {
-        // No custom window dragging needed (using OS window decoration)
-        // sdl_move_win(
-        //     &mut self.drag.need,
-        //     self.sdl_window.as_mut().unwrap(),
-        //     self.drag.dx,
-        //     self.drag.dy,
-        // );
-
         // Note: Do NOT call post_draw() here! Buffer swap should happen after
         // present_default() renders RT to screen. See Scene::draw() flow.
         self.draw_all_graph(current_buffer, _p, pixel_sprites, stage);
-
         Ok(())
     }
 
@@ -460,15 +342,6 @@ impl Adapter for SdlAdapter {
 
         // Swap buffers to display the rendered content
         self.post_draw();
-    }
-}
-
-pub fn sdl_move_win(drag_need: &mut bool, win: &mut Window, dx: i32, dy: i32) {
-    // dragging window, set the correct position of a window
-    if *drag_need {
-        let (win_x, win_y) = win.position();
-        win.set_position(Positioned(win_x + dx), Positioned(win_y + dy));
-        *drag_need = false;
     }
 }
 
