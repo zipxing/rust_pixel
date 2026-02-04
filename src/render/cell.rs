@@ -18,6 +18,10 @@ use crate::render::style::{Color, Modifier, Style};
 use crate::render::symbol_map::get_symbol_map;
 use serde::{Deserialize, Serialize};
 
+fn default_scale() -> f32 {
+    1.0
+}
+
 /// Get TUI symbol index and block
 /// Returns (block, index) for TUI region (Block 160-169)
 pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
@@ -106,6 +110,16 @@ pub struct Cell {
     /// For special characters (Emoji, TUI, CJK), this value is overridden
     /// by `get_cell_info()` based on symbol_map lookups.
     pub tex: u8,
+    /// Per-cell X scale factor (1.0 = no scaling).
+    /// Combined with sprite-level scale in graphics mode rendering.
+    /// When different from 1.0, triggers cumulative width layout.
+    #[serde(default = "default_scale")]
+    pub scale_x: f32,
+    /// Per-cell Y scale factor (1.0 = no scaling).
+    /// Combined with sprite-level scale in graphics mode rendering.
+    /// Cells are vertically centered within the row when scale differs.
+    #[serde(default = "default_scale")]
+    pub scale_y: f32,
 }
 
 impl Cell {
@@ -191,6 +205,22 @@ impl Cell {
         self
     }
 
+    /// Set per-cell scale factors.
+    /// Combined with sprite-level scale during rendering:
+    /// final_scale = sprite_scale * cell_scale
+    pub fn set_scale(&mut self, sx: f32, sy: f32) -> &mut Cell {
+        self.scale_x = sx;
+        self.scale_y = sy;
+        self
+    }
+
+    /// Set uniform per-cell scale (same for both axes).
+    pub fn set_scale_uniform(&mut self, s: f32) -> &mut Cell {
+        self.scale_x = s;
+        self.scale_y = s;
+        self
+    }
+
     pub fn set_style(&mut self, style: Style) -> &mut Cell {
         if let Some(c) = style.fg {
             self.fg = c;
@@ -224,6 +254,8 @@ impl Cell {
         self.bg = Color::Reset;
         self.tex = 0; // Block 0 (Sprite region)
         self.modifier = Modifier::empty();
+        self.scale_x = 1.0;
+        self.scale_y = 1.0;
     }
 
     /// Check if this cell represents a blank space in graphics mode.
@@ -253,6 +285,8 @@ impl Default for Cell {
             bg: Color::Reset,
             modifier: Modifier::empty(),
             tex: 0,
+            scale_x: 1.0,
+            scale_y: 1.0,
         }
     }
 }

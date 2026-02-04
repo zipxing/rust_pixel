@@ -1296,7 +1296,7 @@ pub fn push_render_buffer(
     rbuf.push(wc);
 }
 
-/// Position calculation helper for rendering
+/// Position calculation helper for rendering (no scaling)
 /// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
 pub fn render_helper(
     cell_w: u16,
@@ -1306,11 +1306,17 @@ pub fn render_helper(
     p: PointU16,
     use_tui: bool,
 ) -> (ARect, usize, usize) {
-    render_helper_with_scale(cell_w, r, i, sh, p, use_tui, 1.0, 1.0)
+    render_helper_with_scale(cell_w, r, i, sh, p, use_tui, 1.0, 1.0, 1.0, None)
 }
 
 /// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
 /// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
+///
+/// # Parameters
+/// - `scale_x`, `scale_y`: Combined scale (sprite_scale * cell_scale)
+/// - `sprite_scale_y`: Sprite-level Y scale, used for row height and vertical centering
+/// - `cumulative_x`: Pre-computed cumulative X position in pixel space (before adding p.x).
+///   When Some, uses cumulative layout; when None, uses grid-based layout.
 ///
 /// Returns: (dest_rect, texture_id, symbol_id)
 pub fn render_helper_with_scale(
@@ -1319,50 +1325,54 @@ pub fn render_helper_with_scale(
     i: usize,
     sh: &(u8, u8, Color, Color),
     p: PointU16,
-    use_tui: bool, // Use TUI characters (16×32) instead of Sprite characters (16×16)
-    scale_x: f32,  // Sprite scaling along X (unitless, 1.0 means no scaling)
-    scale_y: f32,  // Sprite scaling along Y (unitless, 1.0 means no scaling)
+    use_tui: bool,        // Use TUI characters (16×32) instead of Sprite characters (16×16)
+    scale_x: f32,         // Combined (sprite * cell) scaling along X
+    scale_y: f32,         // Combined (sprite * cell) scaling along Y
+    sprite_scale_y: f32,  // Sprite-level Y scale for row height calculation
+    cumulative_x: Option<f32>, // Pre-computed cumulative X pixel position
 ) -> (ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32; // 16 pixels
-                                                                   // Height depends on character type:
-                                                                   // - Sprite: 16 pixels
-                                                                   // - TUI: 32 pixels (double height)
+    // Height depends on character type:
+    // - Sprite: 16 pixels
+    // - TUI: 32 pixels (double height)
     let h = if use_tui {
         (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32 // TUI: 32 pixels
     } else {
         *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32 // Sprite: 16 pixels
     };
 
-    let dstx = i as u16 % cell_w;
     let dsty = i as u16 / cell_w;
 
     let tx = sh.1 as usize;
 
-    // Apply per-sprite scaling to the destination render area
+    // Apply combined scaling to the destination render area
     // Use round() to align to pixel boundaries and avoid sub-pixel rendering artifacts
     let scaled_w = (w as f32 / r.x * scale_x).round() as u32;
     let scaled_h = (h as f32 / r.y * scale_y).round() as u32;
 
-    // Apply position scaling: scale both symbol size and spacing to avoid overlaps
-    // No border offset needed - content starts at (0,0)
-    let base_x = dstx as f32 * (w as f32 / r.x);
-    let base_y = dsty as f32 * (h as f32 / r.y);
-
-    let scaled_x = (base_x * scale_x).round();
-    let scaled_y = (base_y * scale_y).round();
+    let (scaled_x, scaled_y) = if let Some(cum_x) = cumulative_x {
+        // Cumulative layout: X from accumulated widths, Y centered within row
+        let row_h = h as f32 / r.y * sprite_scale_y;
+        let cell_h = h as f32 / r.y * scale_y;
+        let y_offset = (row_h - cell_h) / 2.0;
+        let base_y = dsty as f32 * row_h;
+        (cum_x.round(), (base_y + y_offset).round())
+    } else {
+        // Grid-based layout (original behavior)
+        let dstx = i as u16 % cell_w;
+        let base_x = dstx as f32 * (w as f32 / r.x);
+        let base_y = dsty as f32 * (h as f32 / r.y);
+        ((base_x * scale_x).round(), (base_y * scale_y).round())
+    };
 
     (
-        // Destination rectangle in the render texture (with sprite scaling applied
-        // to both size and position)
         ARect {
             x: scaled_x as i32 + p.x as i32,
             y: scaled_y as i32 + p.y as i32,
             w: scaled_w,
             h: scaled_h,
         },
-        // texture id
         tx,
-        // sym id (original index, not offset)
         sh.0 as usize,
     )
 }
@@ -1408,12 +1418,32 @@ pub fn render_buffer_to_cells<F>(
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
     let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
 
+    // Base cell width in pixel space (before any scaling)
+    let base_cell_w = w / rx;
+
+    // Track cumulative X position per row for per-cell scale support
+    let mut cumulative_x: f32 = 0.0;
+    let mut last_row: u16 = 0;
+
     let mut skip_next = false;
     for (i, cell) in buf.content.iter().enumerate() {
+        let row = i as u16 / pw;
+
+        // Reset cumulative_x at row boundary
+        if row != last_row {
+            cumulative_x = 0.0;
+            last_row = row;
+        }
+
         if skip_next {
             skip_next = false;
+            // Don't accumulate width - already counted by the emoji's double width
             continue;
         }
+
+        // Combined scale: sprite-level * per-cell
+        let cell_sx = scale_x * cell.scale_x;
+        let cell_sy = scale_y * cell.scale_y;
 
         // Extract CellInfo: symidx, texidx, fg, bg, modifier
         let cell_info = cell.get_cell_info();
@@ -1431,7 +1461,7 @@ pub fn render_buffer_to_cells<F>(
             }
         }
 
-        // Calculate destination rectangle with scaling
+        // Calculate destination rectangle with combined scaling and cumulative X
         let (mut s2, texidx, symidx) = render_helper_with_scale(
             pw,
             PointF32 { x: rx, y: ry },
@@ -1439,19 +1469,28 @@ pub fn render_buffer_to_cells<F>(
             &sh,
             PointU16 { x: px, y: py },
             use_tui,
-            scale_x,
+            cell_sx,
+            cell_sy,
             scale_y,
+            Some(cumulative_x),
         );
+
+        // Width advance for this cell
+        let mut cell_advance = base_cell_w * cell_sx;
 
         // TUI mode: handle Emoji double-width
         if use_tui && texidx >= 170 {
             s2.w *= 2;
+            cell_advance = base_cell_w * cell_sx * 2.0;
             if (i + 1) % pw as usize != 0 {
                 skip_next = true;
             }
         }
 
-        // Calculate rotation center point
+        // Accumulate width for next cell's position
+        cumulative_x += cell_advance;
+
+        // Calculate rotation center point (uses sprite-level scale, not per-cell)
         let x = i % pw as usize;
         let y = i / pw as usize;
         let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
