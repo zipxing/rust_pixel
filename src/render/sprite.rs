@@ -21,11 +21,6 @@ pub use layer::Layer;
 // Re-export from buffer for backward compatibility
 pub use crate::render::buffer::{SYMBOL_LINE, Borders, BorderType};
 
-// Type alias for backward compatibility
-#[deprecated(note = "Use Layer instead")]
-#[allow(deprecated)]
-pub type Sprites = Layer;
-
 /// Used to simplify the call to set_content_by_asset method
 /// Returns true if asset is loaded and ready, false if still loading (web mode)
 #[macro_export]
