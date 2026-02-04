@@ -29,8 +29,9 @@ use rust_pixel::{
     render::{
         adapter::{Adapter, RenderCell, RtComposite, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
         buffer::Buffer,
+        cell::cellsym,
         // CPU Effects (Buffer级别)
-        effect::{BufferEffect, EffectChain, EffectParams, NoiseEffect, RippleEffect, WaveEffect},
+        effect::{BufferEffect, EffectParams, RippleEffect, WaveEffect},
         // GPU Effects (RenderTexture级别)
         effect::{GpuTransition, GpuBlendEffect},
         scene::Scene,
@@ -43,7 +44,10 @@ use rust_pixel::{
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
 
-/// Apply CPU-based buffer distortion using the new effect system
+/// Apply CPU-based buffer distortion effects
+///
+/// Effects are applied independently from the original source buffer (not chained),
+/// so the wave distortion produces a clean, clearly visible wave pattern.
 fn process_buffer_transition(
     scene: &mut Scene,
     ctx: &mut Context,
@@ -52,21 +56,29 @@ fn process_buffer_transition(
     let p4 = scene.get_sprite("petimg4");
     let time = (ctx.rand.rand() % 300) as f32 / 100.0;
 
-    // Create effect chain with ripple + wave + noise
-    let mut chain = EffectChain::new();
-    chain.add(Box::new(RippleEffect::new(0.05, 10.0)));
-    chain.add(Box::new(WaveEffect::new(0.03, 15.0)));
-
-    // Add noise based on transition stage
-    let noise_density = (transbuf_stage as f32 / 120.0).min(0.3);
-    chain.add(Box::new(NoiseEffect::new(noise_density)));
-
-    // Apply effects
     let params = EffectParams::new(0.5 - time, ctx.stage as usize)
         .with_seed(ctx.rand.rand());
 
     let mut tbuf = p4.content.clone();
-    chain.apply(&p4.content, &mut tbuf, &params);
+
+    // Apply effects independently from source (not chained through EffectChain).
+    // Each distortion reads from p4.content, so wave overwrites ripple and
+    // produces a clean, visible wave pattern.
+    let ripple = RippleEffect::new(0.05, 10.0);
+    ripple.apply(&p4.content, &mut tbuf, &params);
+
+    let wave = WaveEffect::new(0.03, 15.0);
+    wave.apply(&p4.content, &mut tbuf, &params);
+
+    // Add noise: a few random cells per frame
+    let clen = tbuf.content.len();
+    for _ in 0..transbuf_stage / 2 {
+        let idx = ctx.rand.rand() as usize % clen;
+        let sym = (ctx.rand.rand() % 255) as u8;
+        tbuf.content[idx]
+            .set_symbol(&cellsym(sym))
+            .set_fg(Color::Rgba(155, 155, 155, 155));
+    }
 
     // Update p3 sprite with distorted content
     let p3 = scene.get_sprite("petimg3");
