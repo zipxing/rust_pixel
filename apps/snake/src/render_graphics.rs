@@ -99,14 +99,10 @@ impl SnakeRender {
             Color::Indexed(222),
             Color::Reset,
         );
-        #[cfg(not(graphics_mode))]
-        t.add_tui_sprite(l, "SNAKE-BORDER");
-        #[cfg(graphics_mode)]
         t.add_sprite(l, "SNAKE-BORDER");
         // Game area sprite
-        #[cfg(graphics_mode)]
         t.add_sprite(Sprite::new(1, 1, SNAKEW as u16, SNAKEH as u16), "SNAKE");
-        // Message area (TUI layer)
+        // Message area sprite
         t.add_sprite(
             Sprite::new(0, ((SNAKEH + 2) * 16) as u16, SNAKEW as u16, 1u16),
             "SNAKE-MSG",

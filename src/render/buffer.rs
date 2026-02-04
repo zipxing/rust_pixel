@@ -52,13 +52,42 @@
 use crate::{
     render::cell::{cellsym, is_prerendered_emoji, Cell},
     render::style::{Color, Style},
-    util::Rect,
+    util::{Rect, PointU16},
+    util::shape::{circle, line, prepare_line},
 };
+use bitflags::bitflags;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
+
+/// Common line-drawing symbols (in text mode)
+pub const SYMBOL_LINE: [&str; 37] = [
+    "│", "║", "┃", "─", "═", "━", "┐", "╮", "╗", "┓", "┌", "╭", "╔", "┏", "┘", "╯", "╝", "┛", "└",
+    "╰", "╚", "┗", "┤", "╣", "┫", "├", "╠", "┣", "┬", "╦", "┳", "┴", "╩", "┻", "┼", "╬", "╋",
+];
+
+// border's bitflags
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct Borders: u32 {
+        const NONE   = 0b0000_0001;
+        const TOP    = 0b0000_0010;
+        const RIGHT  = 0b0000_0100;
+        const BOTTOM = 0b0000_1000;
+        const LEFT   = 0b0001_0000;
+        const ALL    = Self::TOP.bits() | Self::RIGHT.bits() | Self::BOTTOM.bits() | Self::LEFT.bits();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BorderType {
+    Plain,
+    Rounded,
+    Double,
+    Thick,
+}
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Buffer {
@@ -391,6 +420,158 @@ impl Buffer {
     pub fn set_fg(&mut self, color: Color) {
         for c in &mut self.content {
             c.set_fg(color);
+        }
+    }
+
+    // ========== Content-drawing convenience methods ==========
+
+    /// Set string content at (x,y) with fg/bg color.
+    /// Coordinates are relative to buffer's area.
+    pub fn set_color_str<S>(&mut self, x: u16, y: u16, string: S, fg: Color, bg: Color)
+    where
+        S: AsRef<str>,
+    {
+        self.set_str(x, y, string, Style::default().fg(fg).bg(bg));
+    }
+
+    /// Set string content at (0,0) with default style.
+    pub fn set_default_str<S>(&mut self, string: S)
+    where
+        S: AsRef<str>,
+    {
+        self.set_str(0, 0, string, Style::default());
+    }
+
+    /// Set graphic mode symbol (texture:texture_id, index:sym) at (x,y) with fg color.
+    pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, fg: Color) {
+        self.set_str_tex(
+            x,
+            y,
+            cellsym(sym),
+            Style::default().fg(fg).bg(Color::Reset),
+            texture_id,
+        );
+    }
+
+    // ========== Shape drawing methods ==========
+
+    pub fn draw_circle(
+        &mut self,
+        x0: u16,
+        y0: u16,
+        radius: u16,
+        sym: &str,
+        fg_color: u8,
+        bg_color: u8,
+    ) {
+        for p in circle(x0, y0, radius) {
+            if (p.0 as u16) < self.area.width && (p.1 as u16) < self.area.height {
+                self.set_str(
+                    p.0 as u16,
+                    p.1 as u16,
+                    sym,
+                    Style::default()
+                        .fg(Color::Indexed(fg_color))
+                        .bg(Color::Indexed(bg_color)),
+                );
+            }
+        }
+    }
+
+    pub fn draw_line(
+        &mut self,
+        p0: PointU16,
+        p1: PointU16,
+        sym: Option<Vec<Option<u8>>>,
+        fg_color: u8,
+        bg_color: u8,
+    ) {
+        let (x0, y0, x1, y1) = prepare_line(p0.x, p0.y, p1.x, p1.y);
+        // start, end, v, h, s, bs...
+        let mut syms: Vec<Option<u8>> = vec![None, None, Some(119), Some(116), Some(77), Some(78)];
+        if let Some(s) = sym {
+            syms = s;
+        }
+        for p in line(x0, y0, x1, y1) {
+            let x = p.0 as u16;
+            let y = p.1 as u16;
+            let sym = syms[p.2 as usize];
+            if let Some(s) = sym {
+                if x < self.area.width && y < self.area.height {
+                    self.set_str_tex(
+                        x,
+                        y,
+                        cellsym(s),
+                        Style::default()
+                            .fg(Color::Indexed(fg_color))
+                            .bg(Color::Reset),
+                        bg_color,
+                    );
+                }
+            }
+        }
+    }
+
+    // ========== Border drawing ==========
+
+    pub fn set_border(&mut self, borders: Borders, border_type: BorderType, style: Style) {
+        let lineidx: [usize; 11] = match border_type {
+            BorderType::Plain => [0, 3, 6, 10, 14, 18, 22, 25, 28, 31, 34],
+            BorderType::Rounded => [0, 3, 7, 11, 15, 19, 22, 25, 28, 31, 34],
+            BorderType::Double => [1, 4, 8, 12, 16, 20, 23, 26, 29, 33, 35],
+            BorderType::Thick => [2, 5, 9, 13, 17, 21, 24, 27, 30, 34, 36],
+        };
+        if borders.intersects(Borders::LEFT) {
+            for y in 0..self.area.height {
+                self.set_str_tex(0, y, SYMBOL_LINE[lineidx[0]], style, 1);
+            }
+        }
+        if borders.intersects(Borders::TOP) {
+            for x in 0..self.area.width {
+                self.set_str_tex(x, 0, SYMBOL_LINE[lineidx[1]], style, 1);
+            }
+        }
+        if borders.intersects(Borders::RIGHT) {
+            let x = self.area.width - 1;
+            for y in 0..self.area.height {
+                self.set_str_tex(x, y, SYMBOL_LINE[lineidx[0]], style, 1);
+            }
+        }
+        if borders.intersects(Borders::BOTTOM) {
+            let y = self.area.height - 1;
+            for x in 0..self.area.width {
+                self.set_str_tex(x, y, SYMBOL_LINE[lineidx[1]], style, 1);
+            }
+        }
+        if borders.contains(Borders::RIGHT | Borders::BOTTOM) {
+            self.set_str_tex(
+                self.area.width - 1,
+                self.area.height - 1,
+                SYMBOL_LINE[lineidx[4]],
+                style,
+                1,
+            );
+        }
+        if borders.contains(Borders::RIGHT | Borders::TOP) {
+            self.set_str_tex(
+                self.area.width - 1,
+                0,
+                SYMBOL_LINE[lineidx[2]],
+                style,
+                1,
+            );
+        }
+        if borders.contains(Borders::LEFT | Borders::BOTTOM) {
+            self.set_str_tex(
+                0,
+                self.area.height - 1,
+                SYMBOL_LINE[lineidx[5]],
+                style,
+                1,
+            );
+        }
+        if borders.contains(Borders::LEFT | Borders::TOP) {
+            self.set_str_tex(0, 0, SYMBOL_LINE[lineidx[3]], style, 1);
         }
     }
 

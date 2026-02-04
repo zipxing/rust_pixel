@@ -32,7 +32,7 @@ pub mod symbols;
 
 // re-export
 pub use adapter::{Adapter, AdapterBase};
-pub use buffer::Buffer;
+pub use buffer::{Buffer, Borders, BorderType, SYMBOL_LINE};
 pub use cell::Cell;
 #[cfg(graphics_mode)]
 pub use graph::{

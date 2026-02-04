@@ -31,8 +31,8 @@ pub struct Panel {
     layout_constraints: Vec<LayoutConstraints>,
     border_style: BorderStyle,
     title: Option<String>,
-    /// Optional canvas buffer for direct character drawing
-    canvas: Option<Buffer>,
+    /// Canvas buffer for direct character drawing (always available)
+    canvas: Buffer,
 }
 
 impl Panel {
@@ -44,12 +44,14 @@ impl Panel {
             layout_constraints: Vec::new(),
             border_style: BorderStyle::None,
             title: None,
-            canvas: None,
+            canvas: Buffer::empty(Rect::new(0, 0, 0, 0)),
         }
     }
     
     pub fn with_bounds(mut self, bounds: Rect) -> Self {
         self.base.bounds = bounds;
+        // Auto-size canvas to bounds (render_canvas clips to content_area)
+        self.canvas = Buffer::empty(Rect::new(0, 0, bounds.width, bounds.height));
         self
     }
     
@@ -122,52 +124,65 @@ impl Panel {
 
     // ========== Canvas methods for direct character drawing ==========
 
-    /// Enable canvas mode with specified size
+    /// Resize canvas to specified dimensions
     /// Canvas coordinates are relative to the content area
     pub fn enable_canvas(&mut self, width: u16, height: u16) {
-        let rect = Rect::new(0, 0, width, height);
-        self.canvas = Some(Buffer::empty(rect));
+        self.canvas = Buffer::empty(Rect::new(0, 0, width, height));
         self.mark_dirty();
-    }
-
-    /// Check if canvas is enabled
-    pub fn has_canvas(&self) -> bool {
-        self.canvas.is_some()
     }
 
     /// Set a character at position (x, y) in the canvas
     /// Similar to Sprite's set_color_str but for single character
     pub fn set_char(&mut self, x: u16, y: u16, sym: &str, fg: Color, bg: Color) {
-        if let Some(ref mut canvas) = self.canvas {
-            let area = canvas.area();
-            if x < area.width && y < area.height {
-                let style = Style::default().fg(fg).bg(bg);
-                canvas.get_mut(x, y).set_symbol(sym).set_style(style);
-                self.mark_dirty();
-            }
+        let area = self.canvas.area();
+        if x < area.width && y < area.height {
+            let style = Style::default().fg(fg).bg(bg);
+            self.canvas.get_mut(x, y).set_symbol(sym).set_style(style);
+            self.mark_dirty();
         }
     }
 
     /// Set a string at position (x, y) in the canvas
     pub fn set_str(&mut self, x: u16, y: u16, s: &str, fg: Color, bg: Color) {
-        if let Some(ref mut canvas) = self.canvas {
-            let style = Style::default().fg(fg).bg(bg);
-            canvas.set_string(x, y, s, style);
-            self.mark_dirty();
-        }
+        let style = Style::default().fg(fg).bg(bg);
+        self.canvas.set_string(x, y, s, style);
+        self.mark_dirty();
     }
 
     /// Clear the canvas
     pub fn clear_canvas(&mut self) {
-        if let Some(ref mut canvas) = self.canvas {
-            canvas.reset();
-            self.mark_dirty();
-        }
+        self.canvas.reset();
+        self.mark_dirty();
     }
 
     /// Get canvas buffer for direct manipulation
-    pub fn canvas_mut(&mut self) -> Option<&mut Buffer> {
-        self.canvas.as_mut()
+    pub fn canvas_mut(&mut self) -> &mut Buffer {
+        &mut self.canvas
+    }
+
+    // ========== Sprite-compatible convenience methods ==========
+
+    /// Set colored string at position - compatible with Sprite::set_color_str()
+    pub fn set_color_str(&mut self, x: u16, y: u16, s: &str, fg: Color, bg: Color) {
+        self.set_str(x, y, s, fg, bg);
+    }
+
+    /// Hide/show panel - compatible with Sprite::set_hidden()
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.set_visible(!hidden);
+    }
+
+    /// Check if panel is hidden - compatible with Sprite::is_hidden()
+    pub fn is_hidden(&self) -> bool {
+        !self.state().visible
+    }
+
+    /// Set panel position (keeps current size) - compatible with Sprite::set_pos()
+    pub fn set_pos(&mut self, x: u16, y: u16) {
+        let mut bounds = self.bounds();
+        bounds.x = x;
+        bounds.y = y;
+        self.set_bounds(bounds);
     }
 }
 
@@ -205,9 +220,9 @@ impl Widget for Panel {
             self.render_title(buffer, title, style)?;
         }
 
-        // Render canvas content if enabled
-        if let Some(ref canvas) = self.canvas {
-            self.render_canvas(buffer, canvas)?;
+        // Render canvas content
+        if self.canvas.area().width > 0 && self.canvas.area().height > 0 {
+            self.render_canvas(buffer, &self.canvas)?;
         }
 
         // Render children

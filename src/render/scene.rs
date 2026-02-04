@@ -4,9 +4,9 @@
 //! Scene supports rendering in both text and graphics modes.
 //! The core of it is to draw whatever in the buffer on the screen.
 //!
-//! Scene contains multiple Layers:
-//! - "tui" layer: Contains the mainbuffer sprite for TUI/Widget content
-//! - "sprite" layer: Contains game sprites (pixel sprites)
+//! Scene architecture:
+//! - `tui_buffers`: Double buffer for TUI/Widget content (rendered via Widget.render())
+//! - `layers["sprite"]`: Contains game sprites for graphics mode
 //!
 //! Terminal mode relies on the crossterm modules, and it has builtin double buffering.
 //!
@@ -71,16 +71,11 @@ impl Scene {
         let mut layers = vec![];
         let mut layer_tag_index = HashMap::new();
 
-        // TUI layer - for UI elements (borders, messages, etc.)
-        let mut tui_layer = Layer::new("tui");
-        tui_layer.render_weight = 100;  // Higher weight = rendered on top
-        layers.push(tui_layer);
-        layer_tag_index.insert("tui".to_string(), 0);
-
-        // Sprite layer - for game sprites
+        // Sprite layer - for game sprites (index 0)
+        // Note: TUI/Widget content is rendered directly to tui_buffers, not through layers
         let sprite_layer = Layer::new("sprite");
         layers.push(sprite_layer);
-        layer_tag_index.insert("sprite".to_string(), 1);
+        layer_tag_index.insert("sprite".to_string(), 0);
 
         Scene {
             tui_buffers: [Buffer::empty(size), Buffer::empty(size)],
@@ -150,12 +145,12 @@ impl Scene {
 
     /// Add a sprite to the default sprite layer (for game objects)
     pub fn add_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.layers[1].add(sp, tag);
+        self.layers[0].add(sp, tag);
     }
 
     /// Get a sprite from the default sprite layer
     pub fn get_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.layers[1].get(tag)
+        self.layers[0].get(tag)
     }
 
     /// Execute a closure with multiple sprites simultaneously
@@ -173,21 +168,7 @@ impl Scene {
     where
         F: FnOnce(&mut [&mut Sprite]) -> R,
     {
-        self.layers[1].with_sprites(tags, f)
-    }
-
-    /// Add a sprite to the TUI layer (internal use only)
-    /// Users should use Widget system for TUI content
-    #[allow(dead_code)]
-    fn add_tui_sprite(&mut self, sp: Sprite, tag: &str) {
-        self.layers[0].add(sp, tag);
-    }
-
-    /// Get a sprite from the TUI layer (internal use only)
-    /// Users should use Widget system for TUI content
-    #[allow(dead_code)]
-    fn get_tui_sprite(&mut self, tag: &str) -> &mut Sprite {
-        self.layers[0].get(tag)
+        self.layers[0].with_sprites(tags, f)
     }
 
     pub fn reset(&mut self, ctx: &mut Context) {
@@ -227,23 +208,16 @@ impl Scene {
     /// ```
     pub fn draw_to_rt(&mut self, ctx: &mut Context) -> io::Result<()> {
         if ctx.stage > LOGO_FRAME {
-            self.update_render_index();
-            for idx in &self.render_index {
-                if !self.layers[idx.0].is_hidden {
-                    // Terminal mode: all layers merge to buffer
-                    // Graphics mode: only TUI layer (idx 0) merges to buffer
-                    #[cfg(not(graphics_mode))]
-                    {
+            // Terminal mode: all sprite layers merge to buffer for diff rendering
+            // Graphics mode: sprites are handled separately in generate_render_buffer,
+            //                only tui_buffers content (from Widget.render()) goes to RT
+            #[cfg(not(graphics_mode))]
+            {
+                self.update_render_index();
+                for idx in &self.render_index {
+                    if !self.layers[idx.0].is_hidden {
                         self.layers[idx.0]
                             .render_all_to_buffer(&mut ctx.asset_manager, &mut self.tui_buffers[self.current]);
-                    }
-                    #[cfg(graphics_mode)]
-                    {
-                        // Only TUI layer merges to buffer in graphics mode
-                        if idx.0 == 0 {
-                            self.layers[idx.0]
-                                .render_all_to_buffer(&mut ctx.asset_manager, &mut self.tui_buffers[self.current]);
-                        }
                     }
                 }
             }

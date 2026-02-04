@@ -9,51 +9,22 @@
 use crate::{
     asset::{AssetManager, AssetState, AssetType},
     render::buffer::Buffer,
-    render::cell::cellsym,
-    // render::image::*,
-    render::style::{Color, Style},
-    util::shape::{circle, line, prepare_line},
-    util::{PointU16, PointF32, Rect},
+    util::{PointF32, Rect},
 };
 #[cfg(graphics_mode)]
 use crate::render::graph::{get_ratio_x, get_ratio_y, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
-use bitflags::bitflags;
-// use log::info;
-// use std::f32;
+use std::ops::{Deref, DerefMut};
 
 mod layer;
 pub use layer::Layer;
+
+// Re-export from buffer for backward compatibility
+pub use crate::render::buffer::{SYMBOL_LINE, Borders, BorderType};
 
 // Type alias for backward compatibility
 #[deprecated(note = "Use Layer instead")]
 #[allow(deprecated)]
 pub type Sprites = Layer;
-
-/// Defines some common tabs symbol (in text mode)
-pub const SYMBOL_LINE: [&str; 37] = [
-    "│", "║", "┃", "─", "═", "━", "┐", "╮", "╗", "┓", "┌", "╭", "╔", "┏", "┘", "╯", "╝", "┛", "└",
-    "╰", "╚", "┗", "┤", "╣", "┫", "├", "╠", "┣", "┬", "╦", "┳", "┴", "╩", "┻", "┼", "╬", "╋",
-];
-
-// border's bigflags
-bitflags! {
-    pub struct Borders: u32 {
-        const NONE   = 0b0000_0001;
-        const TOP    = 0b0000_0010;
-        const RIGHT  = 0b0000_0100;
-        const BOTTOM = 0b0000_1000;
-        const LEFT   = 0b0001_0000;
-        const ALL    = Self::TOP.bits() | Self::RIGHT.bits() | Self::BOTTOM.bits() | Self::LEFT.bits();
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BorderType {
-    Plain,
-    Rounded,
-    Double,
-    Thick,
-}
 
 /// Used to simplify the call to set_content_by_asset method
 /// Returns true if asset is loaded and ready, false if still loading (web mode)
@@ -224,6 +195,22 @@ impl Widget for Sprite {
     }
 }
 
+/// Deref to Buffer so all Buffer content-drawing methods
+/// (set_color_str, draw_circle, draw_line, set_border, etc.)
+/// are automatically available on Sprite without wrapping.
+impl Deref for Sprite {
+    type Target = Buffer;
+    fn deref(&self) -> &Buffer {
+        &self.content
+    }
+}
+
+impl DerefMut for Sprite {
+    fn deref_mut(&mut self) -> &mut Buffer {
+        &mut self.content
+    }
+}
+
 impl Sprite {
     pub fn new(x: u16, y: u16, width: u16, height: u16) -> Self {
         let area = Rect::new(x, y, width, height);
@@ -264,38 +251,6 @@ impl Sprite {
         let mut sprite = Self::new(x, y, width, height);
         sprite.set_scale_x(0.5);  // Half width
         sprite
-    }
-
-    pub fn set_fg(&mut self, color: Color) {
-        self.content.set_fg(color);
-    }
-
-    /// set string content at (x,y) with fg/bg color...
-    pub fn set_color_str<S>(&mut self, x: u16, y: u16, string: S, f: Color, b: Color)
-    where
-        S: AsRef<str>,
-    {
-        self.content
-            .set_str(x, y, string, Style::default().fg(f).bg(b));
-    }
-
-    /// set string content at (0,0) with default style...
-    pub fn set_default_str<S>(&mut self, string: S)
-    where
-        S: AsRef<str>,
-    {
-        self.content.set_str(0, 0, string, Style::default());
-    }
-
-    /// set graphic model symbol(texture:texture_id, index:sym) at (x,y) with fgcolor...
-    pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, f: Color) {
-        self.content.set_str_tex(
-            x,
-            y,
-            cellsym(sym),
-            Style::default().fg(f).bg(Color::Reset),
-            texture_id,
-        );
     }
 
     pub fn set_content_by_asset(
@@ -348,76 +303,6 @@ impl Sprite {
 
     pub fn is_hidden(&self) -> bool {
         self.render_weight < 0
-    }
-
-    pub fn set_border(&mut self, borders: Borders, border_type: BorderType, style: Style) {
-        // vertical horizontal
-        // top_right top_left bottom_right bottom_left
-        // vertical_left vertical_right horizontal_down horizontal_up
-        // cross
-        let lineidx: [usize; 11] = match border_type {
-            BorderType::Plain => [0, 3, 6, 10, 14, 18, 22, 25, 28, 31, 34],
-            BorderType::Rounded => [0, 3, 7, 11, 15, 19, 22, 25, 28, 31, 34],
-            BorderType::Double => [1, 4, 8, 12, 16, 20, 23, 26, 29, 33, 35],
-            BorderType::Thick => [2, 5, 9, 13, 17, 21, 24, 27, 30, 34, 36],
-        };
-        if borders.intersects(Borders::LEFT) {
-            for y in 0..self.content.area.height {
-                self.content
-                    .set_str_tex(0, y, SYMBOL_LINE[lineidx[0]], style, 1);
-            }
-        }
-        if borders.intersects(Borders::TOP) {
-            for x in 0..self.content.area.width {
-                self.content
-                    .set_str_tex(x, 0, SYMBOL_LINE[lineidx[1]], style, 1);
-            }
-        }
-        if borders.intersects(Borders::RIGHT) {
-            let x = self.content.area.width - 1;
-            for y in 0..self.content.area.height {
-                self.content
-                    .set_str_tex(x, y, SYMBOL_LINE[lineidx[0]], style, 1);
-            }
-        }
-        if borders.intersects(Borders::BOTTOM) {
-            let y = self.content.area.height - 1;
-            for x in 0..self.content.area.width {
-                self.content
-                    .set_str_tex(x, y, SYMBOL_LINE[lineidx[1]], style, 1);
-            }
-        }
-        if borders.contains(Borders::RIGHT | Borders::BOTTOM) {
-            self.content.set_str_tex(
-                self.content.area.width - 1,
-                self.content.area.height - 1,
-                SYMBOL_LINE[lineidx[4]],
-                style,
-                1,
-            );
-        }
-        if borders.contains(Borders::RIGHT | Borders::TOP) {
-            self.content.set_str_tex(
-                self.content.area.width - 1,
-                0,
-                SYMBOL_LINE[lineidx[2]],
-                style,
-                1,
-            );
-        }
-        if borders.contains(Borders::LEFT | Borders::BOTTOM) {
-            self.content.set_str_tex(
-                0,
-                self.content.area.height - 1,
-                SYMBOL_LINE[lineidx[5]],
-                style,
-                1,
-            );
-        }
-        if borders.contains(Borders::LEFT | Borders::TOP) {
-            self.content
-                .set_str_tex(0, 0, SYMBOL_LINE[lineidx[3]], style, 1);
-        }
     }
 
     pub fn copy_content(&mut self, sp: &Sprite) {
@@ -501,60 +386,4 @@ impl Sprite {
         (self.content.area.x as f32, self.content.area.y as f32)
     }
 
-    pub fn draw_circle(
-        &mut self,
-        x0: u16,
-        y0: u16,
-        radius: u16,
-        sym: &str,
-        fg_color: u8,
-        bg_color: u8,
-    ) {
-        for p in circle(x0, y0, radius) {
-            if (p.0 as u16) < self.content.area.width && (p.1 as u16) < self.content.area.height {
-                self.content.set_str(
-                    p.0 as u16,
-                    p.1 as u16,
-                    sym,
-                    Style::default()
-                        .fg(Color::Indexed(fg_color))
-                        .bg(Color::Indexed(bg_color)),
-                );
-            }
-        }
-    }
-
-    pub fn draw_line(
-        &mut self,
-        p0: PointU16,
-        p1: PointU16,
-        sym: Option<Vec<Option<u8>>>,
-        fg_color: u8,
-        bg_color: u8,
-    ) {
-        let (x0, y0, x1, y1) = prepare_line(p0.x, p0.y, p1.x, p1.y);
-        // start, end, v, h, s, bs...
-        let mut syms: Vec<Option<u8>> = vec![None, None, Some(119), Some(116), Some(77), Some(78)];
-        if let Some(s) = sym {
-            syms = s;
-        }
-        for p in line(x0, y0, x1, y1) {
-            let x = p.0 as u16;
-            let y = p.1 as u16;
-            let sym = syms[p.2 as usize];
-            if let Some(s) = sym {
-                if x < self.content.area.width && y < self.content.area.height {
-                    self.content.set_str_tex(
-                        x,
-                        y,
-                        cellsym(s),
-                        Style::default()
-                            .fg(Color::Indexed(fg_color))
-                            .bg(Color::Reset),
-                        bg_color,
-                    );
-                }
-            }
-        }
-    }
 }
