@@ -1325,7 +1325,7 @@ pub fn render_helper_with_scale(
     i: usize,
     sh: &(u8, u8, Color, Color),
     p: PointU16,
-    use_tui: bool,        // Use TUI characters (16×32) instead of Sprite characters (16×16)
+    use_tui: bool,        // Global TUI mode flag; TUI height also auto-detected from block index
     scale_x: f32,         // Combined (sprite * cell) scaling along X
     scale_y: f32,         // Combined (sprite * cell) scaling along Y
     sprite_scale_y: f32,  // Sprite-level Y scale for row height calculation
@@ -1333,9 +1333,12 @@ pub fn render_helper_with_scale(
 ) -> (ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32; // 16 pixels
     // Height depends on character type:
-    // - Sprite: 16 pixels
-    // - TUI: 32 pixels (double height)
-    let h = if use_tui {
+    // - Sprite (block 0-159): 16 pixels
+    // - TUI (block 160-169): 32 pixels (double height)
+    // Auto-detect from block index so sprites with TUI-region cells
+    // get correct height without needing manual scale_y=2.0 workaround.
+    let cell_is_tui = use_tui || (sh.1 >= 160 && sh.1 < 170);
+    let h = if cell_is_tui {
         (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32 // TUI: 32 pixels
     } else {
         *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32 // Sprite: 16 pixels
@@ -1461,7 +1464,13 @@ pub fn render_buffer_to_cells<F>(
             }
         }
 
-        // Calculate destination rectangle with combined scaling and cumulative X
+        // Fixed grid slot width (sprite-level scale only; per-cell scale doesn't affect spacing)
+        let slot_w = base_cell_w * scale_x;
+        // Center the scaled cell within its fixed grid slot
+        let rendered_w = base_cell_w * cell_sx;
+        let x_center_offset = (slot_w - rendered_w) / 2.0;
+
+        // Calculate destination rectangle with combined scaling and centered X
         let (mut s2, texidx, symidx) = render_helper_with_scale(
             pw,
             PointF32 { x: rx, y: ry },
@@ -1472,23 +1481,23 @@ pub fn render_buffer_to_cells<F>(
             cell_sx,
             cell_sy,
             scale_y,
-            Some(cumulative_x),
+            Some(cumulative_x + x_center_offset),
         );
 
-        // Width advance for this cell
-        let mut cell_advance = base_cell_w * cell_sx;
+        // Grid advance: fixed slot width (per-cell scale doesn't shift neighbors)
+        let mut grid_advance = slot_w;
 
         // TUI mode: handle Emoji double-width
         if use_tui && texidx >= 170 {
             s2.w *= 2;
-            cell_advance = base_cell_w * cell_sx * 2.0;
+            grid_advance = slot_w * 2.0;
             if (i + 1) % pw as usize != 0 {
                 skip_next = true;
             }
         }
 
-        // Accumulate width for next cell's position
-        cumulative_x += cell_advance;
+        // Accumulate by fixed grid slot width
+        cumulative_x += grid_advance;
 
         // Calculate rotation center point (uses sprite-level scale, not per-cell)
         let x = i % pw as usize;
@@ -1593,7 +1602,7 @@ where
             &s.content,
             rx,
             ry,
-            false,      // Sprites use 8×8 characters
+            false,      // No TUI remapping; TUI height auto-detected from block index
             s.alpha,
             s.scale_x,
             s.scale_y,

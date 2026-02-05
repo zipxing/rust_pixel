@@ -41,6 +41,12 @@ pub struct Style {
     pub bg: Option<Color>,
     pub add_modifier: Modifier,
     pub sub_modifier: Modifier,
+    /// Per-cell X scale (None = don't change existing cell scale)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_x: Option<f32>,
+    /// Per-cell Y scale (None = don't change existing cell scale)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_y: Option<f32>,
 }
 
 impl Default for Style {
@@ -50,6 +56,8 @@ impl Default for Style {
             bg: None,
             add_modifier: Modifier::empty(),
             sub_modifier: Modifier::empty(),
+            scale_x: None,
+            scale_y: None,
         }
     }
 }
@@ -62,6 +70,8 @@ impl Style {
             bg: Some(Color::Reset),
             add_modifier: Modifier::empty(),
             sub_modifier: Modifier::all(),
+            scale_x: Some(1.0),
+            scale_y: Some(1.0),
         }
     }
 
@@ -87,6 +97,18 @@ impl Style {
         self
     }
 
+    pub fn scale(mut self, sx: f32, sy: f32) -> Style {
+        self.scale_x = Some(sx);
+        self.scale_y = Some(sy);
+        self
+    }
+
+    pub fn scale_uniform(mut self, s: f32) -> Style {
+        self.scale_x = Some(s);
+        self.scale_y = Some(s);
+        self
+    }
+
     pub fn patch(mut self, other: Style) -> Style {
         self.fg = other.fg.or(self.fg);
         self.bg = other.bg.or(self.bg);
@@ -95,6 +117,9 @@ impl Style {
         self.add_modifier.insert(other.add_modifier);
         self.sub_modifier.remove(other.add_modifier);
         self.sub_modifier.insert(other.sub_modifier);
+
+        self.scale_x = other.scale_x.or(self.scale_x);
+        self.scale_y = other.scale_y.or(self.scale_y);
 
         self
     }

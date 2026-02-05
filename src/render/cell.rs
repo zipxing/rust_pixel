@@ -230,6 +230,12 @@ impl Cell {
         }
         self.modifier.insert(style.add_modifier);
         self.modifier.remove(style.sub_modifier);
+        if let Some(sx) = style.scale_x {
+            self.scale_x = sx;
+        }
+        if let Some(sy) = style.scale_y {
+            self.scale_y = sy;
+        }
         self
     }
 
@@ -238,6 +244,7 @@ impl Cell {
             .fg(self.fg)
             .bg(self.bg)
             .add_modifier(self.modifier)
+            .scale(self.scale_x, self.scale_y)
     }
 
     /// Reset cell to blank state (space character).

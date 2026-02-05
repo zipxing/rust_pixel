@@ -12,7 +12,7 @@ use crate::ui::{
     Layout, LinearLayout, LayoutConstraints,
     next_widget_id
 };
-use crate::impl_widget_base;
+
 
 /// Panel border style
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -187,7 +187,23 @@ impl Panel {
 }
 
 impl Widget for Panel {
-    impl_widget_base!(Panel, base);
+    fn id(&self) -> WidgetId { self.base.id }
+    fn bounds(&self) -> Rect { self.base.bounds }
+    fn set_bounds(&mut self, bounds: Rect) {
+        self.base.bounds = bounds;
+        self.base.state.dirty = true;
+    }
+    fn state(&self) -> &WidgetState { &self.base.state }
+    fn state_mut(&mut self) -> &mut WidgetState { &mut self.base.state }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+    fn update(&mut self, dt: f32, ctx: &mut Context) -> UIResult<()> {
+        for child in &mut self.children {
+            child.update(dt, ctx)?;
+        }
+        Ok(())
+    }
 
     fn layout_children(&mut self) {
         // Panel is a container, so delegate to Container's layout_recursive
