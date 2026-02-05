@@ -142,10 +142,12 @@ impl Adapter for CrosstermAdapter {
                     self.writer,
                     Print("                                 ")
                 ))?;
-                // reset pen color
+                // reset pen color to terminal default
                 to_error(queue!(
                     self.writer,
-                    SetForegroundColor(CColor::from((128, 128, 128)))
+                    SetForegroundColor(CColor::Reset),
+                    SetBackgroundColor(CColor::Reset),
+                    SetAttribute(CAttribute::Reset)
                 ))?;
             }
             return Ok(());
@@ -153,6 +155,13 @@ impl Adapter for CrosstermAdapter {
         let updates = previous_buffer.diff(current_buffer);
         // info!("diff_len.....{:?}", updates.len());
 
+        // Explicitly reset terminal colors to ensure tracked state matches actual terminal state.
+        // This prevents color bleeding from the logo phase or any other prior state.
+        to_error(queue!(
+            self.writer,
+            SetForegroundColor(CColor::Reset),
+            SetBackgroundColor(CColor::Reset)
+        ))?;
         let mut fg = Color::Reset;
         let mut bg = Color::Reset;
         let mut modifier = Modifier::empty();

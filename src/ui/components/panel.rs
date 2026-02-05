@@ -342,12 +342,14 @@ impl Panel {
         let x1 = (bounds.x + bounds.width).min(ba.x + ba.width);
         let y1 = (bounds.y + bounds.height).min(ba.y + ba.height);
 
+        // Fully reset all cells first, then apply panel style.
+        // cell.reset() clears fg/bg to Color::Reset, ensuring no stale styles bleed through.
+        // set_style() alone won't clear colors when style has fg=None/bg=None.
         for y in y0..y1 {
             for x in x0..x1 {
                 let cell = buffer.get_mut(x, y);
-                if cell.symbol == " " || cell.symbol.is_empty() {
-                    cell.set_symbol(" ").set_style(style);
-                }
+                cell.reset();
+                cell.set_style(style);
             }
         }
 
@@ -458,7 +460,10 @@ impl Panel {
                     continue;
                 }
                 let src_cell = canvas.get(x, y);
-                if !src_cell.symbol.is_empty() && src_cell.symbol != " " {
+                let has_content = !src_cell.symbol.is_empty() && src_cell.symbol != " ";
+                let has_styled_bg = src_cell.bg != Color::Reset;
+                // Copy cell if it has visible content or a non-default background
+                if has_content || has_styled_bg {
                     let dst_cell = buffer.get_mut(dst_x, dst_y);
                     dst_cell.set_symbol(&src_cell.symbol).set_style(src_cell.style());
                 }
