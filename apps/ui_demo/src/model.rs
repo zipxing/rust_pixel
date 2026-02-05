@@ -67,7 +67,7 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
     
     // Left column: Simple widgets
     let mut left_panel = rust_pixel::ui::Panel::new()
-        .with_bounds(Rect::new(0, 0, 48, 28))
+        .with_bounds(Rect::new(0, 0, 40, 28))
         .with_border(BorderStyle::Single)
         .with_title("Basic Controls")
         .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
@@ -275,12 +275,16 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
     // Page 5: Modifier Effects Demo
     let modifiers_panel = create_modifiers_demo();
 
-    // Add pages to tabs
+    // Page 6: Table Demo
+    let table_panel = create_table_demo();
+
+    // Add pages to tabs (short names to fit in ~28 char width)
     tabs.add_tab("Tree", Box::new(tree_panel));
     tabs.add_tab("About", Box::new(about));
-    tabs.add_tab("Components", Box::new(components));
+    tabs.add_tab("Comps", Box::new(components));
     tabs.add_tab("Modal", Box::new(modal_demo_panel));
-    tabs.add_tab("Modifiers", Box::new(modifiers_panel));
+    tabs.add_tab("Mods", Box::new(modifiers_panel));
+    tabs.add_tab("Table", Box::new(table_panel));
 
     // Add to main layout
     main_panel.add_child(Box::new(left_panel));
@@ -320,6 +324,66 @@ fn create_sample_tree(tree: &mut Tree) {
     tree.add_child_node(docs_id, "📝 notes.md");
     tree.add_child_node(docs_id, "📊 report.pdf");
     tree.add_child_node(docs_id, "📋 todo.txt");
+}
+
+// Helper function to create table demo
+fn create_table_demo() -> rust_pixel::ui::Panel {
+    let mut panel = rust_pixel::ui::Panel::new()
+        .with_border(BorderStyle::Single)
+        .with_title("Table Widget Demo")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
+
+    let mut table = Table::new()
+        .with_columns(vec![
+            Column::new("Name", 10).align(ColumnAlign::Left),
+            Column::new("Price", 8).align(ColumnAlign::Right),
+            Column::new("Change", 8).align(ColumnAlign::Right),
+            Column::new("Status", 8).align(ColumnAlign::Center),
+        ])
+        .with_header(true)
+        .with_header_style(Style::default().fg(Color::Yellow).bg(Color::Black))
+        .with_selected_style(Style::default().fg(Color::White).bg(Color::Indexed(236)))
+        .with_style(Style::default().fg(Color::White).bg(Color::Black))
+        .on_selection_changed(|idx| {
+            if let Some(i) = idx {
+                println!("Table row selected: {}", i);
+            }
+        });
+
+    // Sample stock-like data
+    let data = [
+        ("Moutai",  "1800.50", "+2.35%", "Buy"),
+        ("CATL",    "215.80",  "-1.20%", "Hold"),
+        ("PingAn",  "48.65",   "+0.85%", "Buy"),
+        ("Midea",   "72.30",   "-0.45%", "Watch"),
+        ("CMB",     "35.20",   "+1.10%", "Buy"),
+        ("Wuliangye","152.40", "+0.60%", "Hold"),
+    ];
+
+    let rows: Vec<TableRow> = data.iter().map(|(name, price, change, status)| {
+        let change_style = if change.starts_with('+') {
+            Some(Style::default().fg(Color::Red))
+        } else {
+            Some(Style::default().fg(Color::Green))
+        };
+        let status_style = match *status {
+            "Buy" => Some(Style::default().fg(Color::Red)),
+            "Hold" => Some(Style::default().fg(Color::Yellow)),
+            _ => Some(Style::default().fg(Color::Gray)),
+        };
+        TableRow::new(vec![
+            TableCell::new(name),
+            TableCell::new(price),
+            TableCell::new(change).with_style(change_style.unwrap()),
+            TableCell::new(status).with_style(status_style.unwrap()),
+        ])
+    }).collect();
+
+    table.set_rows(rows);
+    table.select(Some(0));
+
+    panel.add_child(Box::new(table));
+    panel
 }
 
 // Helper function to create modifier effects demo panel
