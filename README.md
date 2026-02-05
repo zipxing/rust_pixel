@@ -36,7 +36,7 @@
 
 ### Everything is Tiles
 
-Cell → Buffer → Sprite → Panel
+Cell → Buffer → Sprite → Layer → Scene
 
 Unified rendering abstraction
 
