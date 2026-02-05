@@ -325,59 +325,90 @@ impl Container for Panel {
 }
 
 impl Panel {
+    /// Check if (x, y) is within buffer bounds
+    #[inline]
+    fn in_buffer(buf: &Buffer, x: u16, y: u16) -> bool {
+        let a = buf.area();
+        x >= a.x && x < a.x + a.width && y >= a.y && y < a.y + a.height
+    }
+
     fn render_background(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
-        
-        // Fill background
-        for y in bounds.y..bounds.y + bounds.height {
-            for x in bounds.x..bounds.x + bounds.width {
+        let ba = *buffer.area();
+
+        // Clip to buffer area
+        let x0 = bounds.x.max(ba.x);
+        let y0 = bounds.y.max(ba.y);
+        let x1 = (bounds.x + bounds.width).min(ba.x + ba.width);
+        let y1 = (bounds.y + bounds.height).min(ba.y + ba.height);
+
+        for y in y0..y1 {
+            for x in x0..x1 {
                 let cell = buffer.get_mut(x, y);
                 if cell.symbol == " " || cell.symbol.is_empty() {
                     cell.set_symbol(" ").set_style(style);
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn render_border(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
-        
+
         if bounds.width < 2 || bounds.height < 2 {
             return Ok(());
         }
-        
+
         let (top_left, top_right, bottom_left, bottom_right, horizontal, vertical) = match self.border_style {
             BorderStyle::Single => ("┌", "┐", "└", "┘", "─", "│"),
             BorderStyle::Double => ("╔", "╗", "╚", "╝", "═", "║"),
             BorderStyle::Rounded => ("╭", "╮", "╰", "╯", "─", "│"),
             BorderStyle::None => return Ok(()),
         };
-        
+
         let border_style = style;
-        
+        let bottom_y = bounds.y + bounds.height - 1;
+        let right_x = bounds.x + bounds.width - 1;
+
         // Top and bottom borders
-        for x in (bounds.x + 1)..(bounds.x + bounds.width - 1) {
-            buffer.get_mut(x, bounds.y).set_symbol(horizontal).set_style(border_style);
-            buffer.get_mut(x, bounds.y + bounds.height - 1).set_symbol(horizontal).set_style(border_style);
+        for x in (bounds.x + 1)..right_x {
+            if Self::in_buffer(buffer, x, bounds.y) {
+                buffer.get_mut(x, bounds.y).set_symbol(horizontal).set_style(border_style);
+            }
+            if Self::in_buffer(buffer, x, bottom_y) {
+                buffer.get_mut(x, bottom_y).set_symbol(horizontal).set_style(border_style);
+            }
         }
-        
+
         // Left and right borders
-        for y in (bounds.y + 1)..(bounds.y + bounds.height - 1) {
-            buffer.get_mut(bounds.x, y).set_symbol(vertical).set_style(border_style);
-            buffer.get_mut(bounds.x + bounds.width - 1, y).set_symbol(vertical).set_style(border_style);
+        for y in (bounds.y + 1)..bottom_y {
+            if Self::in_buffer(buffer, bounds.x, y) {
+                buffer.get_mut(bounds.x, y).set_symbol(vertical).set_style(border_style);
+            }
+            if Self::in_buffer(buffer, right_x, y) {
+                buffer.get_mut(right_x, y).set_symbol(vertical).set_style(border_style);
+            }
         }
-        
+
         // Corners
-        buffer.get_mut(bounds.x, bounds.y).set_symbol(top_left).set_style(border_style);
-        buffer.get_mut(bounds.x + bounds.width - 1, bounds.y).set_symbol(top_right).set_style(border_style);
-        buffer.get_mut(bounds.x, bounds.y + bounds.height - 1).set_symbol(bottom_left).set_style(border_style);
-        buffer.get_mut(bounds.x + bounds.width - 1, bounds.y + bounds.height - 1).set_symbol(bottom_right).set_style(border_style);
-        
+        if Self::in_buffer(buffer, bounds.x, bounds.y) {
+            buffer.get_mut(bounds.x, bounds.y).set_symbol(top_left).set_style(border_style);
+        }
+        if Self::in_buffer(buffer, right_x, bounds.y) {
+            buffer.get_mut(right_x, bounds.y).set_symbol(top_right).set_style(border_style);
+        }
+        if Self::in_buffer(buffer, bounds.x, bottom_y) {
+            buffer.get_mut(bounds.x, bottom_y).set_symbol(bottom_left).set_style(border_style);
+        }
+        if Self::in_buffer(buffer, right_x, bottom_y) {
+            buffer.get_mut(right_x, bottom_y).set_symbol(bottom_right).set_style(border_style);
+        }
+
         Ok(())
     }
-    
+
     fn render_title(&self, buffer: &mut Buffer, title: &str, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
 
@@ -385,20 +416,19 @@ impl Panel {
             return Ok(());
         }
 
-        let title_y = if self.border_style != BorderStyle::None {
-            bounds.y
-        } else {
-            bounds.y
-        };
+        let title_y = bounds.y;
+        if !Self::in_buffer(buffer, bounds.x, title_y) {
+            return Ok(());
+        }
 
         let available_width = if self.border_style != BorderStyle::None {
-            bounds.width.saturating_sub(4) // Account for border and padding
+            bounds.width.saturating_sub(4)
         } else {
             bounds.width
         };
 
         let title_x = if self.border_style != BorderStyle::None {
-            bounds.x + 2 // Start after border and padding
+            bounds.x + 2
         } else {
             bounds.x
         };
@@ -420,13 +450,16 @@ impl Panel {
         let content = self.content_area();
         let canvas_area = canvas.area();
 
-        // Copy canvas content to buffer at content area position
         for y in 0..canvas_area.height.min(content.height) {
             for x in 0..canvas_area.width.min(content.width) {
+                let dst_x = content.x + x;
+                let dst_y = content.y + y;
+                if !Self::in_buffer(buffer, dst_x, dst_y) {
+                    continue;
+                }
                 let src_cell = canvas.get(x, y);
-                // Only copy non-empty cells
                 if !src_cell.symbol.is_empty() && src_cell.symbol != " " {
-                    let dst_cell = buffer.get_mut(content.x + x, content.y + y);
+                    let dst_cell = buffer.get_mut(dst_x, dst_y);
                     dst_cell.set_symbol(&src_cell.symbol).set_style(src_cell.style());
                 }
             }

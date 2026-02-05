@@ -7,7 +7,7 @@ use rust_pixel::util::Rect;
 use log::info;
 
 pub const UI_DEMO_WIDTH: usize = 80;
-pub const UI_DEMO_HEIGHT: usize = 24;
+pub const UI_DEMO_HEIGHT: usize = 30;
 
 // Model - handles UI state and logic
 pub struct UiDemoModel {
@@ -72,16 +72,35 @@ fn create_main_interface() -> rust_pixel::ui::Panel {
         .with_title("Basic Controls")
         .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
     
-    // Animated label demo (per-cell scale via Style)
-    let animated = rust_pixel::ui::AnimatedLabel::new("PER-CELL SCALE!")
+    // Spotlight animation demo
+    let spotlight = Label::new("SPOTLIGHT ANIM!")
         .with_style(Style::default().fg(Color::Rgba(200, 200, 200, 255)).bg(Color::Reset))
-        .with_highlight_style(Style::default().fg(Color::Rgba(80, 200, 255, 255)).bg(Color::Reset))
-        .with_frames_per_char(12)
-        .with_scale_amplitude(0.55);
-    left_panel.add_child(Box::new(animated));
+        .with_spotlight(
+            Style::default().fg(Color::Rgba(80, 200, 255, 255)).bg(Color::Reset),
+            12, 0.55,
+        );
+    left_panel.add_child(Box::new(spotlight));
 
-    // Step 1: Label (working)
-    let test_label = Label::new("│─你好 RustPixel UI Framework!")
+    // Wave animation demo
+    let wave = Label::new("WAVE ANIMATION!")
+        .with_style(Style::default().fg(Color::Rgba(255, 200, 80, 255)).bg(Color::Reset))
+        .with_wave(0.4, 6.0, 0.15);
+    left_panel.add_child(Box::new(wave));
+
+    // FadeIn animation demo
+    let fade_in = Label::new("FADE IN EFFECT!")
+        .with_style(Style::default().fg(Color::Rgba(100, 255, 150, 255)).bg(Color::Reset))
+        .with_fade_in(8, true);
+    left_panel.add_child(Box::new(fade_in));
+
+    // Typewriter animation demo
+    let typewriter = Label::new("TYPEWRITER MODE...")
+        .with_style(Style::default().fg(Color::Rgba(255, 150, 200, 255)).bg(Color::Reset))
+        .with_typewriter(6, true, true);
+    left_panel.add_child(Box::new(typewriter));
+
+    // Static label
+    let test_label = Label::new("│─你好 RustPixel UI!")
         .with_style(Style::default().fg(Color::Yellow).bg(Color::Black));
     left_panel.add_child(Box::new(test_label));
     

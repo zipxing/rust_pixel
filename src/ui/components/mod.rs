@@ -19,7 +19,6 @@ pub mod toggleswitch;
 pub mod radio;
 pub mod dropdown;
 pub mod toast;
-pub mod animated_label;
 
 // Re-exports
 pub use label::*;
@@ -38,4 +37,3 @@ pub use toggleswitch::*;
 pub use radio::*;
 pub use dropdown::*;
 pub use toast::*;
-pub use animated_label::*;
