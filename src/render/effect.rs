@@ -983,3 +983,638 @@ pub fn glitch_chain(intensity: f32) -> EffectChain {
     chain.add(Box::new(NoiseEffect::new(intensity * 0.2)));
     chain
 }
+
+// ============================================================================
+// Buffer Transitions (双Buffer混合，字符级别页面转场)
+// ============================================================================
+
+/// 字符级页面转场特效 trait
+///
+/// 与 BufferEffect 不同，BufferTransition 接受两个源 Buffer (from/to)，
+/// 根据 progress 将它们混合到目标 Buffer。
+///
+/// # 工作原理
+/// ```text
+/// ┌─────────────┐     ┌─────────────┐
+/// │ from Buffer │     │  to Buffer  │
+/// │  (页面 A)   │     │  (页面 B)   │
+/// └──────┬──────┘     └──────┬──────┘
+///        │                   │
+///        └─────────┬─────────┘
+///                  ▼
+///        ┌─────────────────────┐
+///        │  BufferTransition   │  ← progress (0.0~1.0)
+///        │   (字符级混合)       │
+///        └──────────┬──────────┘
+///                   ▼
+///           ┌─────────────┐
+///           │  dst Buffer │
+///           └─────────────┘
+/// ```
+///
+/// # Example
+/// ```ignore
+/// let wipe = WipeTransition::left();
+/// wipe.transition(&page_a, &page_b, &mut output, 0.5);
+/// // output 左半部分是 page_b，右半部分是 page_a
+/// ```
+pub trait BufferTransition: Send + Sync {
+    /// 执行页面转场
+    ///
+    /// # Parameters
+    /// - `from`: 起始页面 Buffer
+    /// - `to`: 目标页面 Buffer
+    /// - `dst`: 输出 Buffer
+    /// - `progress`: 转场进度 (0.0 = 全部显示from, 1.0 = 全部显示to)
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32);
+
+    /// 获取转场名称
+    fn name(&self) -> &'static str;
+}
+
+/// 转场方向
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WipeDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+/// 擦除转场 - 从一个方向逐渐显示新页面
+///
+/// ```text
+/// WipeLeft (progress=0.3):
+/// ┌──────────────────────┐
+/// │BBBBBBB│AAAAAAAAAAAAAA│  ← 左30%是to，右70%是from
+/// └──────────────────────┘
+///
+/// WipeDown (progress=0.5):
+/// ┌──────────────────────┐
+/// │BBBBBBBBBBBBBBBBBBBBBB│  ← 上50%是to
+/// │BBBBBBBBBBBBBBBBBBBBBB│
+/// │AAAAAAAAAAAAAAAAAAAAAA│  ← 下50%是from
+/// │AAAAAAAAAAAAAAAAAAAAAA│
+/// └──────────────────────┘
+/// ```
+#[derive(Clone, Debug)]
+pub struct WipeTransition {
+    pub direction: WipeDirection,
+}
+
+impl WipeTransition {
+    pub fn new(direction: WipeDirection) -> Self {
+        Self { direction }
+    }
+
+    pub fn left() -> Self {
+        Self::new(WipeDirection::Left)
+    }
+
+    pub fn right() -> Self {
+        Self::new(WipeDirection::Right)
+    }
+
+    pub fn up() -> Self {
+        Self::new(WipeDirection::Up)
+    }
+
+    pub fn down() -> Self {
+        Self::new(WipeDirection::Down)
+    }
+}
+
+impl BufferTransition for WipeTransition {
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32) {
+        let width = from.area.width as usize;
+        let height = from.area.height as usize;
+        let progress = progress.clamp(0.0, 1.0);
+
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * width + x;
+
+                // 判断当前位置应该显示 from 还是 to
+                let show_to = match self.direction {
+                    WipeDirection::Left => (x as f32) < (width as f32 * progress),
+                    WipeDirection::Right => (x as f32) >= (width as f32 * (1.0 - progress)),
+                    WipeDirection::Up => (y as f32) < (height as f32 * progress),
+                    WipeDirection::Down => (y as f32) >= (height as f32 * (1.0 - progress)),
+                };
+
+                let src = if show_to { to } else { from };
+                if let (Some(src_cell), Some(dst_cell)) = (
+                    src.content.get(idx),
+                    dst.content.get_mut(idx),
+                ) {
+                    *dst_cell = src_cell.clone();
+                }
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        match self.direction {
+            WipeDirection::Left => "WipeLeft",
+            WipeDirection::Right => "WipeRight",
+            WipeDirection::Up => "WipeUp",
+            WipeDirection::Down => "WipeDown",
+        }
+    }
+}
+
+/// 溶解转场 - 随机位置逐个替换字符
+///
+/// ```text
+/// progress=0.3:
+/// ┌──────────────────────┐
+/// │A B A A B A A A B A A │  ← 约30%的位置显示to(B)
+/// │A A B A A A B A A B A │
+/// └──────────────────────┘
+/// ```
+#[derive(Clone, Debug)]
+pub struct DissolveTransition {
+    /// 随机种子
+    pub seed: u32,
+}
+
+impl DissolveTransition {
+    pub fn new(seed: u32) -> Self {
+        Self { seed }
+    }
+}
+
+impl Default for DissolveTransition {
+    fn default() -> Self {
+        Self { seed: 12345 }
+    }
+}
+
+impl BufferTransition for DissolveTransition {
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32) {
+        let cell_count = from.content.len();
+        let progress = progress.clamp(0.0, 1.0);
+
+        // 生成随机顺序 (使用确定性shuffle)
+        let mut indices: Vec<usize> = (0..cell_count).collect();
+
+        // Fisher-Yates shuffle with LCG
+        let mut rng = self.seed;
+        let lcg_next = |r: &mut u32| -> u32 {
+            *r = r.wrapping_mul(1103515245).wrapping_add(12345);
+            *r
+        };
+
+        for i in (1..cell_count).rev() {
+            let j = lcg_next(&mut rng) as usize % (i + 1);
+            indices.swap(i, j);
+        }
+
+        // 根据 progress 决定多少个位置显示 to
+        let reveal_count = (cell_count as f32 * progress) as usize;
+
+        // 先复制 from 到 dst
+        dst.content.clone_from(&from.content);
+
+        // 将前 reveal_count 个随机位置替换为 to
+        for &idx in indices.iter().take(reveal_count) {
+            if let (Some(to_cell), Some(dst_cell)) = (
+                to.content.get(idx),
+                dst.content.get_mut(idx),
+            ) {
+                *dst_cell = to_cell.clone();
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "Dissolve"
+    }
+}
+
+/// 打字机转场 - 逐字符从左到右、从上到下显示
+///
+/// ```text
+/// progress=0.3 (假设总共20个字符，显示6个):
+/// ┌──────────────────────┐
+/// │BBBBBB AAAAAAAAAAAAA │  ← 前6个字符是to
+/// │AAAAAAAAAAAAAAAAAAAAAA│
+/// └──────────────────────┘
+/// ```
+#[derive(Clone, Debug)]
+pub struct TypewriterTransition {
+    /// 是否显示光标
+    pub show_cursor: bool,
+    /// 光标字符
+    pub cursor_char: char,
+}
+
+impl TypewriterTransition {
+    pub fn new() -> Self {
+        Self {
+            show_cursor: true,
+            cursor_char: '▌',
+        }
+    }
+
+    pub fn without_cursor() -> Self {
+        Self {
+            show_cursor: false,
+            cursor_char: '▌',
+        }
+    }
+
+    pub fn with_cursor(cursor: char) -> Self {
+        Self {
+            show_cursor: true,
+            cursor_char: cursor,
+        }
+    }
+}
+
+impl Default for TypewriterTransition {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BufferTransition for TypewriterTransition {
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32) {
+        let cell_count = from.content.len();
+        let progress = progress.clamp(0.0, 1.0);
+        let reveal_count = (cell_count as f32 * progress) as usize;
+
+        for (idx, dst_cell) in dst.content.iter_mut().enumerate() {
+            if idx < reveal_count {
+                // 显示 to
+                if let Some(to_cell) = to.content.get(idx) {
+                    *dst_cell = to_cell.clone();
+                }
+            } else if idx == reveal_count && self.show_cursor && progress < 1.0 {
+                // 光标位置
+                if let Some(from_cell) = from.content.get(idx) {
+                    *dst_cell = from_cell.clone();
+                    dst_cell.set_symbol(&self.cursor_char.to_string());
+                }
+            } else {
+                // 显示 from
+                if let Some(from_cell) = from.content.get(idx) {
+                    *dst_cell = from_cell.clone();
+                }
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "Typewriter"
+    }
+}
+
+/// 百叶窗转场方向
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlindsDirection {
+    Horizontal,
+    Vertical,
+}
+
+/// 百叶窗转场 - 像百叶窗一样逐条显示
+///
+/// ```text
+/// Horizontal blinds (progress=0.5, slices=4):
+/// ┌──────────────────────┐
+/// │BBBBBBBBBBBBBBBBBBBBBB│  ← 第1条: to
+/// │AAAAAAAAAAAAAAAAAAAAAA│  ← 第2条: from (未到)
+/// │BBBBBBBBBBBBBBBBBBBBBB│  ← 第3条: to
+/// │AAAAAAAAAAAAAAAAAAAAAA│  ← 第4条: from (未到)
+/// └──────────────────────┘
+/// ```
+#[derive(Clone, Debug)]
+pub struct BlindsTransition {
+    pub direction: BlindsDirection,
+    /// 百叶窗条数
+    pub slices: usize,
+}
+
+impl BlindsTransition {
+    pub fn new(direction: BlindsDirection, slices: usize) -> Self {
+        Self {
+            direction,
+            slices: slices.max(2),
+        }
+    }
+
+    pub fn horizontal(slices: usize) -> Self {
+        Self::new(BlindsDirection::Horizontal, slices)
+    }
+
+    pub fn vertical(slices: usize) -> Self {
+        Self::new(BlindsDirection::Vertical, slices)
+    }
+}
+
+impl BufferTransition for BlindsTransition {
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32) {
+        let width = from.area.width as usize;
+        let height = from.area.height as usize;
+        let progress = progress.clamp(0.0, 1.0);
+
+        let (_total_size, slice_size) = match self.direction {
+            BlindsDirection::Horizontal => (height, (height + self.slices - 1) / self.slices),
+            BlindsDirection::Vertical => (width, (width + self.slices - 1) / self.slices),
+        };
+
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * width + x;
+
+                // 确定当前位置在哪个 slice
+                let pos = match self.direction {
+                    BlindsDirection::Horizontal => y,
+                    BlindsDirection::Vertical => x,
+                };
+                let slice_idx = pos / slice_size;
+                let pos_in_slice = pos % slice_size;
+
+                // 每个 slice 内部的进度
+                let slice_progress = (progress * self.slices as f32 - slice_idx as f32).clamp(0.0, 1.0);
+                let reveal_in_slice = (slice_size as f32 * slice_progress) as usize;
+
+                let show_to = pos_in_slice < reveal_in_slice;
+
+                let src = if show_to { to } else { from };
+                if let (Some(src_cell), Some(dst_cell)) = (
+                    src.content.get(idx),
+                    dst.content.get_mut(idx),
+                ) {
+                    *dst_cell = src_cell.clone();
+                }
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        match self.direction {
+            BlindsDirection::Horizontal => "BlindsHorizontal",
+            BlindsDirection::Vertical => "BlindsVertical",
+        }
+    }
+}
+
+/// 棋盘格转场 - 像棋盘一样交替显示
+///
+/// ```text
+/// progress=0.5 (block_size=2):
+/// ┌──────────────────────┐
+/// │BB  BB  BB  BB  BB   │  ← 交替的方块
+/// │BB  BB  BB  BB  BB   │
+/// │  AA  AA  AA  AA  AA │
+/// │  AA  AA  AA  AA  AA │
+/// └──────────────────────┘
+/// ```
+#[derive(Clone, Debug)]
+pub struct CheckerboardTransition {
+    /// 方块大小
+    pub block_size: usize,
+}
+
+impl CheckerboardTransition {
+    pub fn new(block_size: usize) -> Self {
+        Self {
+            block_size: block_size.max(1),
+        }
+    }
+}
+
+impl Default for CheckerboardTransition {
+    fn default() -> Self {
+        Self { block_size: 2 }
+    }
+}
+
+impl BufferTransition for CheckerboardTransition {
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32) {
+        let width = from.area.width as usize;
+        let height = from.area.height as usize;
+        let progress = progress.clamp(0.0, 1.0);
+        let block = self.block_size;
+
+        // 分两阶段：
+        // 0.0-0.5: 奇数格子显示 to
+        // 0.5-1.0: 偶数格子也显示 to
+        let phase1 = (progress * 2.0).min(1.0);
+        let phase2 = ((progress - 0.5) * 2.0).clamp(0.0, 1.0);
+
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * width + x;
+
+                let block_x = x / block;
+                let block_y = y / block;
+                let is_odd_block = (block_x + block_y) % 2 == 1;
+
+                let show_to = if is_odd_block {
+                    phase1 > 0.5
+                } else {
+                    phase2 > 0.5
+                };
+
+                let src = if show_to { to } else { from };
+                if let (Some(src_cell), Some(dst_cell)) = (
+                    src.content.get(idx),
+                    dst.content.get_mut(idx),
+                ) {
+                    *dst_cell = src_cell.clone();
+                }
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "Checkerboard"
+    }
+}
+
+/// 滑动转场 - 两个页面同时移动
+///
+/// ```text
+/// SlideLeft (progress=0.3):
+/// ┌──────────────────────┐
+/// │AAAAAAAAAAAAAAA│BBBBBB│  ← A向左滑出，B从右滑入
+/// └──────────────────────┘
+/// ```
+#[derive(Clone, Debug)]
+pub struct SlideTransition {
+    pub direction: WipeDirection,
+}
+
+impl SlideTransition {
+    pub fn new(direction: WipeDirection) -> Self {
+        Self { direction }
+    }
+
+    pub fn left() -> Self {
+        Self::new(WipeDirection::Left)
+    }
+
+    pub fn right() -> Self {
+        Self::new(WipeDirection::Right)
+    }
+
+    pub fn up() -> Self {
+        Self::new(WipeDirection::Up)
+    }
+
+    pub fn down() -> Self {
+        Self::new(WipeDirection::Down)
+    }
+}
+
+impl BufferTransition for SlideTransition {
+    fn transition(&self, from: &Buffer, to: &Buffer, dst: &mut Buffer, progress: f32) {
+        let width = from.area.width as usize;
+        let height = from.area.height as usize;
+        let progress = progress.clamp(0.0, 1.0);
+
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * width + x;
+
+                // 计算源坐标
+                let (src_x, src_y, use_to) = match self.direction {
+                    WipeDirection::Left => {
+                        let offset = (width as f32 * progress) as i32;
+                        let new_x = x as i32 + offset;
+                        if new_x < width as i32 {
+                            (new_x as usize, y, false) // 从 from
+                        } else {
+                            ((new_x - width as i32) as usize, y, true) // 从 to
+                        }
+                    }
+                    WipeDirection::Right => {
+                        let offset = (width as f32 * progress) as i32;
+                        let new_x = x as i32 - offset;
+                        if new_x >= 0 {
+                            (new_x as usize, y, false) // 从 from
+                        } else {
+                            ((width as i32 + new_x) as usize, y, true) // 从 to
+                        }
+                    }
+                    WipeDirection::Up => {
+                        let offset = (height as f32 * progress) as i32;
+                        let new_y = y as i32 + offset;
+                        if new_y < height as i32 {
+                            (x, new_y as usize, false) // 从 from
+                        } else {
+                            (x, (new_y - height as i32) as usize, true) // 从 to
+                        }
+                    }
+                    WipeDirection::Down => {
+                        let offset = (height as f32 * progress) as i32;
+                        let new_y = y as i32 - offset;
+                        if new_y >= 0 {
+                            (x, new_y as usize, false) // 从 from
+                        } else {
+                            (x, (height as i32 + new_y) as usize, true) // 从 to
+                        }
+                    }
+                };
+
+                let src = if use_to { to } else { from };
+                let src_idx = src_y * width + src_x;
+
+                if let (Some(src_cell), Some(dst_cell)) = (
+                    src.content.get(src_idx),
+                    dst.content.get_mut(idx),
+                ) {
+                    *dst_cell = src_cell.clone();
+                }
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        match self.direction {
+            WipeDirection::Left => "SlideLeft",
+            WipeDirection::Right => "SlideRight",
+            WipeDirection::Up => "SlideUp",
+            WipeDirection::Down => "SlideDown",
+        }
+    }
+}
+
+/// 转场类型枚举 (便于统一管理)
+#[derive(Clone, Debug)]
+pub enum TransitionType {
+    WipeLeft,
+    WipeRight,
+    WipeUp,
+    WipeDown,
+    SlideLeft,
+    SlideRight,
+    SlideUp,
+    SlideDown,
+    Dissolve(u32),
+    Typewriter,
+    BlindsHorizontal(usize),
+    BlindsVertical(usize),
+    Checkerboard(usize),
+}
+
+impl TransitionType {
+    /// 创建对应的 BufferTransition 实例
+    pub fn create(&self) -> Box<dyn BufferTransition> {
+        match self {
+            TransitionType::WipeLeft => Box::new(WipeTransition::left()),
+            TransitionType::WipeRight => Box::new(WipeTransition::right()),
+            TransitionType::WipeUp => Box::new(WipeTransition::up()),
+            TransitionType::WipeDown => Box::new(WipeTransition::down()),
+            TransitionType::SlideLeft => Box::new(SlideTransition::left()),
+            TransitionType::SlideRight => Box::new(SlideTransition::right()),
+            TransitionType::SlideUp => Box::new(SlideTransition::up()),
+            TransitionType::SlideDown => Box::new(SlideTransition::down()),
+            TransitionType::Dissolve(seed) => Box::new(DissolveTransition::new(*seed)),
+            TransitionType::Typewriter => Box::new(TypewriterTransition::new()),
+            TransitionType::BlindsHorizontal(slices) => Box::new(BlindsTransition::horizontal(*slices)),
+            TransitionType::BlindsVertical(slices) => Box::new(BlindsTransition::vertical(*slices)),
+            TransitionType::Checkerboard(size) => Box::new(CheckerboardTransition::new(*size)),
+        }
+    }
+
+    /// 获取所有转场类型
+    pub fn all() -> Vec<TransitionType> {
+        vec![
+            TransitionType::WipeLeft,
+            TransitionType::WipeRight,
+            TransitionType::WipeUp,
+            TransitionType::WipeDown,
+            TransitionType::SlideLeft,
+            TransitionType::SlideRight,
+            TransitionType::SlideUp,
+            TransitionType::SlideDown,
+            TransitionType::Dissolve(12345),
+            TransitionType::Typewriter,
+            TransitionType::BlindsHorizontal(4),
+            TransitionType::BlindsVertical(4),
+            TransitionType::Checkerboard(2),
+        ]
+    }
+
+    /// 获取名称
+    pub fn name(&self) -> &'static str {
+        match self {
+            TransitionType::WipeLeft => "WipeLeft",
+            TransitionType::WipeRight => "WipeRight",
+            TransitionType::WipeUp => "WipeUp",
+            TransitionType::WipeDown => "WipeDown",
+            TransitionType::SlideLeft => "SlideLeft",
+            TransitionType::SlideRight => "SlideRight",
+            TransitionType::SlideUp => "SlideUp",
+            TransitionType::SlideDown => "SlideDown",
+            TransitionType::Dissolve(_) => "Dissolve",
+            TransitionType::Typewriter => "Typewriter",
+            TransitionType::BlindsHorizontal(_) => "BlindsH",
+            TransitionType::BlindsVertical(_) => "BlindsV",
+            TransitionType::Checkerboard(_) => "Checkerboard",
+        }
+    }
+}

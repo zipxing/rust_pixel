@@ -3,488 +3,448 @@ use rust_pixel::context::Context;
 use rust_pixel::ui::*;
 use rust_pixel::ui::layout::Alignment;
 use rust_pixel::render::style::{Color, Modifier, Style};
+use rust_pixel::render::effect::{BufferTransition, TransitionType};
+use rust_pixel::render::Buffer;
 use rust_pixel::util::Rect;
+use rust_pixel::event::{Event, KeyCode};
 use log::info;
 
 pub const UI_DEMO_WIDTH: usize = 80;
 pub const UI_DEMO_HEIGHT: usize = 30;
 
-// Model - handles UI state and logic
+/// Transition state for multi-page navigation
+pub struct TransitionState {
+    pub active: bool,
+    pub from_page: usize,
+    pub to_page: usize,
+    pub progress: f32,
+    pub duration: f32,
+    pub transition: Box<dyn BufferTransition>,
+}
+
+impl TransitionState {
+    pub fn new() -> Self {
+        Self {
+            active: false,
+            from_page: 0,
+            to_page: 0,
+            progress: 0.0,
+            duration: 0.35,
+            transition: TransitionType::WipeLeft.create(),
+        }
+    }
+
+    pub fn start(&mut self, from: usize, to: usize, transition_type: TransitionType) {
+        self.active = true;
+        self.from_page = from;
+        self.to_page = to;
+        self.progress = 0.0;
+        self.transition = transition_type.create();
+    }
+
+    pub fn update(&mut self, dt: f32) -> bool {
+        if self.active {
+            self.progress += dt / self.duration;
+            if self.progress >= 1.0 {
+                self.progress = 1.0;
+                self.active = false;
+                return true; // Transition completed
+            }
+        }
+        false
+    }
+}
+
+// Model - handles UI state and logic with multi-page support
 pub struct UiDemoModel {
-    pub ui_app: UIApp,
+    pub pages: Vec<UIPage>,
+    pub current_page: usize,
+    pub transition: TransitionState,
+    pub output_buffer: Buffer,
+    pub transition_types: Vec<TransitionType>,
+    pub current_transition_idx: usize,
 }
 
 impl UiDemoModel {
     pub fn new() -> Self {
-        let mut ui_app = UIApp::new(UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16);
-        
-        // Create the main interface
-        let root_panel = create_main_interface();
-        ui_app.set_root_widget(Box::new(root_panel));
-        ui_app.start();
-        
-        Self { ui_app }
+        let width = UI_DEMO_WIDTH as u16;
+        let height = UI_DEMO_HEIGHT as u16;
+
+        // Create multiple pages
+        let mut pages = Vec::new();
+
+        // Page 1: Basic widgets demo
+        let mut page1 = UIPage::new(width, height);
+        page1.set_root_widget(Box::new(create_page1_interface()));
+        page1.start();
+
+        // Page 2: Animation and effects demo
+        let mut page2 = UIPage::new(width, height);
+        page2.set_root_widget(Box::new(create_page2_interface()));
+        page2.start();
+
+        // Page 3: Advanced components demo
+        let mut page3 = UIPage::new(width, height);
+        page3.set_root_widget(Box::new(create_page3_interface()));
+        page3.start();
+
+        pages.push(page1);
+        pages.push(page2);
+        pages.push(page3);
+
+        // Available transition types
+        let transition_types = vec![
+            TransitionType::WipeLeft,
+            TransitionType::WipeRight,
+            TransitionType::SlideLeft,
+            TransitionType::SlideRight,
+            TransitionType::Dissolve(42),
+            TransitionType::BlindsHorizontal(4),
+            TransitionType::BlindsVertical(6),
+            TransitionType::Checkerboard(4),
+            TransitionType::Typewriter,
+        ];
+
+        Self {
+            pages,
+            current_page: 0,
+            transition: TransitionState::new(),
+            output_buffer: Buffer::empty(Rect::new(0, 0, width, height)),
+            transition_types,
+            current_transition_idx: 0,
+        }
+    }
+
+    fn next_transition_type(&mut self) -> TransitionType {
+        let t = self.transition_types[self.current_transition_idx].clone();
+        self.current_transition_idx = (self.current_transition_idx + 1) % self.transition_types.len();
+        t
+    }
+
+    fn go_to_page(&mut self, target: usize) {
+        if target != self.current_page && target < self.pages.len() && !self.transition.active {
+            let transition_type = self.next_transition_type();
+            info!("Transition: {} -> {} using {:?}", self.current_page, target, transition_type);
+            self.transition.start(self.current_page, target, transition_type);
+        }
+    }
+
+    /// Get the current rendered buffer (either single page or transition blend)
+    pub fn get_rendered_buffer(&mut self) -> &Buffer {
+        if self.transition.active {
+            // Render both pages to their buffers
+            let _ = self.pages[self.transition.from_page].render();
+            let _ = self.pages[self.transition.to_page].render();
+
+            // Apply transition effect
+            let from_buf = self.pages[self.transition.from_page].buffer();
+            let to_buf = self.pages[self.transition.to_page].buffer();
+
+            self.transition.transition.transition(
+                from_buf,
+                to_buf,
+                &mut self.output_buffer,
+                self.transition.progress,
+            );
+
+            &self.output_buffer
+        } else {
+            // Render current page
+            let _ = self.pages[self.current_page].render();
+            self.pages[self.current_page].buffer()
+        }
     }
 }
 
 impl Model for UiDemoModel {
     fn init(&mut self, _ctx: &mut Context) {
-        info!("UI Demo model initialized");
+        info!("UI Demo model initialized with {} pages", self.pages.len());
     }
-    
+
     fn handle_timer(&mut self, _ctx: &mut Context, _dt: f32) {}
-    
+
     fn handle_event(&mut self, _ctx: &mut Context, _dt: f32) {}
-    
+
     fn handle_input(&mut self, ctx: &mut Context, dt: f32) {
-        // Forward input events to UI
+        // Handle page navigation
         for event in &ctx.input_events {
-            self.ui_app.handle_input_event(event.clone());
+            if let Event::Key(key_event) = event {
+                match key_event.code {
+                    KeyCode::Left | KeyCode::Char('h') => {
+                        if self.current_page > 0 {
+                            self.go_to_page(self.current_page - 1);
+                        }
+                    }
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        if self.current_page < self.pages.len() - 1 {
+                            self.go_to_page(self.current_page + 1);
+                        }
+                    }
+                    KeyCode::Char('1') => self.go_to_page(0),
+                    KeyCode::Char('2') => self.go_to_page(1),
+                    KeyCode::Char('3') => self.go_to_page(2),
+                    _ => {}
+                }
+            }
         }
-        
-        // Clear input events to prevent reprocessing
+
+        // Forward input events to current page's UI
+        if !self.transition.active {
+            for event in &ctx.input_events {
+                self.pages[self.current_page].handle_input_event(event.clone());
+            }
+        }
+
         ctx.input_events.clear();
-        
-        // Update UI
-        let _ = self.ui_app.update(dt);
-    }
-    
-    fn handle_auto(&mut self, _ctx: &mut Context, _dt: f32) {
-        // Render UI if needed
-        if self.ui_app.should_render() {
-            let _ = self.ui_app.render();
-            self.ui_app.frame_complete();
+
+        // Update transition
+        if self.transition.update(dt) {
+            // Transition completed
+            self.current_page = self.transition.to_page;
         }
+
+        // Update current page
+        if !self.transition.active {
+            let _ = self.pages[self.current_page].update(dt);
+        }
+    }
+
+    fn handle_auto(&mut self, _ctx: &mut Context, _dt: f32) {
+        // Rendering is handled in the Render trait now
     }
 }
 
-fn create_main_interface() -> rust_pixel::ui::Panel {
-    let mut main_panel = rust_pixel::ui::Panel::new()
+// ============== Page Creation Functions ==============
+
+fn create_page1_interface() -> Panel {
+    let mut main_panel = Panel::new()
         .with_bounds(Rect::new(0, 0, UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16))
-        .with_border(BorderStyle::Single)
-        .with_title("UI Debug - Step 5: All Basic Widgets")
-        .with_layout(Box::new(LinearLayout::horizontal().with_spacing(2).with_alignment(Alignment::Start)));
-    
-    // Left column: Simple widgets
-    let mut left_panel = rust_pixel::ui::Panel::new()
-        .with_bounds(Rect::new(0, 0, 40, 28))
-        .with_border(BorderStyle::Single)
-        .with_title("Basic Controls")
+        .with_border(BorderStyle::Double)
+        .with_title("Page 1: Basic Widgets")
         .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
-    
+
+    // Navigation hint
+    let nav_hint = Label::new("← → or 1/2/3 to switch pages | Transition cycles automatically")
+        .with_style(Style::default().fg(Color::Cyan).bg(Color::Black));
+    main_panel.add_child(Box::new(nav_hint));
+
     // Spotlight animation demo
-    let spotlight = Label::new("SPOTLIGHT ANIM!")
+    let spotlight = Label::new("★ SPOTLIGHT ANIMATION DEMO ★")
         .with_style(Style::default().fg(Color::Rgba(200, 200, 200, 255)).bg(Color::Reset))
         .with_spotlight(
             Style::default().fg(Color::Rgba(80, 200, 255, 255)).bg(Color::Reset),
             12, 0.55,
         );
-    left_panel.add_child(Box::new(spotlight));
+    main_panel.add_child(Box::new(spotlight));
 
-    // Wave animation demo
-    let wave = Label::new("WAVE ANIMATION!")
-        .with_style(Style::default().fg(Color::Rgba(255, 200, 80, 255)).bg(Color::Reset))
-        .with_wave(0.4, 6.0, 0.15);
-    left_panel.add_child(Box::new(wave));
-
-    // FadeIn animation demo
-    let fade_in = Label::new("FADE IN EFFECT!")
-        .with_style(Style::default().fg(Color::Rgba(100, 255, 150, 255)).bg(Color::Reset))
-        .with_fade_in(8, true);
-    left_panel.add_child(Box::new(fade_in));
-
-    // Typewriter animation demo
-    let typewriter = Label::new("TYPEWRITER MODE...")
-        .with_style(Style::default().fg(Color::Rgba(255, 150, 200, 255)).bg(Color::Reset))
-        .with_typewriter(6, true, true);
-    left_panel.add_child(Box::new(typewriter));
-
-    // Static label
-    let test_label = Label::new("│─你好 RustPixel UI!")
-        .with_style(Style::default().fg(Color::Yellow).bg(Color::Black));
-    left_panel.add_child(Box::new(test_label));
-    
-    // Step 2: Button (working)
-    let test_button = Button::new("Click Me!")
+    // Button demo
+    let button = Button::new(" Click Me! ")
         .with_style(Style::default().fg(Color::White).bg(Color::Blue))
         .on_click(|| println!("Button clicked!"));
-    left_panel.add_child(Box::new(test_button));
-    
-    // Step 3: TextBox (working)
-    let mut test_textbox = TextBox::new()
+    main_panel.add_child(Box::new(button));
+
+    // TextBox demo
+    let textbox = TextBox::new()
         .with_placeholder("Type something here...")
-        .with_style(Style::default().fg(Color::Green).bg(Color::Black))
-        .on_changed(|text| println!("Text changed: {}", text));
-    
-    // Give the textbox focus for input testing
-    test_textbox.set_focused(true);
-    left_panel.add_child(Box::new(test_textbox));
-    
-    // Step 4: List (working)
-    let mut test_list = List::new()
+        .with_style(Style::default().fg(Color::Green).bg(Color::Black));
+    main_panel.add_child(Box::new(textbox));
+
+    // List demo
+    let mut list = List::new()
         .with_selection_mode(SelectionMode::Single)
-        .with_style(Style::default().fg(Color::Cyan).bg(Color::Black))
-        .on_selection_changed(|indices| {
-            println!("List selection changed: {:?}", indices);
-        });
-    
-    // Add some test items
-    test_list.add_text_item("😀 Music Files");
-    test_list.add_text_item("🐭 Documents");
-    test_list.add_text_item("🎸 Pictures");
-    test_list.add_text_item("📹 Videos");
-    test_list.add_text_item("⚙️ Settings");
-    
-    left_panel.add_child(Box::new(test_list));
-    
-    // Right column: Tabs + Tree/About
-    let mut tabs = Tabs::new()
-        .with_style(
-            Style::default().fg(Color::Gray).bg(Color::Black),      // inactive tab
-            Style::default().fg(Color::White).bg(Color::Blue)        // active tab
-        );
-    
-    // Page 1: File Tree
-    let mut tree_panel = rust_pixel::ui::Panel::new()
-        .with_border(BorderStyle::Single)
-        .with_title("File Tree")
-        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
-    
-    let mut test_tree = Tree::new()
-        .with_lines(true)
-        .with_style(Style::default().fg(Color::Magenta).bg(Color::Black))
-        .on_selection_changed(|node_id| {
-            if let Some(id) = node_id {
-                println!("Tree node selected: {}", id);
-            }
-        })
-        .on_node_expanded(|node_id, expanded| {
-            println!("Tree node {} {}", node_id, if expanded { "expanded" } else { "collapsed" });
-        });
-    create_sample_tree(&mut test_tree);
-    tree_panel.add_child(Box::new(test_tree));
-    
-    // Page 2: About with Modal demo
-    let about_panel = rust_pixel::ui::Panel::new()
-        .with_border(BorderStyle::Single)
-        .with_title("About & Modal Demo")
-        .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
-    
-    let mut about = about_panel;
-    about.add_child(Box::new(Label::new("UI Components Demo")));
-    
+        .with_style(Style::default().fg(Color::Cyan).bg(Color::Black));
+    list.add_text_item("📁 Documents");
+    list.add_text_item("🎵 Music Files");
+    list.add_text_item("📷 Pictures");
+    list.add_text_item("📹 Videos");
+    list.add_text_item("⚙️ Settings");
+    main_panel.add_child(Box::new(list));
+
     // ProgressBar demo
-    let progress = rust_pixel::ui::ProgressBar::new()
+    let progress = ProgressBar::new()
         .with_value(0.65)
         .with_fill_style(Style::default().fg(Color::White).bg(Color::Green))
         .with_bar_style(Style::default().fg(Color::Gray).bg(Color::Black));
-    about.add_child(Box::new(progress));
-    
-    // Checkbox demo
-    let checkbox = rust_pixel::ui::Checkbox::new("Enable feature")
-        .with_checked(true)
-        .on_change(|checked| {
-            println!("Checkbox changed: {}", checked);
-        });
-    about.add_child(Box::new(checkbox));
-    
-    // ToggleSwitch demo
-    let toggle = rust_pixel::ui::ToggleSwitch::new("Dark mode")
-        .with_on(false)
-        .on_change(|on| {
-            println!("Toggle changed: {}", on);
-        });
-    about.add_child(Box::new(toggle));
-    
-    // Slider demo
-    let slider = rust_pixel::ui::Slider::new(0.0, 100.0)
-        .with_value(50.0)
-        .with_step(5.0)
-        .on_change(|value| {
-            println!("Slider value: {:.1}", value);
-        });
-    about.add_child(Box::new(slider));
+    main_panel.add_child(Box::new(progress));
 
-    // Page 3: Modal Demo
-    let mut modal_demo_panel = rust_pixel::ui::Panel::new()
-        .with_border(BorderStyle::Single)
-        .with_title("Modal Demo")
-        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
-    
-    // Create a modal dialog
-    let mut demo_modal = rust_pixel::ui::Modal::new()
-        .with_title("Example Dialog")
-        .with_min_size(40, 12);
-    
-    // Add content to modal
-    demo_modal.add_content(Box::new(Label::new("This is a modal dialog!")));
-    demo_modal.add_content(Box::new(Label::new("It has a backdrop and centered content.")));
-    demo_modal.add_content(Box::new(Label::new("")));
-    demo_modal.add_content(Box::new(Label::new("Press ESC to close (not functional yet)")));
-    
-    // Add buttons to modal
-    let ok_btn = Button::new("  OK  ")
-        .with_style(Style::default().fg(Color::White).bg(Color::Green))
-        .on_click(|| {
-            println!("OK clicked!");
-        });
-    demo_modal.add_button(Box::new(ok_btn));
-    
-    let cancel_btn = Button::new("Cancel")
-        .with_style(Style::default().fg(Color::White).bg(Color::Red))
-        .on_click(|| {
-            println!("Cancel clicked!");
-        });
-    demo_modal.add_button(Box::new(cancel_btn));
-    
-    modal_demo_panel.add_child(Box::new(demo_modal));
-
-    // Page 4: More Components (Radio, Dropdown, Toast)
-    let components_panel = rust_pixel::ui::Panel::new()
-        .with_border(BorderStyle::Single)
-        .with_title("More Components")
-        .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
-    
-    let mut components = components_panel;
-    components.add_child(Box::new(Label::new("Radio & Dropdown Demo")));
-    
-    // Radio demo
-    let radio = rust_pixel::ui::RadioGroup::new()
-        .with_options(vec!["Option A".to_string(), "Option B".to_string(), "Option C".to_string()])
-        .with_selected(0)
-        .on_change(|index| {
-            println!("Radio selected: {}", index);
-        });
-    components.add_child(Box::new(radio));
-    
-    // Dropdown demo
-    let dropdown = rust_pixel::ui::Dropdown::new()
-        .with_options(vec!["Apple".to_string(), "Banana".to_string(), "Cherry".to_string(), "Date".to_string()])
-        .with_selected(0)
-        .on_change(|index| {
-            println!("Dropdown selected: {}", index);
-        });
-    components.add_child(Box::new(dropdown));
-    
-    // Toast demo (positioned at top)
-    let toast = rust_pixel::ui::Toast::new("This is a notification!")
-        .with_type(rust_pixel::ui::ToastType::Success)
-        .with_duration(5.0);
-    components.add_child(Box::new(toast));
-
-    // Page 5: Modifier Effects Demo
-    let modifiers_panel = create_modifiers_demo();
-
-    // Page 6: Table Demo
-    let table_panel = create_table_demo();
-
-    // Add pages to tabs (short names to fit in ~28 char width)
-    tabs.add_tab("Tree", Box::new(tree_panel));
-    tabs.add_tab("About", Box::new(about));
-    tabs.add_tab("Comps", Box::new(components));
-    tabs.add_tab("Modal", Box::new(modal_demo_panel));
-    tabs.add_tab("Mods", Box::new(modifiers_panel));
-    tabs.add_tab("Table", Box::new(table_panel));
-
-    // Add to main layout
-    main_panel.add_child(Box::new(left_panel));
-    main_panel.add_child(Box::new(tabs));
-    
-    // Trigger initial layout
     main_panel.layout();
-    
     main_panel
 }
 
-// Helper function to create sample tree structure
-fn create_sample_tree(tree: &mut Tree) {
-    // Root folders
-    let home_id = tree.add_root_node("🏠 Home");
-    let projects_id = tree.add_root_node("💼 Projects");
-    let docs_id = tree.add_root_node("📁 Documents");
-    
-    // Home folder contents
-    tree.add_child_node(home_id, "📷 Photos");
-    tree.add_child_node(home_id, "🎵 Music");
-    tree.add_child_node(home_id, "📹 Videos");
-    
-    // Projects folder contents
-    if let Some(rust_id) = tree.add_child_node(projects_id, "🦀 rust_pixel") {
-        tree.add_child_node(rust_id, "📄 Cargo.toml");
-        tree.add_child_node(rust_id, "📂 src");
-        tree.add_child_node(rust_id, "📂 apps");
-    }
-    
-    if let Some(webdev_id) = tree.add_child_node(projects_id, "🌐 webdev") {
-        tree.add_child_node(webdev_id, "📄 package.json");
-        tree.add_child_node(webdev_id, "📂 src");
-    }
-    
-    // Documents folder contents
-    tree.add_child_node(docs_id, "📝 notes.md");
-    tree.add_child_node(docs_id, "📊 report.pdf");
-    tree.add_child_node(docs_id, "📋 todo.txt");
-}
+fn create_page2_interface() -> Panel {
+    let mut main_panel = Panel::new()
+        .with_bounds(Rect::new(0, 0, UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16))
+        .with_border(BorderStyle::Double)
+        .with_title("Page 2: Text Animations")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
 
-// Helper function to create table demo
-fn create_table_demo() -> rust_pixel::ui::Panel {
-    let mut panel = rust_pixel::ui::Panel::new()
-        .with_border(BorderStyle::Single)
-        .with_title("Table Widget Demo")
-        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
+    // Navigation hint
+    let nav_hint = Label::new("← → or 1/2/3 to switch pages | Each transition is different!")
+        .with_style(Style::default().fg(Color::Yellow).bg(Color::Black));
+    main_panel.add_child(Box::new(nav_hint));
 
-    let mut table = Table::new()
-        .with_columns(vec![
-            Column::new("Name", 10).align(ColumnAlign::Left),
-            Column::new("Price", 8).align(ColumnAlign::Right),
-            Column::new("Change", 8).align(ColumnAlign::Right),
-            Column::new("Status", 8).align(ColumnAlign::Center),
-        ])
-        .with_header(true)
-        .with_header_style(Style::default().fg(Color::Yellow).bg(Color::Black))
-        .with_selected_style(Style::default().fg(Color::White).bg(Color::Indexed(236)))
-        .with_style(Style::default().fg(Color::White).bg(Color::Black))
-        .on_selection_changed(|idx| {
-            if let Some(i) = idx {
-                println!("Table row selected: {}", i);
-            }
-        });
+    // Wave animation demo
+    let wave = Label::new("~~~ WAVE ANIMATION ~~~")
+        .with_style(Style::default().fg(Color::Rgba(255, 200, 80, 255)).bg(Color::Reset))
+        .with_wave(0.4, 6.0, 0.15);
+    main_panel.add_child(Box::new(wave));
 
-    // Sample stock-like data
-    let data = [
-        ("Moutai",  "1800.50", "+2.35%", "Buy"),
-        ("CATL",    "215.80",  "-1.20%", "Hold"),
-        ("PingAn",  "48.65",   "+0.85%", "Buy"),
-        ("Midea",   "72.30",   "-0.45%", "Watch"),
-        ("CMB",     "35.20",   "+1.10%", "Buy"),
-        ("Wuliangye","152.40", "+0.60%", "Hold"),
-    ];
+    // FadeIn animation demo
+    let fade_in = Label::new(">>> FADE IN EFFECT <<<")
+        .with_style(Style::default().fg(Color::Rgba(100, 255, 150, 255)).bg(Color::Reset))
+        .with_fade_in(8, true);
+    main_panel.add_child(Box::new(fade_in));
 
-    let rows: Vec<TableRow> = data.iter().map(|(name, price, change, status)| {
-        let change_style = if change.starts_with('+') {
-            Some(Style::default().fg(Color::Red))
-        } else {
-            Some(Style::default().fg(Color::Green))
-        };
-        let status_style = match *status {
-            "Buy" => Some(Style::default().fg(Color::Red)),
-            "Hold" => Some(Style::default().fg(Color::Yellow)),
-            _ => Some(Style::default().fg(Color::Gray)),
-        };
-        TableRow::new(vec![
-            TableCell::new(name),
-            TableCell::new(price),
-            TableCell::new(change).with_style(change_style.unwrap()),
-            TableCell::new(status).with_style(status_style.unwrap()),
-        ])
-    }).collect();
+    // Typewriter animation demo
+    let typewriter = Label::new("TYPEWRITER MODE... TYPING CHARACTER BY CHARACTER...")
+        .with_style(Style::default().fg(Color::Rgba(255, 150, 200, 255)).bg(Color::Reset))
+        .with_typewriter(6, true, true);
+    main_panel.add_child(Box::new(typewriter));
 
-    table.set_rows(rows);
-    table.select(Some(0));
-
-    panel.add_child(Box::new(table));
-    panel
-}
-
-// Helper function to create modifier effects demo panel
-fn create_modifiers_demo() -> rust_pixel::ui::Panel {
-    let mut panel = rust_pixel::ui::Panel::new()
-        .with_border(BorderStyle::Single)
-        .with_title("Style Modifier Effects Test")
-        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
-    
-    // Normal text (baseline)
-    let normal = Label::new("Normal Text - No modifier")
-        .with_style(Style::default().fg(Color::White).bg(Color::Black));
-    panel.add_child(Box::new(normal));
-    
-    // BOLD effect (RGB * 1.3)
-    let bold = Label::new("BOLD Text - RGB intensity +30%")
+    // Style modifier effects
+    let bold = Label::new("BOLD Text - Increased intensity")
         .with_style(Style::default()
             .fg(Color::Cyan)
             .bg(Color::Black)
             .add_modifier(Modifier::BOLD));
-    panel.add_child(Box::new(bold));
-    
-    // ITALIC effect (skew transform)
-    let italic = Label::new("ITALIC Text - Slanted 12 degrees")
+    main_panel.add_child(Box::new(bold));
+
+    let italic = Label::new("ITALIC Text - Slanted style")
         .with_style(Style::default()
             .fg(Color::Yellow)
             .bg(Color::Black)
             .add_modifier(Modifier::ITALIC));
-    panel.add_child(Box::new(italic));
-    
-    // UNDERLINED effect (bottom line)
+    main_panel.add_child(Box::new(italic));
+
     let underlined = Label::new("UNDERLINED Text - Line at bottom")
         .with_style(Style::default()
             .fg(Color::Green)
             .bg(Color::Black)
             .add_modifier(Modifier::UNDERLINED));
-    panel.add_child(Box::new(underlined));
-    
-    // DIM effect (alpha * 0.6)
-    let dim = Label::new("DIM Text - Alpha reduced to 60%")
-        .with_style(Style::default()
-            .fg(Color::Magenta)
-            .bg(Color::Black)
-            .add_modifier(Modifier::DIM));
-    panel.add_child(Box::new(dim));
-    
-    // REVERSED effect (swap fg/bg)
+    main_panel.add_child(Box::new(underlined));
+
     let reversed = Label::new("REVERSED Text - FG/BG swapped")
         .with_style(Style::default()
             .fg(Color::White)
-            .bg(Color::Blue)
+            .bg(Color::Magenta)
             .add_modifier(Modifier::REVERSED));
-    panel.add_child(Box::new(reversed));
-    
-    // CROSSED_OUT effect (strikethrough)
-    let crossed = Label::new("CROSSED_OUT Text - Strikethrough")
-        .with_style(Style::default()
-            .fg(Color::Red)
-            .bg(Color::Black)
-            .add_modifier(Modifier::CROSSED_OUT));
-    panel.add_child(Box::new(crossed));
-    
-    // HIDDEN effect (alpha = 0, invisible)
-    let hidden = Label::new("HIDDEN Text - Should be invisible!")
-        .with_style(Style::default()
-            .fg(Color::White)
-            .bg(Color::Black)
-            .add_modifier(Modifier::HIDDEN));
-    panel.add_child(Box::new(hidden));
-    
-    // Combination: BOLD + ITALIC
+    main_panel.add_child(Box::new(reversed));
+
     let bold_italic = Label::new("BOLD+ITALIC - Combined effect")
         .with_style(Style::default()
             .fg(Color::Cyan)
             .bg(Color::Black)
             .add_modifier(Modifier::BOLD | Modifier::ITALIC));
-    panel.add_child(Box::new(bold_italic));
-    
-    // Combination: BOLD + UNDERLINED
-    let bold_underlined = Label::new("BOLD+UNDERLINED - Combined")
-        .with_style(Style::default()
-            .fg(Color::Yellow)
-            .bg(Color::Black)
-            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED));
-    panel.add_child(Box::new(bold_underlined));
-    
-    // Combination: ITALIC + UNDERLINED + CROSSED_OUT
-    let triple = Label::new("ITALIC+UNDERLINE+CROSSED - Triple")
-        .with_style(Style::default()
-            .fg(Color::Green)
-            .bg(Color::Black)
-            .add_modifier(Modifier::ITALIC | Modifier::UNDERLINED | Modifier::CROSSED_OUT));
-    panel.add_child(Box::new(triple));
-    
-    // BLINK effect (should be ignored in graphics mode)
-    let blink = Label::new("SLOW_BLINK - Ignored in graphics")
-        .with_style(Style::default()
-            .fg(Color::White)
-            .bg(Color::Black)
-            .add_modifier(Modifier::SLOW_BLINK));
-    panel.add_child(Box::new(blink));
-    
-    panel
+    main_panel.add_child(Box::new(bold_italic));
+
+    main_panel.layout();
+    main_panel
+}
+
+fn create_page3_interface() -> Panel {
+    let mut main_panel = Panel::new()
+        .with_bounds(Rect::new(0, 0, UI_DEMO_WIDTH as u16, UI_DEMO_HEIGHT as u16))
+        .with_border(BorderStyle::Double)
+        .with_title("Page 3: Advanced Components")
+        .with_layout(Box::new(LinearLayout::horizontal().with_spacing(2).with_alignment(Alignment::Start)));
+
+    // Left column: Tree
+    let mut left_panel = Panel::new()
+        .with_bounds(Rect::new(0, 0, 35, 26))
+        .with_border(BorderStyle::Single)
+        .with_title("File Tree")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(0).with_alignment(Alignment::Start)));
+
+    let mut tree = Tree::new()
+        .with_lines(true)
+        .with_style(Style::default().fg(Color::Magenta).bg(Color::Black));
+
+    // Build tree structure
+    let home_id = tree.add_root_node("🏠 Home");
+    let projects_id = tree.add_root_node("💼 Projects");
+    let docs_id = tree.add_root_node("📁 Documents");
+
+    tree.add_child_node(home_id, "📷 Photos");
+    tree.add_child_node(home_id, "🎵 Music");
+    tree.add_child_node(home_id, "📹 Videos");
+
+    if let Some(rust_id) = tree.add_child_node(projects_id, "🦀 rust_pixel") {
+        tree.add_child_node(rust_id, "📄 Cargo.toml");
+        tree.add_child_node(rust_id, "📂 src");
+        tree.add_child_node(rust_id, "📂 apps");
+    }
+
+    tree.add_child_node(docs_id, "📝 notes.md");
+    tree.add_child_node(docs_id, "📊 report.pdf");
+
+    left_panel.add_child(Box::new(tree));
+
+    // Right column: Controls
+    let mut right_panel = Panel::new()
+        .with_bounds(Rect::new(0, 0, 40, 26))
+        .with_border(BorderStyle::Single)
+        .with_title("Controls")
+        .with_layout(Box::new(LinearLayout::vertical().with_spacing(1).with_alignment(Alignment::Start)));
+
+    // Navigation hint
+    let nav_hint = Label::new("← → or 1/2/3 to switch pages")
+        .with_style(Style::default().fg(Color::Green).bg(Color::Black));
+    right_panel.add_child(Box::new(nav_hint));
+
+    // Checkbox demo
+    let checkbox = Checkbox::new("Enable feature")
+        .with_checked(true)
+        .on_change(|checked| println!("Checkbox: {}", checked));
+    right_panel.add_child(Box::new(checkbox));
+
+    // ToggleSwitch demo
+    let toggle = ToggleSwitch::new("Dark mode")
+        .with_on(false)
+        .on_change(|on| println!("Toggle: {}", on));
+    right_panel.add_child(Box::new(toggle));
+
+    // Slider demo
+    let slider = Slider::new(0.0, 100.0)
+        .with_value(50.0)
+        .with_step(5.0)
+        .on_change(|value| println!("Slider: {:.1}", value));
+    right_panel.add_child(Box::new(slider));
+
+    // Radio demo
+    let radio = RadioGroup::new()
+        .with_options(vec!["Option A".to_string(), "Option B".to_string(), "Option C".to_string()])
+        .with_selected(0)
+        .on_change(|index| println!("Radio: {}", index));
+    right_panel.add_child(Box::new(radio));
+
+    // Dropdown demo
+    let dropdown = Dropdown::new()
+        .with_options(vec!["Apple".to_string(), "Banana".to_string(), "Cherry".to_string()])
+        .with_selected(0)
+        .on_change(|index| println!("Dropdown: {}", index));
+    right_panel.add_child(Box::new(dropdown));
+
+    // Table demo
+    let mut table = Table::new()
+        .with_columns(vec![
+            Column::new("Name", 12).align(ColumnAlign::Left),
+            Column::new("Status", 10).align(ColumnAlign::Center),
+        ])
+        .with_header(true)
+        .with_header_style(Style::default().fg(Color::Yellow).bg(Color::Black))
+        .with_style(Style::default().fg(Color::White).bg(Color::Black));
+
+    let rows: Vec<TableRow> = vec![
+        TableRow::new(vec![TableCell::new("Alpha"), TableCell::new("Active")]),
+        TableRow::new(vec![TableCell::new("Beta"), TableCell::new("Pending")]),
+        TableRow::new(vec![TableCell::new("Gamma"), TableCell::new("Done")]),
+    ];
+    table.set_rows(rows);
+    right_panel.add_child(Box::new(table));
+
+    main_panel.add_child(Box::new(left_panel));
+    main_panel.add_child(Box::new(right_panel));
+
+    main_panel.layout();
+    main_panel
 }

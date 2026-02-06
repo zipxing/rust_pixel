@@ -49,13 +49,15 @@ impl Render for UiDemoRender {
     }
 
     fn update(&mut self, ctx: &mut Context, model: &mut UiDemoModel, _dt: f32) {
-        // Clear the TUI buffer
-        let buffer = self.scene.tui_buffer_mut();
-        buffer.reset();
+        // Get the current buffer (either single page or transition blend)
+        let source_buffer = model.get_rendered_buffer();
 
-        // Render UI directly into the TUI buffer.
-        // AnimatedLabel handles per-cell scale animation via Style automatically.
-        let _ = model.ui_app.render_into(buffer);
+        // Copy to TUI buffer
+        let tui_buffer = self.scene.tui_buffer_mut();
+        tui_buffer.reset();
+
+        // Merge source buffer into TUI buffer
+        tui_buffer.merge(source_buffer, 255, true);
 
         // Draw to screen
         let _ = self.scene.draw(ctx);
