@@ -280,9 +280,21 @@ impl Widget for Label {
 // ========== Private rendering methods ==========
 
 impl Label {
+    /// Compute visual text width in cells, accounting for per-cell scale.
+    /// When scale_x >= 1.0, each character occupies scale_x cells visually
+    /// (graph.rs expands slot width for scale >= 1.0).
+    fn visual_text_width(&self) -> u16 {
+        let scale_x = self.base.style.scale_x.unwrap_or(1.0);
+        if scale_x > 1.0 {
+            (self.text.width() as f32 * scale_x).ceil() as u16
+        } else {
+            self.text.width() as u16
+        }
+    }
+
     fn render_single_line(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
-        let text_width = self.text.width() as u16;
+        let text_width = self.visual_text_width();
 
         if text_width == 0 {
             return Ok(());
@@ -315,13 +327,19 @@ impl Label {
             return Ok(());
         }
 
+        let scale_x = self.base.style.scale_x.unwrap_or(1.0);
+
         for (i, line) in lines.iter().enumerate() {
             let y = bounds.y + i as u16;
             if y >= bounds.y + bounds.height || y >= buffer_area.y + buffer_area.height {
                 break;
             }
 
-            let line_width = line.width() as u16;
+            let line_width = if scale_x > 1.0 {
+                (line.width() as f32 * scale_x).ceil() as u16
+            } else {
+                line.width() as u16
+            };
             let start_x = match self.align {
                 TextAlign::Left => bounds.x,
                 TextAlign::Center => bounds.x + (bounds.width.saturating_sub(line_width)) / 2,
@@ -336,7 +354,8 @@ impl Label {
         Ok(())
     }
 
-    /// Compute start_x for aligned text (shared by all animated renders)
+    /// Compute start_x for aligned text (shared by all animated renders).
+    /// Uses visual text width (scale-aware) for correct centering.
     fn aligned_start_x(&self, text_width: u16) -> u16 {
         let bounds = self.bounds();
         match self.align {
@@ -355,7 +374,7 @@ impl Label {
             return Ok(());
         }
 
-        let text_width = self.text.width() as u16;
+        let text_width = self.visual_text_width();
         if text_width == 0 {
             return Ok(());
         }

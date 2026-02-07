@@ -113,15 +113,17 @@ pub fn build_slide_page(
                 };
 
                 let style = title_style(*level);
-                if *level == 1 && !jump_to_middle {
-                    // Center h1 titles (account for per-cell scale affecting spacing)
-                    let text_len = text.chars().count() as f32;
-                    let visual_width = (text_len * style.scale_x.unwrap_or(1.0)).ceil() as u16;
-                    let centered_x = x_start + w.saturating_sub(visual_width) / 2;
-                    buf.set_string(centered_x, y, text, style);
+                let align = if *level == 1 && !jump_to_middle {
+                    TextAlign::Center
                 } else {
-                    buf.set_string(x_start, y, text, style);
-                }
+                    TextAlign::Left
+                };
+                let bounds = Rect::new(x_start, y, w, 1);
+                let mut label = Label::new(text)
+                    .with_style(style)
+                    .with_align(align);
+                label.set_bounds(bounds);
+                deferred_labels.push(DeferredLabel { label });
                 y += 1;
                 // Add spacing after titles
                 if *level <= 2 {
@@ -335,6 +337,9 @@ pub fn build_slide_page(
                 buf.set_string(x_start, y, &img_text, style);
                 y += 1;
             }
+            SlideElement::Spacer(n) => {
+                y += n;
+            }
         }
     }
 
@@ -385,6 +390,7 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
             SlideElement::Divider => h += 1,
             SlideElement::Image { .. } => h += 1,
             SlideElement::AnimatedText { .. } => h += 1,
+            SlideElement::Spacer(n) => h += n,
             SlideElement::Pause | SlideElement::JumpToMiddle => {}
             SlideElement::ColumnLayout { .. } | SlideElement::Column(_) | SlideElement::ResetLayout => {}
         }
@@ -397,20 +403,16 @@ fn title_style(level: u8) -> Style {
     match level {
         1 => Style::default()
             .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD)
-            .scale(1.2, 1.2),
+            .add_modifier(Modifier::BOLD),
         2 => Style::default()
             .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
-            .scale(1.2, 1.2),
+            .add_modifier(Modifier::BOLD),
         3 => Style::default()
             .fg(Color::Green)
-            .add_modifier(Modifier::BOLD)
-            .scale(1.2, 1.2),
+            .add_modifier(Modifier::BOLD),
         _ => Style::default()
             .fg(Color::White)
-            .add_modifier(Modifier::BOLD)
-            .scale(1.2, 1.2),
+            .add_modifier(Modifier::BOLD),
     }
 }
 

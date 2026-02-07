@@ -12,9 +12,12 @@ pub const VERTEX_SRC_SYMBOLS: &str = r#"
             };
             out vec2 uv;
             out vec4 colorj;
+            flat out float v_bold;
             void main() {
+                v_bold = a1.x < 0.0 ? 1.0 : 0.0;
+                vec2 origin = abs(a1.xy);
                 uv = a1.zw + vertex * a2.xy;
-                vec2 transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0;
+                vec2 transformed = (((vertex - origin) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0;
                 gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
                 colorj = color * colorFilter;
             }
@@ -30,9 +33,19 @@ pub const FRAGMENT_SRC_SYMBOLS: &str = r#"
             };
             in vec2 uv;
             in vec4 colorj;
+            flat in float v_bold;
             layout(location=0) out vec4 color;
             void main() {
-                color = texture(source, uv) * colorj;
+                vec4 texColor = texture(source, uv);
+                if (v_bold > 0.5) {
+                    ivec2 ts = textureSize(source, 0);
+                    float dx = 0.5 / float(ts.x);
+                    float dy = 0.5 / float(ts.y);
+                    texColor = max(texColor, texture(source, uv + vec2(dx, 0.0)));
+                    texColor = max(texColor, texture(source, uv + vec2(-dx, 0.0)));
+                    texColor.a = smoothstep(0.05, 0.8, texColor.a);
+                }
+                color = texColor * colorj;
             }
         "#;
 

@@ -316,9 +316,11 @@ impl WgpuSymbolRenderer {
                 let bg_scale_y = cell_height / bg_frame_height / ratio_y;
                 bg_transform.scale(bg_scale_x, bg_scale_y);
 
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &bg_transform, [b.0, b.1, b.2, b.3]);
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &bg_transform, [b.0, b.1, b.2, b.3], false);
             }
-            
+
+            let is_bold = modifier & MOD_BOLD != 0;
+
             // Foreground rendering
             let mut transform = self.transform_stack;
             transform.translate(
@@ -353,7 +355,7 @@ impl WgpuSymbolRenderer {
             transform.scale(scale_x, scale_y);
             
             // Draw foreground symbol with modified color
-            self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
+            self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], is_bold);
             
             // Draw UNDERLINED effect: a line at the bottom of the cell
             // UNDERLINED 效果：在单元格底部绘制线条
@@ -374,7 +376,7 @@ impl WgpuSymbolRenderer {
                 let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
                 line_transform.scale(line_scale_x, line_scale_y);
 
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false);
             }
 
             // Draw CROSSED_OUT effect: a line through the middle of the cell
@@ -395,7 +397,7 @@ impl WgpuSymbolRenderer {
                 let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
                 line_transform.scale(line_scale_x, line_scale_y);
 
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3]);
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false);
             }
         }
     }
@@ -406,7 +408,7 @@ impl WgpuSymbolRenderer {
     /// - a1: origin, UV top-left
     /// - a2: UV size, first column of local 2x2 scaled by frame size
     /// - a3: second column of local 2x2 scaled by frame size, then translation
-    fn draw_symbol_instance(&mut self, sym: usize, transform: &UnifiedTransform, color: [f32; 4]) {
+    fn draw_symbol_instance(&mut self, sym: usize, transform: &UnifiedTransform, color: [f32; 4], is_bold: bool) {
         if self.instance_count >= self.max_instances {
             // Instance limit reached (debug output removed for performance)
             return;
@@ -415,13 +417,16 @@ impl WgpuSymbolRenderer {
             // Symbol index out of bounds (debug output removed for performance)
             return;
         }
-        
+
         let frame = &self.symbols[sym];
-        
+
+        // Encode bold flag in origin_x sign: negative = bold
+        let origin_x = if is_bold { -frame.origin_x } else { frame.origin_x };
+
         // Create instance data matching OpenGL layout exactly
         let instance = WgpuSymbolInstance {
-            // a1: [origin_x, origin_y, uv_left, uv_top]
-            a1: [frame.origin_x, frame.origin_y, frame.uv_left, frame.uv_top],
+            // a1: [origin_x (sign=bold), origin_y, uv_left, uv_top]
+            a1: [origin_x, frame.origin_y, frame.uv_left, frame.uv_top],
             
             // a2: [uv_width, uv_height, m00*width, m10*width]
             // Matrix column 1: both m00 and m10 multiply by width

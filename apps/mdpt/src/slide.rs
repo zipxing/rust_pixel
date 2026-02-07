@@ -124,6 +124,9 @@ pub enum SlideElement {
         text: String,
         animation: AnimationType,
     },
+
+    /// Vertical spacer (N blank lines)
+    Spacer(u16),
 }
 
 /// Supported text animation types

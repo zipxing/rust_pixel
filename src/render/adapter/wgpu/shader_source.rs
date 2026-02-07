@@ -206,7 +206,7 @@ struct VertexInput {
 
 // Instance input (per-symbol data, matches OpenGL layout)
 struct InstanceInput {
-    @location(1) a1: vec4<f32>,  // origin_x, origin_y, uv_left, uv_top
+    @location(1) a1: vec4<f32>,  // origin_x (sign=bold flag), origin_y, uv_left, uv_top
     @location(2) a2: vec4<f32>,  // uv_width, uv_height, m00*width, m10*width
     @location(3) a3: vec4<f32>,  // m01*height, m11*height, m20, m21
     @location(4) color: vec4<f32>, // r, g, b, a
@@ -216,6 +216,7 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
+    @location(2) v_bold: f32,
 }
 
 // Transform uniform (matches OpenGL layout)
@@ -231,37 +232,41 @@ var<uniform> transform: Transform;
 @vertex
 fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
     var output: VertexOutput;
-    
+
+    // Extract bold flag from origin_x sign (negative = bold)
+    output.v_bold = select(0.0, 1.0, instance.a1.x < 0.0);
+    let origin = abs(instance.a1.xy);
+
     // Calculate UV coordinates: uv = a1.zw + position * a2.xy
     output.uv = instance.a1.zw + vertex_input.position * instance.a2.xy;
-    
+
     // Apply the same transformation chain as OpenGL:
-    // transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0
+    // transformed = (((vertex - origin) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0
     // gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
-    
-    // Step 1: vertex - a1.xy
-    let vertex_centered = vertex_input.position - instance.a1.xy;
-    
+
+    // Step 1: vertex - origin
+    let vertex_centered = vertex_input.position - origin;
+
     // Step 2: * mat2(a2.zw, a3.xy) + a3.zw
     let transform_matrix = mat2x2<f32>(instance.a2.zw, instance.a3.xy);
     let transformed_local = transform_matrix * vertex_centered + instance.a3.zw;
-    
+
     // Step 3: * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)
     let global_matrix = mat2x2<f32>(transform.tw.xy, transform.th.xy);
     let transformed_global = global_matrix * transformed_local + vec2<f32>(transform.tw.z, transform.th.z);
-    
+
     // Step 4: / vec2(tw.w, th.w) * 2.0
     let normalized = (transformed_global / vec2<f32>(transform.tw.w, transform.th.w)) * 2.0;
-    
+
     // Step 5: - vec2(1.0, 1.0) to convert to NDC coordinates
     let ndc_pos = normalized - vec2<f32>(1.0, 1.0);
-    
+
     // Step 6: Flip Y coordinate to match WGPU coordinate system (Y-axis up in OpenGL, Y-axis down in WGPU)
     output.clip_position = vec4<f32>(ndc_pos.x, -ndc_pos.y, 0.0, 1.0);
-    
+
     // Color modulation: colorj = color * colorFilter
     output.colorj = instance.color * transform.colorFilter;
-    
+
     return output;
 }
 "#;
@@ -277,12 +282,21 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
+    @location(2) v_bold: f32,
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let tex_color = textureSample(source, source_sampler, input.uv);
-    return tex_color * input.colorj;
+    var texColor = textureSample(source, source_sampler, input.uv);
+    if (input.v_bold > 0.5) {
+        let ts = vec2<f32>(textureDimensions(source));
+        let dx = 0.5 / ts.x;
+        let dy = 0.5 / ts.y;
+        texColor = max(texColor, textureSample(source, source_sampler, input.uv + vec2<f32>(dx, 0.0)));
+        texColor = max(texColor, textureSample(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0)));
+        texColor.a = smoothstep(0.05, 0.8, texColor.a);
+    }
+    return texColor * input.colorj;
 }
 "#;
 

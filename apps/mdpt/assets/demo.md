@@ -68,6 +68,8 @@ fn main() {
 
 ### Left Column
 
+<!-- spacer: 1 -->
+
 This demonstrates the
 column layout feature.
 
@@ -80,6 +82,8 @@ left column area.
 <!-- column: 1 -->
 
 ### Right Column
+
+<!-- spacer: 1 -->
 
 The right column gets
 equal width here.

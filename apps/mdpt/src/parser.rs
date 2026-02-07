@@ -73,6 +73,9 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                         CommentCommand::Anim(name) => {
                             pending_anim = parse_animation_type(&name);
                         }
+                        CommentCommand::Spacer(n) => {
+                            current_slide.elements.push(SlideElement::Spacer(n));
+                        }
                     }
                 }
                 // Non-comment HTML blocks are ignored
@@ -185,6 +188,8 @@ enum CommentCommand {
     ResetLayout,
     /// Text animation: spotlight, wave, fadein, typewriter
     Anim(String),
+    /// Vertical spacer
+    Spacer(u16),
 }
 
 /// Recursively collect all text content from a node and its children.

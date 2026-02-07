@@ -305,13 +305,15 @@ impl GlRenderSymbols {
         sym: usize,
         transform: &UnifiedTransform,
         color: &UnifiedColor,
+        is_bold: bool,
     ) {
         self.prepare_draw(gl);
         let frame = &self.symbols[sym];
         let instance_buffer = &mut self.instance_buffer;
 
+        // Encode bold flag in origin_x sign: negative = bold
         self.instance_buffer_at += 1;
-        instance_buffer[self.instance_buffer_at as usize] = frame.origin_x;
+        instance_buffer[self.instance_buffer_at as usize] = if is_bold { -frame.origin_x } else { frame.origin_x };
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.origin_y;
 
@@ -443,8 +445,10 @@ impl GlRenderSymbols {
                 bg_transform.scale(cell_width / bg_frame_width / ratio_x, cell_height / bg_frame_height / ratio_y);
 
                 let back_color = UnifiedColor::new(b.0, b.1, b.2, b.3);
-                self.draw_symbol(gl, BG_FILL_SYMBOL, &bg_transform, &back_color);
+                self.draw_symbol(gl, BG_FILL_SYMBOL, &bg_transform, &back_color, false);
             }
+
+            let is_bold = modifier & MOD_BOLD != 0;
 
             // Foreground rendering
             let mut transform = UnifiedTransform::new();
@@ -479,7 +483,7 @@ impl GlRenderSymbols {
             let color = UnifiedColor::new(fg_color.0, fg_color.1, fg_color.2, fg_color.3);
             // fill instance buffer for opengl instance rendering
             // r.texsym is calculated by push_render_buffer using block layout formula
-            self.draw_symbol(gl, r.texsym, &transform, &color);
+            self.draw_symbol(gl, r.texsym, &transform, &color, is_bold);
             
             // Draw UNDERLINED effect: a line at the bottom of the cell
             // UNDERLINED 效果：在单元格底部绘制线条
@@ -501,7 +505,7 @@ impl GlRenderSymbols {
                 line_transform.scale(line_scale_x, line_scale_y);
 
                 let line_color = UnifiedColor::new(fg_color.0, fg_color.1, fg_color.2, fg_color.3);
-                self.draw_symbol(gl, BG_FILL_SYMBOL, &line_transform, &line_color);
+                self.draw_symbol(gl, BG_FILL_SYMBOL, &line_transform, &line_color, false);
             }
 
             // Draw CROSSED_OUT effect: a line through the middle of the cell
@@ -523,7 +527,7 @@ impl GlRenderSymbols {
                 line_transform.scale(line_scale_x, line_scale_y);
 
                 let line_color = UnifiedColor::new(fg_color.0, fg_color.1, fg_color.2, fg_color.3);
-                self.draw_symbol(gl, BG_FILL_SYMBOL, &line_transform, &line_color);
+                self.draw_symbol(gl, BG_FILL_SYMBOL, &line_transform, &line_color, false);
             }
         }
         self.draw(gl);
