@@ -187,7 +187,7 @@ impl Render for PetviewRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
-            .init(PETW, PETH, 1.0, 1.0, "petview".to_string());
+            .init(PETW, PETH, 1.2, 1.2, "petview".to_string());
         self.scene.init(ctx);
 
         let p1 = self.scene.get_sprite("petimg1");

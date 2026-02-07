@@ -206,7 +206,7 @@ impl WgpuTexture {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest, // Pixel art should use nearest neighbor
+            mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
@@ -250,13 +250,14 @@ impl WgpuRenderTexture {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Create sampler for render texture
+        // Create sampler for render texture - use Nearest to avoid grid artifacts
+        // during RT-to-screen compositing (symbol atlas uses Linear for smooth scaling)
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("RustPixel Render Texture Sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest, // Pixel art should use nearest neighbor
+            mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
@@ -307,13 +308,14 @@ impl WgpuRenderTexture {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Create sampler for render texture
+        // Create sampler for render texture - use Nearest to avoid grid artifacts
+        // during RT-to-screen compositing (symbol atlas uses Linear for smooth scaling)
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("RustPixel Custom Render Texture Sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest, // Pixel art should use nearest neighbor
+            mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()

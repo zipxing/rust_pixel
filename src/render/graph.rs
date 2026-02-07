@@ -1348,24 +1348,35 @@ pub fn render_helper_with_scale(
 
     let tx = sh.1 as usize;
 
-    // Apply combined scaling to the destination render area
-    // Use round() to align to pixel boundaries and avoid sub-pixel rendering artifacts
-    let scaled_w = (w as f32 / r.x * scale_x).round() as u32;
-    let scaled_h = (h as f32 / r.y * scale_y).round() as u32;
-
-    let (scaled_x, scaled_y) = if let Some(cum_x) = cumulative_x {
+    // Compute tiling-corrected sizes and positions.
+    // When cell size is non-integer (e.g., 16/1.2 = 13.333), independently rounding
+    // each cell's position and width creates 1-pixel gaps between adjacent cells.
+    // Fix: compute width/height as round(next_pos) - round(this_pos), ensuring
+    // adjacent cells tile perfectly (sizes alternate e.g. 13,14,13,13,14,...).
+    let (scaled_x, scaled_y, scaled_w, scaled_h) = if let Some(cum_x) = cumulative_x {
         // Cumulative layout: X from accumulated widths, Y centered within row
         let row_h = h as f32 / r.y * sprite_scale_y;
         let cell_h = h as f32 / r.y * scale_y;
         let y_offset = (row_h - cell_h) / 2.0;
         let base_y = dsty as f32 * row_h;
-        (cum_x.round(), (base_y + y_offset).round())
+        let this_y_f = base_y + y_offset;
+        let next_y_f = (dsty as f32 + 1.0) * row_h + y_offset;
+        // Width: use rounded value here; caller (render_buffer_to_cells) will
+        // correct it with grid_advance info for perfect X-direction tiling.
+        let w_val = (w as f32 / r.x * scale_x).round() as u32;
+        // Height: tiling-corrected to prevent Y-direction gaps
+        let h_val = (next_y_f.round() - this_y_f.round()) as u32;
+        (cum_x.round(), this_y_f.round(), w_val, h_val)
     } else {
-        // Grid-based layout (original behavior)
+        // Grid-based layout with tiling fix
         let dstx = i as u16 % cell_w;
-        let base_x = dstx as f32 * (w as f32 / r.x);
-        let base_y = dsty as f32 * (h as f32 / r.y);
-        ((base_x * scale_x).round(), (base_y * scale_y).round())
+        let cell_f_w = w as f32 / r.x * scale_x;
+        let cell_f_h = h as f32 / r.y * scale_y;
+        let this_x = (dstx as f32 * cell_f_w).round();
+        let this_y = (dsty as f32 * cell_f_h).round();
+        let next_x = ((dstx as f32 + 1.0) * cell_f_w).round();
+        let next_y = ((dsty as f32 + 1.0) * cell_f_h).round();
+        (this_x, this_y, (next_x - this_x) as u32, (next_y - this_y) as u32)
     };
 
     (
@@ -1493,6 +1504,20 @@ pub fn render_buffer_to_cells<F>(
             grid_advance = slot_w * 2.0;
             if (i + 1) % pw as usize != 0 {
                 skip_next = true;
+            }
+        }
+
+        // Fix width to ensure perfect tiling (prevent sub-pixel gaps from integer rounding).
+        // When cell size is non-integer (e.g., 16/1.2 = 13.333), independently rounding
+        // each cell's position and using a fixed rounded width creates 1-pixel gaps every
+        // few cells. Fix by computing width as: round(next_position) - round(this_position),
+        // so adjacent cells tile without gaps (widths alternate e.g. 13,14,13,13,14,...).
+        {
+            let this_x_f = cumulative_x + x_center_offset;
+            let next_x_f = this_x_f + grid_advance;
+            let corrected_w = next_x_f.round() as i32 - this_x_f.round() as i32;
+            if corrected_w > 0 {
+                s2.w = corrected_w as u32;
             }
         }
 

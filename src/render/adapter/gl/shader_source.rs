@@ -1,5 +1,5 @@
 pub const VERTEX_SRC_SYMBOLS: &str = r#"
-            precision mediump float;
+            precision highp float;
             layout(location=0) in vec2 vertex;
             layout(location=1) in vec4 a1;
             layout(location=2) in vec4 a2;
@@ -21,7 +21,7 @@ pub const VERTEX_SRC_SYMBOLS: &str = r#"
         "#;
 
 pub const FRAGMENT_SRC_SYMBOLS: &str = r#"
-            precision mediump float;
+            precision highp float;
             uniform sampler2D source;
             layout(std140) uniform transform {
                 vec4 tw;
@@ -38,7 +38,7 @@ pub const FRAGMENT_SRC_SYMBOLS: &str = r#"
 
 // trans shader ...
 pub const VERTEX_SRC_TRANS: &str = r#"
-            precision mediump float;
+            precision highp float;
             layout(location = 0) in vec2 aPos;
             layout(location = 1) in vec2 aTexCoord;
             out vec2 TexCoord;
@@ -165,7 +165,7 @@ pub fn get_trans_fragment_src() -> Vec<String> {
     for t in TRANS_FS {
         tfs.push(format!(
             r#"
-            precision mediump float;
+            precision highp float;
             out vec4 FragColor;
             in vec2 TexCoord;
             uniform sampler2D texture1;
@@ -209,7 +209,7 @@ pub fn get_trans_fragment_src() -> Vec<String> {
 ///            = 采样起始Y + 采样高度 * 插值
 /// ```
 pub const GENERAL2D_VERTEX_SRC: &str = r#"
-            precision mediump float;
+            precision highp float;
 
             // 顶点属性
             layout(location = 0) in vec2 aPos;       // 顶点位置 (NDC: -1 到 1)
@@ -248,7 +248,7 @@ pub const GENERAL2D_VERTEX_SRC: &str = r#"
 /// - **texture1**: RT 纹理
 /// - **color**: 颜色乘数 (通常是 [1, 1, 1, alpha])
 pub const GENERAL2D_FRAGMENT_SRC: &str = r#"
-            precision mediump float;
+            precision highp float;
 
             out vec4 FragColor;           // 输出颜色
             in vec2 TexCoord;             // 从顶点着色器传入的纹理坐标

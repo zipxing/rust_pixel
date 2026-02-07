@@ -544,10 +544,14 @@ impl GlRenderSymbols {
         let tex_width = sheet.width as f32;
         let tex_height = sheet.height as f32;
 
-        let uv_left = x / tex_width;
-        let uv_top = y / tex_height;
-        let uv_width = width / tex_width;
-        let uv_height = height / tex_height;
+        // Half-texel inset to prevent bilinear filtering from sampling
+        // adjacent symbols in the texture atlas (avoids grid line artifacts)
+        let half_texel_x = 0.5 / tex_width;
+        let half_texel_y = 0.5 / tex_height;
+        let uv_left = x / tex_width + half_texel_x;
+        let uv_top = y / tex_height + half_texel_y;
+        let uv_width = width / tex_width - half_texel_x * 2.0;
+        let uv_height = height / tex_height - half_texel_y * 2.0;
 
         GlCell {
             texture: sheet.texture,
