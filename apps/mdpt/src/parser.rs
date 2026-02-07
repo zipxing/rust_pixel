@@ -6,6 +6,17 @@ use comrak::{
 };
 use serde::Deserialize;
 
+/// Parse animation name string to AnimationType.
+fn parse_animation_type(name: &str) -> Option<AnimationType> {
+    match name.to_lowercase().as_str() {
+        "spotlight" => Some(AnimationType::Spotlight),
+        "wave" => Some(AnimationType::Wave),
+        "fadein" | "fade_in" => Some(AnimationType::FadeIn),
+        "typewriter" => Some(AnimationType::Typewriter),
+        _ => None,
+    }
+}
+
 /// Parse a markdown string into a Presentation.
 pub fn parse_markdown(contents: &str) -> Presentation {
     let arena = Arena::new();
@@ -19,6 +30,7 @@ pub fn parse_markdown(contents: &str) -> Presentation {
     let mut front_matter = FrontMatter::default();
     let mut slides = Vec::new();
     let mut current_slide = SlideContent::new();
+    let mut pending_anim: Option<AnimationType> = None;
 
     for node in root.children() {
         let data = node.data.borrow();
@@ -30,6 +42,7 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                 // --- splits slides (like presenterm's end_slide_shorthand)
                 slides.push(current_slide);
                 current_slide = SlideContent::new();
+                pending_anim = None;
             }
             NodeValue::HtmlBlock(block) => {
                 // Check if it's a comment command
@@ -38,6 +51,7 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                         CommentCommand::EndSlide => {
                             slides.push(current_slide);
                             current_slide = SlideContent::new();
+                            pending_anim = None;
                         }
                         CommentCommand::Pause => {
                             current_slide.elements.push(SlideElement::Pause);
@@ -55,6 +69,9 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                         }
                         CommentCommand::ResetLayout => {
                             current_slide.elements.push(SlideElement::ResetLayout);
+                        }
+                        CommentCommand::Anim(name) => {
+                            pending_anim = parse_animation_type(&name);
                         }
                     }
                 }
@@ -74,9 +91,16 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                 } else {
                     let text = collect_text(node);
                     if !text.is_empty() {
-                        current_slide
-                            .elements
-                            .push(SlideElement::Paragraph { text });
+                        if let Some(anim) = pending_anim.take() {
+                            current_slide.elements.push(SlideElement::AnimatedText {
+                                text,
+                                animation: anim,
+                            });
+                        } else {
+                            current_slide
+                                .elements
+                                .push(SlideElement::Paragraph { text });
+                        }
                     }
                 }
             }
@@ -159,6 +183,8 @@ enum CommentCommand {
     ColumnLayout(Vec<u32>),
     Column(usize),
     ResetLayout,
+    /// Text animation: spotlight, wave, fadein, typewriter
+    Anim(String),
 }
 
 /// Recursively collect all text content from a node and its children.

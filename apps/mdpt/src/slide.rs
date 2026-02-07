@@ -118,6 +118,21 @@ pub enum SlideElement {
 
     /// Vertically center subsequent content
     JumpToMiddle,
+
+    /// Animated text (rendered as Label widget with animation)
+    AnimatedText {
+        text: String,
+        animation: AnimationType,
+    },
+}
+
+/// Supported text animation types
+#[derive(Debug, Clone)]
+pub enum AnimationType {
+    Spotlight,
+    Wave,
+    FadeIn,
+    Typewriter,
 }
 
 /// A list item with depth for nested lists (flat representation like presenterm)

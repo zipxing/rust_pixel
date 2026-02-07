@@ -13,6 +13,8 @@ A Markdown Presentation Tool built with RustPixel
 
 Press Space or Right arrow to advance
 
+不依赖终端软件，窗口里直接跑 😀😃🍀
+
 ---
 
 ## Features
@@ -106,6 +108,22 @@ or side-by-side content.
   * Markdown parsing
   * Code highlighting
   * Slide transitions
+
+---
+
+## Text Animations
+
+<!-- anim: spotlight -->
+Spotlight: sequential per-char scale pulse
+
+<!-- anim: wave -->
+Wave: sinusoidal scale wave across characters
+
+<!-- anim: fadein -->
+FadeIn: characters reveal left-to-right with scale-up
+
+<!-- anim: typewriter -->
+Typewriter: characters appear one by one with cursor
 
 ---
 

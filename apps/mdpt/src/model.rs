@@ -15,7 +15,7 @@ use rust_pixel::{
 use std::collections::HashMap;
 
 pub const MDPTW: u16 = 80;
-pub const MDPTH: u16 = 30;
+pub const MDPTH: u16 = 25;
 
 /// Transition state for slide navigation effects
 pub struct TransitionState {
@@ -34,7 +34,7 @@ impl TransitionState {
             from_slide: 0,
             to_slide: 0,
             progress: 0.0,
-            duration: 0.35,
+            duration: 0.5,
             transition: TransitionType::WipeLeft.create(),
         }
     }
@@ -104,12 +104,11 @@ impl MdptModel {
             output_buffer: Buffer::empty(Rect::new(0, 0, MDPTW, MDPTH)),
             last_rendered: (usize::MAX, usize::MAX),
             transition_types: vec![
-                TransitionType::WipeLeft,
                 TransitionType::SlideLeft,
+                TransitionType::WipeLeft,
                 TransitionType::Dissolve(42),
-                TransitionType::BlindsVertical(6),
-                TransitionType::Checkerboard(4),
-                TransitionType::Typewriter,
+                TransitionType::SlideUp,
+                TransitionType::WipeDown,
             ],
             transition_idx: 0,
         }
@@ -220,7 +219,9 @@ impl MdptModel {
                 // Reverse direction for going back
                 match self.next_transition_type() {
                     TransitionType::WipeLeft => TransitionType::WipeRight,
+                    TransitionType::WipeDown => TransitionType::WipeUp,
                     TransitionType::SlideLeft => TransitionType::SlideRight,
+                    TransitionType::SlideUp => TransitionType::SlideDown,
                     other => other,
                 }
             };

@@ -1,10 +1,15 @@
 use crate::highlight::HighlightedLine;
-use crate::slide::{ColumnAlignment, FrontMatter, ListItem, SlideContent, SlideElement};
+use crate::slide::{AnimationType, ColumnAlignment, FrontMatter, ListItem, SlideContent, SlideElement};
 use rust_pixel::render::style::{Color, Modifier, Style};
 use rust_pixel::render::Buffer;
 use rust_pixel::ui::*;
 use rust_pixel::util::Rect;
 use std::collections::HashMap;
+
+/// Deferred Label widget to be added as Panel child after canvas rendering.
+struct DeferredLabel {
+    label: Label,
+}
 
 /// Build a UIPage for a given slide at a given step.
 ///
@@ -26,12 +31,17 @@ pub fn build_slide_page(
     let boundary = slide.step_boundary(step);
 
     // Build the panel with canvas for direct rendering
+    // FreeLayout ensures child Labels keep their manually set bounds
     let mut panel = Panel::new()
         .with_bounds(Rect::new(0, 0, width, height))
-        .with_border(BorderStyle::None);
+        .with_border(BorderStyle::None)
+        .with_layout(Box::new(FreeLayout));
     panel.enable_canvas(width, height);
 
     let buf = panel.canvas_mut();
+
+    // Collect deferred Label widgets for animated text
+    let mut deferred_labels: Vec<DeferredLabel> = Vec::new();
 
     // Render visible elements
     let mut y: u16 = 1; // Start after top margin
@@ -265,6 +275,51 @@ pub fn build_slide_page(
                 buf.set_string(x_start, y, &divider, style);
                 y += 1;
             }
+            SlideElement::AnimatedText { text, animation } => {
+                let (x_start, w) = if in_column_layout {
+                    (col_x, col_width(&column_widths, current_col, content_width))
+                } else {
+                    (margin, content_width)
+                };
+
+                // Draw emoji bullet on canvas (same as list items)
+                let marker_style = Style::default().fg(Color::Cyan).scale(0.5, 0.5);
+                buf.set_string(x_start, y, "🟢", marker_style);
+                // Label starts after emoji(2) + space(1) = 3 cells
+                let label_x = x_start + 3;
+                let label_w = w.saturating_sub(3);
+                let bounds = Rect::new(label_x, y, label_w, 1);
+                let mut label = match animation {
+                    AnimationType::Spotlight => {
+                        let s = Style::default().fg(Color::Rgba(200, 200, 200, 255)).bg(Color::Reset);
+                        let hl = Style::default().fg(Color::Rgba(80, 200, 255, 255)).bg(Color::Reset);
+                        Label::new(text)
+                            .with_style(s)
+                            .with_spotlight(hl, 12, 0.55)
+                    }
+                    AnimationType::Wave => {
+                        let s = Style::default().fg(Color::Rgba(255, 200, 80, 255)).bg(Color::Reset);
+                        Label::new(text)
+                            .with_style(s)
+                            .with_wave(0.4, 6.0, 0.15)
+                    }
+                    AnimationType::FadeIn => {
+                        let s = Style::default().fg(Color::Rgba(100, 255, 150, 255)).bg(Color::Reset);
+                        Label::new(text)
+                            .with_style(s)
+                            .with_fade_in(8, true)
+                    }
+                    AnimationType::Typewriter => {
+                        let s = Style::default().fg(Color::Rgba(255, 150, 200, 255)).bg(Color::Reset);
+                        Label::new(text)
+                            .with_style(s)
+                            .with_typewriter(6, true, true)
+                    }
+                };
+                label.set_bounds(bounds);
+                deferred_labels.push(DeferredLabel { label });
+                y += 1;
+            }
             SlideElement::Image { path, alt } => {
                 let (x_start, _w) = if in_column_layout {
                     (col_x, col_width(&column_widths, current_col, content_width))
@@ -280,6 +335,11 @@ pub fn build_slide_page(
                 y += 1;
             }
         }
+    }
+
+    // Add deferred Label widgets as Panel children (rendered on top of canvas)
+    for dl in deferred_labels {
+        panel.add_child(Box::new(dl.label));
     }
 
     let mut page = UIPage::new(width, height);
@@ -323,6 +383,7 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
             }
             SlideElement::Divider => h += 1,
             SlideElement::Image { .. } => h += 1,
+            SlideElement::AnimatedText { .. } => h += 1,
             SlideElement::Pause | SlideElement::JumpToMiddle => {}
             SlideElement::ColumnLayout { .. } | SlideElement::Column(_) | SlideElement::ResetLayout => {}
         }
