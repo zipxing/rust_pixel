@@ -1364,8 +1364,13 @@ pub fn render_helper_with_scale(
         // Width: use rounded value here; caller (render_buffer_to_cells) will
         // correct it with grid_advance info for perfect X-direction tiling.
         let w_val = (w as f32 / r.x * scale_x).round() as u32;
-        // Height: tiling-corrected to prevent Y-direction gaps
-        let h_val = (next_y_f.round() - this_y_f.round()) as u32;
+        // Height: tiling-corrected only when cell fills its row (no per-cell Y scaling).
+        // When y_offset != 0, cell is intentionally smaller and centered in row.
+        let h_val = if y_offset.abs() < 0.01 {
+            (next_y_f.round() - this_y_f.round()) as u32
+        } else {
+            (h as f32 / r.y * scale_y).round() as u32
+        };
         (cum_x.round(), this_y_f.round(), w_val, h_val)
     } else {
         // Grid-based layout with tiling fix
@@ -1512,7 +1517,9 @@ pub fn render_buffer_to_cells<F>(
         // each cell's position and using a fixed rounded width creates 1-pixel gaps every
         // few cells. Fix by computing width as: round(next_position) - round(this_position),
         // so adjacent cells tile without gaps (widths alternate e.g. 13,14,13,13,14,...).
-        {
+        // Only apply when cell fills its slot (no per-cell scaling); cells with per-cell
+        // scaling (e.g., 0.5x emoji bullets) are intentionally smaller and don't need tiling.
+        if x_center_offset.abs() < 0.01 {
             let this_x_f = cumulative_x + x_center_offset;
             let next_x_f = this_x_f + grid_advance;
             let corrected_w = next_x_f.round() as i32 - this_x_f.round() as i32;
