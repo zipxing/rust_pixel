@@ -1480,9 +1480,12 @@ pub fn render_buffer_to_cells<F>(
             }
         }
 
-        // Fixed grid slot width (sprite-level scale only; per-cell scale doesn't affect spacing)
-        let slot_w = base_cell_w * scale_x;
-        // Center the scaled cell within its fixed grid slot
+        // Grid slot width: when scaling UP (>= 1.0), both character size and spacing
+        // scale uniformly (e.g., title text at 1.2x). When scaling DOWN (< 1.0),
+        // character shrinks but spacing stays fixed, centering the small character
+        // in its normal-sized slot (e.g., emoji bullets at 0.5x).
+        let effective_slot_scale = if cell.scale_x >= 1.0 { cell_sx } else { scale_x };
+        let slot_w = base_cell_w * effective_slot_scale;
         let rendered_w = base_cell_w * cell_sx;
         let x_center_offset = (slot_w - rendered_w) / 2.0;
 

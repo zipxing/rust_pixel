@@ -114,9 +114,10 @@ pub fn build_slide_page(
 
                 let style = title_style(*level);
                 if *level == 1 && !jump_to_middle {
-                    // Center h1 titles
-                    let text_len = text.len() as u16;
-                    let centered_x = x_start + w.saturating_sub(text_len) / 2;
+                    // Center h1 titles (account for per-cell scale affecting spacing)
+                    let text_len = text.chars().count() as f32;
+                    let visual_width = (text_len * style.scale_x.unwrap_or(1.0)).ceil() as u16;
+                    let centered_x = x_start + w.saturating_sub(visual_width) / 2;
                     buf.set_string(centered_x, y, text, style);
                 } else {
                     buf.set_string(x_start, y, text, style);
@@ -397,19 +398,19 @@ fn title_style(level: u8) -> Style {
         1 => Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD)
-            .scale(1.0, 1.0),
+            .scale(1.2, 1.2),
         2 => Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD)
-            .scale(1.0, 1.0),
+            .scale(1.2, 1.2),
         3 => Style::default()
             .fg(Color::Green)
             .add_modifier(Modifier::BOLD)
-            .scale(1.0, 1.0),
+            .scale(1.2, 1.2),
         _ => Style::default()
             .fg(Color::White)
             .add_modifier(Modifier::BOLD)
-            .scale(1.0, 1.0),
+            .scale(1.2, 1.2),
     }
 }
 
