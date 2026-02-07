@@ -554,6 +554,20 @@ impl RtComposite {
 /// - CJK: Grid-based (128×32 chars, 32×32px each)
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
+/// Path to the CJK texture file for Texture Array Layer 1
+///
+/// Multi-size CJK texture containing 5935 characters at 3 sizes:
+/// - 16px zone: y=0-383   (24 rows × 256 cols)
+/// - 32px zone: y=384-1887 (47 rows × 128 cols)
+/// - 64px zone: y=1888-4063 (34 rows × 64 cols, first 2176 chars)
+pub const PIXEL_CJK_TEXTURE_FILE: &str = "assets/pix/cjk.png";
+
+/// Path to the CJK 64px overflow texture file for Texture Array Layer 2
+///
+/// Contains the remaining 64px CJK characters that don't fit in cjk.png:
+/// - 64px zone: y=0-3775 (59 rows × 64 cols, remaining 3759 chars)
+pub const PIXEL_CJK64_TEXTURE_FILE: &str = "assets/pix/cjk64.png";
+
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
 ///
 /// Initialized exactly once during adapter initialization. Accessing this

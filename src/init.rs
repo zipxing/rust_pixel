@@ -89,6 +89,14 @@ pub struct PixelTextureData {
 /// Global cached texture data - loaded once during init_pixel_assets()
 pub static PIXEL_TEXTURE_DATA: OnceLock<PixelTextureData> = OnceLock::new();
 
+/// Global cached CJK texture data - loaded once during init_pixel_assets()
+/// This is used for Texture Array Layer 1 (CJK multi-size: 16px + 32px + 64px front)
+pub static PIXEL_CJK_TEXTURE_DATA: OnceLock<PixelTextureData> = OnceLock::new();
+
+/// Global cached CJK 64px overflow texture data - loaded once during init_pixel_assets()
+/// This is used for Texture Array Layer 2 (CJK 64px back portion)
+pub static PIXEL_CJK64_TEXTURE_DATA: OnceLock<PixelTextureData> = OnceLock::new();
+
 /// Get the cached texture data
 ///
 /// # Panics
@@ -97,6 +105,26 @@ pub fn get_pixel_texture_data() -> &'static PixelTextureData {
     PIXEL_TEXTURE_DATA
         .get()
         .expect("Texture data not loaded - call init_pixel_assets() first")
+}
+
+/// Get the cached CJK texture data (Layer 1)
+///
+/// # Panics
+/// Panics if init_pixel_assets() was not called before this function.
+pub fn get_pixel_cjk_texture_data() -> &'static PixelTextureData {
+    PIXEL_CJK_TEXTURE_DATA
+        .get()
+        .expect("CJK texture data not loaded - call init_pixel_assets() first")
+}
+
+/// Get the cached CJK 64px overflow texture data (Layer 2)
+///
+/// # Panics
+/// Panics if init_pixel_assets() was not called before this function.
+pub fn get_pixel_cjk64_texture_data() -> &'static PixelTextureData {
+    PIXEL_CJK64_TEXTURE_DATA
+        .get()
+        .expect("CJK64 texture data not loaded - call init_pixel_assets() first")
 }
 
 // ============================================================================
@@ -135,6 +163,7 @@ pub fn get_pixel_texture_data() -> &'static PixelTextureData {
 pub fn init_pixel_assets(game_name: &str, project_path: &str) -> Result<(), String> {
     use crate::render::adapter::{
         init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+        PIXEL_CJK_TEXTURE_FILE, PIXEL_CJK64_TEXTURE_FILE,
     };
 
     // 1. Set global game configuration
@@ -172,12 +201,60 @@ pub fn init_pixel_assets(game_name: &str, project_path: &str) -> Result<(), Stri
         })
         .map_err(|_| "PIXEL_TEXTURE_DATA already initialized".to_string())?;
 
-    // 5. Load symbol_map.json
+    // 5. Load CJK texture file into memory (for Texture Array Layer 1)
+    let cjk_texture_path = format!(
+        "{}{}{}",
+        project_path,
+        std::path::MAIN_SEPARATOR,
+        PIXEL_CJK_TEXTURE_FILE
+    );
+
+    let cjk_img = image::open(&cjk_texture_path)
+        .map_err(|e| format!("Failed to load CJK texture '{}': {}", cjk_texture_path, e))?
+        .to_rgba8();
+
+    let cjk_width = cjk_img.width();
+    let cjk_height = cjk_img.height();
+
+    // 6. Cache CJK texture data for later GPU upload
+    PIXEL_CJK_TEXTURE_DATA
+        .set(PixelTextureData {
+            width: cjk_width,
+            height: cjk_height,
+            data: cjk_img.into_raw(),
+        })
+        .map_err(|_| "PIXEL_CJK_TEXTURE_DATA already initialized".to_string())?;
+
+    // 7. Load CJK64 texture file into memory (for Texture Array Layer 2)
+    let cjk64_texture_path = format!(
+        "{}{}{}",
+        project_path,
+        std::path::MAIN_SEPARATOR,
+        PIXEL_CJK64_TEXTURE_FILE
+    );
+
+    let cjk64_img = image::open(&cjk64_texture_path)
+        .map_err(|e| format!("Failed to load CJK64 texture '{}': {}", cjk64_texture_path, e))?
+        .to_rgba8();
+
+    let cjk64_width = cjk64_img.width();
+    let cjk64_height = cjk64_img.height();
+
+    // 8. Cache CJK64 texture data for later GPU upload
+    PIXEL_CJK64_TEXTURE_DATA
+        .set(PixelTextureData {
+            width: cjk64_width,
+            height: cjk64_height,
+            data: cjk64_img.into_raw(),
+        })
+        .map_err(|_| "PIXEL_CJK64_TEXTURE_DATA already initialized".to_string())?;
+
+    // 9. Load symbol_map.json
     crate::render::symbol_map::init_symbol_map_from_file()?;
 
     println!(
-        "Pixel assets initialized: {}x{} texture, symbol_map loaded from {}",
-        width, height, project_path
+        "Pixel assets initialized: {}x{} texture, {}x{} CJK texture, {}x{} CJK64 texture, symbol_map loaded from {}",
+        width, height, cjk_width, cjk_height, cjk64_width, cjk64_height, project_path
     );
 
     Ok(())
@@ -189,7 +266,7 @@ pub fn init_pixel_assets(game_name: &str, project_path: &str) -> Result<(), Stri
 
 /// Initialize pixel assets for Web/WASM mode
 ///
-/// This function is called from JavaScript after loading the texture image
+/// This function is called from JavaScript after loading the texture images
 /// and symbol_map.json. It performs the same initialization as `init_pixel_assets`
 /// but receives data directly from JavaScript instead of loading from files.
 ///
@@ -197,39 +274,30 @@ pub fn init_pixel_assets(game_name: &str, project_path: &str) -> Result<(), Stri
 /// * `game_name` - Game identifier
 /// * `tex_w` - Texture width in pixels
 /// * `tex_h` - Texture height in pixels
-/// * `tex_data` - Raw RGBA pixel data from JavaScript
+/// * `tex_data` - Raw RGBA pixel data from JavaScript (symbols.png)
+/// * `cjk_tex_w` - CJK texture width in pixels
+/// * `cjk_tex_h` - CJK texture height in pixels
+/// * `cjk_tex_data` - Raw RGBA pixel data for CJK texture (cjk.png)
+/// * `cjk64_tex_w` - CJK64 texture width in pixels
+/// * `cjk64_tex_h` - CJK64 texture height in pixels
+/// * `cjk64_tex_data` - Raw RGBA pixel data for CJK64 texture (cjk64.png)
 /// * `symbol_map_json` - Content of symbol_map.json
 ///
 /// # Returns
 /// * `true` on success
 /// * `false` on failure (error logged to console)
-///
-/// # JavaScript Example
-/// ```js
-/// import init, {PixelGame, wasm_init_pixel_assets} from "./pkg/pixel.js";
-/// await init();
-///
-/// // Load texture
-/// const timg = new Image();
-/// timg.src = "assets/pix/symbols.png";
-/// await timg.decode();
-/// const imgdata = ctx.getImageData(0, 0, timg.width, timg.height).data;
-///
-/// // Load symbol map
-/// const symbolMapJson = await fetch("assets/pix/symbol_map.json").then(r => r.text());
-///
-/// // Initialize all assets at once
-/// wasm_init_pixel_assets("my_game", timg.width, timg.height, imgdata, symbolMapJson);
-///
-/// // Now create the game
-/// const sg = PixelGame.new();
-/// ```
 #[cfg(target_arch = "wasm32")]
 pub fn wasm_init_pixel_assets(
     game_name: &str,
     tex_w: u32,
     tex_h: u32,
     tex_data: &[u8],
+    cjk_tex_w: u32,
+    cjk_tex_h: u32,
+    cjk_tex_data: &[u8],
+    cjk64_tex_w: u32,
+    cjk64_tex_h: u32,
+    cjk64_tex_data: &[u8],
     symbol_map_json: &str,
 ) -> bool {
     use crate::render::adapter::{init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
@@ -245,7 +313,7 @@ pub fn wasm_init_pixel_assets(
         web_sys::console::warn_1(&"PIXEL_SYM_HEIGHT already initialized".into());
     }
 
-    // 3. Cache texture data
+    // 3. Cache texture data (Layer 0: Sprite/TUI/Emoji)
     if PIXEL_TEXTURE_DATA
         .set(PixelTextureData {
             width: tex_w,
@@ -257,13 +325,37 @@ pub fn wasm_init_pixel_assets(
         web_sys::console::warn_1(&"PIXEL_TEXTURE_DATA already initialized".into());
     }
 
-    // 4. Initialize symbol map
+    // 4. Cache CJK texture data (Layer 1: CJK multi-size)
+    if PIXEL_CJK_TEXTURE_DATA
+        .set(PixelTextureData {
+            width: cjk_tex_w,
+            height: cjk_tex_h,
+            data: cjk_tex_data.to_vec(),
+        })
+        .is_err()
+    {
+        web_sys::console::warn_1(&"PIXEL_CJK_TEXTURE_DATA already initialized".into());
+    }
+
+    // 5. Cache CJK64 texture data (Layer 2: CJK 64px overflow)
+    if PIXEL_CJK64_TEXTURE_DATA
+        .set(PixelTextureData {
+            width: cjk64_tex_w,
+            height: cjk64_tex_h,
+            data: cjk64_tex_data.to_vec(),
+        })
+        .is_err()
+    {
+        web_sys::console::warn_1(&"PIXEL_CJK64_TEXTURE_DATA already initialized".into());
+    }
+
+    // 6. Initialize symbol map
     match crate::render::symbol_map::init_symbol_map_from_json(symbol_map_json) {
         Ok(()) => {
             web_sys::console::log_1(
                 &format!(
-                    "RUST: Pixel assets initialized: {}x{} texture, symbol_map loaded",
-                    tex_w, tex_h
+                    "RUST: Pixel assets initialized: {}x{} texture, {}x{} CJK texture, {}x{} CJK64 texture, symbol_map loaded",
+                    tex_w, tex_h, cjk_tex_w, cjk_tex_h, cjk64_tex_w, cjk64_tex_h
                 )
                 .into(),
             );

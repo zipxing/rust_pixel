@@ -1,3 +1,5 @@
+// Vertex shader for symbol rendering with instanced drawing
+// Supports texture2DArray for multi-layer texture atlas (Layer 0: Sprite/TUI/Emoji, Layer 1: CJK)
 pub const VERTEX_SRC_SYMBOLS: &str = r#"
             precision mediump float;
             layout(location=0) in vec2 vertex;
@@ -5,6 +7,7 @@ pub const VERTEX_SRC_SYMBOLS: &str = r#"
             layout(location=2) in vec4 a2;
             layout(location=3) in vec4 a3;
             layout(location=4) in vec4 color;
+            layout(location=5) in vec4 a5;  // tex_layer in a5.x, padding in a5.yzw
             layout(std140) uniform transform {
                 vec4 tw;
                 vec4 th;
@@ -12,17 +15,21 @@ pub const VERTEX_SRC_SYMBOLS: &str = r#"
             };
             out vec2 uv;
             out vec4 colorj;
+            out float tex_layer;  // Pass texture layer to fragment shader
             void main() {
                 uv = a1.zw + vertex * a2.xy;
+                tex_layer = a5.x;  // Extract layer index from a5
                 vec2 transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0;
                 gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
                 colorj = color * colorFilter;
             }
         "#;
 
+// Fragment shader for symbol rendering
+// Uses sampler2DArray for multi-layer texture atlas
 pub const FRAGMENT_SRC_SYMBOLS: &str = r#"
             precision mediump float;
-            uniform sampler2D source;
+            uniform sampler2DArray source;
             layout(std140) uniform transform {
                 vec4 tw;
                 vec4 th;
@@ -30,9 +37,11 @@ pub const FRAGMENT_SRC_SYMBOLS: &str = r#"
             };
             in vec2 uv;
             in vec4 colorj;
+            in float tex_layer;  // Texture layer index from vertex shader
             layout(location=0) out vec4 color;
             void main() {
-                color = texture(source, uv) * colorj;
+                // Sample from texture array using layer index
+                color = texture(source, vec3(uv, tex_layer)) * colorj;
             }
         "#;
 

@@ -104,6 +104,8 @@ pub struct GlTexture {
     framebuffer: glow::Framebuffer,
 }
 
+/// Symbol cell data for OpenGL rendering
+/// Includes tex_layer for texture_2d_array support
 #[derive(Clone)]
 pub struct GlCell {
     pub texture: glow::Texture,
@@ -115,6 +117,107 @@ pub struct GlCell {
     pub uv_top: f32,
     pub uv_width: f32,
     pub uv_height: f32,
+    /// Texture layer: 0 for Sprite/TUI/Emoji (Layer 0), 1 for CJK (Layer 1)
+    pub tex_layer: f32,
+}
+
+/// 2D Array Texture for OpenGL
+/// Used for multi-layer symbol rendering (Layer 0: Sprite/TUI/Emoji, Layer 1: CJK)
+pub struct GlTextureArray {
+    pub texture: glow::Texture,
+    pub width: u32,
+    pub height: u32,
+    pub layers: u32,
+}
+
+impl GlTextureArray {
+    /// Create a new 2D array texture with the specified number of layers
+    /// All layers have the same dimensions
+    pub fn new(gl: &glow::Context, width: i32, height: i32, layers: i32) -> Result<Self, String> {
+        let texture = unsafe { gl.create_texture().map_err(|e| e.to_string())? };
+
+        unsafe {
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(texture));
+
+            // Allocate storage for the texture array
+            gl.tex_image_3d(
+                glow::TEXTURE_2D_ARRAY,
+                0,
+                glow::RGBA as i32,
+                width,
+                height,
+                layers,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(None),
+            );
+
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D_ARRAY,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D_ARRAY,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D_ARRAY,
+                glow::TEXTURE_WRAP_S,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D_ARRAY,
+                glow::TEXTURE_WRAP_T,
+                glow::CLAMP_TO_EDGE as i32,
+            );
+        }
+
+        Ok(Self {
+            texture,
+            width: width as u32,
+            height: height as u32,
+            layers: layers as u32,
+        })
+    }
+
+    /// Upload data to a specific layer of the texture array
+    pub fn upload_layer(&self, gl: &glow::Context, layer: i32, data: &[u8]) {
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.texture));
+            gl.tex_sub_image_3d(
+                glow::TEXTURE_2D_ARRAY,
+                0,
+                0, 0, layer,
+                self.width as i32,
+                self.height as i32,
+                1,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(Some(data)),
+            );
+        }
+    }
+
+    pub fn bind(&self, gl: &glow::Context) {
+        unsafe {
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.texture));
+        }
+    }
+
+    pub fn free(&self, gl: &glow::Context) {
+        unsafe {
+            gl.delete_texture(self.texture);
+        }
+    }
+
+    pub fn get_texture(&self) -> glow::Texture {
+        self.texture
+    }
 }
 
 impl GlTexture {

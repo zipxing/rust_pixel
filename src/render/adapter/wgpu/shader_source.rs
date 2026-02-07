@@ -198,6 +198,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 "#;
 
 /// Instanced vertex shader for symbols (matches OpenGL behavior exactly)
+/// Supports texture_2d_array for multi-layer texture atlas (Layer 0: Sprite/TUI/Emoji, Layer 1: CJK)
 pub const SYMBOLS_INSTANCED_VERTEX_SHADER: &str = r#"
 // Vertex input (base quad geometry)
 struct VertexInput {
@@ -205,17 +206,20 @@ struct VertexInput {
 }
 
 // Instance input (per-symbol data, matches OpenGL layout)
+// tex_layer is packed into a5.x (layer index: 0 for Sprite/TUI/Emoji, 1 for CJK)
 struct InstanceInput {
     @location(1) a1: vec4<f32>,  // origin_x, origin_y, uv_left, uv_top
     @location(2) a2: vec4<f32>,  // uv_width, uv_height, m00*width, m10*width
     @location(3) a3: vec4<f32>,  // m01*height, m11*height, m20, m21
     @location(4) color: vec4<f32>, // r, g, b, a
+    @location(5) a5: vec4<f32>,  // tex_layer, padding, padding, padding
 }
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
+    @location(2) tex_layer: f32,  // Pass texture layer to fragment shader
 }
 
 // Transform uniform (matches OpenGL layout)
@@ -231,45 +235,49 @@ var<uniform> transform: Transform;
 @vertex
 fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
     var output: VertexOutput;
-    
+
     // Calculate UV coordinates: uv = a1.zw + position * a2.xy
     output.uv = instance.a1.zw + vertex_input.position * instance.a2.xy;
-    
+
+    // Pass texture layer to fragment shader
+    output.tex_layer = instance.a5.x;
+
     // Apply the same transformation chain as OpenGL:
     // transformed = (((vertex - a1.xy) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0
     // gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
-    
+
     // Step 1: vertex - a1.xy
     let vertex_centered = vertex_input.position - instance.a1.xy;
-    
+
     // Step 2: * mat2(a2.zw, a3.xy) + a3.zw
     let transform_matrix = mat2x2<f32>(instance.a2.zw, instance.a3.xy);
     let transformed_local = transform_matrix * vertex_centered + instance.a3.zw;
-    
+
     // Step 3: * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)
     let global_matrix = mat2x2<f32>(transform.tw.xy, transform.th.xy);
     let transformed_global = global_matrix * transformed_local + vec2<f32>(transform.tw.z, transform.th.z);
-    
+
     // Step 4: / vec2(tw.w, th.w) * 2.0
     let normalized = (transformed_global / vec2<f32>(transform.tw.w, transform.th.w)) * 2.0;
-    
+
     // Step 5: - vec2(1.0, 1.0) to convert to NDC coordinates
     let ndc_pos = normalized - vec2<f32>(1.0, 1.0);
-    
+
     // Step 6: Flip Y coordinate to match WGPU coordinate system (Y-axis up in OpenGL, Y-axis down in WGPU)
     output.clip_position = vec4<f32>(ndc_pos.x, -ndc_pos.y, 0.0, 1.0);
-    
+
     // Color modulation: colorj = color * colorFilter
     output.colorj = instance.color * transform.colorFilter;
-    
+
     return output;
 }
 "#;
 
 /// Instanced fragment shader for symbols (matches OpenGL behavior)
+/// Uses texture_2d_array for multi-layer texture atlas (Layer 0: Sprite/TUI/Emoji, Layer 1: CJK)
 pub const SYMBOLS_INSTANCED_FRAGMENT_SHADER: &str = r#"
 @group(0) @binding(1)
-var source: texture_2d<f32>;
+var source: texture_2d_array<f32>;
 @group(0) @binding(2)
 var source_sampler: sampler;
 
@@ -277,11 +285,13 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
+    @location(2) tex_layer: f32,  // Texture layer index from vertex shader
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let tex_color = textureSample(source, source_sampler, input.uv);
+    // Sample from texture array using layer index
+    let tex_color = textureSample(source, source_sampler, input.uv, i32(input.tex_layer));
     return tex_color * input.colorj;
 }
 "#;

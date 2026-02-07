@@ -18,7 +18,7 @@
 use crate::render::adapter::gl::{
     shader::GlShader,
     shader_source::{FRAGMENT_SRC_SYMBOLS, VERTEX_SRC_SYMBOLS},
-    texture::{GlCell, GlTexture},
+    texture::{GlCell, GlTexture, GlTextureArray},
     GlRender, GlRenderBase,
 };
 use crate::render::graph::{UnifiedColor, UnifiedTransform};
@@ -132,20 +132,20 @@ impl GlRender for GlRenderSymbols {
 
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(instances_vbo));
 
-            // Per-instance attribute stride: 4 vec4 = 64 bytes
-            let stride = 64;
+            // Per-instance attribute stride: 5 vec4 = 80 bytes (added a5 for tex_layer)
+            let stride = 80;
 
-            // Attribute 1
+            // Attribute 1 (a1: origin, UV top-left)
             gl.enable_vertex_attrib_array(1);
             gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
             gl.vertex_attrib_divisor(1, 1);
 
-            // Attribute 2
+            // Attribute 2 (a2: UV size, transform column 1)
             gl.enable_vertex_attrib_array(2);
             gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
             gl.vertex_attrib_divisor(2, 1);
 
-            // Attribute 3
+            // Attribute 3 (a3: transform column 2, translation)
             gl.enable_vertex_attrib_array(3);
             gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
             gl.vertex_attrib_divisor(3, 1);
@@ -154,6 +154,11 @@ impl GlRender for GlRenderSymbols {
             gl.enable_vertex_attrib_array(4);
             gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
             gl.vertex_attrib_divisor(4, 1);
+
+            // Attribute 5 (a5: tex_layer, padding, padding, padding)
+            gl.enable_vertex_attrib_array(5);
+            gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, stride, 64);
+            gl.vertex_attrib_divisor(5, 1);
 
             gl.bind_vertex_array(None);
 
@@ -164,12 +169,13 @@ impl GlRender for GlRenderSymbols {
     }
 
     fn prepare_draw(&mut self, gl: &glow::Context) {
-        let size = 16u32;
+        // Instance size: 5 vec4 = 20 floats (a1, a2, a3, color, a5)
+        let size = 20u32;
 
         if !self.base.textures_binded {
             unsafe {
                 gl.active_texture(glow::TEXTURE0);
-                gl.bind_texture(glow::TEXTURE_2D, Some(self.base.textures[0]));
+                gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.base.textures[0]));
             }
             self.base.textures_binded = true;
         }
@@ -238,25 +244,51 @@ impl GlRender for GlRenderSymbols {
 impl GlRenderSymbols {
     /// Load symbol texture using centralized iterator from symbol_map
     ///
-    /// Uses iter_symbol_frames() which yields all symbols in linear order:
-    /// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
-    /// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
-    /// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
-    /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
+    /// Creates a 3-layer texture array:
+    /// - Layer 0: Sprite/TUI/Emoji (from symbols.png)
+    /// - Layer 1: CJK multi-size (from cjk.png: 16px + 32px + 64px front)
+    /// - Layer 2: CJK 64px overflow (from cjk64.png: 64px back)
+    ///
+    /// Symbol indices and tex_layer assignment:
+    /// - [0, 40959]: Sprite -> Layer 0
+    /// - [40960, 43519]: TUI -> Layer 0
+    /// - [43520, 44287]: Emoji -> Layer 0
+    /// - [44288+]: CJK -> Layer 1
     pub fn load_texture(&mut self, gl: &glow::Context, texw: i32, texh: i32, texdata: &[u8]) {
+        // Get CJK texture data for Layer 1 and Layer 2
+        let cjk_tex_data = crate::get_pixel_cjk_texture_data();
+        let cjk64_tex_data = crate::get_pixel_cjk64_texture_data();
+
+        // Create a 3-layer texture array
+        let texture_array = GlTextureArray::new(gl, texw, texh, 3).unwrap();
+
+        // Upload symbols.png to Layer 0 (Sprite/TUI/Emoji)
+        texture_array.upload_layer(gl, 0, texdata);
+        // Upload cjk.png to Layer 1 (CJK multi-size: 16px + 32px + 64px front)
+        texture_array.upload_layer(gl, 1, &cjk_tex_data.data);
+        // Upload cjk64.png to Layer 2 (CJK 64px overflow)
+        texture_array.upload_layer(gl, 2, &cjk64_tex_data.data);
+
+        // Also create a regular GlTexture for UV calculations (same dimensions)
         let mut sprite_sheet = GlTexture::new(gl, texw, texh, texdata).unwrap();
         sprite_sheet.bind(gl);
 
         // Use centralized iterator from symbol_map
+        let mut index = 0usize;
         for frame in iter_symbol_frames() {
+            // Determine texture layer: Layer 0 for Sprite/TUI/Emoji, Layer 1 for CJK
+            let tex_layer = if index >= layout::CJK_BASE { 1.0 } else { 0.0 };
+
             let symbol = self.make_symbols_frame_custom(
                 &mut sprite_sheet,
                 frame.pixel_x as f32,
                 frame.pixel_y as f32,
                 frame.width as f32,
                 frame.height as f32,
+                tex_layer,
             );
             self.symbols.push(symbol);
+            index += 1;
         }
 
         info!(
@@ -268,8 +300,10 @@ impl GlRenderSymbols {
             layout::CJK_TOTAL,
             layout::SPRITE_TOTAL + layout::TUI_TOTAL + layout::EMOJI_TOTAL + layout::CJK_TOTAL
         );
+
+        // Use the texture array instead of the regular 2D texture
         self.base.textures.clear();
-        self.base.textures.push(self.symbols[0].texture);
+        self.base.textures.push(texture_array.get_texture());
         self.base.textures_binded = false;
     }
 
@@ -299,6 +333,7 @@ impl GlRenderSymbols {
     }
 
     // Fill the instance buffer with one symbol's attributes
+    // Layout: a1 (4), a2 (4), a3 (4), color (4), a5 (4) = 20 floats per instance
     fn draw_symbol(
         &mut self,
         gl: &glow::Context,
@@ -310,28 +345,29 @@ impl GlRenderSymbols {
         let frame = &self.symbols[sym];
         let instance_buffer = &mut self.instance_buffer;
 
+        // a1: [origin_x, origin_y, uv_left, uv_top]
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.origin_x;
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.origin_y;
-
-        // UV attributes
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.uv_left;
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.uv_top;
+
+        // a2: [uv_width, uv_height, m00*width, m10*width]
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.uv_width;
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = frame.uv_height;
-
-        // Transform attributes (matrix columns multiplied by frame size, then translation)
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = transform.m00 * frame.width;
         self.instance_buffer_at += 1;
-        instance_buffer[self.instance_buffer_at as usize] = transform.m10 * frame.width;  // Fixed: was * frame.height
+        instance_buffer[self.instance_buffer_at as usize] = transform.m10 * frame.width;
+
+        // a3: [m01*height, m11*height, m20, m21]
         self.instance_buffer_at += 1;
-        instance_buffer[self.instance_buffer_at as usize] = transform.m01 * frame.height;  // Fixed: was * frame.width
+        instance_buffer[self.instance_buffer_at as usize] = transform.m01 * frame.height;
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = transform.m11 * frame.height;
         self.instance_buffer_at += 1;
@@ -339,7 +375,7 @@ impl GlRenderSymbols {
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = transform.m21;
 
-        // Color
+        // color: [r, g, b, a]
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = color.r;
         self.instance_buffer_at += 1;
@@ -348,6 +384,16 @@ impl GlRenderSymbols {
         instance_buffer[self.instance_buffer_at as usize] = color.b;
         self.instance_buffer_at += 1;
         instance_buffer[self.instance_buffer_at as usize] = color.a;
+
+        // a5: [tex_layer, padding, padding, padding]
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = frame.tex_layer;
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = 0.0; // padding
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = 0.0; // padding
+        self.instance_buffer_at += 1;
+        instance_buffer[self.instance_buffer_at as usize] = 0.0; // padding
     }
 
     /// Render all `RenderCell` instances by converting them into per-instance
@@ -532,13 +578,14 @@ impl GlRenderSymbols {
     // fn make_symbols_frame(&mut self, sheet: &mut GlTexture, x: f32, y: f32) -> GlCell {
     //     let width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
     //     let height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-    //     self.make_symbols_frame_custom(sheet, x, y, width, height)
+    //     self.make_symbols_frame_custom(sheet, x, y, width, height, 0.0)
     // }
-    
+
     /// Create a symbol frame with custom dimensions
     ///
     /// Used for TUI (16x32), Emoji (32x32), and Sprite (16x16) regions.
-    fn make_symbols_frame_custom(&mut self, sheet: &mut GlTexture, x: f32, y: f32, width: f32, height: f32) -> GlCell {
+    /// tex_layer: 0 for Sprite/TUI/Emoji (Layer 0), 1 for CJK (Layer 1)
+    fn make_symbols_frame_custom(&mut self, sheet: &mut GlTexture, x: f32, y: f32, width: f32, height: f32, tex_layer: f32) -> GlCell {
         let origin_x = 1.0;
         let origin_y = 1.0;
         let tex_width = sheet.width as f32;
@@ -559,6 +606,7 @@ impl GlRenderSymbols {
             uv_top,
             uv_width,
             uv_height,
+            tex_layer,
         }
     }
 }

@@ -100,9 +100,21 @@ macro_rules! app {
                 tex_w: u32,
                 tex_h: u32,
                 tex_data: &[u8],
+                cjk_tex_w: u32,
+                cjk_tex_h: u32,
+                cjk_tex_data: &[u8],
+                cjk64_tex_w: u32,
+                cjk64_tex_h: u32,
+                cjk64_tex_data: &[u8],
                 symbol_map_json: &str,
             ) -> bool {
-                rust_pixel::wasm_init_pixel_assets(game_name, tex_w, tex_h, tex_data, symbol_map_json)
+                rust_pixel::wasm_init_pixel_assets(
+                    game_name,
+                    tex_w, tex_h, tex_data,
+                    cjk_tex_w, cjk_tex_h, cjk_tex_data,
+                    cjk64_tex_w, cjk64_tex_h, cjk64_tex_data,
+                    symbol_map_json,
+                )
             }
 
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]

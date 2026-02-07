@@ -23,8 +23,125 @@ pub struct WgpuTexture {
     pub height: u32,
 }
 
+/// WGPU 2D Array Texture wrapper
+///
+/// Used for multi-layer symbol rendering (Layer 0: Sprite/TUI/Emoji, Layer 1: CJK)
+/// This enables efficient switching between texture layers without rebinding.
+pub struct WgpuTextureArray {
+    /// WGPU texture object (2D array)
+    pub texture: wgpu::Texture,
+    /// Texture view for shader access (2D array view)
+    pub view: wgpu::TextureView,
+    /// Sampler for texture filtering
+    pub sampler: wgpu::Sampler,
+    /// Texture width in pixels
+    pub width: u32,
+    /// Texture height in pixels
+    pub height: u32,
+    /// Number of array layers
+    pub layers: u32,
+}
+
+impl WgpuTextureArray {
+    /// Create a new 2D array texture with the specified number of layers
+    ///
+    /// # Parameters
+    /// - `device`: WGPU device handle
+    /// - `width`: Texture width in pixels
+    /// - `height`: Texture height in pixels
+    /// - `layers`: Number of texture layers
+    ///
+    /// # Returns
+    /// New WgpuTextureArray instance
+    pub fn new(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        layers: u32,
+    ) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("RustPixel Texture Array"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: layers,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("RustPixel Texture Array View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("RustPixel Texture Array Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        Self {
+            texture,
+            view,
+            sampler,
+            width,
+            height,
+            layers,
+        }
+    }
+
+    /// Upload data to a specific layer of the texture array
+    ///
+    /// # Parameters
+    /// - `queue`: WGPU queue handle
+    /// - `layer`: Target layer index (0-based)
+    /// - `data`: Image data as RGBA bytes
+    pub fn upload_layer(&self, queue: &wgpu::Queue, layer: u32, data: &[u8]) {
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 0, z: layer },
+                aspect: wgpu::TextureAspect::All,
+            },
+            data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * self.width),
+                rows_per_image: Some(self.height),
+            },
+            wgpu::Extent3d {
+                width: self.width,
+                height: self.height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    /// Get the texture view for shader binding
+    pub fn get_view(&self) -> &wgpu::TextureView {
+        &self.view
+    }
+
+    /// Get the sampler for shader binding
+    pub fn get_sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
+    }
+}
+
 /// WGPU Render Texture wrapper with OpenGL-compatible interface
-/// 
+///
 /// This structure provides a render target texture similar to OpenGL's GlRenderTexture,
 /// including support for hidden/visible state management for transition effects.
 pub struct WgpuRenderTexture {

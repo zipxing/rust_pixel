@@ -606,6 +606,11 @@ impl WgpuPixelRender {
     }
 
     /// Internal method for loading symbol texture
+    ///
+    /// Creates a 3-layer texture array:
+    /// - Layer 0: Sprite/TUI/Emoji (from symbols.png)
+    /// - Layer 1: CJK multi-size (from cjk.png: 16px + 32px + 64px front)
+    /// - Layer 2: CJK 64px overflow (from cjk64.png: 64px back)
     fn load_symbol_texture_internal(
         &mut self,
         device: &wgpu::Device,
@@ -615,15 +620,17 @@ impl WgpuPixelRender {
         texture_data: &[u8],
     ) -> Result<(), String> {
 
-        // Symbol texture loaded successfully (debug output removed for performance)
+        // Get CJK texture data for Layer 1 and Layer 2
+        let cjk_tex_data = crate::get_pixel_cjk_texture_data();
+        let cjk64_tex_data = crate::get_pixel_cjk64_texture_data();
 
-        // Create WGPU texture (use linear format to exactly match GL mode)
+        // Create 3-layer WGPU texture array (use linear format to exactly match GL mode)
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Symbol Texture"),
+            label: Some("Symbol Texture Array"),
             size: wgpu::Extent3d {
                 width: texture_width,
                 height: texture_height,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: 3, // 3 layers: Layer 0 (Sprite/TUI/Emoji), Layer 1 (CJK), Layer 2 (CJK64)
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -633,9 +640,14 @@ impl WgpuPixelRender {
             view_formats: &[],
         });
 
-        // Write texture data
+        // Write texture data to Layer 0 (Sprite/TUI/Emoji from symbols.png)
         queue.write_texture(
-            texture.as_image_copy(),
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 0, z: 0 }, // Layer 0
+                aspect: wgpu::TextureAspect::All,
+            },
             texture_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
@@ -649,8 +661,54 @@ impl WgpuPixelRender {
             },
         );
 
-        // Create texture view
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // Write CJK texture data to Layer 1 (from cjk.png: multi-size)
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 0, z: 1 }, // Layer 1
+                aspect: wgpu::TextureAspect::All,
+            },
+            &cjk_tex_data.data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * cjk_tex_data.width),
+                rows_per_image: Some(cjk_tex_data.height),
+            },
+            wgpu::Extent3d {
+                width: cjk_tex_data.width,
+                height: cjk_tex_data.height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        // Write CJK64 texture data to Layer 2 (from cjk64.png: 64px overflow)
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 0, z: 2 }, // Layer 2
+                aspect: wgpu::TextureAspect::All,
+            },
+            &cjk64_tex_data.data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * cjk64_tex_data.width),
+                rows_per_image: Some(cjk64_tex_data.height),
+            },
+            wgpu::Extent3d {
+                width: cjk64_tex_data.width,
+                height: cjk64_tex_data.height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        // Create texture view as 2D array
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("Symbol Texture Array View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
 
         // Create sampler
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -665,7 +723,7 @@ impl WgpuPixelRender {
             lod_max_clamp: 100.0,
             border_color: None,
             anisotropy_clamp: 1,
-            label: Some("Symbol Sampler"),
+            label: Some("Symbol Array Sampler"),
         });
 
         // Store texture in WgpuTexture wrapper
@@ -1020,13 +1078,13 @@ impl WgpuRender for WgpuPixelRender {
                     },
                     count: None,
                 },
-                // Texture
+                // Texture (2D Array for multi-layer symbol atlas)
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     },
                     count: None,

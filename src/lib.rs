@@ -48,8 +48,9 @@ pub mod init;
 // Re-export commonly used items from init module
 #[cfg(not(feature = "base"))]
 pub use init::{
-    get_game_config, get_pixel_texture_data, init_game_config, GameConfig, PixelTextureData,
-    GAME_CONFIG, PIXEL_TEXTURE_DATA,
+    get_game_config, get_pixel_texture_data, get_pixel_cjk_texture_data, get_pixel_cjk64_texture_data,
+    init_game_config, GameConfig, PixelTextureData,
+    GAME_CONFIG, PIXEL_TEXTURE_DATA, PIXEL_CJK_TEXTURE_DATA, PIXEL_CJK64_TEXTURE_DATA,
 };
 
 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]

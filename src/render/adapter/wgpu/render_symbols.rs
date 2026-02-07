@@ -33,17 +33,21 @@ const BG_FILL_SYMBOL: usize = layout::BG_FILL_SYMBOL;
 /// - `a2`: UV size and first column of the local 2x2 matrix multiplied by frame size
 /// - `a3`: second column of the local 2x2 matrix multiplied by frame size, and translation
 /// - `color`: per-instance color modulation
+/// - `a5`: texture layer index (for texture_2d_array support)
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct WgpuSymbolInstance {
     /// a1: [origin_x, origin_y, uv_left, uv_top]
     pub a1: [f32; 4],
-    /// a2: [uv_width, uv_height, m00*width, m10*height]  
+    /// a2: [uv_width, uv_height, m00*width, m10*height]
     pub a2: [f32; 4],
     /// a3: [m01*width, m11*height, m20, m21]
     pub a3: [f32; 4],
     /// color: [r, g, b, a]
     pub color: [f32; 4],
+    /// a5: [tex_layer, padding, padding, padding]
+    /// tex_layer: 0 for Sprite/TUI/Emoji (Layer 0), 1 for CJK (Layer 1)
+    pub a5: [f32; 4],
 }
 
 unsafe impl bytemuck::Pod for WgpuSymbolInstance {}
@@ -83,6 +87,7 @@ unsafe impl bytemuck::Pod for WgpuQuadVertex {}
 unsafe impl bytemuck::Zeroable for WgpuQuadVertex {}
 
 /// Symbol frame data (equivalent to OpenGL GlCell)
+/// Includes tex_layer for texture_2d_array support
 #[derive(Clone, Debug)]
 pub struct WgpuSymbolFrame {
     pub width: f32,
@@ -93,6 +98,8 @@ pub struct WgpuSymbolFrame {
     pub uv_top: f32,
     pub uv_width: f32,
     pub uv_height: f32,
+    /// Texture layer: 0 for Sprite/TUI/Emoji (Layer 0), 1 for CJK (Layer 1)
+    pub tex_layer: f32,
 }
 
 /// WGPU Symbol Renderer using instanced rendering
@@ -157,10 +164,10 @@ impl WgpuSymbolRenderer {
     /// Load symbol texture using centralized iterator from symbol_map
     ///
     /// Uses iter_symbol_frames() which yields all symbols in linear order:
-    /// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
-    /// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
-    /// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
-    /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
+    /// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px) -> Layer 0
+    /// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px) -> Layer 0
+    /// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px) -> Layer 0
+    /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px) -> Layer 1
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
         self.symbols.clear();
 
@@ -168,7 +175,11 @@ impl WgpuSymbolRenderer {
         let tex_height = texh as f32;
 
         // Use centralized iterator from symbol_map
+        let mut index = 0usize;
         for frame in iter_symbol_frames() {
+            // Determine texture layer: Layer 0 for Sprite/TUI/Emoji, Layer 1 for CJK
+            let tex_layer = if index >= layout::CJK_BASE { 1.0 } else { 0.0 };
+
             let symbol_frame = self.make_symbols_frame_custom(
                 tex_width,
                 tex_height,
@@ -176,8 +187,10 @@ impl WgpuSymbolRenderer {
                 frame.pixel_y as f32,
                 frame.width as f32,
                 frame.height as f32,
+                tex_layer,
             );
             self.symbols.push(symbol_frame);
+            index += 1;
         }
     }
     
@@ -194,14 +207,15 @@ impl WgpuSymbolRenderer {
     /// Create a symbol frame with custom dimensions
     ///
     /// Used for TUI (16x32), Emoji (32x32), and Sprite (16x16) regions.
-    fn make_symbols_frame_custom(&self, tex_width: f32, tex_height: f32, x: f32, y: f32, width: f32, height: f32) -> WgpuSymbolFrame {
+    /// tex_layer: 0 for Sprite/TUI/Emoji (Layer 0), 1 for CJK (Layer 1)
+    fn make_symbols_frame_custom(&self, tex_width: f32, tex_height: f32, x: f32, y: f32, width: f32, height: f32, tex_layer: f32) -> WgpuSymbolFrame {
         let origin_x = 1.0;
         let origin_y = 1.0;
         let uv_left = x / tex_width;
         let uv_top = y / tex_height;
         let uv_width = width / tex_width;
         let uv_height = height / tex_height;
-        
+
         WgpuSymbolFrame {
             width,
             height,
@@ -211,6 +225,7 @@ impl WgpuSymbolRenderer {
             uv_top,
             uv_width,
             uv_height,
+            tex_layer,
         }
     }
     
@@ -402,6 +417,7 @@ impl WgpuSymbolRenderer {
     /// - a1: origin, UV top-left
     /// - a2: UV size, first column of local 2x2 scaled by frame size
     /// - a3: second column of local 2x2 scaled by frame size, then translation
+    /// - a5: texture layer index (for texture_2d_array support)
     fn draw_symbol_instance(&mut self, sym: usize, transform: &UnifiedTransform, color: [f32; 4]) {
         if self.instance_count >= self.max_instances {
             // Instance limit reached (debug output removed for performance)
@@ -411,23 +427,23 @@ impl WgpuSymbolRenderer {
             // Symbol index out of bounds (debug output removed for performance)
             return;
         }
-        
+
         let frame = &self.symbols[sym];
-        
+
         // Create instance data matching OpenGL layout exactly
         let instance = WgpuSymbolInstance {
             // a1: [origin_x, origin_y, uv_left, uv_top]
             a1: [frame.origin_x, frame.origin_y, frame.uv_left, frame.uv_top],
-            
+
             // a2: [uv_width, uv_height, m00*width, m10*width]
             // Matrix column 1: both m00 and m10 multiply by width
             a2: [
-                frame.uv_width, 
+                frame.uv_width,
                 frame.uv_height,
                 transform.m00 * frame.width,
                 transform.m10 * frame.width  // Fixed: was * frame.height
             ],
-            
+
             // a3: [m01*height, m11*height, m20, m21]
             // Matrix column 2: both m01 and m11 multiply by height
             a3: [
@@ -436,11 +452,15 @@ impl WgpuSymbolRenderer {
                 transform.m20,
                 transform.m21
             ],
-            
+
             // color: [r, g, b, a]
             color,
+
+            // a5: [tex_layer, padding, padding, padding]
+            // tex_layer: 0 for Sprite/TUI/Emoji (Layer 0), 1 for CJK (Layer 1)
+            a5: [frame.tex_layer, 0.0, 0.0, 0.0],
         };
-        
+
         self.instance_buffer.push(instance);
         self.instance_count += 1;
     }
@@ -538,6 +558,7 @@ impl WgpuQuadVertex {
 
 impl WgpuSymbolInstance {
     /// Instance buffer layout descriptor
+    /// Supports 5 vec4 attributes: a1, a2, a3, color, a5 (with tex_layer)
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<WgpuSymbolInstance>() as wgpu::BufferAddress,
@@ -565,6 +586,12 @@ impl WgpuSymbolInstance {
                 wgpu::VertexAttribute {
                     offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
                     shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // a5: vec4<f32> at location 5 (tex_layer in x, padding in yzw)
+                wgpu::VertexAttribute {
+                    offset: (4 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
+                    shader_location: 5,
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],

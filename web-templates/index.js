@@ -93,25 +93,36 @@ const wasm = await init();
 
 /**
  * Symbol Texture Loading and Processing
- * 
+ *
  * RustPixel uses a symbol atlas (symbols.png) containing all drawable characters
  * and sprites. This must be loaded and processed before the game can render.
+ *
+ * Additionally, CJK characters are stored in a separate texture (cjk.png) for
+ * Texture Array Layer 1 support.
  */
 const timg = new Image();
 timg.src = "assets/pix/symbols.png";
 
+const cjkimg = new Image();
+cjkimg.src = "assets/pix/cjk.png";
+
+const cjk64img = new Image();
+cjk64img.src = "assets/pix/cjk64.png";
+
 /**
  * Image Decode Await Explanation:
- * 
+ *
  * The 'await timg.decode()' is essential because:
  * 1. Image loading (setting src) is asynchronous
  * 2. Browser may not have finished decoding the image data yet
  * 3. decode() returns a Promise that resolves when image is ready for use
  * 4. Without await, getImageData() might fail or return incomplete data
- * 
+ *
  * This ensures the image is FULLY loaded and decoded before processing.
  */
 await timg.decode();
+await cjkimg.decode();
+await cjk64img.decode();
 
 // Create a canvas to extract pixel data from the loaded image
 const canvas = document.createElement("canvas");
@@ -119,24 +130,50 @@ canvas.width = timg.width;
 canvas.height = timg.height;
 const ctx = canvas.getContext("2d");
 
-// Draw the image to canvas and extract raw pixel data
+// Draw the main texture to canvas and extract raw pixel data
 ctx.drawImage(timg, 0, 0);
 const imgdata = ctx.getImageData(0, 0, timg.width, timg.height).data;
 
+// Create a separate canvas for CJK texture
+const cjkcanvas = document.createElement("canvas");
+cjkcanvas.width = cjkimg.width;
+cjkcanvas.height = cjkimg.height;
+const cjkctx = cjkcanvas.getContext("2d");
+
+// Draw the CJK texture to canvas and extract raw pixel data
+cjkctx.drawImage(cjkimg, 0, 0);
+const cjkdata = cjkctx.getImageData(0, 0, cjkimg.width, cjkimg.height).data;
+
+// Create a separate canvas for CJK64 texture
+const cjk64canvas = document.createElement("canvas");
+cjk64canvas.width = cjk64img.width;
+cjk64canvas.height = cjk64img.height;
+const cjk64ctx = cjk64canvas.getContext("2d");
+
+// Draw the CJK64 texture to canvas and extract raw pixel data
+cjk64ctx.drawImage(cjk64img, 0, 0);
+const cjk64data = cjk64ctx.getImageData(0, 0, cjk64img.width, cjk64img.height).data;
+
 /**
- * Unified Asset Loading (New Approach)
+ * Unified Asset Loading
  *
  * Load the symbol_map.json configuration file and initialize all assets
  * at once using wasm_init_pixel_assets(). This provides:
- * - Unified loading for texture + symbol_map
+ * - Unified loading for texture + CJK texture + CJK64 texture + symbol_map
  * - Consistent with native mode initialization
  * - All assets cached before game creation
  */
 const symbolMapResponse = await fetch("assets/pix/symbol_map.json");
 const symbolMapText = await symbolMapResponse.text();
 
-// Initialize all assets at once: game config + texture + symbol_map
-wasm_init_pixel_assets("pixel_game", timg.width, timg.height, imgdata, symbolMapText);
+// Initialize all assets at once: game config + texture + CJK texture + CJK64 texture + symbol_map
+wasm_init_pixel_assets(
+    "pixel_game",
+    timg.width, timg.height, imgdata,
+    cjkimg.width, cjkimg.height, cjkdata,
+    cjk64img.width, cjk64img.height, cjk64data,
+    symbolMapText
+);
 
 /**
  * Game Instance Creation and Initialization
