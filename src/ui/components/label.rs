@@ -411,13 +411,14 @@ impl Label {
         let active_idx = frame_in_cycle / frames_per_char;
         let progress = (frame_in_cycle % frames_per_char) as f32 / frames_per_char as f32;
         let active_scale = 1.0 + scale_amplitude * (progress * std::f32::consts::PI).sin();
-        let normal_style = base_style.scale_uniform(1.0);
+        let normal_style = base_style.scale(1.0, 1.0);
 
         for (i, ch) in self.text.chars().enumerate() {
             let x = start_x + i as u16;
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
             let style = if i == active_idx {
-                highlight_style.scale_uniform(active_scale)
+                // Scale both axes but keep slot width fixed (no horizontal spacing change)
+                highlight_style.scale_fixed_slot(active_scale, active_scale)
             } else {
                 normal_style
             };
@@ -436,8 +437,9 @@ impl Label {
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
 
             let phase = speed * self.frame as f32 + i as f32 * pi2 / wavelength;
-            let scale = (1.0 + amplitude * phase.sin()).max(0.1);
-            let style = base_style.scale_uniform(scale);
+            let scale_y = (1.0 + amplitude * phase.sin()).max(0.1);
+            // Only scale Y for a gentle vertical wave effect
+            let style = base_style.scale(1.0, scale_y);
             buffer.set_string(x, bounds.y, &ch.to_string(), style);
         }
     }

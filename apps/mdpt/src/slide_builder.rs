@@ -163,8 +163,9 @@ pub fn build_slide_page(
                 // Render author below title on first slide
                 if *level == 1 && slide_idx == 0 && !front_matter.author.is_empty() {
                     let author_style = Style::default()
-                        .fg(Color::Gray)
-                        .add_modifier(Modifier::ITALIC);
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::ITALIC)
+                        .scale(0.98, 0.98);
                     let mut author_label = Label::new(&front_matter.author)
                         .with_style(author_style)
                         .with_align(align);
@@ -432,13 +433,13 @@ pub fn build_slide_page(
                         let hl = Style::default().fg(Color::Rgba(80, 200, 255, 255)).bg(Color::Reset);
                         Label::new(text)
                             .with_style(s)
-                            .with_spotlight(hl, 12, 0.55)
+                            .with_spotlight(hl, 12, 0.35)
                     }
                     AnimationType::Wave => {
                         let s = Style::default().fg(Color::Rgba(255, 200, 80, 255)).bg(Color::Reset);
                         Label::new(text)
                             .with_style(s)
-                            .with_wave(0.4, 6.0, 0.15)
+                            .with_wave(0.2, 8.0, 0.3)
                     }
                     AnimationType::FadeIn => {
                         let s = Style::default().fg(Color::Rgba(100, 255, 150, 255)).bg(Color::Reset);
@@ -632,16 +633,20 @@ fn title_style(level: u8) -> Style {
     match level {
         1 => Style::default()
             .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD)
+            .scale(1.1, 1.1),
         2 => Style::default()
             .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD)
+            .scale(1.1, 1.1),
         3 => Style::default()
             .fg(Color::Green)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD)
+            .scale(1.1, 1.1),
         _ => Style::default()
             .fg(Color::White)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD)
+            .scale(1.1, 1.1),
     }
 }
 

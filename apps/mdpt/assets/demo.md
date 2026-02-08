@@ -1,6 +1,6 @@
 ---
 title: MDPT Demo
-author: RustPixel Team
+author: zipxing
 theme: dark
 transition: dissolve
 title_animation: typewriter
@@ -8,9 +8,10 @@ code_theme: base16-ocean.dark
 margin: 4
 ---
 
-# Welcome to MDPT
+# Welcome to MDPT...
 
 A Markdown Presentation Tool built with RustPixel
+
 白日依山尽 黄河入海流
 
 Press Space or Right arrow to advance

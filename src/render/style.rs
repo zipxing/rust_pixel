@@ -32,6 +32,9 @@ bitflags! {
         const REVERSED          = 0b0000_0100_0000;
         const HIDDEN            = 0b0000_1000_0000;
         const CROSSED_OUT       = 0b0001_0000_0000;
+        /// Rendering hint: keep slot width fixed even when scale_x >= 1.0.
+        /// Character scales visually but doesn't expand its grid slot.
+        const FIXED_SLOT        = 0b0010_0000_0000;
     }
 }
 
@@ -107,6 +110,11 @@ impl Style {
         self.scale_x = Some(s);
         self.scale_y = Some(s);
         self
+    }
+
+    /// Scale visually but keep horizontal slot width fixed (no spacing change).
+    pub fn scale_fixed_slot(self, sx: f32, sy: f32) -> Style {
+        self.scale(sx, sy).add_modifier(Modifier::FIXED_SLOT)
     }
 
     pub fn patch(mut self, other: Style) -> Style {

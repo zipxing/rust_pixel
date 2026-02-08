@@ -74,7 +74,7 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::Color, symbol_map::calc_linear_index, AdapterBase},
+    render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::{Color, Modifier}, symbol_map::calc_linear_index, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -835,21 +835,20 @@ impl UnifiedTransform {
     }
 
     /// Apply horizontal skew/shear transformation (for ITALIC effect)
-    /// 
+    ///
     /// This transforms coordinates as: x' = x + y * shear_x
     /// A positive shear_x value slants the top of the character to the right.
     /// Typical italic angle is about 12-15 degrees, which corresponds to
     /// a shear factor of approximately 0.2-0.27 (tan(12°) ≈ 0.21)
-    /// 
+    ///
     /// # Parameters
     /// - `shear_x`: The horizontal shear factor (tan of the slant angle)
     pub fn skew_x(&mut self, shear_x: f32) {
-        // Skew matrix: [1, shear_x; 0, 1]
-        // Multiplying current matrix M by skew matrix S:
-        // [m00, m10]   [1, shear_x]   [m00, m00*shear_x + m10]
-        // [m01, m11] * [0, 1      ] = [m01, m01*shear_x + m11]
-        self.m10 += self.m00 * shear_x;
-        self.m11 += self.m01 * shear_x;
+        // GPU convention: x' = m00*x + m01*y, y' = m10*x + m11*y
+        // The global viewport transform flips Y (screen Y-down vs NDC Y-up),
+        // so we negate to get correct visual italic direction.
+        self.m01 -= self.m00 * shear_x;
+        self.m11 -= self.m10 * shear_x;
     }
 
     /// Reset to identity matrix
@@ -1484,7 +1483,16 @@ pub fn render_buffer_to_cells<F>(
         // scale uniformly (e.g., title text at 1.2x). When scaling DOWN (< 1.0),
         // character shrinks but spacing stays fixed, centering the small character
         // in its normal-sized slot (e.g., emoji bullets at 0.5x).
-        let effective_slot_scale = if cell.scale_x >= 1.0 { cell_sx } else { scale_x };
+        // FIXED_SLOT modifier: character scales visually but slot stays at base width
+        // (e.g., spotlight animation scales up without pushing neighbors).
+        let has_fixed_slot = cell.modifier.contains(Modifier::FIXED_SLOT);
+        let effective_slot_scale = if has_fixed_slot {
+            scale_x
+        } else if cell.scale_x >= 1.0 {
+            cell_sx
+        } else {
+            scale_x
+        };
         let slot_w = base_cell_w * effective_slot_scale;
         let rendered_w = base_cell_w * cell_sx;
         let x_center_offset = (slot_w - rendered_w) / 2.0;
