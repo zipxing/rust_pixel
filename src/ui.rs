@@ -41,6 +41,7 @@ pub mod event;
 pub mod theme;
 pub mod components;
 pub mod app;
+pub mod text_util;
 
 // Re-exports for convenience
 pub use widget::*;
@@ -49,6 +50,7 @@ pub use event::*;
 pub use theme::*;
 pub use components::*;
 pub use app::*;
+pub use text_util::*;
 
 
 

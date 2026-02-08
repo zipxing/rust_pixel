@@ -258,7 +258,7 @@ impl Widget for Label {
         }
 
         if self.wrap {
-            let lines = self.wrap_text(available.width);
+            let lines = crate::ui::text_util::wrap_text(&self.text, available.width);
             let height = (lines.len() as u16).min(available.height);
             let width = if lines.is_empty() {
                 0
@@ -320,7 +320,7 @@ impl Label {
 
     fn render_wrapped(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
         let bounds = self.bounds();
-        let lines = self.wrap_text(bounds.width);
+        let lines = crate::ui::text_util::wrap_text(&self.text, bounds.width);
 
         let buffer_area = *buffer.area();
         if bounds.y >= buffer_area.y + buffer_area.height || bounds.x >= buffer_area.x + buffer_area.width {
@@ -518,36 +518,4 @@ impl Label {
         }
     }
 
-    fn wrap_text(&self, width: u16) -> Vec<String> {
-        if width == 0 {
-            return vec![];
-        }
-
-        let mut lines = Vec::new();
-        let mut current_line = String::new();
-        let mut current_width = 0;
-
-        for word in self.text.split_whitespace() {
-            let word_width = word.width() as u16;
-
-            if current_width > 0 && current_width + 1 + word_width > width {
-                lines.push(current_line);
-                current_line = word.to_string();
-                current_width = word_width;
-            } else {
-                if current_width > 0 {
-                    current_line.push(' ');
-                    current_width += 1;
-                }
-                current_line.push_str(word);
-                current_width += word_width;
-            }
-        }
-
-        if !current_line.is_empty() {
-            lines.push(current_line);
-        }
-
-        lines
-    }
 }

@@ -202,18 +202,13 @@ impl MdptModel {
     }
 
     fn navigate_slide(&mut self, new_slide: usize, new_step: usize) {
-        let slide_changed = new_slide != self.current_slide;
+        let old_slide = self.current_slide;
+        let slide_changed = new_slide != old_slide;
 
         if slide_changed && !self.transition.active {
-            // Save current page as prev for transition
-            self.prev_page = self.current_page.take();
-
-            self.current_slide = new_slide;
-            self.current_step = new_step;
-            self.rebuild_current_page();
-
-            // Determine transition direction
-            let transition_type = if new_slide > self.transition.from_slide || self.prev_page.is_none() {
+            // Determine transition direction before updating state
+            let going_forward = new_slide > old_slide;
+            let transition_type = if going_forward {
                 self.next_transition_type()
             } else {
                 // Reverse direction for going back
@@ -226,8 +221,16 @@ impl MdptModel {
                 }
             };
 
+            // Save current page as prev for transition
+            self.prev_page = self.current_page.take();
+
+            // Now update state and rebuild
+            self.current_slide = new_slide;
+            self.current_step = new_step;
+            self.rebuild_current_page();
+
             if self.prev_page.is_some() {
-                self.transition.start(self.current_slide, new_slide, transition_type);
+                self.transition.start(old_slide, new_slide, transition_type);
             }
         } else if !slide_changed && new_step != self.current_step {
             // Step change within same slide - just rebuild, no transition

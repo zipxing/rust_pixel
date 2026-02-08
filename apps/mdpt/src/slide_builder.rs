@@ -1,15 +1,12 @@
 use crate::highlight::HighlightedLine;
-use crate::slide::{AnimationType, ColumnAlignment, FrontMatter, ListItem, SlideContent, SlideElement};
+use crate::slide::{AnimationType, ColumnAlignment, FrontMatter, SlideContent, SlideElement};
 use rust_pixel::render::style::{Color, Modifier, Style};
-use rust_pixel::render::Buffer;
 use rust_pixel::ui::*;
 use rust_pixel::util::Rect;
 use std::collections::HashMap;
 
-/// Deferred Label widget to be added as Panel child after canvas rendering.
-struct DeferredLabel {
-    label: Label,
-}
+/// Deferred widgets to be added as Panel children after canvas rendering.
+type DeferredWidgets = Vec<Box<dyn rust_pixel::ui::Widget>>;
 
 /// Build a UIPage for a given slide at a given step.
 ///
@@ -40,8 +37,8 @@ pub fn build_slide_page(
 
     let buf = panel.canvas_mut();
 
-    // Collect deferred Label widgets for animated text
-    let mut deferred_labels: Vec<DeferredLabel> = Vec::new();
+    // Collect deferred widgets (Labels, PresentList, PresentTable) added as Panel children
+    let mut deferred_widgets: DeferredWidgets = Vec::new();
 
     // Render visible elements
     let mut y: u16 = 1; // Start after top margin
@@ -50,6 +47,8 @@ pub fn build_slide_page(
     let mut column_widths: Vec<u32> = Vec::new();
     let mut current_col: usize = 0;
     let mut col_x: u16 = margin;
+    let mut col_top_y: u16 = 0;   // y where columns start (top-aligned)
+    let mut col_max_y: u16 = 0;   // max y reached across all columns
 
     // First pass: if JumpToMiddle, calculate content height
     if boundary > 0 {
@@ -82,8 +81,14 @@ pub fn build_slide_page(
                 column_widths = widths.clone();
                 current_col = 0;
                 col_x = margin;
+                col_top_y = y;
+                col_max_y = y;
             }
             SlideElement::Column(idx) => {
+                // Track the tallest column before switching
+                if y > col_max_y {
+                    col_max_y = y;
+                }
                 current_col = *idx;
                 // Calculate x position for this column
                 let total_weight: u32 = column_widths.iter().sum();
@@ -94,13 +99,15 @@ pub fn build_slide_page(
                     }
                 }
                 col_x = x_offset;
-                // Reset y to after the column layout header if this is not the first column
-                if *idx > 0 {
-                    // Don't reset y; columns share the same vertical space
-                    // We'd need to track per-column y, but for simplicity let's use the same y
-                }
+                // Reset y to column top so all columns are top-aligned
+                y = col_top_y;
             }
             SlideElement::ResetLayout => {
+                // Advance y past the tallest column
+                if y > col_max_y {
+                    col_max_y = y;
+                }
+                y = col_max_y;
                 in_column_layout = false;
                 column_widths.clear();
                 col_x = margin;
@@ -123,7 +130,7 @@ pub fn build_slide_page(
                     .with_style(style)
                     .with_align(align);
                 label.set_bounds(bounds);
-                deferred_labels.push(DeferredLabel { label });
+                deferred_widgets.push(Box::new(label));
                 y += 1;
                 // Add spacing after titles
                 if *level <= 2 {
@@ -138,14 +145,14 @@ pub fn build_slide_page(
                 };
 
                 let style = Style::default().fg(Color::White);
-                let lines = wrap_text(text, w as usize);
-                for line in &lines {
-                    if y >= content_height {
-                        break;
-                    }
-                    buf.set_string(x_start, y, line, style);
-                    y += 1;
-                }
+                let line_count = rust_pixel::ui::text_util::wrap_text(text, w).len() as u16;
+                let h = line_count.min(content_height.saturating_sub(y));
+                let mut label = Label::new(text)
+                    .with_style(style)
+                    .with_wrap(true);
+                label.set_bounds(Rect::new(x_start, y, w, h));
+                deferred_widgets.push(Box::new(label));
+                y += line_count;
                 y += 1; // paragraph spacing
             }
             SlideElement::CodeBlock { language, code, line_numbers } => {
@@ -202,19 +209,16 @@ pub fn build_slide_page(
                             cx += line_num_width;
                         }
 
-                        // Render highlighted spans
+                        // Render highlighted spans (unicode-safe truncation)
                         for span in &hl_line.spans {
                             if cx >= x_start + w {
                                 break;
                             }
                             let remaining = (x_start + w - cx) as usize;
-                            let text = if span.text.len() > remaining {
-                                &span.text[..remaining]
-                            } else {
-                                &span.text
-                            };
-                            buf.set_string(cx, y, text, span.style);
-                            cx += text.len() as u16;
+                            let text = rust_pixel::ui::text_util::truncate_to_width(&span.text, remaining);
+                            let text_w = rust_pixel::ui::text_util::display_width(&text);
+                            buf.set_string(cx, y, &text, span.style);
+                            cx += text_w as u16;
                         }
 
                         y += 1;
@@ -230,12 +234,8 @@ pub fn build_slide_page(
                         }
                         let bg_fill = " ".repeat(w as usize);
                         buf.set_string(x_start, y, &bg_fill, bg_style);
-                        let truncated = if line.len() > w as usize {
-                            &line[..w as usize]
-                        } else {
-                            line
-                        };
-                        buf.set_string(x_start, y, truncated, plain_style);
+                        let truncated = rust_pixel::ui::text_util::truncate_to_width(line, w as usize);
+                        buf.set_string(x_start, y, &truncated, plain_style);
                         y += 1;
                     }
                 }
@@ -248,13 +248,17 @@ pub fn build_slide_page(
                     (margin, content_width)
                 };
 
-                for item in items {
-                    if y >= content_height {
-                        break;
-                    }
-                    render_list_item(buf, x_start, y, w, item);
-                    y += 1;
-                }
+                let list_items: Vec<PresentListItem> = items.iter().map(|item| {
+                    PresentListItem::new(&item.text)
+                        .with_depth(item.depth)
+                        .with_ordered(item.ordered, item.index)
+                }).collect();
+                let item_count = list_items.len() as u16;
+                let h = item_count.min(content_height.saturating_sub(y));
+                let mut pl = PresentList::new().with_items(list_items);
+                pl.set_bounds(Rect::new(x_start, y, w, h));
+                deferred_widgets.push(Box::new(pl));
+                y += item_count;
                 y += 1; // spacing after list
             }
             SlideElement::Table { headers, rows, alignments } => {
@@ -264,7 +268,20 @@ pub fn build_slide_page(
                     (margin, content_width)
                 };
 
-                y = render_table(buf, x_start, y, w, headers, rows, alignments);
+                let col_aligns: Vec<ColumnAlign> = alignments.iter().map(|a| match a {
+                    ColumnAlignment::Left | ColumnAlignment::None => ColumnAlign::Left,
+                    ColumnAlignment::Center => ColumnAlign::Center,
+                    ColumnAlignment::Right => ColumnAlign::Right,
+                }).collect();
+                let table_h = 2 + rows.len() as u16; // header + separator + rows
+                let h = table_h.min(content_height.saturating_sub(y));
+                let mut pt = PresentTable::new()
+                    .with_headers(headers.clone())
+                    .with_rows(rows.clone())
+                    .with_alignments(col_aligns);
+                pt.set_bounds(Rect::new(x_start, y, w, h));
+                deferred_widgets.push(Box::new(pt));
+                y += table_h;
                 y += 1; // spacing after table
             }
             SlideElement::Divider => {
@@ -285,9 +302,8 @@ pub fn build_slide_page(
                     (margin, content_width)
                 };
 
-                // Draw emoji bullet on canvas (same as list items)
-                let marker_style = Style::default().fg(Color::Cyan).scale(0.5, 0.5);
-                buf.set_string(x_start, y, "🟢", marker_style);
+                // Draw emoji bullet on canvas (shared style with PresentList)
+                buf.set_string(x_start, y, DEFAULT_MARKERS[0], default_marker_style());
                 // Label starts after emoji(2) + space(1) = 3 cells
                 let label_x = x_start + 3;
                 let label_w = w.saturating_sub(3);
@@ -320,7 +336,7 @@ pub fn build_slide_page(
                     }
                 };
                 label.set_bounds(bounds);
-                deferred_labels.push(DeferredLabel { label });
+                deferred_widgets.push(Box::new(label));
                 y += 1;
             }
             SlideElement::Image { path, alt } => {
@@ -343,9 +359,9 @@ pub fn build_slide_page(
         }
     }
 
-    // Add deferred Label widgets as Panel children (rendered on top of canvas)
-    for dl in deferred_labels {
-        panel.add_child(Box::new(dl.label));
+    // Add deferred widgets as Panel children (rendered on top of canvas)
+    for widget in deferred_widgets {
+        panel.add_child(widget);
     }
 
     let mut page = UIPage::new(width, height);
@@ -375,7 +391,7 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
                 }
             }
             SlideElement::Paragraph { text } => {
-                let lines = wrap_text(text, width as usize);
+                let lines = rust_pixel::ui::text_util::wrap_text(text, width);
                 h += lines.len() as u16 + 1;
             }
             SlideElement::CodeBlock { code, .. } => {
@@ -416,157 +432,3 @@ fn title_style(level: u8) -> Style {
     }
 }
 
-/// Simple word-wrapping.
-fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
-    if max_width == 0 {
-        return vec![text.to_string()];
-    }
-
-    let mut lines = Vec::new();
-    for paragraph in text.split('\n') {
-        if paragraph.is_empty() {
-            lines.push(String::new());
-            continue;
-        }
-
-        let words: Vec<&str> = paragraph.split_whitespace().collect();
-        let mut current_line = String::new();
-
-        for word in words {
-            if current_line.is_empty() {
-                if word.len() > max_width {
-                    // Break long words
-                    let mut remaining = word;
-                    while remaining.len() > max_width {
-                        lines.push(remaining[..max_width].to_string());
-                        remaining = &remaining[max_width..];
-                    }
-                    current_line = remaining.to_string();
-                } else {
-                    current_line = word.to_string();
-                }
-            } else if current_line.len() + 1 + word.len() > max_width {
-                lines.push(current_line);
-                current_line = word.to_string();
-            } else {
-                current_line.push(' ');
-                current_line.push_str(word);
-            }
-        }
-
-        if !current_line.is_empty() {
-            lines.push(current_line);
-        }
-    }
-
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-
-    lines
-}
-
-/// Render a list item with emoji bullet and indentation.
-fn render_list_item(buf: &mut Buffer, x: u16, y: u16, _width: u16, item: &ListItem) {
-    let indent_width = item.depth as u16 * 2;
-    let indent = "  ".repeat(item.depth as usize);
-
-    let prefix_style = Style::default().fg(Color::Cyan);
-    let text_style = Style::default().fg(Color::White);
-
-    if item.ordered {
-        let bullet = format!("{}{}. ", indent, item.index);
-        let w = bullet.len() as u16;
-        buf.set_string(x, y, &bullet, prefix_style);
-        buf.set_string(x + w, y, &item.text, text_style);
-    } else {
-        // Emoji bullets from tui.txt (double-width: 2 cells each), scaled to 0.5
-        let marker = match item.depth {
-            0 => "🟢",
-            1 => "🔵",
-            _ => "🟡",
-        };
-        let marker_style = Style::default().fg(Color::Cyan).scale(0.5, 0.5);
-        buf.set_string(x, y, &indent, prefix_style);
-        buf.set_string(x + indent_width, y, marker, marker_style);
-        // emoji(2 cells) + space(1 cell) = 3
-        buf.set_string(x + indent_width + 3, y, &item.text, text_style);
-    }
-}
-
-/// Render a table.
-fn render_table(
-    buf: &mut Buffer,
-    x: u16,
-    mut y: u16,
-    max_width: u16,
-    headers: &[String],
-    rows: &[Vec<String>],
-    alignments: &[ColumnAlignment],
-) -> u16 {
-    if headers.is_empty() {
-        return y;
-    }
-
-    let num_cols = headers.len();
-    // Calculate column widths
-    let col_width = (max_width as usize / num_cols).max(3);
-
-    let header_style = Style::default()
-        .fg(Color::Yellow)
-        .add_modifier(Modifier::BOLD);
-    let separator_style = Style::default().fg(Color::DarkGray);
-    let cell_style = Style::default().fg(Color::White);
-
-    // Header row
-    let mut cx = x;
-    for (i, header) in headers.iter().enumerate() {
-        let text = align_text(header, col_width, alignments.get(i).copied());
-        buf.set_string(cx, y, &text, header_style);
-        cx += col_width as u16;
-    }
-    y += 1;
-
-    // Separator
-    let separator = "─".repeat(col_width - 1);
-    cx = x;
-    for _ in 0..num_cols {
-        buf.set_string(cx, y, &separator, separator_style);
-        cx += col_width as u16;
-    }
-    y += 1;
-
-    // Data rows
-    for row in rows {
-        cx = x;
-        for (i, cell) in row.iter().enumerate() {
-            let text = align_text(cell, col_width, alignments.get(i).copied());
-            buf.set_string(cx, y, &text, cell_style);
-            cx += col_width as u16;
-        }
-        y += 1;
-    }
-
-    y
-}
-
-/// Align text within a column width.
-fn align_text(text: &str, width: usize, alignment: Option<ColumnAlignment>) -> String {
-    let truncated = if text.len() > width - 1 {
-        &text[..width - 1]
-    } else {
-        text
-    };
-
-    match alignment.unwrap_or(ColumnAlignment::Left) {
-        ColumnAlignment::Left | ColumnAlignment::None => {
-            format!("{:<width$}", truncated, width = width)
-        }
-        ColumnAlignment::Center => {
-            format!("{:^width$}", truncated, width = width)
-        }
-        ColumnAlignment::Right => {
-            format!("{:>width$}", truncated, width = width)
-        }
-    }
-}

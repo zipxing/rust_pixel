@@ -76,6 +76,9 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                         CommentCommand::Spacer(n) => {
                             current_slide.elements.push(SlideElement::Spacer(n));
                         }
+                        CommentCommand::Divider => {
+                            current_slide.elements.push(SlideElement::Divider);
+                        }
                     }
                 }
                 // Non-comment HTML blocks are ignored
@@ -190,6 +193,8 @@ enum CommentCommand {
     Anim(String),
     /// Vertical spacer
     Spacer(u16),
+    /// In-page horizontal divider line
+    Divider,
 }
 
 /// Recursively collect all text content from a node and its children.
@@ -549,5 +554,20 @@ Right content
             &pres.slides[0].elements[0],
             SlideElement::JumpToMiddle
         ));
+    }
+
+    #[test]
+    fn test_divider() {
+        let md = r#"# Title
+
+<!-- divider -->
+
+Some text
+"#;
+        let pres = parse_markdown(md);
+        let elems = &pres.slides[0].elements;
+        assert!(matches!(&elems[0], SlideElement::Title { .. }));
+        assert!(matches!(&elems[1], SlideElement::Divider));
+        assert!(matches!(&elems[2], SlideElement::Paragraph { .. }));
     }
 }

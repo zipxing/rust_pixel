@@ -26,6 +26,8 @@ Press Space or Right arrow to advance
 
 <!-- pause -->
 
+<!-- divider -->
+
 * Column layouts
 * Incremental display with pause
 * Table rendering
