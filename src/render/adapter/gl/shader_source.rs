@@ -88,23 +88,22 @@ pub const TRANS_FS: [&str; 7] = [
           }
     "#,
     r#"
-            highp float noise(vec2 co)
+            const float GRID = 16.0;
+            const float RADIUS = 0.5;
+
+            highp float hash(vec2 co)
             {
-                highp float a = 12.9898;
-                highp float b = 78.233;
-                highp float c = 43758.5453;
-                highp float dt= dot(co.xy * progress, vec2(a, b));
-                highp float sn= mod(dt,3.14);
-                return fract(sin(sn) * c);
+                highp float dt = dot(co, vec2(12.9898, 78.233));
+                return fract(sin(mod(dt, 3.14)) * 43758.5453);
             }
             vec4 transition(vec2 p) {
-              if (progress < 0.05 ) {
-                return getFromColor(p);
-              } else if (progress > (1.0 - 0.05 )) {
-                return getToColor(p);
-              } else {
-                return vec4(vec3(noise(p)), 1.0);
-              }
+              vec2 cell = floor(p * GRID);
+              vec2 local = fract(p * GRID) - 0.5;
+              float dist = length(local);
+              float n = hash(cell);
+              float grow = smoothstep(n - 0.1, n + 0.1, progress * 1.2 - 0.1);
+              float circle = 1.0 - smoothstep(RADIUS * grow - 0.05, RADIUS * grow, dist);
+              return mix(getFromColor(p), getToColor(p), circle);
             }
     "#,
     r#"

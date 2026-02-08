@@ -610,23 +610,22 @@ fn getToColor(uv: vec2<f32>) -> vec4<f32> {
     return textureSample(texture2, texture_sampler, uv);
 }
 
-fn noise(co: vec2<f32>) -> f32 {
-    let a = 12.9898;
-    let b = 78.233;
-    let c = 43758.5453;
-    let dt = dot(co * uniforms.progress, vec2<f32>(a, b));
-    let sn = dt % 3.14159265;
-    return fract(sin(sn) * c);
+const GRID: f32 = 16.0;
+const RADIUS: f32 = 0.5;
+
+fn hash(co: vec2<f32>) -> f32 {
+    let dt = dot(co, vec2<f32>(12.9898, 78.233));
+    return fract(sin(dt % 3.14159265) * 43758.5453);
 }
 
 fn transition(p: vec2<f32>) -> vec4<f32> {
-    if (uniforms.progress < 0.05) {
-        return getFromColor(p);
-    } else if (uniforms.progress > (1.0 - 0.05)) {
-        return getToColor(p);
-    } else {
-        return vec4<f32>(vec3<f32>(noise(p)), 1.0);
-    }
+    let cell = floor(p * GRID);
+    let local = fract(p * GRID) - 0.5;
+    let dist = length(local);
+    let n = hash(cell);
+    let grow = smoothstep(n - 0.1, n + 0.1, uniforms.progress * 1.2 - 0.1);
+    let circle = 1.0 - smoothstep(RADIUS * grow - 0.05, RADIUS * grow, dist);
+    return mix(getFromColor(p), getToColor(p), circle);
 }
 
 @fragment
