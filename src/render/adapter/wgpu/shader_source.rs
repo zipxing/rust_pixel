@@ -888,19 +888,10 @@ fn transition(p: vec2<f32>) -> vec4<f32> {
     let amplitude = 30.0;
     let speed = 30.0;
 
-    // Work in GL-style UV (y=0 bottom, y=1 top) for consistent ripple direction
-    let gl_p = vec2<f32>(p.x, 1.0 - p.y);
-    let dir = gl_p - vec2<f32>(0.5);
+    let dir = p - vec2<f32>(0.5);
     let dist = length(dir);
-
-    if (dist > uniforms.progress) {
-        return mix(getFromColor(p), getToColor(p), uniforms.progress);
-    } else {
-        let offset = dir * sin(dist * amplitude - uniforms.progress * speed);
-        // Convert offset back to WGPU UV space (flip y)
-        let wgpu_offset = vec2<f32>(offset.x, -offset.y);
-        return mix(getFromColor(p + wgpu_offset), getToColor(p), uniforms.progress);
-    }
+    let offset = dir * sin(dist * amplitude - uniforms.progress * speed);
+    return mix(getFromColor(p + offset), getToColor(p), uniforms.progress);
 }
 
 @fragment

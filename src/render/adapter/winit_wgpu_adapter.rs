@@ -39,7 +39,7 @@ use crate::render::{
             load_custom_cursor, winit_init_common, winit_move_win, BorderArea, Drag,
             WindowInitParams,
         },
-        Adapter, AdapterBase, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+        Adapter, AdapterBase, 
     },
     buffer::Buffer,
     graph::{UnifiedColor, UnifiedTransform},
