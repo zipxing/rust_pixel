@@ -107,6 +107,8 @@ pub enum SlideElement {
     Image {
         path: String,
         alt: String,
+        /// Explicit (x, y) position override; None = use document flow
+        pos: Option<(u16, u16)>,
     },
 
     /// Pause marker — split slide into incremental steps

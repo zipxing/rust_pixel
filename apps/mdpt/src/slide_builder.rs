@@ -22,6 +22,16 @@ pub const CODE_FG_HL: Color = Color::Rgba(220, 225, 235, 255);
 /// Deferred widgets to be added as Panel children after canvas rendering.
 type DeferredWidgets = Vec<Box<dyn rust_pixel::ui::Widget>>;
 
+/// Image placement info for sprite-based rendering (SSF/PIX).
+#[derive(Debug, Clone)]
+pub struct ImagePlacement {
+    pub path: String,
+    pub x: u16,
+    pub y: u16,
+    pub w: u16,
+    pub h: u16,
+}
+
 /// Build a UIPage for a given slide at a given step.
 ///
 /// Only elements up to the step boundary are rendered (pause support).
@@ -33,7 +43,7 @@ pub fn build_slide_page(
     front_matter: &FrontMatter,
     width: u16,
     height: u16,
-) -> UIPage {
+) -> (UIPage, Vec<ImagePlacement>) {
     let margin = front_matter.margin;
     let content_width = width.saturating_sub(margin * 2);
     let content_height = height.saturating_sub(2); // 1 top margin + 1 bottom for status
@@ -53,6 +63,8 @@ pub fn build_slide_page(
 
     // Collect deferred widgets (Labels, PresentList, PresentTable) added as Panel children
     let mut deferred_widgets: DeferredWidgets = Vec::new();
+    // Collect image placements for sprite-based rendering
+    let mut image_placements: Vec<ImagePlacement> = Vec::new();
 
     // Render visible elements
     let mut y: u16 = 1; // Start after top margin
@@ -79,7 +91,8 @@ pub fn build_slide_page(
         if ei >= boundary {
             break;
         }
-        if y >= content_height {
+        // Skip height check for Image elements (they render as sprite overlays)
+        if y >= content_height && !matches!(elem, SlideElement::Image { .. }) {
             break;
         }
 
@@ -444,19 +457,26 @@ pub fn build_slide_page(
                 deferred_widgets.push(Box::new(label));
                 y += 1;
             }
-            SlideElement::Image { path, alt } => {
-                let (x_start, _w) = if in_column_layout {
-                    (col_x, col_width(&column_widths, current_col, content_width))
+            SlideElement::Image { path, alt: _, pos } => {
+                // Use explicit position if provided, otherwise use document flow
+                let (img_x, img_y) = if let Some((px, py)) = pos {
+                    (*px, *py)
                 } else {
-                    (margin, content_width)
+                    let (x_start, _w) = if in_column_layout {
+                        (col_x, col_width(&column_widths, current_col, content_width))
+                    } else {
+                        (margin, content_width)
+                    };
+                    (x_start, y)
                 };
-                // Placeholder for image support
-                let img_text = format!("[Image: {} ({})]", alt, path);
-                let style = Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::DIM);
-                buf.set_string(x_start, y, &img_text, style);
-                y += 1;
+                image_placements.push(ImagePlacement {
+                    path: path.clone(),
+                    x: img_x,
+                    y: img_y,
+                    w: content_width,
+                    h: content_height.saturating_sub(img_y),
+                });
+                // Don't advance y for sprite-based images (they overlay)
             }
             SlideElement::Spacer(n) => {
                 y += n;
@@ -528,7 +548,7 @@ pub fn build_slide_page(
     let mut page = UIPage::new(width, height);
     page.set_root_widget(Box::new(panel));
     page.start();
-    page
+    (page, image_placements)
 }
 
 /// Calculate column width from weights.
@@ -565,7 +585,7 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
                 h += rows.len() as u16 + 3; // header + separator + rows + spacing
             }
             SlideElement::Divider => h += 1,
-            SlideElement::Image { .. } => h += 1,
+            SlideElement::Image { .. } => {}, // sprite overlay, no vertical space
             SlideElement::AnimatedText { .. } => h += 1,
             SlideElement::Spacer(n) => h += n,
             SlideElement::BlockQuote { text, alert_type } => {

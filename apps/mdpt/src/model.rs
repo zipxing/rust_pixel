@@ -1,7 +1,7 @@
 use crate::highlight::{CodeHighlighter, HighlightedLine};
 use crate::parser::parse_markdown;
 use crate::slide::{Presentation, SlideElement};
-use crate::slide_builder::{build_slide_page, CODE_FG_HL, CODE_LINE_BG};
+use crate::slide_builder::{build_slide_page, ImagePlacement, CODE_FG_HL, CODE_LINE_BG};
 use rust_pixel::{
     context::Context,
     event::{Event, KeyCode},
@@ -76,6 +76,8 @@ pub struct MdptModel {
     pub transition: TransitionState,
     /// Output buffer for transition blending
     pub output_buffer: Buffer,
+    /// Image placements for sprite-based rendering (SSF/PIX)
+    pub image_placements: Vec<ImagePlacement>,
     /// Track last rendered state to avoid unnecessary rebuilds
     last_rendered: (usize, usize),
     /// Available transition types
@@ -99,6 +101,7 @@ impl MdptModel {
             md_file,
             highlighter: CodeHighlighter::new(),
             highlight_cache: HashMap::new(),
+            image_placements: Vec::new(),
             current_page: None,
             prev_page: None,
             transition: TransitionState::new(),
@@ -195,7 +198,7 @@ impl MdptModel {
 
     fn rebuild_current_page(&mut self) {
         if let Some(slide) = self.presentation.slides.get(self.current_slide) {
-            let page = build_slide_page(
+            let (page, images) = build_slide_page(
                 slide,
                 self.current_slide,
                 self.current_step,
@@ -205,6 +208,7 @@ impl MdptModel {
                 MDPTH,
             );
             self.current_page = Some(page);
+            self.image_placements = images;
             self.last_rendered = (self.current_slide, self.current_step);
         }
     }

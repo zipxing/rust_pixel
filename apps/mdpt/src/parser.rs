@@ -31,6 +31,7 @@ pub fn parse_markdown(contents: &str) -> Presentation {
     let mut slides = Vec::new();
     let mut current_slide = SlideContent::new();
     let mut pending_anim: Option<AnimationType> = None;
+    let mut pending_image_pos: Option<(u16, u16)> = None;
 
     for node in root.children() {
         let data = node.data.borrow();
@@ -79,6 +80,11 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                         CommentCommand::Divider => {
                             current_slide.elements.push(SlideElement::Divider);
                         }
+                        CommentCommand::ImagePos(coords) => {
+                            if coords.len() >= 2 {
+                                pending_image_pos = Some((coords[0], coords[1]));
+                            }
+                        }
                     }
                 }
                 // Non-comment HTML blocks are ignored
@@ -92,7 +98,11 @@ pub fn parse_markdown(contents: &str) -> Presentation {
             }
             NodeValue::Paragraph => {
                 // Check if paragraph contains an image
-                if let Some(image) = extract_image(node) {
+                if let Some(mut image) = extract_image(node) {
+                    // Apply pending image position if set
+                    if let SlideElement::Image { ref mut pos, .. } = image {
+                        *pos = pending_image_pos.take();
+                    }
                     current_slide.elements.push(image);
                 } else {
                     let text = collect_text(node);
@@ -220,6 +230,9 @@ enum CommentCommand {
     Spacer(u16),
     /// In-page horizontal divider line
     Divider,
+    /// Explicit image position: [x, y] in cell coordinates
+    #[serde(rename = "image_pos")]
+    ImagePos(Vec<u16>),
 }
 
 /// Recursively collect all text content from a node and its children.
@@ -262,6 +275,7 @@ fn extract_image<'a>(node: &'a AstNode<'a>) -> Option<SlideElement> {
             return Some(SlideElement::Image {
                 path: link.url.clone(),
                 alt,
+                pos: None,
             });
         }
     }
@@ -600,9 +614,10 @@ Right content
 "#;
         let pres = parse_markdown(md);
         match &pres.slides[0].elements[0] {
-            SlideElement::Image { path, alt } => {
+            SlideElement::Image { path, alt, pos } => {
                 assert_eq!(path, "assets/logo.pix");
                 assert_eq!(alt, "Logo");
+                assert!(pos.is_none());
             }
             other => panic!("expected Image, got {:?}", other),
         }
@@ -804,6 +819,55 @@ code
                 assert!(text.contains("note"));
             }
             other => panic!("expected BlockQuote, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_image_pos() {
+        let md = r#"<!-- image_pos: [10, 5] -->
+
+![dance](dance.ssf)
+"#;
+        let pres = parse_markdown(md);
+        println!("elements: {:?}", pres.slides[0].elements);
+        match &pres.slides[0].elements[0] {
+            SlideElement::Image { path, pos, .. } => {
+                assert_eq!(path, "dance.ssf");
+                assert_eq!(*pos, Some((10, 5)));
+            }
+            other => panic!("expected Image with pos, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_image_pos_no_blank_line() {
+        // No blank line between image_pos and image - does it work?
+        let md = r#"<!-- image_pos: [20, 8] -->
+![dance](dance.ssf)
+"#;
+        let pres = parse_markdown(md);
+        println!("no_blank_line elements: {:?}", pres.slides[0].elements);
+        // Check if the image was parsed at all
+        let has_image = pres.slides[0].elements.iter().any(|e| matches!(e, SlideElement::Image { .. }));
+        assert!(has_image, "Image should be parsed even without blank line");
+    }
+
+    #[test]
+    fn test_image_pos_after_pause() {
+        // Test adjacent comments: pause then image_pos (no blank line between)
+        let md = r#"<!-- pause -->
+<!-- image_pos: [20, 8] -->
+
+![dance](dance.ssf)
+"#;
+        let pres = parse_markdown(md);
+        println!("elements: {:?}", pres.slides[0].elements);
+        assert!(matches!(&pres.slides[0].elements[0], SlideElement::Pause));
+        match &pres.slides[0].elements[1] {
+            SlideElement::Image { pos, .. } => {
+                assert_eq!(*pos, Some((20, 8)));
+            }
+            other => panic!("expected Image with pos, got {:?}", other),
         }
     }
 }

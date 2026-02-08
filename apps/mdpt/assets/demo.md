@@ -24,7 +24,7 @@ Press Space or Right arrow to advance
 * GPU-accelerated slide transitions (6 types)
 * Code syntax highlighting (100+ languages)
 * Text animations (Spotlight, Wave, FadeIn, Typewriter)
-* .pix/.ssf image support (planned)
+* .pix/.ssf image support
 
 <!-- pause -->
 
@@ -181,6 +181,17 @@ string greet() {
 
 > [!caution]
 > Be careful with this operation!
+
+---
+
+## SSF Animation
+
+> [!note]
+> 按空格显示动画.
+
+<!-- pause -->
+<!-- image_pos: [16, 10] -->
+![dance](dance.ssf)
 
 ---
 
