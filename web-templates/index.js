@@ -162,7 +162,13 @@ sg.init_from_cache();  // Initialize WebGL using cached texture data
  * 
  * The Rust code (in pixel_game! macro) handles these through key_event() method.
  */
-window.onkeypress = (e) => { sg.key_event(0, e); };
+window.onkeydown = (e) => {
+    sg.key_event(0, e);
+    // Prevent browser default for game-relevant keys
+    if (["Space","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","PageUp","PageDown","Home","End"].includes(e.code)) {
+        e.preventDefault();
+    }
+};
 window.onmouseup = (e) => { sg.key_event(1, e); };
 window.onmousedown = (e) => { sg.key_event(2, e); };
 window.onmousemove = (e) => { sg.key_event(3, e); };

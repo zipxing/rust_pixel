@@ -268,19 +268,35 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
 
     if let Some(key_e) = wasm_bindgen::JsCast::dyn_ref::<web_sys::KeyboardEvent>(&e) {
         assert!(t == 0);
-        let kcc = (key_e.key_code(), key_e.char_code());
-        match kcc.0 {
-            32 | 48..=57 | 97..=122 => {
-                let cte = KeyEvent::new(
-                    KeyCode::Char(char::from_u32(kcc.0).unwrap()),
-                    KeyModifiers::NONE,
-                );
-                return Some(Event::Key(cte));
+        let key = key_e.key();
+        let key_code = match key.as_str() {
+            // Arrow keys
+            "ArrowLeft" => Some(KeyCode::Left),
+            "ArrowRight" => Some(KeyCode::Right),
+            "ArrowUp" => Some(KeyCode::Up),
+            "ArrowDown" => Some(KeyCode::Down),
+            // Navigation keys
+            "PageUp" => Some(KeyCode::PageUp),
+            "PageDown" => Some(KeyCode::PageDown),
+            "Home" => Some(KeyCode::Home),
+            "End" => Some(KeyCode::End),
+            "Escape" => Some(KeyCode::Esc),
+            "Enter" => Some(KeyCode::Enter),
+            "Backspace" => Some(KeyCode::Backspace),
+            "Tab" => Some(KeyCode::Tab),
+            " " => Some(KeyCode::Char(' ')),
+            // Single character keys (letters, digits, symbols)
+            s if s.len() == 1 => {
+                let ch = s.chars().next().unwrap();
+                Some(KeyCode::Char(ch))
             }
-            _ => {
-                return None;
-            }
+            _ => None,
+        };
+        if let Some(kc) = key_code {
+            let cte = KeyEvent::new(kc, KeyModifiers::NONE);
+            return Some(Event::Key(cte));
         }
+        return None;
     }
 
     if let Some(mouse_e) = wasm_bindgen::JsCast::dyn_ref::<web_sys::MouseEvent>(&e) {
