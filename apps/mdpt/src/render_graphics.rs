@@ -4,7 +4,6 @@ use rust_pixel::{
     asset2sprite,
     context::Context,
     game::Render,
-    render::adapter::RtComposite,
     render::scene::Scene,
     render::sprite::Sprite,
     render::style::Color,
@@ -90,10 +89,11 @@ impl MdptRender {
     }
 
     /// GPU transition rendering:
-    /// prev_page → RT0, current_page → RT1, blend → RT3, present RT3
+    /// prev_page → RT0, current_page → RT1, blend → RT2, present fullscreen
     fn draw_gpu_transition(&mut self, ctx: &mut Context, data: &mut MdptModel) {
-        // Ensure RT3 is visible for GPU transition
-        ctx.adapter.set_rt_visible(3, true);
+        // Hide RT3 — we blend directly into RT2 which present_default()
+        // renders fullscreen without ratio scaling
+        ctx.adapter.set_rt_visible(3, false);
 
         // Step 1: Render prev page buffer to RT0
         if let Some(prev) = &mut data.prev_page {
@@ -113,24 +113,27 @@ impl MdptRender {
             ctx.adapter.rbuf2rt(&rbuf, 1, false);
         }
 
-        // Step 3: GPU shader blend RT0 + RT1 → RT3
-        ctx.adapter.blend_rts(
-            0, 1, 3,
-            data.gpu_effect.effect_type(),
-            data.gpu_effect.progress,
-        );
-
         // Hide image sprite during transitions
         let sprite = self.scene.get_sprite(IMAGE_TAG);
         sprite.set_hidden(true);
 
-        // Step 4: Render empty scene to RT2 (needed for internal buffer swap)
+        // Step 3: Render empty scene to RT2 (needed for internal buffer swap)
         let tui_buffer = self.scene.tui_buffer_mut();
         tui_buffer.reset();
         self.scene.draw_to_rt(ctx).unwrap();
 
-        // Step 5: Present RT3 fullscreen (the GPU transition blend)
-        ctx.adapter.present(&[RtComposite::fullscreen(3)]);
+        // Step 4: GPU shader blend RT0 + RT1 → RT2 (overwrite RT2)
+        // Blending to RT2 instead of RT3 because present_default() renders
+        // RT2 fullscreen [0,0,1,1] without ratio scaling, while RT3 gets
+        // viewport scaled by 1/ratio (causing ~83% size on web)
+        ctx.adapter.blend_rts(
+            0, 1, 2,
+            data.gpu_effect.effect_type(),
+            data.gpu_effect.progress,
+        );
+
+        // Step 5: Present — RT2 fullscreen (contains transition result)
+        ctx.adapter.present_default();
     }
 
     /// Draw status bar on the last row of tui_buffer

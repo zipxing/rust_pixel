@@ -191,10 +191,13 @@ impl Adapter for WebAdapter {
             // Bind screen framebuffer
             gl_pixel_renderer.gl_pixel.bind_screen(&gl_pixel_renderer.gl);
 
-            // Clear screen
+            // Set viewport to game content area (pixel_w x pixel_h)
+            // Without this, bind_screen resets viewport to canvas_size which
+            // is larger than the game area, causing oversized black borders
             use glow::HasContext;
             let gl = gl_pixel_renderer.get_gl();
             unsafe {
+                gl.viewport(0, 0, self.base.gr.pixel_w as i32, self.base.gr.pixel_h as i32);
                 gl.clear_color(0.0, 0.0, 0.0, 1.0);
                 gl.clear(glow::COLOR_BUFFER_BIT);
             }
