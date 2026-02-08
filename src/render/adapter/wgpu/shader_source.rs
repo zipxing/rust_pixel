@@ -290,11 +290,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     var texColor = textureSample(source, source_sampler, input.uv);
     if (input.v_bold > 0.5) {
         let ts = vec2<f32>(textureDimensions(source));
-        let dx = 0.5 / ts.x;
-        let dy = 0.5 / ts.y;
+        let dx = 0.35 / ts.x;
         texColor = max(texColor, textureSample(source, source_sampler, input.uv + vec2<f32>(dx, 0.0)));
         texColor = max(texColor, textureSample(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0)));
-        texColor.a = smoothstep(0.05, 0.8, texColor.a);
+        texColor.a = smoothstep(0.15, 0.95, texColor.a);
     }
     return texColor * input.colorj;
 }

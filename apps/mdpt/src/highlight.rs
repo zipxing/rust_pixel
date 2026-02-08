@@ -79,6 +79,26 @@ impl CodeHighlighter {
         lines
     }
 
+    /// Override a theme's background and foreground colors.
+    /// Accepts RustPixel Color::Rgba values and converts to syntect colors.
+    pub fn override_theme_colors(
+        &mut self,
+        theme_name: &str,
+        bg: Option<(u8, u8, u8, u8)>,
+        fg: Option<(u8, u8, u8, u8)>,
+    ) {
+        if let Some(theme) = self.theme_set.themes.get_mut(theme_name) {
+            if let Some((r, g, b, a)) = bg {
+                theme.settings.background =
+                    Some(syntect::highlighting::Color { r, g, b, a });
+            }
+            if let Some((r, g, b, a)) = fg {
+                theme.settings.foreground =
+                    Some(syntect::highlighting::Color { r, g, b, a });
+            }
+        }
+    }
+
     /// List available theme names.
     pub fn theme_names(&self) -> Vec<&str> {
         self.theme_set.themes.keys().map(|s| s.as_str()).collect()

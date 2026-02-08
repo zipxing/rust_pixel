@@ -1,7 +1,7 @@
 use crate::highlight::{CodeHighlighter, HighlightedLine};
 use crate::parser::parse_markdown;
 use crate::slide::{Presentation, SlideElement};
-use crate::slide_builder::build_slide_page;
+use crate::slide_builder::{build_slide_page, CODE_FG_HL, CODE_LINE_BG};
 use rust_pixel::{
     context::Context,
     event::{Event, KeyCode},
@@ -9,6 +9,7 @@ use rust_pixel::{
     get_game_config,
     render::Buffer,
     render::effect::{BufferTransition, TransitionType},
+    render::style::Color,
     ui::UIPage,
     util::Rect,
 };
@@ -165,6 +166,19 @@ impl MdptModel {
         } else {
             &self.presentation.front_matter.code_theme
         };
+
+        // Override syntect theme bg/fg with our constants
+        let bg = if let Color::Rgba(r, g, b, a) = CODE_LINE_BG {
+            Some((r, g, b, a))
+        } else {
+            None
+        };
+        let fg = if let Color::Rgba(r, g, b, a) = CODE_FG_HL {
+            Some((r, g, b, a))
+        } else {
+            None
+        };
+        self.highlighter.override_theme_colors(code_theme, bg, fg);
 
         for (si, slide) in self.presentation.slides.iter().enumerate() {
             for (ei, elem) in slide.elements.iter().enumerate() {

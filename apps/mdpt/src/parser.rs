@@ -112,7 +112,23 @@ pub fn parse_markdown(contents: &str) -> Presentation {
             }
             NodeValue::CodeBlock(block) => {
                 let element = parse_code_block(block);
+                // Insert extra Pause elements for dynamic highlight groups
+                let extra_pauses = if let SlideElement::CodeBlock {
+                    ref highlight_groups, ..
+                } = element
+                {
+                    if highlight_groups.len() > 1 {
+                        highlight_groups.len() - 1
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
                 current_slide.elements.push(element);
+                for _ in 0..extra_pauses {
+                    current_slide.elements.push(SlideElement::Pause);
+                }
             }
             NodeValue::List(_) => {
                 let items = parse_list(node, 0);
@@ -122,8 +138,17 @@ pub fn parse_markdown(contents: &str) -> Presentation {
                 let table = parse_table(node);
                 current_slide.elements.push(table);
             }
+            NodeValue::BlockQuote => {
+                let (alert_type, text) = parse_block_quote(node);
+                if !text.is_empty() {
+                    current_slide.elements.push(SlideElement::BlockQuote {
+                        text,
+                        alert_type,
+                    });
+                }
+            }
             _ => {
-                // Skip unsupported elements (BlockQuote, etc.)
+                // Skip unsupported elements
             }
         }
     }
@@ -243,17 +268,32 @@ fn extract_image<'a>(node: &'a AstNode<'a>) -> Option<SlideElement> {
     None
 }
 
-/// Parse a code block, extracting language and +line_numbers flag.
+/// Parse a code block, extracting language, +line_numbers, +no_background, and {highlight} groups.
 fn parse_code_block(block: &NodeCodeBlock) -> SlideElement {
     let info = block.info.trim().to_string();
     let mut language = String::new();
     let mut line_numbers = false;
+    let mut no_background = false;
+    let mut highlight_groups: Vec<Vec<LineRange>> = Vec::new();
 
     for part in info.split_whitespace() {
         if part == "+line_numbers" {
             line_numbers = true;
+        } else if part == "+no_background" {
+            no_background = true;
+        } else if part.starts_with('{') && part.ends_with('}') {
+            highlight_groups = parse_highlight_groups(&part[1..part.len() - 1]);
         } else if language.is_empty() {
-            language = part.to_string();
+            // Language may have highlight spec attached, e.g. "rust{1-4|6-10}"
+            if let Some(brace_pos) = part.find('{') {
+                language = part[..brace_pos].to_string();
+                if part.ends_with('}') {
+                    highlight_groups =
+                        parse_highlight_groups(&part[brace_pos + 1..part.len() - 1]);
+                }
+            } else {
+                language = part.to_string();
+            }
         }
     }
 
@@ -261,7 +301,73 @@ fn parse_code_block(block: &NodeCodeBlock) -> SlideElement {
         language,
         code: block.literal.clone(),
         line_numbers,
+        no_background,
+        highlight_groups,
     }
+}
+
+/// Parse highlight group spec like "1-4|6-10|all" into Vec<Vec<LineRange>>.
+fn parse_highlight_groups(spec: &str) -> Vec<Vec<LineRange>> {
+    spec.split('|')
+        .map(|group| {
+            group
+                .split(',')
+                .filter_map(|part| {
+                    let part = part.trim();
+                    if part.eq_ignore_ascii_case("all") {
+                        Some(LineRange::All)
+                    } else if let Some(dash) = part.find('-') {
+                        let start = part[..dash].trim().parse::<usize>().ok()?;
+                        let end = part[dash + 1..].trim().parse::<usize>().ok()?;
+                        Some(LineRange::Range(start, end))
+                    } else {
+                        let n = part.parse::<usize>().ok()?;
+                        Some(LineRange::Single(n))
+                    }
+                })
+                .collect()
+        })
+        .filter(|g: &Vec<LineRange>| !g.is_empty())
+        .collect()
+}
+
+/// Parse a block quote node, detecting GitHub-style alerts.
+/// Returns (alert_type, text_content).
+fn parse_block_quote<'a>(node: &'a AstNode<'a>) -> (Option<AlertType>, String) {
+    let mut paragraphs = Vec::new();
+    for child in node.children() {
+        let data = child.data.borrow();
+        if matches!(&data.value, NodeValue::Paragraph) {
+            drop(data);
+            paragraphs.push(collect_text(child));
+        }
+    }
+
+    let full_text = paragraphs.join("\n");
+
+    // Check for GitHub-style alert: text starts with [!TYPE]
+    // comrak may join lines with spaces, so check for "[!type]" prefix
+    let trimmed = full_text.trim_start();
+    if trimmed.starts_with("[!") {
+        if let Some(close) = trimmed.find(']') {
+            let alert_name = &trimmed[2..close];
+            let alert_type = match alert_name.to_lowercase().as_str() {
+                "note" => Some(AlertType::Note),
+                "tip" => Some(AlertType::Tip),
+                "important" => Some(AlertType::Important),
+                "warning" => Some(AlertType::Warning),
+                "caution" => Some(AlertType::Caution),
+                _ => None,
+            };
+            if alert_type.is_some() {
+                // Remaining text after the [!TYPE] marker
+                let rest = trimmed[close + 1..].trim().to_string();
+                return (alert_type, rest);
+            }
+        }
+    }
+
+    (None, full_text)
 }
 
 /// Parse a list node into flat ListItems with depth (like presenterm).
@@ -569,5 +675,135 @@ Some text
         assert!(matches!(&elems[0], SlideElement::Title { .. }));
         assert!(matches!(&elems[1], SlideElement::Divider));
         assert!(matches!(&elems[2], SlideElement::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_author_front_matter() {
+        let md = r#"---
+title: Test
+author: Alice
+---
+
+# Hello
+"#;
+        let pres = parse_markdown(md);
+        assert_eq!(pres.front_matter.author, "Alice");
+    }
+
+    #[test]
+    fn test_no_background_code_block() {
+        let md = r#"```cpp +no_background +line_numbers
+int x = 42;
+```
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::CodeBlock {
+                language,
+                line_numbers,
+                no_background,
+                ..
+            } => {
+                assert_eq!(language, "cpp");
+                assert!(line_numbers);
+                assert!(no_background);
+            }
+            other => panic!("expected CodeBlock, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_highlight_groups() {
+        let md = r#"```rust {1-4|6-10|all} +line_numbers
+fn main() {}
+```
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::CodeBlock {
+                highlight_groups, ..
+            } => {
+                assert_eq!(highlight_groups.len(), 3);
+                // Group 0: 1-4
+                assert!(matches!(highlight_groups[0][0], LineRange::Range(1, 4)));
+                // Group 1: 6-10
+                assert!(matches!(highlight_groups[1][0], LineRange::Range(6, 10)));
+                // Group 2: all
+                assert!(matches!(highlight_groups[2][0], LineRange::All));
+            }
+            other => panic!("expected CodeBlock, got {:?}", other),
+        }
+        // Should also have 2 extra Pause elements
+        let elems = &pres.slides[0].elements;
+        assert!(matches!(&elems[1], SlideElement::Pause));
+        assert!(matches!(&elems[2], SlideElement::Pause));
+    }
+
+    #[test]
+    fn test_highlight_groups_attached_to_language() {
+        let md = r#"```rust{1|3|5}
+code
+```
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::CodeBlock {
+                language,
+                highlight_groups,
+                ..
+            } => {
+                assert_eq!(language, "rust");
+                assert_eq!(highlight_groups.len(), 3);
+                assert!(matches!(highlight_groups[0][0], LineRange::Single(1)));
+                assert!(matches!(highlight_groups[1][0], LineRange::Single(3)));
+                assert!(matches!(highlight_groups[2][0], LineRange::Single(5)));
+            }
+            other => panic!("expected CodeBlock, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_block_quote() {
+        let md = r#"> This is a block quote
+> spanning multiple lines
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::BlockQuote { text, alert_type } => {
+                assert!(text.contains("block quote"));
+                assert!(alert_type.is_none());
+            }
+            other => panic!("expected BlockQuote, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_github_alert_caution() {
+        let md = r#"> [!caution]
+> Be very careful here
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::BlockQuote { text, alert_type } => {
+                assert!(matches!(alert_type, Some(AlertType::Caution)));
+                assert!(text.contains("careful"));
+            }
+            other => panic!("expected BlockQuote, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_github_alert_note() {
+        let md = r#"> [!note]
+> This is a note
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::BlockQuote { text, alert_type } => {
+                assert!(matches!(alert_type, Some(AlertType::Note)));
+                assert!(text.contains("note"));
+            }
+            other => panic!("expected BlockQuote, got {:?}", other),
+        }
     }
 }

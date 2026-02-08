@@ -5,6 +5,7 @@ use serde::Deserialize;
 #[serde(default)]
 pub struct FrontMatter {
     pub title: String,
+    pub author: String,
     pub theme: String,
     pub transition: String,
     pub title_animation: String,
@@ -16,6 +17,7 @@ impl Default for FrontMatter {
     fn default() -> Self {
         Self {
             title: String::new(),
+            author: String::new(),
             theme: "dark".to_string(),
             transition: "dissolve".to_string(),
             title_animation: "typewriter".to_string(),
@@ -83,6 +85,9 @@ pub enum SlideElement {
         language: String,
         code: String,
         line_numbers: bool,
+        no_background: bool,
+        /// Dynamic line highlight groups, e.g. {1-4|6-10|all}
+        highlight_groups: Vec<Vec<LineRange>>,
     },
 
     /// List (flat representation with depth, like presenterm)
@@ -127,6 +132,33 @@ pub enum SlideElement {
 
     /// Vertical spacer (N blank lines)
     Spacer(u16),
+
+    /// Block quote with optional GitHub alert type
+    BlockQuote {
+        text: String,
+        alert_type: Option<AlertType>,
+    },
+}
+
+/// Line range for dynamic code highlighting
+#[derive(Debug, Clone)]
+pub enum LineRange {
+    /// Single line (1-indexed)
+    Single(usize),
+    /// Inclusive range (1-indexed)
+    Range(usize, usize),
+    /// All lines
+    All,
+}
+
+/// GitHub-style alert types for block quotes
+#[derive(Debug, Clone)]
+pub enum AlertType {
+    Note,
+    Tip,
+    Important,
+    Warning,
+    Caution,
 }
 
 /// Supported text animation types

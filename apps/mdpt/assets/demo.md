@@ -1,5 +1,6 @@
 ---
 title: MDPT Demo
+author: RustPixel Team
 theme: dark
 transition: dissolve
 title_animation: typewriter
@@ -10,6 +11,7 @@ margin: 4
 # Welcome to MDPT
 
 A Markdown Presentation Tool built with RustPixel
+白日依山尽 黄河入海流
 
 Press Space or Right arrow to advance
 
@@ -114,6 +116,71 @@ or side-by-side content.
   * Markdown parsing
   * Code highlighting
   * Slide transitions
+
+<!-- end_slide -->
+
+## Ordered Lists
+
+1. Parse Markdown with comrak
+2. Build slide elements
+3. Render with RustPixel UI
+4. GPU-accelerated transitions
+
+<!-- divider -->
+
+Mixed with unordered:
+
+* Unordered item A
+* Unordered item B
+
+---
+
+## Dynamic Code Highlighting
+
+Press Space to cycle through highlight groups:
+
+```rust {1-4|6-10|all} +line_numbers
+#[derive(Clone, Debug)]
+struct Person {
+    name: String,
+}
+
+impl Person {
+    fn say_hello(&self) {
+        println!("hello, I'm {}", self.name)
+    }
+}
+```
+
+---
+
+## Code: No Background
+
+Code can be displayed without background:
+
+```cpp +no_background +line_numbers
+// C++ example
+string greet() {
+    return "hi mom";
+}
+```
+
+---
+
+## Block Quotes & Alerts
+
+> Lorem ipsum dolor sit amet. Eos laudantium animi
+> ut ipsam beataeet et exercitationem deleniti.
+
+<!-- pause -->
+
+> [!note]
+> This is a helpful note for the audience.
+
+<!-- pause -->
+
+> [!caution]
+> Be careful with this operation!
 
 ---
 

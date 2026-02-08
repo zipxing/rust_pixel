@@ -1,9 +1,23 @@
 use crate::highlight::HighlightedLine;
-use crate::slide::{AnimationType, ColumnAlignment, FrontMatter, SlideContent, SlideElement};
+use crate::slide::{
+    AlertType, AnimationType, ColumnAlignment, FrontMatter, LineRange, SlideContent, SlideElement,
+};
 use rust_pixel::render::style::{Color, Modifier, Style};
 use rust_pixel::ui::*;
 use rust_pixel::util::Rect;
 use std::collections::HashMap;
+
+/// Code block fill background (area outside code text)
+const CODE_BG: Color = Color::Rgba(20, 24, 22, 255);
+
+/// Code line background (syntect span bg, overrides theme default)
+pub const CODE_LINE_BG: Color = Color::Rgba(20, 24, 22, 255);
+
+/// Default code foreground for non-highlighted (dimmed) lines
+pub const CODE_FG: Color = Color::Rgba(120, 125, 135, 255);
+
+/// Default code foreground for highlighted lines
+pub const CODE_FG_HL: Color = Color::Rgba(220, 225, 235, 255);
 
 /// Deferred widgets to be added as Panel children after canvas rendering.
 type DeferredWidgets = Vec<Box<dyn rust_pixel::ui::Widget>>;
@@ -132,6 +146,20 @@ pub fn build_slide_page(
                 label.set_bounds(bounds);
                 deferred_widgets.push(Box::new(label));
                 y += 1;
+
+                // Render author below title on first slide
+                if *level == 1 && slide_idx == 0 && !front_matter.author.is_empty() {
+                    let author_style = Style::default()
+                        .fg(Color::Gray)
+                        .add_modifier(Modifier::ITALIC);
+                    let mut author_label = Label::new(&front_matter.author)
+                        .with_style(author_style)
+                        .with_align(align);
+                    author_label.set_bounds(Rect::new(x_start, y, w, 1));
+                    deferred_widgets.push(Box::new(author_label));
+                    y += 1;
+                }
+
                 // Add spacing after titles
                 if *level <= 2 {
                     y += 1;
@@ -155,28 +183,63 @@ pub fn build_slide_page(
                 y += line_count;
                 y += 1; // paragraph spacing
             }
-            SlideElement::CodeBlock { language, code, line_numbers } => {
+            SlideElement::CodeBlock {
+                language,
+                code,
+                line_numbers,
+                no_background,
+                highlight_groups,
+            } => {
                 let (x_start, w) = if in_column_layout {
                     (col_x, col_width(&column_widths, current_col, content_width))
                 } else {
                     (margin, content_width)
                 };
 
-                // Draw code block background
-                let bg_style = Style::default()
-                    .fg(Color::Gray)
-                    .bg(Color::Rgba(40, 44, 52, 255));
+                let has_bg = !no_background;
+                let bg_style = if has_bg {
+                    Style::default()
+                        .fg(Color::Gray)
+                        .bg(CODE_BG)
+                } else {
+                    Style::default().fg(Color::Gray)
+                };
+
+                // Compute active highlight group based on step
+                let active_group_idx = if highlight_groups.len() > 1 {
+                    let pauses_after = highlight_groups.len() - 1;
+                    let consumed = boundary.saturating_sub(ei + 1).min(pauses_after);
+                    consumed
+                } else {
+                    0
+                };
+                let active_ranges: Option<&Vec<LineRange>> =
+                    if !highlight_groups.is_empty() {
+                        highlight_groups.get(active_group_idx)
+                    } else {
+                        None
+                    };
 
                 // Language label
                 if !language.is_empty() {
                     let lang_label = format!(" {} ", language);
-                    let lang_style = Style::default()
-                        .fg(Color::Cyan)
-                        .bg(Color::Rgba(40, 44, 52, 255));
+                    let lang_style = if has_bg {
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .bg(CODE_BG)
+                    } else {
+                        Style::default().fg(Color::Cyan)
+                    };
                     buf.set_string(x_start, y, &lang_label, lang_style);
-                    // Fill rest of line with bg
-                    let fill = " ".repeat((w as usize).saturating_sub(lang_label.len()));
-                    buf.set_string(x_start + lang_label.len() as u16, y, &fill, bg_style);
+                    if has_bg {
+                        let fill = " ".repeat((w as usize).saturating_sub(lang_label.len()));
+                        buf.set_string(
+                            x_start + lang_label.len() as u16,
+                            y,
+                            &fill,
+                            bg_style,
+                        );
+                    }
                     y += 1;
                 }
 
@@ -193,18 +256,32 @@ pub fn build_slide_page(
                             break;
                         }
 
+                        let line_num_1based = li + 1;
+                        let is_highlighted =
+                            is_line_in_ranges(line_num_1based, active_ranges);
+
                         // Fill line background
-                        let bg_fill = " ".repeat(w as usize);
-                        buf.set_string(x_start, y, &bg_fill, bg_style);
+                        if has_bg {
+                            let bg_fill = " ".repeat(w as usize);
+                            buf.set_string(x_start, y, &bg_fill, bg_style);
+                        }
 
                         let mut cx = x_start;
 
                         // Line numbers
                         if *line_numbers {
-                            let num_str = format!("{:>width$} ", li + 1, width = (line_num_width - 2) as usize);
-                            let num_style = Style::default()
-                                .fg(Color::DarkGray)
-                                .bg(Color::Rgba(40, 44, 52, 255));
+                            let num_str = format!(
+                                "{:>width$} ",
+                                line_num_1based,
+                                width = (line_num_width - 2) as usize
+                            );
+                            let num_style = if has_bg {
+                                Style::default()
+                                    .fg(Color::DarkGray)
+                                    .bg(CODE_BG)
+                            } else {
+                                Style::default().fg(Color::DarkGray)
+                            };
                             buf.set_string(cx, y, &num_str, num_style);
                             cx += line_num_width;
                         }
@@ -215,9 +292,18 @@ pub fn build_slide_page(
                                 break;
                             }
                             let remaining = (x_start + w - cx) as usize;
-                            let text = rust_pixel::ui::text_util::truncate_to_width(&span.text, remaining);
-                            let text_w = rust_pixel::ui::text_util::display_width(&text);
-                            buf.set_string(cx, y, &text, span.style);
+                            let text = rust_pixel::ui::text_util::truncate_to_width(
+                                &span.text, remaining,
+                            );
+                            let text_w =
+                                rust_pixel::ui::text_util::display_width(&text);
+                            let style = if is_highlighted {
+                                span.style
+                            } else {
+                                // Non-highlighted lines use CODE_FG
+                                span.style.fg(CODE_FG)
+                            };
+                            buf.set_string(cx, y, &text, style);
                             cx += text_w as u16;
                         }
 
@@ -225,17 +311,36 @@ pub fn build_slide_page(
                     }
                 } else {
                     // Fallback: render code without highlighting
-                    let plain_style = Style::default()
-                        .fg(Color::White)
-                        .bg(Color::Rgba(40, 44, 52, 255));
-                    for line in code.lines() {
+                    let hl_style = if has_bg {
+                        Style::default().fg(CODE_FG_HL).bg(CODE_BG)
+                    } else {
+                        Style::default().fg(CODE_FG_HL)
+                    };
+                    let dim_style = if has_bg {
+                        Style::default().fg(CODE_FG).bg(CODE_BG)
+                    } else {
+                        Style::default().fg(CODE_FG)
+                    };
+                    for (li, line) in code.lines().enumerate() {
                         if y >= content_height {
                             break;
                         }
-                        let bg_fill = " ".repeat(w as usize);
-                        buf.set_string(x_start, y, &bg_fill, bg_style);
-                        let truncated = rust_pixel::ui::text_util::truncate_to_width(line, w as usize);
-                        buf.set_string(x_start, y, &truncated, plain_style);
+                        let is_highlighted =
+                            is_line_in_ranges(li + 1, active_ranges);
+                        if has_bg {
+                            let bg_fill = " ".repeat(w as usize);
+                            buf.set_string(x_start, y, &bg_fill, bg_style);
+                        }
+                        let truncated = rust_pixel::ui::text_util::truncate_to_width(
+                            line,
+                            w as usize,
+                        );
+                        let style = if is_highlighted {
+                            hl_style
+                        } else {
+                            dim_style
+                        };
+                        buf.set_string(x_start, y, &truncated, style);
                         y += 1;
                     }
                 }
@@ -356,6 +461,62 @@ pub fn build_slide_page(
             SlideElement::Spacer(n) => {
                 y += n;
             }
+            SlideElement::BlockQuote { text, alert_type } => {
+                let (x_start, w) = if in_column_layout {
+                    (col_x, col_width(&column_widths, current_col, content_width))
+                } else {
+                    (margin, content_width)
+                };
+
+                // Alert header
+                if let Some(at) = alert_type {
+                    let (icon, label_text, color) = match at {
+                        AlertType::Note => ("👉", "NOTE", Color::Blue),
+                        AlertType::Tip => ("💡", "TIP", Color::Green),
+                        AlertType::Important => ("❗", "IMPORTANT", Color::Magenta),
+                        AlertType::Warning => ("⚠", "WARNING", Color::Yellow),
+                        AlertType::Caution => ("❤️", "CAUTION", Color::Red),
+                    };
+                    let bar_style = Style::default().fg(color);
+                    let icon_style = if matches!(at, AlertType::Caution) {
+                        Style::default().fg(color).scale(0.75, 0.75)
+                    } else {
+                        Style::default().fg(color)
+                    };
+                    buf.set_string(x_start, y, "│ ", bar_style);
+                    buf.set_string(x_start + 2, y, icon, icon_style);
+                    // emoji = 2 cells + 1 space
+                    let after_icon = x_start + 2 + 2 + 1;
+                    buf.set_string(after_icon, y, label_text, bar_style);
+                    y += 1;
+                }
+
+                // Quote text lines with vertical bar
+                let bar_color = if let Some(at) = alert_type {
+                    match at {
+                        AlertType::Note => Color::Blue,
+                        AlertType::Tip => Color::Green,
+                        AlertType::Important => Color::Magenta,
+                        AlertType::Warning => Color::Yellow,
+                        AlertType::Caution => Color::Red,
+                    }
+                } else {
+                    Color::DarkGray
+                };
+                let bar_style = Style::default().fg(bar_color);
+                let text_style = Style::default().fg(Color::Gray);
+                let quote_w = w.saturating_sub(2); // "│ " takes 2 cells
+                let lines = rust_pixel::ui::text_util::wrap_text(text, quote_w);
+                for line in &lines {
+                    if y >= content_height {
+                        break;
+                    }
+                    buf.set_string(x_start, y, "│ ", bar_style);
+                    buf.set_string(x_start + 2, y, line, text_style);
+                    y += 1;
+                }
+                y += 1; // spacing after block quote
+            }
         }
     }
 
@@ -407,11 +568,43 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
             SlideElement::Image { .. } => h += 1,
             SlideElement::AnimatedText { .. } => h += 1,
             SlideElement::Spacer(n) => h += n,
+            SlideElement::BlockQuote { text, alert_type } => {
+                if alert_type.is_some() {
+                    h += 1; // alert header
+                }
+                let lines = rust_pixel::ui::text_util::wrap_text(text, width.saturating_sub(2));
+                h += lines.len() as u16 + 1;
+            }
             SlideElement::Pause | SlideElement::JumpToMiddle => {}
             SlideElement::ColumnLayout { .. } | SlideElement::Column(_) | SlideElement::ResetLayout => {}
         }
     }
     h
+}
+
+/// Check if a 1-indexed line number is within any of the given ranges.
+/// Returns true if no ranges specified (show all highlighted).
+fn is_line_in_ranges(line: usize, ranges: Option<&Vec<LineRange>>) -> bool {
+    let ranges = match ranges {
+        Some(r) if !r.is_empty() => r,
+        _ => return true, // No highlight groups = all lines highlighted
+    };
+    for range in ranges {
+        match range {
+            LineRange::All => return true,
+            LineRange::Single(n) => {
+                if line == *n {
+                    return true;
+                }
+            }
+            LineRange::Range(start, end) => {
+                if line >= *start && line <= *end {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Style for heading levels.

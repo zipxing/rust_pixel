@@ -39,11 +39,10 @@ pub const FRAGMENT_SRC_SYMBOLS: &str = r#"
                 vec4 texColor = texture(source, uv);
                 if (v_bold > 0.5) {
                     ivec2 ts = textureSize(source, 0);
-                    float dx = 0.5 / float(ts.x);
-                    float dy = 0.5 / float(ts.y);
+                    float dx = 0.35 / float(ts.x);
                     texColor = max(texColor, texture(source, uv + vec2(dx, 0.0)));
                     texColor = max(texColor, texture(source, uv + vec2(-dx, 0.0)));
-                    texColor.a = smoothstep(0.05, 0.8, texColor.a);
+                    texColor.a = smoothstep(0.15, 0.95, texColor.a);
                 }
                 color = texColor * colorj;
             }
