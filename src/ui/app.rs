@@ -70,7 +70,7 @@ pub struct UIPage {
     buffer: Buffer,
     running: bool,
     frame_time: Duration,
-    last_frame: Instant,
+    last_frame: Option<Instant>,
 }
 
 /// Type alias for backward compatibility
@@ -89,7 +89,11 @@ impl UIPage {
             buffer: Buffer::empty(Rect::new(0, 0, width, height)),
             running: false,
             frame_time: Duration::from_millis(16), // ~60 FPS
-            last_frame: Instant::now(),
+            // Instant::now() panics on wasm32-unknown-unknown
+            #[cfg(not(target_arch = "wasm32"))]
+            last_frame: Some(Instant::now()),
+            #[cfg(target_arch = "wasm32")]
+            last_frame: None,
         }
     }
 
@@ -211,15 +215,20 @@ impl UIPage {
 
     pub fn start(&mut self) {
         self.running = true;
-        self.last_frame = Instant::now();
+        #[cfg(not(target_arch = "wasm32"))]
+        { self.last_frame = Some(Instant::now()); }
     }
 
     pub fn should_render(&self) -> bool {
-        self.last_frame.elapsed() >= self.frame_time
+        match self.last_frame {
+            Some(t) => t.elapsed() >= self.frame_time,
+            None => true,
+        }
     }
 
     pub fn frame_complete(&mut self) {
-        self.last_frame = Instant::now();
+        #[cfg(not(target_arch = "wasm32"))]
+        { self.last_frame = Some(Instant::now()); }
     }
 
     /// Get immutable reference to internal buffer
@@ -245,11 +254,12 @@ impl UIPage {
     }
 
     /// Simple main loop for testing (in a real app, you'd integrate with rust_pixel's main loop)
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn run_simple(&mut self) -> UIResult<()> {
         self.start();
 
         while self.running {
-            let dt = self.last_frame.elapsed().as_secs_f32();
+            let dt = self.last_frame.map_or(0.016, |t| t.elapsed().as_secs_f32());
 
             // Update
             self.update(dt)?;

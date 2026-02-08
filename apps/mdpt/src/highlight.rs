@@ -25,9 +25,14 @@ pub struct CodeHighlighter {
 
 impl CodeHighlighter {
     pub fn new() -> Self {
+        log::info!("[mdpt] CodeHighlighter::new: loading syntax_set...");
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        log::info!("[mdpt] CodeHighlighter::new: syntax_set loaded, loading theme_set...");
+        let theme_set = ThemeSet::load_defaults();
+        log::info!("[mdpt] CodeHighlighter::new: theme_set loaded");
         Self {
-            syntax_set: SyntaxSet::load_defaults_newlines(),
-            theme_set: ThemeSet::load_defaults(),
+            syntax_set,
+            theme_set,
         }
     }
 

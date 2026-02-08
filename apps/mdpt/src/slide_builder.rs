@@ -76,9 +76,12 @@ pub fn build_slide_page(
     let mut col_top_y: u16 = 0;   // y where columns start (top-aligned)
     let mut col_max_y: u16 = 0;   // max y reached across all columns
 
+    log::info!("[mdpt] build_slide_page: boundary={}, margin={}, content={}x{}", boundary, margin, content_width, content_height);
+
     // First pass: if JumpToMiddle, calculate content height
     if boundary > 0 {
         if let Some(SlideElement::JumpToMiddle) = slide.elements.first() {
+            log::info!("[mdpt] build_slide_page: JumpToMiddle detected");
             // Calculate total content height of remaining elements
             let total_h = estimate_content_height(&slide.elements[1..boundary], content_width);
             let start_y = content_height.saturating_sub(total_h) / 2;
@@ -95,6 +98,7 @@ pub fn build_slide_page(
         if y >= content_height && !matches!(elem, SlideElement::Image { .. }) {
             break;
         }
+        log::info!("[mdpt] build_slide_page: rendering elem {} / {:?}", ei, std::mem::discriminant(elem));
 
         match elem {
             SlideElement::JumpToMiddle => {
@@ -140,6 +144,7 @@ pub fn build_slide_page(
                 col_x = margin;
             }
             SlideElement::Title { level, text } => {
+                log::info!("[mdpt] Title: level={} text='{}' y={}", level, &text.chars().take(20).collect::<String>(), y);
                 let (x_start, w) = if in_column_layout {
                     (col_x, col_width(&column_widths, current_col, content_width))
                 } else {
@@ -153,11 +158,13 @@ pub fn build_slide_page(
                     TextAlign::Left
                 };
                 let bounds = Rect::new(x_start, y, w, 1);
+                log::info!("[mdpt] Title: creating Label bounds=({},{},{},{})", x_start, y, w, 1);
                 let mut label = Label::new(text)
                     .with_style(style)
                     .with_align(align);
                 label.set_bounds(bounds);
                 deferred_widgets.push(Box::new(label));
+                log::info!("[mdpt] Title: Label done");
                 y += 1;
 
                 // Render author below title on first slide
@@ -180,6 +187,7 @@ pub fn build_slide_page(
                 }
             }
             SlideElement::Paragraph { text } => {
+                log::info!("[mdpt] Paragraph: text='{}' y={}", &text.chars().take(20).collect::<String>(), y);
                 let (x_start, w) = if in_column_layout {
                     (col_x, col_width(&column_widths, current_col, content_width))
                 } else {
@@ -187,13 +195,16 @@ pub fn build_slide_page(
                 };
 
                 let style = Style::default().fg(Color::White);
+                log::info!("[mdpt] Paragraph: calling wrap_text w={}", w);
                 let line_count = rust_pixel::ui::text_util::wrap_text(text, w).len() as u16;
+                log::info!("[mdpt] Paragraph: wrap_text done, line_count={}", line_count);
                 let h = line_count.min(content_height.saturating_sub(y));
                 let mut label = Label::new(text)
                     .with_style(style)
                     .with_wrap(true);
                 label.set_bounds(Rect::new(x_start, y, w, h));
                 deferred_widgets.push(Box::new(label));
+                log::info!("[mdpt] Paragraph: Label done");
                 y += line_count;
                 y += 1; // paragraph spacing
             }
@@ -415,6 +426,7 @@ pub fn build_slide_page(
                 y += 1;
             }
             SlideElement::AnimatedText { text, animation } => {
+                log::info!("[mdpt] AnimatedText: text='{}' animation={:?} y={}", &text.chars().take(20).collect::<String>(), animation, y);
                 let (x_start, w) = if in_column_layout {
                     (col_x, col_width(&column_widths, current_col, content_width))
                 } else {
@@ -422,6 +434,7 @@ pub fn build_slide_page(
                 };
 
                 // Draw emoji bullet on canvas (shared style with PresentList)
+                log::info!("[mdpt] AnimatedText: calling set_string for marker");
                 buf.set_string(x_start, y, DEFAULT_MARKERS[0], default_marker_style());
                 // Label starts after emoji(2) + space(1) = 3 cells
                 let label_x = x_start + 3;
@@ -542,13 +555,18 @@ pub fn build_slide_page(
     }
 
     // Add deferred widgets as Panel children (rendered on top of canvas)
+    log::info!("[mdpt] build_slide_page: adding {} deferred widgets", deferred_widgets.len());
     for widget in deferred_widgets {
         panel.add_child(widget);
     }
 
+    log::info!("[mdpt] build_slide_page: creating UIPage {}x{}", width, height);
     let mut page = UIPage::new(width, height);
+    log::info!("[mdpt] build_slide_page: setting root widget");
     page.set_root_widget(Box::new(panel));
+    log::info!("[mdpt] build_slide_page: calling page.start()");
     page.start();
+    log::info!("[mdpt] build_slide_page: done");
     (page, image_placements)
 }
 

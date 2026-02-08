@@ -3,6 +3,10 @@ name = "mdpt"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
 [build-dependencies]
 cfg_aliases = { workspace = true }
 
@@ -14,11 +18,11 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 log = "0.4"
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.53"
+web-sys = "0.3.80"
 
 [features]
-default = ["term"]
 term = ["rust_pixel/term"]
 sdl = ["rust_pixel/sdl"]
 glow = ["rust_pixel/glow"]
 wgpu = ["rust_pixel/wgpu"]
-web = ["rust_pixel/web"]

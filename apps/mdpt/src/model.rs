@@ -84,19 +84,25 @@ pub struct MdptModel {
 
 impl MdptModel {
     pub fn new() -> Self {
-        let args: Vec<String> = std::env::args().collect();
-        let md_file = if args.len() > 1 {
-            args[1].clone()
-        } else {
-            String::new()
+        log::info!("[mdpt] MdptModel::new: start");
+        #[cfg(not(target_arch = "wasm32"))]
+        let md_file = {
+            let args: Vec<String> = std::env::args().collect();
+            if args.len() > 1 { args[1].clone() } else { String::new() }
         };
+        #[cfg(target_arch = "wasm32")]
+        let md_file = String::new();
+
+        log::info!("[mdpt] MdptModel::new: creating highlighter...");
+        let highlighter = CodeHighlighter::new();
+        log::info!("[mdpt] MdptModel::new: highlighter created, building Self...");
 
         Self {
             presentation: Presentation::new(),
             current_slide: 0,
             current_step: 0,
             md_file,
-            highlighter: CodeHighlighter::new(),
+            highlighter,
             highlight_cache: HashMap::new(),
             image_placements: Vec::new(),
             current_page: None,
@@ -130,35 +136,50 @@ impl MdptModel {
     }
 
     fn load_presentation(&mut self) {
-        let md_path = if self.md_file.is_empty() {
-            let project_path = &get_game_config().project_path;
-            format!("{}/assets/demo.md", project_path)
-        } else {
-            self.md_file.clone()
+        log::info!("[mdpt] load_presentation: start");
+
+        // WASM: embed demo.md at compile time since std::fs is unavailable
+        #[cfg(target_arch = "wasm32")]
+        let contents = include_str!("../assets/demo.md").to_string();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let contents = {
+            let md_path = if self.md_file.is_empty() {
+                let project_path = &get_game_config().project_path;
+                format!("{}/assets/demo.md", project_path)
+            } else {
+                self.md_file.clone()
+            };
+
+            match std::fs::read_to_string(&md_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    log::error!("Failed to load {}: {}", md_path, e);
+                    format!("# mdpt\n\nFailed to load: {}\n\nError: {}", md_path, e)
+                }
+            }
         };
 
-        match std::fs::read_to_string(&md_path) {
-            Ok(contents) => {
-                self.presentation = parse_markdown(&contents);
-                self.current_slide = 0;
-                self.current_step = 0;
-                self.build_highlight_cache();
-                self.rebuild_current_page();
-                log::info!(
-                    "Loaded presentation: {} slides from {}",
-                    self.presentation.slides.len(),
-                    md_path
-                );
-            }
-            Err(e) => {
-                log::error!("Failed to load {}: {}", md_path, e);
-                self.presentation = parse_markdown(&format!(
-                    "# mdpt\n\nFailed to load: {}\n\nError: {}",
-                    md_path, e
-                ));
-                self.rebuild_current_page();
-            }
-        }
+        log::info!("[mdpt] load_presentation: contents loaded, len={}", contents.len());
+
+        self.presentation = parse_markdown(&contents);
+        log::info!("[mdpt] load_presentation: parse_markdown done, {} slides", self.presentation.slides.len());
+
+        self.current_slide = 0;
+        self.current_step = 0;
+
+        log::info!("[mdpt] load_presentation: calling build_highlight_cache...");
+        self.build_highlight_cache();
+        log::info!("[mdpt] load_presentation: build_highlight_cache done");
+
+        log::info!("[mdpt] load_presentation: calling rebuild_current_page...");
+        self.rebuild_current_page();
+        log::info!("[mdpt] load_presentation: rebuild_current_page done");
+
+        log::info!(
+            "Loaded presentation: {} slides",
+            self.presentation.slides.len(),
+        );
     }
 
     fn build_highlight_cache(&mut self) {
@@ -168,6 +189,7 @@ impl MdptModel {
         } else {
             &self.presentation.front_matter.code_theme
         };
+        log::info!("[mdpt] build_highlight_cache: theme={}", code_theme);
 
         // Override syntect theme bg/fg with our constants
         let bg = if let Color::Rgba(r, g, b, a) = CODE_LINE_BG {
@@ -181,22 +203,29 @@ impl MdptModel {
             None
         };
         self.highlighter.override_theme_colors(code_theme, bg, fg);
+        log::info!("[mdpt] build_highlight_cache: theme colors overridden");
 
+        let mut code_block_count = 0;
         for (si, slide) in self.presentation.slides.iter().enumerate() {
             for (ei, elem) in slide.elements.iter().enumerate() {
                 if let SlideElement::CodeBlock {
                     language, code, ..
                 } = elem
                 {
+                    log::info!("[mdpt] build_highlight_cache: highlighting slide={} elem={} lang={}", si, ei, language);
                     let lines = self.highlighter.highlight(code, language, code_theme);
                     self.highlight_cache.insert((si, ei), lines);
+                    code_block_count += 1;
                 }
             }
         }
+        log::info!("[mdpt] build_highlight_cache: done, {} code blocks highlighted", code_block_count);
     }
 
     fn rebuild_current_page(&mut self) {
+        log::info!("[mdpt] rebuild_current_page: slide={} step={}", self.current_slide, self.current_step);
         if let Some(slide) = self.presentation.slides.get(self.current_slide) {
+            log::info!("[mdpt] rebuild_current_page: building slide page with {} elements", slide.elements.len());
             let (page, images) = build_slide_page(
                 slide,
                 self.current_slide,
@@ -206,9 +235,11 @@ impl MdptModel {
                 MDPTW,
                 MDPTH,
             );
+            log::info!("[mdpt] rebuild_current_page: build_slide_page done, {} images", images.len());
             self.current_page = Some(page);
             self.image_placements = images;
             self.last_rendered = (self.current_slide, self.current_step);
+            log::info!("[mdpt] rebuild_current_page: done");
         }
     }
 
@@ -332,7 +363,9 @@ impl MdptModel {
 
 impl Model for MdptModel {
     fn init(&mut self, _context: &mut Context) {
+        log::info!("[mdpt] Model::init called, calling load_presentation...");
         self.load_presentation();
+        log::info!("[mdpt] Model::init done");
     }
 
     fn handle_input(&mut self, context: &mut Context, dt: f32) {
