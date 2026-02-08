@@ -2,7 +2,7 @@
 title: MDPT Demo
 author: zipxing
 theme: dark
-transition: dissolve
+transition: cycle
 title_animation: typewriter
 code_theme: base16-ocean.dark
 margin: 4

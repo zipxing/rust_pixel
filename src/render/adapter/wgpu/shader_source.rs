@@ -755,9 +755,10 @@ fn transition(uv: vec2<f32>) -> vec4<f32> {
     let time = uniforms.progress;
     let stime = sin(time * 3.14159265 / 2.0);
     let phase = time * 3.14159265 * 3.0;
-    let y = 1.0 - abs(cos(phase)) * (1.0 - stime);  // Y轴翻转，适配WGPU坐标系
-    let d = uv.y - y;
-    let from_color = getFromColor(vec2<f32>(uv.x, uv.y + (1.0 - y)));
+    let y = abs(cos(phase)) * (1.0 - stime);
+    // Use GL-style y (1.0 - uv.y) for boundary check, flip scroll direction for WGPU UV
+    let d = (1.0 - uv.y) - y;
+    let from_color = getFromColor(vec2<f32>(uv.x, uv.y - (1.0 - y)));
     let to_color = getToColor(uv);
     return mix(to_color, from_color, step(d, 0.0));
 }
@@ -886,15 +887,19 @@ fn getToColor(uv: vec2<f32>) -> vec4<f32> {
 fn transition(p: vec2<f32>) -> vec4<f32> {
     let amplitude = 30.0;
     let speed = 30.0;
-    
-    let dir = p - vec2<f32>(0.5);
+
+    // Work in GL-style UV (y=0 bottom, y=1 top) for consistent ripple direction
+    let gl_p = vec2<f32>(p.x, 1.0 - p.y);
+    let dir = gl_p - vec2<f32>(0.5);
     let dist = length(dir);
-    
+
     if (dist > uniforms.progress) {
         return mix(getFromColor(p), getToColor(p), uniforms.progress);
     } else {
         let offset = dir * sin(dist * amplitude - uniforms.progress * speed);
-        return mix(getFromColor(p + offset), getToColor(p), uniforms.progress);
+        // Convert offset back to WGPU UV space (flip y)
+        let wgpu_offset = vec2<f32>(offset.x, -offset.y);
+        return mix(getFromColor(p + wgpu_offset), getToColor(p), uniforms.progress);
     }
 }
 

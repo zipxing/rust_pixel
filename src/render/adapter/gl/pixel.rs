@@ -303,8 +303,8 @@ impl GlPixelRenderer {
             let pch = canvas_height as f32;
 
             // Calculate scaled dimensions for transition layer
-            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+            let pw = pcw / ratio_x;
+            let ph = pch / ratio_y;
 
             // Create unified transform with proper scaling
             let mut unified_transform = crate::render::graph::UnifiedTransform::new();
@@ -625,8 +625,8 @@ impl GlPixelRenderer {
             let pcw = canvas_width as f32;
             let pch = canvas_height as f32;
 
-            let pw = 40.0f32 * crate::render::adapter::PIXEL_SYM_WIDTH.get().expect("lazylock init") / ratio_x;
-            let ph = 25.0f32 * crate::render::adapter::PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ratio_y;
+            let pw = pcw / ratio_x;
+            let ph = pch / ratio_y;
 
             let mut unified_transform = UnifiedTransform::new();
             unified_transform.scale(pw / pcw, ph / pch);

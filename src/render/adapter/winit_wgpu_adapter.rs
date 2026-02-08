@@ -792,9 +792,14 @@ impl WinitWgpuAdapter {
         let rx = self.base.gr.ratio_x;
         let ry = self.base.gr.ratio_y;
 
-        // Calculate game area dimensions (matching OpenGL version)
-        let pw = (40.0f32 * PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx) as u32;
-        let ph = (25.0f32 * PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry) as u32;
+        // Calculate game area dimensions from actual canvas size
+        let (cw, ch) = if let Some(pr) = &self.wgpu_pixel_renderer {
+            (pr.canvas_width, pr.canvas_height)
+        } else {
+            return Err("wgpu_pixel_renderer not initialized".to_string());
+        };
+        let pw = (cw as f32 / rx) as u32;
+        let ph = (ch as f32 / ry) as u32;
 
         // Build composites: RT2 fullscreen + RT3 game area
         let composites = vec![
@@ -1138,6 +1143,10 @@ impl Adapter for WinitWgpuAdapter {
         effect_type: usize,
         progress: f32,
     ) {
+        // Make destination RT visible (matching glow adapter behavior)
+        if let Some(pr) = &mut self.wgpu_pixel_renderer {
+            pr.set_render_texture_hidden(dst_texture, false);
+        }
         // WGPU uses full transition rendering API
         if let Err(e) =
             self.render_transition_to_texture_wgpu(src_texture1, src_texture2, dst_texture, effect_type, progress)

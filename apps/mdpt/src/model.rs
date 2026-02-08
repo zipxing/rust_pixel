@@ -8,7 +8,7 @@ use rust_pixel::{
     game::Model,
     get_game_config,
     render::Buffer,
-    render::effect::{BufferTransition, TransitionType},
+    render::effect::{BufferTransition, GpuBlendEffect, GpuTransition, TransitionType},
     render::style::Color,
     ui::UIPage,
     util::Rect,
@@ -35,17 +35,9 @@ impl TransitionState {
             from_slide: 0,
             to_slide: 0,
             progress: 0.0,
-            duration: 0.5,
+            duration: 0.8,
             transition: TransitionType::WipeLeft.create(),
         }
-    }
-
-    pub fn start(&mut self, from: usize, to: usize, transition_type: TransitionType) {
-        self.active = true;
-        self.from_slide = from;
-        self.to_slide = to;
-        self.progress = 0.0;
-        self.transition = transition_type.create();
     }
 
     pub fn update(&mut self, dt: f32) -> bool {
@@ -80,9 +72,14 @@ pub struct MdptModel {
     pub image_placements: Vec<ImagePlacement>,
     /// Track last rendered state to avoid unnecessary rebuilds
     last_rendered: (usize, usize),
-    /// Available transition types
+    /// Available CPU transition types
     transition_types: Vec<TransitionType>,
-    transition_idx: usize,
+    /// GPU transition effect state
+    pub gpu_effect: GpuBlendEffect,
+    /// Whether current transition uses GPU (true) or CPU (false)
+    pub use_gpu_transition: bool,
+    /// Unified transition index cycling through all CPU+GPU effects
+    unified_transition_idx: usize,
 }
 
 impl MdptModel {
@@ -114,7 +111,9 @@ impl MdptModel {
                 TransitionType::SlideUp,
                 TransitionType::WipeDown,
             ],
-            transition_idx: 0,
+            gpu_effect: GpuBlendEffect::default(),
+            use_gpu_transition: true,
+            unified_transition_idx: 0,
         }
     }
 
@@ -213,10 +212,59 @@ impl MdptModel {
         }
     }
 
-    fn next_transition_type(&mut self) -> TransitionType {
-        let t = self.transition_types[self.transition_idx].clone();
-        self.transition_idx = (self.transition_idx + 1) % self.transition_types.len();
-        t
+    /// Pick next transition from the unified pool (5 CPU + 7 GPU).
+    /// Returns (cpu_transition_type, is_gpu, gpu_transition).
+    fn next_unified_transition(&mut self, going_forward: bool) {
+        let cpu_count = self.transition_types.len(); // 5
+        let gpu_count = GpuTransition::count();      // 7
+        let total = cpu_count + gpu_count;            // 12
+
+        // Check if front_matter locks to a specific GPU transition
+        let fm_trans = &self.presentation.front_matter.transition;
+        let fixed_gpu = match fm_trans.as_str() {
+            "squares" => Some(GpuTransition::Squares),
+            "heart" => Some(GpuTransition::Heart),
+            "noise" => Some(GpuTransition::Noise),
+            "rotate" => Some(GpuTransition::RotateZoom),
+            "bounce" => Some(GpuTransition::Bounce),
+            "dissolve" => Some(GpuTransition::Dispersion),
+            "ripple" => Some(GpuTransition::Ripple),
+            _ => None,
+        };
+        if let Some(gpu_trans) = fixed_gpu {
+            self.use_gpu_transition = true;
+            self.transition.duration = 1.0;
+            self.gpu_effect = GpuBlendEffect::new(gpu_trans, 0.0);
+            return;
+        }
+
+        let idx = self.unified_transition_idx;
+        self.unified_transition_idx = (idx + 1) % total;
+
+        if idx < cpu_count {
+            // CPU transition
+            self.use_gpu_transition = false;
+            let mut t = self.transition_types[idx].clone();
+            if !going_forward {
+                t = match t {
+                    TransitionType::WipeLeft => TransitionType::WipeRight,
+                    TransitionType::WipeDown => TransitionType::WipeUp,
+                    TransitionType::SlideLeft => TransitionType::SlideRight,
+                    TransitionType::SlideUp => TransitionType::SlideDown,
+                    other => other,
+                };
+            }
+            self.transition.transition = t.create();
+            self.transition.duration = 0.5;
+            self.gpu_effect = GpuBlendEffect::default();
+        } else {
+            // GPU transition
+            self.use_gpu_transition = true;
+            self.transition.duration = 1.0;
+            let gpu_idx = idx - cpu_count;
+            let gpu_trans = GpuTransition::from_index(gpu_idx);
+            self.gpu_effect = GpuBlendEffect::new(gpu_trans, 0.0);
+        }
     }
 
     fn navigate_slide(&mut self, new_slide: usize, new_step: usize) {
@@ -224,20 +272,10 @@ impl MdptModel {
         let slide_changed = new_slide != old_slide;
 
         if slide_changed && !self.transition.active {
-            // Determine transition direction before updating state
             let going_forward = new_slide > old_slide;
-            let transition_type = if going_forward {
-                self.next_transition_type()
-            } else {
-                // Reverse direction for going back
-                match self.next_transition_type() {
-                    TransitionType::WipeLeft => TransitionType::WipeRight,
-                    TransitionType::WipeDown => TransitionType::WipeUp,
-                    TransitionType::SlideLeft => TransitionType::SlideRight,
-                    TransitionType::SlideUp => TransitionType::SlideDown,
-                    other => other,
-                }
-            };
+
+            // Pick next transition from unified CPU+GPU pool
+            self.next_unified_transition(going_forward);
 
             // Save current page as prev for transition
             self.prev_page = self.current_page.take();
@@ -248,7 +286,10 @@ impl MdptModel {
             self.rebuild_current_page();
 
             if self.prev_page.is_some() {
-                self.transition.start(old_slide, new_slide, transition_type);
+                self.transition.active = true;
+                self.transition.from_slide = old_slide;
+                self.transition.to_slide = new_slide;
+                self.transition.progress = 0.0;
             }
         } else if !slide_changed && new_step != self.current_step {
             // Step change within same slide - just rebuild, no transition
@@ -335,6 +376,8 @@ impl Model for MdptModel {
             // Transition completed
             self.prev_page = None;
         }
+        // Sync GPU effect progress with transition state
+        self.gpu_effect.progress = self.transition.progress;
 
         // Update current page animations
         if !self.transition.active {
