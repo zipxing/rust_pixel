@@ -88,7 +88,7 @@ utils.loop = update => {
  * - WebAssembly.instantiate() is inherently async
  * - Memory allocation and linking must complete before use
  */
-import init, {PixelGame, wasm_init_pixel_assets} from "./pkg/pixel.js";
+import init, {PixelGame, wasm_init_pixel_assets, wasm_set_app_data} from "./pkg/pixel.js";
 const wasm = await init();
 
 /**
@@ -137,6 +137,29 @@ const symbolMapText = await symbolMapResponse.text();
 
 // Initialize all assets at once: game config + texture + symbol_map
 wasm_init_pixel_assets("pixel_game", timg.width, timg.height, imgdata, symbolMapText);
+
+/**
+ * Optional App Data Loading
+ *
+ * Apps can receive text data (e.g., markdown files, config) from the browser
+ * via the `?data=` URL parameter. This avoids compile-time embedding and allows
+ * switching content without recompilation.
+ *
+ * Example: http://localhost:8080?data=assets/demo.md
+ */
+const dataUrl = new URLSearchParams(window.location.search).get('data');
+if (dataUrl) {
+    try {
+        const dataResponse = await fetch(dataUrl);
+        if (dataResponse.ok) {
+            wasm_set_app_data(await dataResponse.text());
+        } else {
+            console.warn(`Failed to load app data: ${dataUrl} (${dataResponse.status})`);
+        }
+    } catch (e) {
+        console.warn('Failed to load app data:', e);
+    }
+}
 
 /**
  * Game Instance Creation and Initialization

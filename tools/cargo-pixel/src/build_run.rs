@@ -69,50 +69,34 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
         .map(|s| s.as_str())
         .unwrap_or("8080");
 
+    // Collect extra arguments to forward to the binary via `--`
+    let other_args: Vec<&str> = args
+        .get_many::<String>("other")
+        .unwrap_or_default()
+        .map(|s| s.as_str())
+        .collect();
+    let other_part = if other_args.is_empty() {
+        String::new()
+    } else {
+        format!("-- {}", other_args.join(" "))
+    };
+
     match build_type.as_str() {
         "term" | "t" => cmds.push(format!(
             "cargo {} -p {} --features term {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.get_many::<String>("other")
-                .unwrap_or_default()
-                .map(|s| s.as_str())
-                .collect::<Vec<&str>>()
-                .join(" ")
+            subcmd, mod_name, release, other_part
         )),
         "glow" | "g" => cmds.push(format!(
             "cargo {} -p {} --features glow {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.get_many::<String>("other")
-                .unwrap_or_default()
-                .map(|s| s.as_str())
-                .collect::<Vec<&str>>()
-                .join(" ")
+            subcmd, mod_name, release, other_part
         )),
         "wgpu" | "wg" => cmds.push(format!(
             "cargo {} -p {} --features wgpu {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.get_many::<String>("other")
-                .unwrap_or_default()
-                .map(|s| s.as_str())
-                .collect::<Vec<&str>>()
-                .join(" ")
+            subcmd, mod_name, release, other_part
         )),
         "sdl" | "s" => cmds.push(format!(
             "cargo {} -p {} --features sdl {} {}",
-            subcmd, // build or run
-            mod_name,
-            release,
-            args.get_many::<String>("other")
-                .unwrap_or_default()
-                .map(|s| s.as_str())
-                .collect::<Vec<&str>>()
-                .join(" ")
+            subcmd, mod_name, release, other_part
         )),
         "web" | "w" => {
             let mut crate_path = "".to_string();

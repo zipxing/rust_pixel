@@ -138,9 +138,11 @@ impl MdptModel {
     fn load_presentation(&mut self) {
         log::info!("[mdpt] load_presentation: start");
 
-        // WASM: embed demo.md at compile time since std::fs is unavailable
+        // WASM: load md from JS via wasm_set_app_data (use ?data=assets/demo.md URL param)
         #[cfg(target_arch = "wasm32")]
-        let contents = include_str!("../assets/demo.md").to_string();
+        let contents = rust_pixel::get_wasm_app_data()
+            .unwrap_or("# mdpt\n\nOpen with `?data=assets/demo.md` URL parameter to load a presentation")
+            .to_string();
 
         #[cfg(not(target_arch = "wasm32"))]
         let contents = {

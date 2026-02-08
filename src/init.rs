@@ -68,6 +68,25 @@ pub fn get_game_config() -> &'static GameConfig {
 }
 
 // ============================================================================
+// App Data Cache (for passing text data from JS to WASM at startup)
+// ============================================================================
+
+/// App-specific text data passed from JavaScript before game creation.
+///
+/// Use `?data=assets/demo.md` URL parameter in the browser to load data.
+pub static WASM_APP_DATA: OnceLock<String> = OnceLock::new();
+
+/// Store app data (called from JavaScript before game creation)
+pub fn set_wasm_app_data(data: &str) {
+    let _ = WASM_APP_DATA.set(data.to_string());
+}
+
+/// Retrieve app data passed from JavaScript, if any
+pub fn get_wasm_app_data() -> Option<&'static str> {
+    WASM_APP_DATA.get().map(|s| s.as_str())
+}
+
+// ============================================================================
 // Texture Data Cache
 // ============================================================================
 

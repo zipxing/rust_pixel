@@ -58,6 +58,9 @@ pub use init::init_pixel_assets;
 #[cfg(target_arch = "wasm32")]
 pub use init::wasm_init_pixel_assets;
 
+#[cfg(not(feature = "base"))]
+pub use init::{get_wasm_app_data, set_wasm_app_data};
+
 /// Target frames per second for the main game loop. Keep this moderate to conserve CPU.
 pub const GAME_FRAME: u32 = 60;
 

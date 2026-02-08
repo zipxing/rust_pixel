@@ -105,6 +105,14 @@ macro_rules! app {
                 rust_pixel::wasm_init_pixel_assets(game_name, tex_w, tex_h, tex_data, symbol_map_json)
             }
 
+            /// Pass app-specific text data from JavaScript before game creation.
+            /// Use URL parameter `?data=assets/demo.md` to specify the data file.
+            #[cfg(target_arch = "wasm32")]
+            #[wasm_bindgen]
+            pub fn wasm_set_app_data(data: &str) {
+                rust_pixel::set_wasm_app_data(data);
+            }
+
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             pub struct [<$name Game>] {
                 g: Game<[<$name Model>], [<$name Render>]>,
