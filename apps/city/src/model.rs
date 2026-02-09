@@ -15,17 +15,17 @@ use std::fmt;
 pub const NROW: usize = 5;
 pub const NCOL: usize = 5;
 #[cfg(graphics_mode)]
-pub const CELLW: usize = 8;
+pub const CELLW: usize = 4;
 #[cfg(not(graphics_mode))]
 pub const CELLW: usize = 10;
 #[cfg(graphics_mode)]
-pub const CELLH: usize = 8;
+pub const CELLH: usize = 4;
 #[cfg(not(graphics_mode))]
 pub const CELLH: usize = 5;
 #[cfg(graphics_mode)]
-pub const ADJX: usize = 9;
+pub const ADJX: usize = 5;
 #[cfg(graphics_mode)]
-pub const ADJY: usize = 10;
+pub const ADJY: usize = 5;
 #[cfg(not(graphics_mode))]
 pub const ADJX: usize = 3;
 #[cfg(not(graphics_mode))]

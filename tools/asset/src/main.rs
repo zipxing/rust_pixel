@@ -1,17 +1,16 @@
 //! # RustPixel Asset Packer
 //!
-//! A command-line tool for packing multiple images into a texture atlas and generating
+//! A command-line tool for packing images into a texture atlas and generating
 //! corresponding `.pix` files for use with the RustPixel engine.
 //!
-//! ## Features
+//! ## Packing Modes
 //!
-//! - **Image Packing**: Uses MaxRects bin packing algorithm for efficient space utilization
-//! - **Size Optimization**: Automatically adjusts image sizes to multiples of 16 pixels
-//! - **Texture Atlas Generation**: Creates a 4096x4096 texture atlas with region support
-//! - **PIX File Generation**: Generates `.pix` metadata files for each packed image
-//! - **Region-aware Packing**: Supports packing into Sprite region (blocks 0-159)
+//! - **Linear (default)**: Slices images into 16×16 cells and fills blocks sequentially.
+//!   Existing PETSCII/TUI/emoji/CJK content is preserved. New cells are appended
+//!   starting from the first free block.
+//! - **BinPack**: Uses MaxRects bin packing to fit whole images as rectangles.
 //!
-//! ## 4096x4096 Texture Layout
+//! ## 4096×4096 Texture Layout
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
@@ -32,14 +31,12 @@
 //! ## Usage
 //!
 //! ```bash
-//! cargo pixel r asset t -r <input_folder> <output_folder> [--region sprite|full] [--start-block N]
+//! # Linear mode (default): slice images into 16×16 cells, fill blocks sequentially
+//! cargo pixel r asset t -r <input_folder> <output_folder> --symbol-map assets/pix/symbol_map.json
+//!
+//! # BinPack mode: pack whole images using MaxRects algorithm
+//! cargo pixel r asset t -r <input_folder> <output_folder> --mode binpack
 //! ```
-//!
-//! ## Input Requirements
-//!
-//! - Input folder should contain image files (PNG, JPEG, etc.)
-//! - Images will be automatically resized and packed efficiently
-//! - The tool requires `assets/pix/symbols.png` to exist as base texture
 //!
 //! ## Output
 //!
@@ -215,7 +212,7 @@ impl BlockOccupancy {
     }
 }
 
-/// Parses symbol_map.json and calculates block occupancy
+/// Parses symbol_map.json for region stats display
 fn parse_symbol_map(path: &str) -> Result<BlockOccupancy, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read symbol map '{}': {}", path, e))?;
@@ -235,13 +232,6 @@ fn parse_symbol_map(path: &str) -> Result<BlockOccupancy, String> {
             end_block,
             symbol_count,
         ));
-
-        // Mark sprite region blocks as occupied if they have symbols
-        if region_name == "sprite" && symbol_count > 0 {
-            // Block 0 is occupied for basic PETSCII symbols
-            occupancy.occupied_sprite_blocks.insert(0);
-            occupancy.total_sprite_symbols = symbol_count;
-        }
     }
 
     // Sort stats by start_block for display
@@ -250,7 +240,51 @@ fn parse_symbol_map(path: &str) -> Result<BlockOccupancy, String> {
     Ok(occupancy)
 }
 
-/// Packing region mode
+/// Scan the base texture to detect which sprite blocks have non-transparent content.
+/// A block is considered occupied if ANY pixel within it has alpha > 0.
+fn detect_occupied_blocks_from_texture(atlas: &RgbaImage) -> BlockOccupancy {
+    let mut occupancy = BlockOccupancy::default();
+
+    for block_idx in 0..layout::SPRITE_BLOCKS {
+        let block_col = block_idx % 16;
+        let block_row = block_idx / 16;
+        let bx = block_col * 256;
+        let by = block_row * 256;
+
+        let mut has_content = false;
+        'scan: for py in 0..256u32 {
+            for px in 0..256u32 {
+                let x = bx + px;
+                let y = by + py;
+                if x < atlas.width() && y < atlas.height() {
+                    let pixel = atlas.get_pixel(x, y);
+                    if pixel[3] > 0 {
+                        has_content = true;
+                        break 'scan;
+                    }
+                }
+            }
+        }
+
+        if has_content {
+            occupancy.occupied_sprite_blocks.insert(block_idx);
+        }
+    }
+
+    occupancy.total_sprite_symbols = occupancy.occupied_sprite_blocks.len() * 256;
+    occupancy
+}
+
+/// Packing mode
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PackingMode {
+    /// Slice images into 16×16 cells, fill blocks linearly (default)
+    Linear,
+    /// MaxRects bin packing (whole images)
+    BinPack,
+}
+
+/// Packing region mode (for binpack mode)
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum PackingRegion {
     /// Pack into sprite region only (y: 0-2559)
@@ -267,6 +301,78 @@ impl PackingRegion {
             _ => None,
         }
     }
+}
+
+// ============================================================================
+// Linear Packing
+// ============================================================================
+
+/// Linear packer: fills blocks sequentially with 16×16 cells
+struct LinearPacker {
+    current_block: u32,
+    current_sym: u32, // 0-255 within current block
+    max_block: u32,   // exclusive upper bound (160 for sprite region)
+}
+
+impl LinearPacker {
+    fn new(start_block: u32) -> Self {
+        Self {
+            current_block: start_block,
+            current_sym: 0,
+            max_block: layout::SPRITE_BLOCKS,
+        }
+    }
+
+    /// Get next available (block, sym) slot, advancing the cursor
+    fn next_slot(&mut self) -> Option<(u32, u32)> {
+        if self.current_block >= self.max_block {
+            return None;
+        }
+        let result = (self.current_block, self.current_sym);
+        self.current_sym += 1;
+        if self.current_sym >= 256 {
+            self.current_sym = 0;
+            self.current_block += 1;
+        }
+        Some(result)
+    }
+
+    /// Convert (block, sym) to pixel coordinates in the 4096×4096 atlas
+    fn to_pixel(block: u32, sym: u32) -> (u32, u32) {
+        let block_col = block % 16;
+        let block_row = block / 16;
+        let sym_col = sym % 16;
+        let sym_row = sym / 16;
+        let px = block_col * 256 + sym_col * 16;
+        let py = block_row * 256 + sym_row * 16;
+        (px, py)
+    }
+
+    /// How many cells have been placed so far (for summary)
+    fn cells_placed(&self, start_block: u32) -> u32 {
+        (self.current_block - start_block) * 256 + self.current_sym
+    }
+
+    /// How many blocks have been (partially) used
+    fn blocks_used(&self, start_block: u32) -> u32 {
+        if self.current_sym > 0 {
+            self.current_block - start_block + 1
+        } else {
+            self.current_block - start_block
+        }
+    }
+}
+
+/// Result of linearly packing one image
+struct LinearImageResult {
+    /// Original filename
+    path: String,
+    /// Image width in cells
+    width_cells: u32,
+    /// Image height in cells
+    height_cells: u32,
+    /// Per-cell (block_idx, sym_idx) mapping, row-major: [row][col]
+    cell_mappings: Vec<Vec<(u32, u32)>>,
 }
 
 /// Represents a rectangular area in 2D space
@@ -529,6 +635,7 @@ struct ImageRect {
 struct Args {
     input_folder: String,
     output_folder: String,
+    mode: PackingMode,
     region: PackingRegion,
     start_block: Option<u32>,  // None means auto-detect from symbol map
     scale_factor: f32,
@@ -541,53 +648,36 @@ fn print_usage_and_exit() -> ! {
     eprintln!("RustPixel Asset Packer (4096x4096 Texture Atlas)");
     eprintln!();
     eprintln!("USAGE:");
-    eprintln!("    cargo pixel r asset t -r <INPUT_FOLDER> <OUTPUT_FOLDER> [OPTIONS]");
+    eprintln!("    cargo pixel r asset t -r -- <INPUT_FOLDER> <OUTPUT_FOLDER> [OPTIONS]");
     eprintln!();
     eprintln!("ARGS:");
     eprintln!("    <INPUT_FOLDER>     Folder containing images to pack");
     eprintln!("    <OUTPUT_FOLDER>    Folder where output files will be written");
     eprintln!();
     eprintln!("OPTIONS:");
+    eprintln!("    --mode <MODE>      Packing mode: 'linear' (default) or 'binpack'");
+    eprintln!("                       linear: Slice images into 16x16 cells, fill blocks");
+    eprintln!("                               sequentially. Preserves existing content.");
+    eprintln!("                       binpack: MaxRects bin packing (whole images).");
     eprintln!("    --symbols <PATH>   Path to base symbols.png texture");
     eprintln!("                       (default: assets/pix/symbols.png)");
     eprintln!("    --symbol-map <PATH>");
     eprintln!("                       Path to symbol_map.json for auto block detection");
     eprintln!("                       When provided, automatically selects first free block");
-    eprintln!("    --region <MODE>    Packing region: 'sprite' (default) or 'full'");
-    eprintln!("                       sprite: Pack into sprite region (y: 0-2559)");
-    eprintln!("                       full: Pack into entire 4096x4096 atlas");
+    eprintln!("    --region <MODE>    (binpack only) Packing region: 'sprite' or 'full'");
     eprintln!("    --start-block <N>  Start packing from block N (overrides auto-detect)");
     eprintln!("                       Blocks 0-159 are in sprite region");
     eprintln!("    --scale <FACTOR>   Scale factor for images (default: 1.0)");
-    eprintln!("                       Use 0.5 to scale to half size");
-    eprintln!();
-    eprintln!("TEXTURE LAYOUT:");
-    eprintln!("    ┌──────────────────────────────────────────────────┐");
-    eprintln!("    │ SPRITE (y: 0-2559) - 160 blocks, 16x16px symbols │");
-    eprintln!("    ├──────────────────────────────────────────────────┤");
-    eprintln!("    │ TUI (x: 0-2559) + EMOJI (x: 2560-4095)          │");
-    eprintln!("    │ y: 2560-3071, 16x32px / 32x32px symbols         │");
-    eprintln!("    ├──────────────────────────────────────────────────┤");
-    eprintln!("    │ CJK (y: 3072-4095) - 64 blocks, 32x32px symbols │");
-    eprintln!("    └──────────────────────────────────────────────────┘");
-    eprintln!();
-    eprintln!("OUTPUT:");
-    eprintln!("    texture_atlas.png  - Combined texture atlas (4096x4096)");
-    eprintln!("    *.pix              - Metadata files for each input image");
     eprintln!();
     eprintln!("EXAMPLES:");
-    eprintln!("    # Basic usage with auto block detection");
+    eprintln!("    # Linear mode (default): slice and fill blocks sequentially");
     eprintln!("    asset ./sprites ./output --symbol-map assets/pix/symbol_map.json");
     eprintln!();
-    eprintln!("    # Specify both symbols.png and symbol_map.json");
-    eprintln!("    asset ./sprites ./output --symbols assets/pix/symbols.png \\");
-    eprintln!("          --symbol-map assets/pix/symbol_map.json");
+    eprintln!("    # Linear mode with explicit start block");
+    eprintln!("    asset ./sprites ./output --start-block 4");
     eprintln!();
-    eprintln!("    # Manual start block (overrides auto-detect)");
-    eprintln!("    asset ./icons ./output --start-block 80 --scale 0.5");
-    eprintln!();
-    eprintln!("    # Pack into full atlas");
-    eprintln!("    asset ./images ./output --region full");
+    eprintln!("    # BinPack mode: whole-image rectangle packing");
+    eprintln!("    asset ./sprites ./output --mode binpack --start-block 4");
 
     process::exit(1);
 }
@@ -607,6 +697,7 @@ fn parse_args() -> Args {
 
     let input_folder = args[1].clone();
     let output_folder = args[2].clone();
+    let mut mode = PackingMode::Linear;
     let mut region = PackingRegion::Sprite;
     let mut start_block: Option<u32> = None;
     let mut scale_factor = 1.0f32;
@@ -617,6 +708,22 @@ fn parse_args() -> Args {
     let mut i = 3;
     while i < args.len() {
         match args[i].as_str() {
+            "--mode" => {
+                if i + 1 < args.len() {
+                    mode = match args[i + 1].to_lowercase().as_str() {
+                        "linear" => PackingMode::Linear,
+                        "binpack" => PackingMode::BinPack,
+                        _ => {
+                            eprintln!("Error: Invalid mode '{}'. Use 'linear' or 'binpack'.", args[i + 1]);
+                            process::exit(1);
+                        }
+                    };
+                    i += 2;
+                } else {
+                    eprintln!("Error: --mode requires a value");
+                    process::exit(1);
+                }
+            }
             "--symbols" => {
                 if i + 1 < args.len() {
                     symbols_path = args[i + 1].clone();
@@ -682,6 +789,7 @@ fn parse_args() -> Args {
     Args {
         input_folder,
         output_folder,
+        mode,
         region,
         start_block,
         scale_factor,
@@ -888,6 +996,130 @@ fn generate_pix_files(image_rects: &[ImageRect], output_dir: &str) -> Result<(),
     Ok(())
 }
 
+/// Linear packing: slice images into 16×16 cells, fill atlas blocks sequentially
+fn linear_pack_images(
+    images: Vec<(String, DynamicImage)>,
+    packer: &mut LinearPacker,
+    atlas: &mut RgbaImage,
+    scale_factor: f32,
+) -> Vec<LinearImageResult> {
+    let mut results = Vec::new();
+
+    for (filename, img) in images {
+        let (orig_width, orig_height) = img.dimensions();
+
+        // Apply scale factor first
+        let scaled = if scale_factor != 1.0 {
+            let sw = ((orig_width as f32 * scale_factor) as u32).max(config::GRID_SIZE);
+            let sh = ((orig_height as f32 * scale_factor) as u32).max(config::GRID_SIZE);
+            let (sw, sh) = adjust_size_to_grid(sw, sh);
+            img.resize_exact(sw, sh, FilterType::Lanczos3)
+        } else {
+            img
+        };
+
+        let (w, h) = scaled.dimensions();
+        let (aw, ah) = adjust_size_to_grid(w, h);
+
+        // Pad to grid multiples if needed
+        let padded = if aw != w || ah != h {
+            let mut p = DynamicImage::new_rgba8(aw, ah);
+            p.copy_from(&scaled, 0, 0).expect("Failed to pad image");
+            p
+        } else {
+            scaled
+        };
+
+        let cells_w = aw / 16;
+        let cells_h = ah / 16;
+        let mut cell_mappings: Vec<Vec<(u32, u32)>> = Vec::new();
+        let mut ok = true;
+
+        for row in 0..cells_h {
+            let mut row_map = Vec::new();
+            for col in 0..cells_w {
+                if let Some((block, sym)) = packer.next_slot() {
+                    // Copy 16×16 cell from source to atlas
+                    let src_x = col * 16;
+                    let src_y = row * 16;
+                    let (dst_x, dst_y) = LinearPacker::to_pixel(block, sym);
+
+                    for py in 0..16 {
+                        for px in 0..16 {
+                            let pixel = padded.get_pixel(src_x + px, src_y + py);
+                            atlas.put_pixel(dst_x + px, dst_y + py, pixel);
+                        }
+                    }
+
+                    row_map.push((block, sym));
+                } else {
+                    eprintln!("Warning: No space for '{}' (ran out of blocks)", filename);
+                    ok = false;
+                    break;
+                }
+            }
+            if !ok {
+                break;
+            }
+            cell_mappings.push(row_map);
+        }
+
+        if ok {
+            println!(
+                "  Packed '{}': {}x{} -> {}x{} cells",
+                filename, aw, ah, cells_w, cells_h
+            );
+            results.push(LinearImageResult {
+                path: filename,
+                width_cells: cells_w,
+                height_cells: cells_h,
+                cell_mappings,
+            });
+        }
+    }
+
+    results
+}
+
+/// Generate .pix files for linearly-packed images
+fn generate_linear_pix_files(
+    results: &[LinearImageResult],
+    output_dir: &str,
+) -> Result<(), String> {
+    fs::create_dir_all(output_dir)
+        .map_err(|e| format!("Failed to create output directory '{}': {}", output_dir, e))?;
+
+    for result in results {
+        let output_path = Path::new(output_dir)
+            .join(&result.path)
+            .with_extension("pix");
+
+        let mut file = File::create(&output_path)
+            .map_err(|e| format!("Failed to create file '{}': {}", output_path.display(), e))?;
+
+        // Header
+        writeln!(
+            file,
+            "width={},height={},texture=255",
+            result.width_cells, result.height_cells
+        )
+        .map_err(|e| format!("Write error: {}", e))?;
+
+        // Each cell: symidx,fgcolor,texidx,bgcolor
+        for row in &result.cell_mappings {
+            for &(block, sym) in row {
+                write!(file, "{},{},{},{} ", sym, 15, block, 0)
+                    .map_err(|e| format!("Write error: {}", e))?;
+            }
+            writeln!(file).map_err(|e| format!("Write error: {}", e))?;
+        }
+
+        println!("Generated: {}", output_path.display());
+    }
+
+    Ok(())
+}
+
 /// Main entry point for the asset packer
 fn main() {
     let args = parse_args();
@@ -896,51 +1128,26 @@ fn main() {
     println!("══════════════════════════════════");
     println!("Input folder:  {}", args.input_folder);
     println!("Output folder: {}", args.output_folder);
+    println!("Mode:          {:?}", args.mode);
     println!("Symbols:       {}", args.symbols_path);
     if let Some(ref map_path) = args.symbol_map_path {
         println!("Symbol map:    {}", map_path);
     }
-    println!("Region:        {:?}", args.region);
     println!("Scale factor:  {}", args.scale_factor);
     println!();
 
-    // Parse symbol map if provided to detect occupied blocks
-    let occupancy = if let Some(ref map_path) = args.symbol_map_path {
+    // Print symbol map info if provided
+    if let Some(ref map_path) = args.symbol_map_path {
         match parse_symbol_map(map_path) {
             Ok(occ) => {
                 occ.print_summary();
                 println!();
-                Some(occ)
             }
             Err(e) => {
                 eprintln!("Warning: {}", e);
-                eprintln!("Continuing without block occupancy detection...");
-                println!();
-                None
             }
         }
-    } else {
-        None
-    };
-
-    // Determine start block: use explicit arg, or auto-detect from symbol map, or default to 0
-    let start_block = match args.start_block {
-        Some(block) => {
-            println!("Using explicit start block: {}", block);
-            block
-        }
-        None => {
-            if let Some(ref occ) = occupancy {
-                let auto_block = occ.first_free_sprite_block();
-                println!("Auto-detected start block: {} (first free block)", auto_block);
-                auto_block
-            } else {
-                println!("Using default start block: 0");
-                0
-            }
-        }
-    };
-    println!();
+    }
 
     // Load images from input folder
     let images = match load_images_from_folder(&args.input_folder) {
@@ -954,67 +1161,145 @@ fn main() {
     println!("Loaded {} images", images.len());
     println!();
 
-    // Initialize the bin packing algorithm based on region
-    let packing_region = match args.region {
-        PackingRegion::Sprite => layout::sprite_packing_region(start_block),
-        PackingRegion::Full => (0, 0, config::ATLAS_WIDTH, config::ATLAS_HEIGHT),
-    };
-
-    println!("Packing region: x={}, y={}, w={}, h={}",
-        packing_region.0, packing_region.1, packing_region.2, packing_region.3);
-    println!();
-
-    let mut bin = MaxRectsBin::from_region(packing_region);
-
-    // Pack all images
-    let image_rects = pack_images(images, &mut bin, args.scale_factor);
-
-    if image_rects.is_empty() {
-        eprintln!("Error: No images could be packed");
-        process::exit(1);
-    }
-
-    println!();
-    println!("Successfully packed {} images", image_rects.len());
-
-    // Create the texture atlas using specified symbols path
-    let atlas = match create_texture_atlas(&image_rects, &args.symbols_path) {
-        Ok(atlas) => atlas,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            process::exit(1);
-        }
-    };
-
-    // Create output directory if needed
+    // Create output directory
     if let Err(e) = fs::create_dir_all(&args.output_folder) {
         eprintln!("Error: Failed to create output directory: {}", e);
         process::exit(1);
     }
 
-    // Save the texture atlas
-    let atlas_path = format!("{}/texture_atlas.png", args.output_folder);
-    if let Err(e) = atlas.save(&atlas_path) {
-        eprintln!("Error: Failed to save texture atlas '{}': {}", atlas_path, e);
-        process::exit(1);
-    }
-    println!("Saved texture atlas: {}", atlas_path);
-
-    // Generate .pix files
-    if let Err(e) = generate_pix_files(&image_rects, &args.output_folder) {
-        eprintln!("Error: {}", e);
-        process::exit(1);
+    // Load base texture (used by both modes)
+    let mut atlas = RgbaImage::new(config::ATLAS_WIDTH, config::ATLAS_HEIGHT);
+    if let Ok(base) = image::open(&args.symbols_path) {
+        let (bw, bh) = base.dimensions();
+        println!("Loaded base texture: {}x{}", bw, bh);
+        if let Err(e) = atlas.copy_from(&base, 0, 0) {
+            eprintln!("Warning: Failed to copy base texture: {}", e);
+        }
+    } else {
+        println!("Note: Base texture not found at '{}', creating blank atlas", args.symbols_path);
     }
 
+    // Detect occupied blocks by scanning actual pixel content
+    let start_block = match args.start_block {
+        Some(block) => {
+            println!("Using explicit start block: {}", block);
+            block
+        }
+        None => {
+            let tex_occ = detect_occupied_blocks_from_texture(&atlas);
+            let auto_block = tex_occ.first_free_sprite_block();
+            println!(
+                "Scanned texture: {}/{} sprite blocks occupied (non-transparent pixels)",
+                tex_occ.occupied_sprite_blocks.len(),
+                layout::SPRITE_BLOCKS
+            );
+            if !tex_occ.occupied_sprite_blocks.is_empty() {
+                let mut blocks: Vec<u32> = tex_occ.occupied_sprite_blocks.iter().copied().collect();
+                blocks.sort();
+                println!("  Occupied blocks: {:?}", blocks);
+            }
+            println!("Auto-detected start block: {}", auto_block);
+            auto_block
+        }
+    };
     println!();
-    println!("════════════════════════════════════════════════════");
-    println!("Asset packing completed successfully!");
-    println!("────────────────────────────────────────────────────");
-    println!("• Generated {} .pix files", image_rects.len());
-    println!("• Texture atlas: {} (4096x4096)", atlas_path);
-    println!("• Blocks used: starting from block {}", start_block);
-    if let Some(occ) = occupancy {
-        let remaining = layout::SPRITE_BLOCKS - occ.occupied_sprite_blocks.len() as u32;
-        println!("• Remaining sprite blocks: {}/{}", remaining, layout::SPRITE_BLOCKS);
+
+    match args.mode {
+        PackingMode::Linear => {
+            // ── Linear mode: slice into 16×16 cells, fill blocks sequentially ──
+            let mut packer = LinearPacker::new(start_block);
+            let results = linear_pack_images(images, &mut packer, &mut atlas, args.scale_factor);
+
+            if results.is_empty() {
+                eprintln!("Error: No images could be packed");
+                process::exit(1);
+            }
+
+            // Save atlas
+            let atlas_path = format!("{}/texture_atlas.png", args.output_folder);
+            if let Err(e) = atlas.save(&atlas_path) {
+                eprintln!("Error: Failed to save texture atlas: {}", e);
+                process::exit(1);
+            }
+            println!("Saved texture atlas: {}", atlas_path);
+
+            // Generate .pix files
+            if let Err(e) = generate_linear_pix_files(&results, &args.output_folder) {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
+
+            let total_cells: u32 = results.iter()
+                .map(|r| r.width_cells * r.height_cells)
+                .sum();
+
+            println!();
+            println!("════════════════════════════════════════════════════");
+            println!("Linear packing completed!");
+            println!("────────────────────────────────────────────────────");
+            println!("• Generated {} .pix files", results.len());
+            println!("• Total cells packed: {}", total_cells);
+            println!("• Blocks used: {} (blocks {}-{})",
+                packer.blocks_used(start_block),
+                start_block,
+                start_block + packer.blocks_used(start_block).saturating_sub(1));
+            println!("• Texture atlas: {}", atlas_path);
+            let remaining = layout::SPRITE_BLOCKS - start_block - packer.blocks_used(start_block);
+            println!("• Remaining sprite blocks: {}/{}", remaining, layout::SPRITE_BLOCKS);
+        }
+
+        PackingMode::BinPack => {
+            // ── BinPack mode: MaxRects rectangle packing ──
+            println!("Region:        {:?}", args.region);
+
+            let packing_region = match args.region {
+                PackingRegion::Sprite => layout::sprite_packing_region(start_block),
+                PackingRegion::Full => (0, 0, config::ATLAS_WIDTH, config::ATLAS_HEIGHT),
+            };
+
+            println!("Packing region: x={}, y={}, w={}, h={}",
+                packing_region.0, packing_region.1, packing_region.2, packing_region.3);
+            println!();
+
+            let mut bin = MaxRectsBin::from_region(packing_region);
+            let image_rects = pack_images(images, &mut bin, args.scale_factor);
+
+            if image_rects.is_empty() {
+                eprintln!("Error: No images could be packed");
+                process::exit(1);
+            }
+
+            println!();
+            println!("Successfully packed {} images", image_rects.len());
+
+            // Copy packed images onto atlas (base already loaded)
+            for image_rect in &image_rects {
+                atlas.copy_from(
+                    &image_rect.image,
+                    image_rect.rect.x,
+                    image_rect.rect.y
+                ).unwrap_or_else(|e| eprintln!("Warning: {}", e));
+            }
+
+            let atlas_path = format!("{}/texture_atlas.png", args.output_folder);
+            if let Err(e) = atlas.save(&atlas_path) {
+                eprintln!("Error: Failed to save texture atlas: {}", e);
+                process::exit(1);
+            }
+            println!("Saved texture atlas: {}", atlas_path);
+
+            if let Err(e) = generate_pix_files(&image_rects, &args.output_folder) {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
+
+            println!();
+            println!("════════════════════════════════════════════════════");
+            println!("BinPack completed!");
+            println!("────────────────────────────────────────────────────");
+            println!("• Generated {} .pix files", image_rects.len());
+            println!("• Texture atlas: {} (4096x4096)", atlas_path);
+            println!("• Blocks used: starting from block {}", start_block);
+        }
     }
 }

@@ -106,9 +106,9 @@ impl CityRender {
             asset2sprite!(l, ctx, "pix/cc16.pix");
         }
         l.set_pos(x, y);
-        l.set_color_str(3, 3, msg, COLORS[msg_color as usize], Color::Reset);
+        l.set_color_str(1, 2, msg, COLORS[msg_color as usize], Color::Reset);
         if is_del {
-            l.set_color_str(3, 0, "DEL?", COLORS[7], Color::Reset);
+            l.set_color_str(0, 0, "DEL?", COLORS[7], Color::Reset);
         }
     }
 
@@ -156,16 +156,16 @@ impl CityRender {
                 let sx = nx * CELLW as f32 + ADJX as f32;
                 let sy = ny * CELLH as f32 + ADJY as f32;
                 if sx >= 0.0 && sy >= 0.0 {
-                    let usx = (sx * 8.0) as u16;
-                    let usy = (sy * 8.0) as u16;
+                    let usx = (sx * 16.0) as u16;
+                    let usy = (sy * 16.0) as u16;
 
                     self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
                 }
             } else {
                 let sx = x * CELLW + ADJX;
                 let sy = y * CELLH + ADJY;
-                let usx = (sx * 8) as u16;
-                let usy = (sy * 8) as u16;
+                let usx = (sx * 16) as u16;
+                let usy = (sy * 16) as u16;
                 self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
             }
         }
@@ -200,8 +200,8 @@ impl CityRender {
                 msgcol = 3u32;
             }
 
-            let usx = (sx * 8) as u16;
-            let usy = (sy * 8) as u16;
+            let usx = (sx * 16) as u16;
+            let usy = (sy * 16) as u16;
 
             self.draw_cell(
                 ctx,
@@ -222,7 +222,7 @@ impl Render for CityRender {
     type Model = CityModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(60, 60, 1.0, 1.0, "city".to_string());
+        ctx.adapter.init(30, 30, 1.0, 1.0, "city".to_string());
         self.scene.init(ctx);
     }
 
