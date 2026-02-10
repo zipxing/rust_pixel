@@ -4,7 +4,6 @@ use crate::chart::mermaid::{parse_mermaid, render_mermaid};
 use crate::chart::pie_chart::PieChart;
 use crate::chart::{parse_chart_data, ChartRenderer};
 use crate::highlight::HighlightedLine;
-use crate::parser::parse_animation_type;
 use crate::slide::{
     AlertType, AnimationType, ColumnAlignment, FrontMatter, LineRange, SlideContent, SlideElement,
 };
@@ -631,8 +630,8 @@ pub fn build_slide_page(
 
 /// Build a UIPage for the auto-generated cover slide.
 ///
-/// Renders a decorative box-drawing border with title (animated), author,
-/// configuration summary, and a "Press Space to begin" hint.
+/// Clean, minimal layout — large centered title with animation,
+/// author, and subtle config info at the bottom.
 pub fn build_cover_page(
     front_matter: &FrontMatter,
     width: u16,
@@ -650,120 +649,57 @@ pub fn build_cover_page(
     let buf = panel.canvas_mut();
     let mut deferred_widgets: Vec<Box<dyn Widget>> = Vec::new();
 
-    // Cover box dimensions
-    let box_w = content_width;
-    let box_h: u16 = 14;
-    let box_x = margin;
-    let box_y = (height.saturating_sub(box_h)) / 2;
+    let cx = margin; // content left x
+    let mid_y = height / 2; // vertical center
 
-    let border_style = Style::default().fg(Color::Rgba(80, 90, 100, 255));
-    let inner_w = box_w.saturating_sub(2) as usize;
-
-    // Top border
-    let top = format!("┌{}┐", "─".repeat(inner_w));
-    buf.set_string(box_x, box_y, &top, border_style);
-
-    // Bottom border
-    let bot = format!("└{}┘", "─".repeat(inner_w));
-    buf.set_string(box_x, box_y + box_h - 1, &bot, border_style);
-
-    // Side borders
-    for row in 1..box_h - 1 {
-        buf.set_string(box_x, box_y + row, "│", border_style);
-        buf.set_string(box_x + box_w - 1, box_y + row, "│", border_style);
-    }
-
-    // Divider line between title section and config section
-    let divider_y = box_y + 7;
-    let divider = format!("├{}┤", "─".repeat(inner_w));
-    buf.set_string(box_x, divider_y, &divider, border_style);
-
-    // Title (with animation)
-    let title_y = box_y + 3;
+    // ── Title (large, centered, static) ──
+    let title_y = mid_y.saturating_sub(3);
     if !front_matter.title.is_empty() {
         let title_style = Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD)
-            .scale(1.1, 1.1);
-
-        let anim_type = parse_animation_type(&front_matter.title_animation);
-        let title_w = content_width.saturating_sub(4);
-        let title_x = box_x + 2;
-        let bounds = Rect::new(title_x, title_y, title_w, 1);
-
-        let mut label = match anim_type {
-            Some(AnimationType::Spotlight) => {
-                let hl = Style::default()
-                    .fg(Color::Rgba(255, 220, 80, 255))
-                    .add_modifier(Modifier::BOLD)
-                    .scale(1.1, 1.1);
-                Label::new(&front_matter.title)
-                    .with_style(title_style)
-                    .with_align(TextAlign::Center)
-                    .with_spotlight(hl, 12, 0.35)
-            }
-            Some(AnimationType::Wave) => {
-                Label::new(&front_matter.title)
-                    .with_style(title_style)
-                    .with_align(TextAlign::Center)
-                    .with_wave(0.2, 8.0, 0.3)
-            }
-            Some(AnimationType::FadeIn) => {
-                Label::new(&front_matter.title)
-                    .with_style(title_style)
-                    .with_align(TextAlign::Center)
-                    .with_fade_in(8, true)
-            }
-            Some(AnimationType::Typewriter) | None => {
-                Label::new(&front_matter.title)
-                    .with_style(title_style)
-                    .with_align(TextAlign::Center)
-                    .with_typewriter(6, true, true)
-            }
-        };
-        label.set_bounds(bounds);
+            .scale(1.8, 1.8);
+        let mut label = Label::new(&front_matter.title)
+            .with_style(title_style)
+            .with_align(TextAlign::Center);
+        label.set_bounds(Rect::new(cx, title_y, content_width, 1));
         deferred_widgets.push(Box::new(label));
     }
 
-    // Author
-    let author_y = title_y + 2;
+    // ── Author ──
     if !front_matter.author.is_empty() {
-        let author_text = format!("by {}", front_matter.author);
+        let author_y = title_y + 3;
         let author_style = Style::default()
-            .fg(Color::LightGreen)
-            .add_modifier(Modifier::ITALIC)
-            .scale(0.98, 0.98);
-        let author_w = content_width.saturating_sub(4);
-        let author_x = box_x + 2;
-        let mut label = Label::new(&author_text)
+            .fg(Color::Rgba(140, 200, 160, 255))
+            .scale(0.95, 0.95);
+        let mut label = Label::new(&front_matter.author)
             .with_style(author_style)
             .with_align(TextAlign::Center);
-        label.set_bounds(Rect::new(author_x, author_y, author_w, 1));
+        label.set_bounds(Rect::new(cx, author_y, content_width, 1));
         deferred_widgets.push(Box::new(label));
     }
 
-    // Config summary section (below divider)
-    let config_style = Style::default().fg(Color::DarkGray);
-    let config_y = divider_y + 2;
-    let config_x = box_x + 4;
+    // ── Thin separator ──
+    let sep_y = height - 5;
+    let sep_w = 30u16.min(content_width);
+    let sep_x = cx + (content_width.saturating_sub(sep_w)) / 2;
+    let sep_style = Style::default().fg(Color::Rgba(60, 65, 70, 255));
+    buf.set_string(sep_x, sep_y, &"─".repeat(sep_w as usize), sep_style);
 
-    // Line 1: Theme + Transition
-    let line1 = format!(
-        "Theme: {}    Transition: {}",
-        front_matter.theme, front_matter.transition
+    // ── Config line (small, dim, single line) ──
+    let info = format!(
+        "{}  ·  {}  ·  {}",
+        front_matter.theme, front_matter.transition, front_matter.code_theme
     );
-    buf.set_string(config_x, config_y, &line1, config_style);
+    let info_style = Style::default().fg(Color::Rgba(90, 95, 100, 255)).scale(0.85, 0.85);
+    let info_x = cx + (content_width.saturating_sub(info.len() as u16)) / 2;
+    buf.set_string(info_x, sep_y + 1, &info, info_style);
 
-    // Line 2: Code Theme
-    let line2 = format!("Code Theme: {}", front_matter.code_theme);
-    buf.set_string(config_x, config_y + 1, &line2, config_style);
-
-    // "Press Space to begin" hint
-    let hint_y = box_y + box_h - 3;
+    // ── Hint ──
     let hint = "Press Space to begin →";
-    let hint_style = Style::default().fg(Color::Gray);
-    let hint_x = box_x + (box_w.saturating_sub(hint.len() as u16)) / 2;
-    buf.set_string(hint_x, hint_y, hint, hint_style);
+    let hint_style = Style::default().fg(Color::Rgba(80, 85, 90, 255)).scale(0.85, 0.85);
+    let hint_x = cx + (content_width.saturating_sub(hint.len() as u16)) / 2;
+    buf.set_string(hint_x, sep_y + 3, hint, hint_style);
 
     // Add deferred widgets
     for widget in deferred_widgets {
