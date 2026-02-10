@@ -82,12 +82,10 @@ use crate::{
 use std::sync::OnceLock;
 
 // ============================================================================
-// Logo Data (embedded at compile time)
+// Logo Data (embedded in logo_data.rs)
 // ============================================================================
 
-/// Embedded logo pix file content
-/// Path is relative to this source file: src/render/graph.rs -> assets/logo.pix
-const LOGO_PIX_DATA: &str = include_str!("../../assets/logo.pix");
+use super::logo_data::LOGO_PIX_DATA;
 
 /// Parsed logo cell data: (symbol_id, fg_color, texture_id, bg_color)
 static LOGO_CELLS: OnceLock<Vec<(u8, u8, u8, u8)>> = OnceLock::new();

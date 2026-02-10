@@ -23,6 +23,8 @@ pub mod cell;
 pub mod effect;
 #[cfg(graphics_mode)]
 pub mod graph;
+#[cfg(graphics_mode)]
+mod logo_data;
 pub mod image;
 pub mod scene;
 pub mod sprite;
