@@ -16,7 +16,7 @@ use rust_pixel::{
 use std::collections::HashMap;
 
 pub const MDPTW: u16 = 80;
-pub const MDPTH: u16 = 25;
+pub const MDPTH: u16 = 30;
 
 /// Transition state for slide navigation effects
 pub struct TransitionState {
