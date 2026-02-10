@@ -33,6 +33,7 @@ pub struct SlideContent {
     pub elements: Vec<SlideElement>,
     pub transition: Option<String>,
     pub animation: Option<String>,
+    pub is_cover: bool,
 }
 
 impl SlideContent {
@@ -41,6 +42,7 @@ impl SlideContent {
             elements: Vec::new(),
             transition: None,
             animation: None,
+            is_cover: false,
         }
     }
 
@@ -139,6 +141,17 @@ pub enum SlideElement {
     BlockQuote {
         text: String,
         alert_type: Option<AlertType>,
+    },
+
+    /// Chart (linechart, barchart, piechart)
+    Chart {
+        chart_type: String,
+        content: String,
+    },
+
+    /// Mermaid diagram (minimal graph subset)
+    Mermaid {
+        content: String,
     },
 }
 

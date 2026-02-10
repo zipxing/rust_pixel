@@ -212,6 +212,54 @@ Typewriter: characters appear one by one with cursor
 
 ---
 
+## Line Chart
+
+```linechart
+title: Monthly Revenue ($K)
+x: [Jan, Feb, Mar, Apr, May, Jun]
+y: [120, 200, 150, 300, 280, 350]
+y2: [80, 150, 120, 200, 250, 300]
+height: 12
+```
+
+---
+
+## Bar Chart
+
+```barchart
+title: Programming Languages
+labels: [Rust, Go, Python, JS, Java, C++]
+values: [95, 72, 88, 78, 65, 70]
+height: 14
+```
+
+---
+
+## Pie Chart
+
+```piechart
+title: Market Share
+labels: [Chrome, Safari, Firefox, Edge, Other]
+values: [65, 18, 7, 5, 5]
+radius: 7
+```
+
+---
+
+## Mermaid Flowchart
+
+```mermaid
+graph TD
+A[Start] --> B[Parse Markdown]
+B --> C{Has Charts?}
+C -->|Yes| D[Render Charts]
+C -->|No| E[Render Text]
+D --> F[Display]
+E --> F
+```
+
+---
+
 <!-- jump_to_middle -->
 
 # Thank You!

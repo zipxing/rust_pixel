@@ -1,7 +1,7 @@
 use crate::highlight::{CodeHighlighter, HighlightedLine};
 use crate::parser::parse_markdown;
 use crate::slide::{Presentation, SlideElement};
-use crate::slide_builder::{build_slide_page, ImagePlacement, CODE_FG_HL, CODE_LINE_BG};
+use crate::slide_builder::{build_cover_page, build_slide_page, ImagePlacement, CODE_FG_HL, CODE_LINE_BG};
 use rust_pixel::{
     context::Context,
     event::{Event, KeyCode},
@@ -167,6 +167,14 @@ impl MdptModel {
         self.presentation = parse_markdown(&contents);
         log::info!("[mdpt] load_presentation: parse_markdown done, {} slides", self.presentation.slides.len());
 
+        // Insert auto-generated cover slide at index 0 if title is set
+        if !self.presentation.front_matter.title.is_empty() {
+            let mut cover = crate::slide::SlideContent::new();
+            cover.is_cover = true;
+            self.presentation.slides.insert(0, cover);
+            log::info!("[mdpt] load_presentation: inserted cover slide");
+        }
+
         self.current_slide = 0;
         self.current_step = 0;
 
@@ -227,21 +235,30 @@ impl MdptModel {
     fn rebuild_current_page(&mut self) {
         log::info!("[mdpt] rebuild_current_page: slide={} step={}", self.current_slide, self.current_step);
         if let Some(slide) = self.presentation.slides.get(self.current_slide) {
-            log::info!("[mdpt] rebuild_current_page: building slide page with {} elements", slide.elements.len());
-            let (page, images) = build_slide_page(
-                slide,
-                self.current_slide,
-                self.current_step,
-                &self.highlight_cache,
-                &self.presentation.front_matter,
-                MDPTW,
-                MDPTH,
-            );
-            log::info!("[mdpt] rebuild_current_page: build_slide_page done, {} images", images.len());
+            let (page, images) = if slide.is_cover {
+                log::info!("[mdpt] rebuild_current_page: building cover page");
+                let page = build_cover_page(
+                    &self.presentation.front_matter,
+                    MDPTW,
+                    MDPTH,
+                );
+                (page, Vec::new())
+            } else {
+                log::info!("[mdpt] rebuild_current_page: building slide page with {} elements", slide.elements.len());
+                build_slide_page(
+                    slide,
+                    self.current_slide,
+                    self.current_step,
+                    &self.highlight_cache,
+                    &self.presentation.front_matter,
+                    MDPTW,
+                    MDPTH,
+                )
+            };
+            log::info!("[mdpt] rebuild_current_page: done, {} images", images.len());
             self.current_page = Some(page);
             self.image_placements = images;
             self.last_rendered = (self.current_slide, self.current_step);
-            log::info!("[mdpt] rebuild_current_page: done");
         }
     }
 

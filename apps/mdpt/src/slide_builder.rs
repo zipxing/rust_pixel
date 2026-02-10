@@ -1,4 +1,10 @@
+use crate::chart::bar_chart::BarChart;
+use crate::chart::line_chart::LineChart;
+use crate::chart::mermaid::{parse_mermaid, render_mermaid};
+use crate::chart::pie_chart::PieChart;
+use crate::chart::{parse_chart_data, ChartRenderer};
 use crate::highlight::HighlightedLine;
+use crate::parser::parse_animation_type;
 use crate::slide::{
     AlertType, AnimationType, ColumnAlignment, FrontMatter, LineRange, SlideContent, SlideElement,
 };
@@ -551,6 +557,59 @@ pub fn build_slide_page(
                 }
                 y += 1; // spacing after block quote
             }
+            SlideElement::Chart { chart_type, content } => {
+                let (x_start, w) = if in_column_layout {
+                    (col_x, col_width(&column_widths, current_col, content_width))
+                } else {
+                    (margin, content_width)
+                };
+
+                let data = parse_chart_data(content);
+                let chart_w = data.width.unwrap_or(w);
+                let chart_h = data.height.unwrap_or(15).min(content_height.saturating_sub(y));
+
+                match chart_type.as_str() {
+                    "linechart" => {
+                        let chart = LineChart::new(data);
+                        chart.render(buf, x_start, y, chart_w, chart_h);
+                    }
+                    "barchart" => {
+                        let chart = BarChart::new(data);
+                        chart.render(buf, x_start, y, chart_w, chart_h);
+                    }
+                    "piechart" => {
+                        let chart = PieChart::new(data);
+                        chart.render(buf, x_start, y, chart_w, chart_h);
+                    }
+                    _ => {}
+                }
+                y += chart_h + 1;
+            }
+            SlideElement::Mermaid { content } => {
+                let (x_start, w) = if in_column_layout {
+                    (col_x, col_width(&column_widths, current_col, content_width))
+                } else {
+                    (margin, content_width)
+                };
+
+                if let Some(graph) = parse_mermaid(content) {
+                    let chart_h = 15u16.min(content_height.saturating_sub(y));
+                    render_mermaid(&graph, buf, x_start, y, w, chart_h);
+                    y += chart_h + 1;
+                } else {
+                    // Fallback: render as plain code block
+                    let style = Style::default().fg(Color::Gray);
+                    for line in content.lines() {
+                        if y >= content_height {
+                            break;
+                        }
+                        let truncated = rust_pixel::ui::text_util::truncate_to_width(line, w as usize);
+                        buf.set_string(x_start, y, &truncated, style);
+                        y += 1;
+                    }
+                    y += 1;
+                }
+            }
         }
     }
 
@@ -568,6 +627,153 @@ pub fn build_slide_page(
     page.start();
     log::info!("[mdpt] build_slide_page: done");
     (page, image_placements)
+}
+
+/// Build a UIPage for the auto-generated cover slide.
+///
+/// Renders a decorative box-drawing border with title (animated), author,
+/// configuration summary, and a "Press Space to begin" hint.
+pub fn build_cover_page(
+    front_matter: &FrontMatter,
+    width: u16,
+    height: u16,
+) -> UIPage {
+    let margin = front_matter.margin;
+    let content_width = width.saturating_sub(margin * 2);
+
+    let mut panel = Panel::new()
+        .with_bounds(Rect::new(0, 0, width, height))
+        .with_border(BorderStyle::None)
+        .with_layout(Box::new(FreeLayout));
+    panel.enable_canvas(width, height);
+
+    let buf = panel.canvas_mut();
+    let mut deferred_widgets: Vec<Box<dyn Widget>> = Vec::new();
+
+    // Cover box dimensions
+    let box_w = content_width;
+    let box_h: u16 = 14;
+    let box_x = margin;
+    let box_y = (height.saturating_sub(box_h)) / 2;
+
+    let border_style = Style::default().fg(Color::Rgba(80, 90, 100, 255));
+    let inner_w = box_w.saturating_sub(2) as usize;
+
+    // Top border
+    let top = format!("┌{}┐", "─".repeat(inner_w));
+    buf.set_string(box_x, box_y, &top, border_style);
+
+    // Bottom border
+    let bot = format!("└{}┘", "─".repeat(inner_w));
+    buf.set_string(box_x, box_y + box_h - 1, &bot, border_style);
+
+    // Side borders
+    for row in 1..box_h - 1 {
+        buf.set_string(box_x, box_y + row, "│", border_style);
+        buf.set_string(box_x + box_w - 1, box_y + row, "│", border_style);
+    }
+
+    // Divider line between title section and config section
+    let divider_y = box_y + 7;
+    let divider = format!("├{}┤", "─".repeat(inner_w));
+    buf.set_string(box_x, divider_y, &divider, border_style);
+
+    // Title (with animation)
+    let title_y = box_y + 3;
+    if !front_matter.title.is_empty() {
+        let title_style = Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+            .scale(1.1, 1.1);
+
+        let anim_type = parse_animation_type(&front_matter.title_animation);
+        let title_w = content_width.saturating_sub(4);
+        let title_x = box_x + 2;
+        let bounds = Rect::new(title_x, title_y, title_w, 1);
+
+        let mut label = match anim_type {
+            Some(AnimationType::Spotlight) => {
+                let hl = Style::default()
+                    .fg(Color::Rgba(255, 220, 80, 255))
+                    .add_modifier(Modifier::BOLD)
+                    .scale(1.1, 1.1);
+                Label::new(&front_matter.title)
+                    .with_style(title_style)
+                    .with_align(TextAlign::Center)
+                    .with_spotlight(hl, 12, 0.35)
+            }
+            Some(AnimationType::Wave) => {
+                Label::new(&front_matter.title)
+                    .with_style(title_style)
+                    .with_align(TextAlign::Center)
+                    .with_wave(0.2, 8.0, 0.3)
+            }
+            Some(AnimationType::FadeIn) => {
+                Label::new(&front_matter.title)
+                    .with_style(title_style)
+                    .with_align(TextAlign::Center)
+                    .with_fade_in(8, true)
+            }
+            Some(AnimationType::Typewriter) | None => {
+                Label::new(&front_matter.title)
+                    .with_style(title_style)
+                    .with_align(TextAlign::Center)
+                    .with_typewriter(6, true, true)
+            }
+        };
+        label.set_bounds(bounds);
+        deferred_widgets.push(Box::new(label));
+    }
+
+    // Author
+    let author_y = title_y + 2;
+    if !front_matter.author.is_empty() {
+        let author_text = format!("by {}", front_matter.author);
+        let author_style = Style::default()
+            .fg(Color::LightGreen)
+            .add_modifier(Modifier::ITALIC)
+            .scale(0.98, 0.98);
+        let author_w = content_width.saturating_sub(4);
+        let author_x = box_x + 2;
+        let mut label = Label::new(&author_text)
+            .with_style(author_style)
+            .with_align(TextAlign::Center);
+        label.set_bounds(Rect::new(author_x, author_y, author_w, 1));
+        deferred_widgets.push(Box::new(label));
+    }
+
+    // Config summary section (below divider)
+    let config_style = Style::default().fg(Color::DarkGray);
+    let config_y = divider_y + 2;
+    let config_x = box_x + 4;
+
+    // Line 1: Theme + Transition
+    let line1 = format!(
+        "Theme: {}    Transition: {}",
+        front_matter.theme, front_matter.transition
+    );
+    buf.set_string(config_x, config_y, &line1, config_style);
+
+    // Line 2: Code Theme
+    let line2 = format!("Code Theme: {}", front_matter.code_theme);
+    buf.set_string(config_x, config_y + 1, &line2, config_style);
+
+    // "Press Space to begin" hint
+    let hint_y = box_y + box_h - 3;
+    let hint = "Press Space to begin →";
+    let hint_style = Style::default().fg(Color::Gray);
+    let hint_x = box_x + (box_w.saturating_sub(hint.len() as u16)) / 2;
+    buf.set_string(hint_x, hint_y, hint, hint_style);
+
+    // Add deferred widgets
+    for widget in deferred_widgets {
+        panel.add_child(widget);
+    }
+
+    let mut page = UIPage::new(width, height);
+    page.set_root_widget(Box::new(panel));
+    page.start();
+    page
 }
 
 /// Calculate column width from weights.
@@ -613,6 +819,13 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
                 }
                 let lines = rust_pixel::ui::text_util::wrap_text(text, width.saturating_sub(2));
                 h += lines.len() as u16 + 1;
+            }
+            SlideElement::Chart { content, .. } => {
+                let data = parse_chart_data(content);
+                h += data.height.unwrap_or(15) + 1;
+            }
+            SlideElement::Mermaid { .. } => {
+                h += 16; // default mermaid height + spacing
             }
             SlideElement::Pause | SlideElement::JumpToMiddle => {}
             SlideElement::ColumnLayout { .. } | SlideElement::Column(_) | SlideElement::ResetLayout => {}

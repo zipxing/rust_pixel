@@ -1,0 +1,114 @@
+use super::braille::BrailleCanvas;
+use super::{ChartData, ChartRenderer, CHART_COLORS, LABEL_COLOR, TITLE_COLOR};
+use rust_pixel::render::buffer::Buffer;
+use rust_pixel::render::style::Style;
+use std::f64::consts::TAU;
+
+pub struct PieChart {
+    pub data: ChartData,
+}
+
+impl PieChart {
+    pub fn new(data: ChartData) -> Self {
+        Self { data }
+    }
+}
+
+impl ChartRenderer for PieChart {
+    fn render(&self, buf: &mut Buffer, x: u16, y: u16, w: u16, h: u16) {
+        let values = match self.data.series.first() {
+            Some(v) if !v.is_empty() => v,
+            _ => return,
+        };
+        let labels = &self.data.labels;
+        let n = values.len();
+        if n == 0 || h < 4 {
+            return;
+        }
+
+        let total: f64 = values.iter().sum();
+        if total <= 0.0 {
+            return;
+        }
+
+        let mut cy = y;
+
+        // Title
+        if let Some(ref title) = self.data.title {
+            let tx = x + (w.saturating_sub(title.len() as u16)) / 2;
+            buf.set_string(tx, cy, title, Style::default().fg(TITLE_COLOR));
+            cy += 1;
+        }
+
+        // Chart dimensions
+        let legend_w: u16 = 18; // space for legend on the right
+        let chart_area_w = w.saturating_sub(legend_w + 1);
+        let chart_h = h.saturating_sub((cy - y) + 1);
+
+        // Radius in character cells, then convert to dot-space
+        let radius_cells = self.data.radius.unwrap_or(
+            (chart_h.min(chart_area_w / 2)).max(4) - 1,
+        );
+        let canvas_w = (radius_cells * 2 + 2) as usize;
+        let canvas_h = (radius_cells + 1) as usize;
+
+        if canvas_w < 4 || canvas_h < 2 {
+            return;
+        }
+
+        // Center in dot-space
+        let dot_cx = canvas_w; // dot_width = canvas_w * 2
+        let dot_cy = canvas_h * 2; // dot_height = canvas_h * 4, center at half
+        let dot_r_adj = (radius_cells as usize) * 2; // radius in dot-space (X direction)
+
+        // Build sectors
+        let mut angle = 0.0f64;
+        let sectors: Vec<(f64, f64)> = values
+            .iter()
+            .map(|&v| {
+                let sweep = (v / total) * TAU;
+                let start = angle;
+                angle += sweep;
+                (start, start + sweep)
+            })
+            .collect();
+
+        // Render each sector with its own canvas and color
+        for (i, &(start, end)) in sectors.iter().enumerate() {
+            let color = CHART_COLORS[i % CHART_COLORS.len()];
+            let color_style = Style::default().fg(color);
+            let mut canvas = BrailleCanvas::new(canvas_w, canvas_h);
+            canvas.fill_sector(dot_cx, dot_cy, dot_r_adj, start, end);
+
+            // Write to buffer
+            let offset_x = x + (chart_area_w.saturating_sub(canvas_w as u16)) / 2;
+            for (ry, line) in canvas.rows().iter().enumerate() {
+                for (cx, ch) in line.chars().enumerate() {
+                    if ch != '⠀' && ch != ' ' {
+                        let s = ch.to_string();
+                        buf.set_string(offset_x + cx as u16, cy + ry as u16, &s, color_style);
+                    }
+                }
+            }
+        }
+
+        // Legend (right side)
+        let label_style = Style::default().fg(LABEL_COLOR);
+        let legend_x = x + chart_area_w + 1;
+        for (i, &(_, _)) in sectors.iter().enumerate() {
+            let color = CHART_COLORS[i % CHART_COLORS.len()];
+            let pct = (values[i] / total) * 100.0;
+            let label = if i < labels.len() {
+                &labels[i]
+            } else {
+                "?"
+            };
+            let ly = cy + i as u16;
+            if ly < y + h {
+                buf.set_string(legend_x, ly, "█", Style::default().fg(color));
+                let text = format!(" {} {:.0}%", label, pct);
+                buf.set_string(legend_x + 1, ly, &text, label_style);
+            }
+        }
+    }
+}

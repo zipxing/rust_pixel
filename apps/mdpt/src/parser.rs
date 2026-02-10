@@ -7,7 +7,7 @@ use comrak::{
 use serde::Deserialize;
 
 /// Parse animation name string to AnimationType.
-fn parse_animation_type(name: &str) -> Option<AnimationType> {
+pub fn parse_animation_type(name: &str) -> Option<AnimationType> {
     match name.to_lowercase().as_str() {
         "spotlight" => Some(AnimationType::Spotlight),
         "wave" => Some(AnimationType::Wave),
@@ -283,6 +283,7 @@ fn extract_image<'a>(node: &'a AstNode<'a>) -> Option<SlideElement> {
 }
 
 /// Parse a code block, extracting language, +line_numbers, +no_background, and {highlight} groups.
+/// Also intercepts chart/mermaid code blocks and returns the corresponding SlideElement.
 fn parse_code_block(block: &NodeCodeBlock) -> SlideElement {
     let info = block.info.trim().to_string();
     let mut language = String::new();
@@ -309,6 +310,22 @@ fn parse_code_block(block: &NodeCodeBlock) -> SlideElement {
                 language = part.to_string();
             }
         }
+    }
+
+    // Intercept chart and mermaid code blocks
+    match language.as_str() {
+        "linechart" | "barchart" | "piechart" => {
+            return SlideElement::Chart {
+                chart_type: language,
+                content: block.literal.clone(),
+            };
+        }
+        "mermaid" => {
+            return SlideElement::Mermaid {
+                content: block.literal.clone(),
+            };
+        }
+        _ => {}
     }
 
     SlideElement::CodeBlock {
@@ -850,6 +867,69 @@ code
         // Check if the image was parsed at all
         let has_image = pres.slides[0].elements.iter().any(|e| matches!(e, SlideElement::Image { .. }));
         assert!(has_image, "Image should be parsed even without blank line");
+    }
+
+    #[test]
+    fn test_chart_code_block() {
+        let md = r#"```linechart
+title: Test
+x: [A, B, C]
+y: [1, 2, 3]
+```
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::Chart { chart_type, content } => {
+                assert_eq!(chart_type, "linechart");
+                assert!(content.contains("title: Test"));
+            }
+            other => panic!("expected Chart, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_barchart_code_block() {
+        let md = r#"```barchart
+labels: [Rust, Go]
+values: [95, 72]
+```
+"#;
+        let pres = parse_markdown(md);
+        assert!(matches!(
+            &pres.slides[0].elements[0],
+            SlideElement::Chart { chart_type, .. } if chart_type == "barchart"
+        ));
+    }
+
+    #[test]
+    fn test_piechart_code_block() {
+        let md = r#"```piechart
+labels: [A, B]
+values: [60, 40]
+```
+"#;
+        let pres = parse_markdown(md);
+        assert!(matches!(
+            &pres.slides[0].elements[0],
+            SlideElement::Chart { chart_type, .. } if chart_type == "piechart"
+        ));
+    }
+
+    #[test]
+    fn test_mermaid_code_block() {
+        let md = r#"```mermaid
+graph TD
+A[Start] --> B[End]
+```
+"#;
+        let pres = parse_markdown(md);
+        match &pres.slides[0].elements[0] {
+            SlideElement::Mermaid { content } => {
+                assert!(content.contains("graph TD"));
+                assert!(content.contains("A[Start]"));
+            }
+            other => panic!("expected Mermaid, got {:?}", other),
+        }
     }
 
     #[test]
