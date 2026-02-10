@@ -82,10 +82,11 @@ use crate::{
 use std::sync::OnceLock;
 
 // ============================================================================
-// Logo Data from 2.pix (embedded at compile time)
+// Logo Data (embedded at compile time)
 // ============================================================================
 
-/// Embedded logo pix file content (180x60 PETSCII art)
+/// Embedded logo pix file content
+/// Path is relative to this source file: src/render/graph.rs -> assets/logo.pix
 const LOGO_PIX_DATA: &str = include_str!("../../assets/logo.pix");
 
 /// Parsed logo cell data: (symbol_id, fg_color, texture_id, bg_color)

@@ -8,7 +8,8 @@ readme = "README.md"
 license = "Apache-2.0"
 description = "2d pixel-art game engine & rapid prototype tools support terminal, wgpu, sdl2 and web..."
 categories = ["game-engines", "gui", "graphics"]
-exclude = ["/screen-shot", "/doc", "/test", "/assets", "/web-template"]
+exclude = ["/screen-shot", "/doc", "/test", "/web-template"]
+include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "assets/logo.pix", "assets/pix/**/*"]
 
 # Define binaries that will be built for the project.
 [[bin]]
