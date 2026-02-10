@@ -143,8 +143,10 @@ impl Asset for PixAsset {
             let line =
                 &content.content[(row * width + x1) as usize..(row * width + x2 + 1) as usize];
             for cell in line.iter() {
-                let (idx, _, _, _, _) = cell.get_cell_info();
-                let _ = write!(ptr, "{},{},{} ", idx, u8::from(cell.fg), u8::from(cell.bg));
+                // get_cell_info returns (symidx, texidx, fg, bg, modifier)
+                let (idx, tex, _, _, _) = cell.get_cell_info();
+                // Format: symidx,fgcolor,texidx,bgcolor (matches rel1_v2 regex in parse)
+                let _ = write!(ptr, "{},{},{},{} ", idx, u8::from(cell.fg), tex, u8::from(cell.bg));
             }
             let _ = writeln!(ptr);
         }

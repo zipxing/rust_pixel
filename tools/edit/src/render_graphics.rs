@@ -878,13 +878,13 @@ impl TeditRender {
                     format!("symbol {}             ", idx),
                     Style::default().fg(MSG_COLOR).bg(Color::Indexed(0)),
                 );
-                m1.content.set_str(
+                // Use set_str_tex to display symbol with correct texture block
+                m1.content.set_str_tex(
                     17,
                     0,
                     format!("{}", cellsym(idx as u8)),
-                    Style::default()
-                        .fg(MSG_COLOR)
-                        .bg(Color::Indexed(d.sym_tab_idx)),
+                    Style::default().fg(MSG_COLOR).bg(Color::Reset),
+                    d.sym_tab_idx,  // texture block index
                 );
             }
             TeditPen::FORE(idx) | TeditPen::BACK(idx) => {
@@ -920,7 +920,9 @@ impl TeditRender {
             TeditPen::SYMBOL(idx) => {
                 elb.content.content[si as usize].set_symbol(&cellsym(idx as u8));
                 elb.content.content[si as usize].set_fg(Color::White);
-                elb.content.content[si as usize].set_bg(Color::Indexed(d.sym_tab_idx));
+                // Use set_texture() to set the texture block index, not set_bg()
+                // sym_tab_idx indicates which block (0, 1, 2, 3) in the Sprite region
+                elb.content.content[si as usize].set_texture(d.sym_tab_idx);
             }
             TeditPen::FORE(idx) => {
                 let tc;
@@ -957,6 +959,10 @@ impl Render for TeditRender {
             1.0,
             "tedit".to_string(),
         );
+
+        // Set sprite positions before scene.init() so buffer sizes are correct
+        self.do_init(context);
+
         self.scene.init(context);
         let l = self.scene.get_sprite("EDIT");
         l.set_content_by_asset(

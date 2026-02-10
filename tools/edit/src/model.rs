@@ -10,8 +10,11 @@ pub const SYMH: u16 = 18;
 #[cfg(not(graphics_mode))]
 pub const EDITW: u16 = 80;
 #[cfg(graphics_mode)]
-pub const EDITW: u16 = 48;
+pub const EDITW: u16 = 64;
+#[cfg(not(graphics_mode))]
 pub const EDITH: u16 = 35;
+#[cfg(graphics_mode)]
+pub const EDITH: u16 = 64;  // Match EDITW for square edit area in graphics mode
 
 //画笔类型
 #[derive(PartialEq)]

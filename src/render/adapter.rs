@@ -202,7 +202,6 @@ pub use crate::render::graph::{
     render_logo,
     Graph,
     RenderCell,
-    PIXEL_LOGO,
     PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH,
     PIXEL_RATIO_X,

@@ -82,6 +82,64 @@ use crate::{
 use std::sync::OnceLock;
 
 // ============================================================================
+// Logo Data from 2.pix (embedded at compile time)
+// ============================================================================
+
+/// Embedded logo pix file content (180x60 PETSCII art)
+const LOGO_PIX_DATA: &str = include_str!("../../assets/logo.pix");
+
+/// Parsed logo cell data: (symbol_id, fg_color, texture_id, bg_color)
+static LOGO_CELLS: OnceLock<Vec<(u8, u8, u8, u8)>> = OnceLock::new();
+
+/// Get parsed logo cells, parsing on first access
+fn get_logo_cells() -> &'static Vec<(u8, u8, u8, u8)> {
+    LOGO_CELLS.get_or_init(|| {
+        let mut cells = Vec::new();
+        let mut lines = LOGO_PIX_DATA.lines();
+
+        // Skip lines until we find the header (starts with "width=")
+        let mut found_header = false;
+        for line in lines.by_ref() {
+            if line.starts_with("width=") {
+                found_header = true;
+                break;
+            }
+        }
+
+        if !found_header {
+            return cells;
+        }
+
+        // Parse cell data lines after header
+        // Supports both 3-value (sym,fg,tex) and 4-value (sym,fg,tex,bg) formats
+        for line in lines {
+            if line.trim().is_empty() {
+                continue;
+            }
+            for cell_str in line.split_whitespace() {
+                let parts: Vec<&str> = cell_str.split(',').collect();
+                if parts.len() >= 3 {
+                    if let (Ok(sym), Ok(fg), Ok(tex)) = (
+                        parts[0].parse::<u8>(),
+                        parts[1].parse::<u8>(),
+                        parts[2].parse::<u8>(),
+                    ) {
+                        // Background color defaults to 0 if not present
+                        let bg = if parts.len() >= 4 {
+                            parts[3].parse::<u8>().unwrap_or(0)
+                        } else {
+                            0
+                        };
+                        cells.push((sym, fg, tex, bg));
+                    }
+                }
+            }
+        }
+        cells
+    })
+}
+
+// ============================================================================
 // RenderTexture API - Unified RT management for graphics mode
 // ============================================================================
 
@@ -624,65 +682,17 @@ pub fn init_sym_height(height: u32) -> f32 {
     height as f32 / TEXTURE_GRID_SIZE
 }
 
-/// Logo display width (in characters)
-pub const PIXEL_LOGO_WIDTH: usize = 27;
+/// Logo display width (in characters) - from 2.pix (180x60)
+pub const PIXEL_LOGO_WIDTH: usize = 180;
 
 /// Logo display height (in characters)
 ///
 /// The logo is displayed during startup to show the project identity.
-/// Uses RGB format storage with 3 bytes per pixel.
-pub const PIXEL_LOGO_HEIGHT: usize = 12;
+/// Data is loaded from embedded 2.pix file (180x60 PETSCII art).
+pub const PIXEL_LOGO_HEIGHT: usize = 60;
 
-/// RustPixel Logo data
-///
-/// Predefined logo image data in RGB format, 3 bytes per pixel.
-/// Displayed during game startup stage to provide brand identification.
-///
-/// Data format: [R, G, B, R, G, B, ...]
-/// Dimensions: 27 × 12 pixels
-pub const PIXEL_LOGO: [u8; PIXEL_LOGO_WIDTH * PIXEL_LOGO_HEIGHT * 3] = [
-    32, 15, 1, 32, 202, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 239, 1, 32, 15, 1, 100, 239, 1, 32,
-    239, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0,
-    32, 15, 1, 32, 15, 1, 32, 15, 0, 32, 15, 1, 32, 15, 1, 32, 15, 0, 32, 15, 1, 32, 165, 1, 32,
-    165, 0, 32, 87, 1, 32, 15, 1, 18, 202, 1, 21, 202, 1, 19, 202, 1, 20, 202, 1, 32, 15, 1, 47,
-    239, 1, 47, 239, 1, 116, 239, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15,
-    0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32,
-    15, 0, 32, 87, 1, 32, 165, 0, 32, 165, 1, 32, 240, 1, 100, 239, 1, 100, 239, 1, 100, 239, 1,
-    100, 239, 1, 100, 239, 1, 81, 49, 1, 47, 239, 1, 32, 239, 1, 100, 239, 1, 32, 239, 1, 32, 15,
-    1, 32, 239, 1, 100, 239, 1, 32, 239, 1, 100, 239, 1, 100, 239, 1, 100, 239, 1, 100, 239, 1,
-    100, 239, 1, 32, 239, 1, 100, 239, 1, 32, 239, 1, 32, 15, 0, 32, 87, 1, 32, 15, 0, 32, 165, 0,
-    47, 239, 1, 104, 239, 1, 104, 239, 1, 104, 239, 1, 104, 239, 1, 47, 239, 1, 47, 238, 1, 47,
-    238, 1, 47, 238, 1, 47, 239, 1, 100, 239, 1, 46, 239, 1, 47, 239, 1, 47, 239, 1, 47, 239, 1,
-    104, 239, 1, 104, 239, 1, 104, 239, 1, 104, 239, 1, 47, 239, 1, 47, 239, 1, 47, 239, 1, 84,
-    239, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 160, 49, 1, 160, 49, 1, 160, 49, 1, 160,
-    49, 1, 81, 49, 1, 32, 15, 1, 160, 86, 1, 32, 15, 1, 160, 49, 1, 47, 236, 1, 47, 236, 1, 46,
-    234, 1, 160, 49, 1, 47, 239, 1, 81, 49, 1, 160, 49, 1, 160, 49, 1, 160, 49, 1, 160, 49, 1, 47,
-    239, 1, 160, 49, 1, 32, 15, 1, 84, 239, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 87, 1, 160, 45,
-    1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 160, 45, 1, 32, 15, 1, 160, 45, 1, 32, 235, 1, 116, 235, 1,
-    160, 45, 1, 47, 236, 1, 160, 45, 1, 47, 239, 1, 116, 239, 1, 160, 45, 1, 46, 234, 1, 32, 15, 1,
-    46, 234, 1, 47, 239, 1, 116, 239, 1, 160, 45, 1, 32, 15, 1, 84, 239, 1, 32, 15, 0, 32, 15, 1,
-    32, 15, 0, 32, 197, 1, 160, 147, 1, 32, 239, 1, 100, 239, 1, 100, 239, 1, 160, 147, 1, 32, 15,
-    1, 160, 147, 1, 32, 235, 1, 116, 235, 1, 46, 235, 1, 81, 147, 1, 47, 239, 1, 47, 239, 1, 100,
-    239, 1, 160, 147, 1, 160, 147, 1, 160, 147, 1, 160, 147, 1, 47, 239, 1, 32, 15, 1, 160, 147, 1,
-    32, 239, 1, 84, 239, 1, 100, 239, 1, 100, 239, 1, 100, 239, 1, 32, 239, 1, 160, 147, 1, 47,
-    239, 1, 104, 239, 1, 104, 240, 1, 160, 147, 1, 32, 15, 1, 160, 147, 1, 32, 15, 1, 116, 235, 1,
-    160, 147, 1, 47, 239, 1, 160, 147, 1, 47, 239, 1, 47, 239, 1, 160, 147, 1, 104, 238, 1, 104,
-    238, 1, 104, 238, 1, 104, 238, 1, 47, 242, 1, 160, 147, 1, 47, 239, 1, 104, 239, 1, 104, 239,
-    1, 104, 239, 1, 47, 239, 1, 84, 239, 1, 160, 214, 1, 160, 214, 1, 160, 214, 1, 160, 214, 1, 81,
-    214, 1, 47, 239, 1, 81, 214, 1, 47, 239, 1, 160, 214, 1, 47, 239, 1, 32, 0, 1, 46, 235, 1, 160,
-    214, 1, 47, 236, 1, 81, 214, 1, 160, 214, 1, 160, 214, 1, 160, 214, 1, 160, 214, 1, 47, 242, 1,
-    81, 214, 1, 81, 214, 1, 81, 214, 1, 81, 214, 1, 81, 214, 1, 47, 239, 1, 32, 165, 1, 160, 214,
-    1, 103, 239, 1, 32, 242, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 0, 1,
-    32, 0, 1, 32, 87, 1, 32, 87, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15,
-    0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 165, 0, 32,
-    165, 0, 160, 214, 1, 103, 239, 1, 32, 242, 1, 32, 97, 1, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32,
-    15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 97, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0,
-    32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 97,
-    0, 32, 165, 0, 32, 15, 1, 90, 214, 1, 47, 239, 1, 32, 0, 1, 32, 15, 0, 32, 0, 1, 32, 0, 1, 32,
-    15, 0, 32, 15, 0, 32, 15, 0, 32, 15, 0, 32, 0, 1, 32, 15, 0, 32, 0, 1, 32, 0, 1, 32, 0, 1, 32,
-    0, 1, 32, 0, 1, 32, 0, 1, 32, 0, 1, 32, 15, 0, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32, 15, 1, 32,
-    15, 1, 32, 15, 1, 32, 15, 1,
-];
+/// Logo scale factor (0.5 = display at half size, 30x30 effective)
+pub const PIXEL_LOGO_SCALE: f32 = 0.2;
 
 /// 🎨 Unified Color Representation
 ///
@@ -1858,64 +1868,209 @@ where
 /// - `sry`: Screen vertical scaling ratio
 /// - `spw`: Screen physical width in pixels
 /// - `sph`: Screen physical height in pixels
-/// - `rd`: Random number generator for color effects
+/// - `_rd`: Random number generator (unused, kept for API compatibility)
 /// - `stage`: Current animation stage (0 to LOGO_FRAME)
 /// - `f`: Callback function to render each logo character
-pub fn render_logo<F>(srx: f32, sry: f32, spw: u32, sph: u32, rd: &mut Rand, stage: u32, mut f: F)
+pub fn render_logo<F>(srx: f32, sry: f32, spw: u32, sph: u32, _rd: &mut Rand, stage: u32, mut f: F)
 where
     F: FnMut(&(u8, u8, u8, u8), ARect, usize, usize),
 {
+    let logo_cells = get_logo_cells();
     let rx = srx * 1.0;
     let ry = sry * 1.0;
+    let scale = PIXEL_LOGO_SCALE;
+
+    // Calculate symbol size after DPI and scale
+    let symw = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx * scale;
+    let symh = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry * scale;
+
+    // Calculate centered position with scaled dimensions
+    let logo_pixel_w = PIXEL_LOGO_WIDTH as f32 * symw;
+    let logo_pixel_h = PIXEL_LOGO_HEIGHT as f32 * symh;
+    let base_x = (spw as f32 / 2.0 - logo_pixel_w / 2.0) as u16;
+    let base_y = (sph as f32 / 2.0 - logo_pixel_h / 2.0) as u16;
+
     for y in 0usize..PIXEL_LOGO_HEIGHT {
         for x in 0usize..PIXEL_LOGO_WIDTH {
             let sci = y * PIXEL_LOGO_WIDTH + x;
-            let symw = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
-            let symh = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+            if sci >= logo_cells.len() {
+                continue;
+            }
 
-            let (mut s2, texidx, symidx) = render_helper(
+            // Get cell data: (symbol, fg_color, texture, bg_color)
+            let (sym, fg, tex, _bg) = logo_cells[sci];
+
+            // Use render_helper_with_scale for proper scaling
+            let (mut s2, texidx, symidx) = render_helper_with_scale(
                 PIXEL_LOGO_WIDTH as u16,
                 PointF32 { x: rx, y: ry },
                 sci,
                 &(
-                    PIXEL_LOGO[sci * 3],
-                    PIXEL_LOGO[sci * 3 + 2],
-                    Color::Indexed(PIXEL_LOGO[sci * 3 + 1]),
+                    sym,
+                    tex,
+                    Color::Indexed(fg),
                     Color::Reset,
                 ),
                 PointU16 {
-                    x: spw as u16 / 2 - (PIXEL_LOGO_WIDTH as f32 / 2.0 * symw) as u16,
-                    y: sph as u16 / 2 - (PIXEL_LOGO_HEIGHT as f32 / 2.0 * symh) as u16,
+                    x: base_x,
+                    y: base_y,
                 },
-                false, // Logo uses Sprite characters (8×8)
+                false, // Logo uses Sprite characters (16×16)
+                scale, // scale_x
+                scale, // scale_y
+                scale, // sprite_scale_y
+                None,  // cumulative_x (use grid-based layout)
             );
-            let fc = Color::Indexed(PIXEL_LOGO[sci * 3 + 1]).get_rgba();
 
-            let randadj = 12 - (rd.rand() % 24) as i32;
+            let fc = Color::Indexed(fg).get_rgba();
+
             let sg = LOGO_FRAME as u8 / 3;
+            let symw_px = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx * scale;
+
+            // Hold frames: jitter persists for this many frames before changing
+            // This creates a more rhythmic, intentional glitch effect
+            const JITTER_HOLD_FRAMES: u32 = 4;
+            let held_stage = stage / JITTER_HOLD_FRAMES;
+
+            // Row-based scanline offset - each row has a large random horizontal shift
+            // Use held_stage so the offset persists for multiple frames
+            let row_seed = (y as u32 * 7919 + held_stage * 31) % 65536;
+            let row_rand = ((row_seed * 1103515245 + 12345) >> 16) & 0x7fff;
+
             let r: u8;
             let g: u8;
             let b: u8;
             let a: u8;
+            let mut rand_x: i32 = 0;
+            let mut rand_y: i32 = 0;
+            let mut final_symidx = symidx;
+
             if stage <= sg as u32 {
-                r = (stage as u8).saturating_mul(10);
-                g = (stage as u8).saturating_mul(10);
-                b = (stage as u8).saturating_mul(10);
+                // Stage 1: Emergence with strong scanline displacement
+                let stage_progress = stage as f32 / sg as f32;
+                let chaos = 1.0 - stage_progress; // 1.0 at start, 0.0 at end
+
+                // Large row-based horizontal displacement (scanline glitch effect)
+                // Displacement decreases as stage progresses
+                let max_row_offset = (symw_px * 8.0 * chaos) as i32; // Up to 8 symbols width
+                let row_offset = if max_row_offset > 0 {
+                    (row_rand as i32 % (max_row_offset * 2 + 1)) - max_row_offset
+                } else {
+                    0
+                };
+
+                // Per-cell deterministic random based on held_stage (persists for JITTER_HOLD_FRAMES)
+                let cell_seed = (sci as u32 * 2654435761 + held_stage * 1664525) as u32;
+                let cell_rand1 = ((cell_seed * 1103515245 + 12345) >> 16) & 0x7fff;
+                let cell_rand2 = ((cell_seed * 214013 + 2531011) >> 16) & 0x7fff;
+                let cell_rand3 = ((cell_seed * 48271 + 1) >> 16) & 0x7fff;
+
+                // Additional per-cell random jitter
+                let cell_jitter = (symw_px * 2.0 * chaos) as u32;
+                let cell_rand_x = if cell_jitter > 0 {
+                    (cell_rand1 as i32 % (cell_jitter as i32 * 2 + 1)) - cell_jitter as i32
+                } else {
+                    0
+                };
+                let cell_rand_y = if cell_jitter > 0 {
+                    (cell_rand2 as i32 % (cell_jitter as i32 + 1)) - (cell_jitter / 2) as i32
+                } else {
+                    0
+                };
+
+                rand_x = row_offset + cell_rand_x;
+                rand_y = cell_rand_y;
+
+                // Glitch symbol substitution - more likely early on
+                let glitch_chance = (50.0 * chaos * chaos) as u32; // 50% at start, decreasing
+                if cell_rand3 % 100 < glitch_chance {
+                    final_symidx = (cell_rand1 % 128) as usize;
+                }
+
+                // ═══ Random Color Effects ═══
+                // Row-based color shift (each row can have a different hue tint)
+                let row_color_seed = ((row_seed * 48271) >> 8) & 0xff;
+                let row_hue_shift = (row_color_seed as i32 - 128) as f32 * chaos * 0.8;
+
+                // Per-cell random color (chromatic aberration / RGB split effect)
+                // Use deterministic seeds for consistent hold behavior
+                let color_seed1 = ((cell_seed * 16807 + 1) >> 8) & 0xffff;
+                let color_seed2 = ((cell_seed * 48271 + 7) >> 8) & 0xffff;
+                let color_seed3 = ((cell_seed * 69621 + 13) >> 8) & 0xffff;
+                let cell_color_chaos = (150.0 * chaos) as i32;
+                let rand_r = if cell_color_chaos > 0 { (color_seed1 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
+                let rand_g = if cell_color_chaos > 0 { (color_seed2 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
+                let rand_b = if cell_color_chaos > 0 { (color_seed3 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
+
+                // Random full-color replacement for some cells (pure random color)
+                let color_glitch_chance = (30.0 * chaos * chaos) as u32;
+                let use_random_color = (cell_rand2 % 100) < color_glitch_chance;
+
+                let base_bright = (stage_progress * 200.0) as u8;
+                let blend = stage_progress;
+
+                if use_random_color {
+                    // Completely random vibrant color (deterministic for frame hold)
+                    r = (color_seed1 & 0xff) as u8;
+                    g = (color_seed2 & 0xff) as u8;
+                    b = (color_seed3 & 0xff) as u8;
+                } else {
+                    // Blend from random/noisy to original with per-channel noise
+                    let base_r = (base_bright as f32 * (1.0 - blend) + fc.0 as f32 * blend) as i32;
+                    let base_g = (base_bright as f32 * (1.0 - blend) + fc.1 as f32 * blend) as i32;
+                    let base_b = (base_bright as f32 * (1.0 - blend) + fc.2 as f32 * blend) as i32;
+
+                    r = (base_r + rand_r + row_hue_shift as i32).clamp(0, 255) as u8;
+                    g = (base_g + rand_g - (row_hue_shift * 0.5) as i32).clamp(0, 255) as u8;
+                    b = (base_b + rand_b - row_hue_shift as i32).clamp(0, 255) as u8;
+                }
                 a = 255;
-                s2.x += randadj;
             } else if stage <= sg as u32 * 2 {
-                r = fc.0;
-                g = fc.1;
-                b = fc.2;
+                // Stage 2: Settling phase - residual jitter decreasing to stable
+                let stage_progress = (stage as f32 - sg as f32) / sg as f32;
+                let residual = 1.0 - stage_progress; // 1.0 -> 0.0
+
+                // Small residual row offset
+                let residual_offset = (symw_px * 1.5 * residual) as i32;
+                let row_offset = if residual_offset > 0 {
+                    (row_rand as i32 % (residual_offset * 2 + 1)) - residual_offset
+                } else {
+                    0
+                };
+
+                rand_x = row_offset;
+
+                // Subtle breathing effect on color
+                let breath = ((stage as f32 * 0.3).sin() * 8.0) as i32;
+                r = (fc.0 as i32 + breath).clamp(0, 255) as u8;
+                g = (fc.1 as i32 + breath).clamp(0, 255) as u8;
+                b = (fc.2 as i32 + breath).clamp(0, 255) as u8;
                 a = 255;
             } else {
-                let cc = (stage as u8 - sg * 2).saturating_mul(10);
-                r = fc.0.saturating_sub(cc);
-                g = fc.1.saturating_sub(cc);
-                b = fc.2.saturating_sub(cc);
-                a = 255;
+                // Stage 3: Fade out with dissolve scatter
+                let fade_progress = (stage - sg as u32 * 2) as f32 / sg as f32;
+                let fade_amount = (fade_progress * 255.0) as u8;
+                r = fc.0.saturating_sub(fade_amount);
+                g = fc.1.saturating_sub(fade_amount);
+                b = fc.2.saturating_sub(fade_amount);
+                // Alpha fade for smoother disappearance
+                a = 255u8.saturating_sub((fade_progress * 200.0) as u8);
+
+                // Scatter effect during fade out (also uses held_stage for consistent hold)
+                let scatter = (symw_px * 3.0 * (1.0 - fade_progress)) as i32;
+                if scatter > 0 {
+                    let scatter_seed = (sci as u32 * 2654435761 + held_stage * 1664525) as u32;
+                    let scatter_rand1 = ((scatter_seed * 1103515245 + 12345) >> 16) & 0x7fff;
+                    let scatter_rand2 = ((scatter_seed * 214013 + 2531011) >> 16) & 0x7fff;
+                    rand_x = (scatter_rand1 as i32 % (scatter * 2 + 1)) - scatter;
+                    rand_y = (scatter_rand2 as i32 % (scatter + 1)) - scatter / 2;
+                }
             }
-            f(&(r, g, b, a), s2, texidx, symidx);
+
+            // Apply position jitter
+            s2.x += rand_x;
+            s2.y += rand_y;
+            f(&(r, g, b, a), s2, texidx, final_symidx);
         }
     }
 }
