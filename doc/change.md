@@ -1,3 +1,131 @@
+# 2.0.0 - MDPT: A TUI Without a Terminal Emulator
+
+## 🎯 Killer App: MDPT (Markdown Presentation Tool)
+
+**A Markdown-first presentation toolkit with a self-rendered TUI.**
+
+MDPT demonstrates RustPixel's unique capability: rendering a full-featured terminal UI in a native GPU window, completely independent of any terminal emulator.
+
+### Why MDPT?
+
+Unlike terminal-based presenters (presenterm, slides), MDPT:
+- **No terminal emulator** — Runs in a native window with GPU rendering
+- **Consistent rendering** — Same look across all platforms
+- **Rich transitions** — GPU shader effects impossible in terminals
+- **True graphics** — Not limited by terminal cell constraints
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **GPU-Accelerated Transitions** | 6 transition effects (dissolve, circle, wipe, etc.) powered by shaders |
+| **Code Highlighting** | 100+ languages with dynamic line-by-line reveal `{1-4\|6-10\|all}` |
+| **Text Animations** | Spotlight, Wave, FadeIn, Typewriter effects |
+| **Charts** | Line charts, bar charts, pie charts, Mermaid diagrams |
+| **Column Layouts** | Flexible multi-column content arrangement |
+| **PETSCII/SSF Images** | Native pixel-art and animation support |
+| **Full CJK Support** | Chinese, Japanese, Korean text rendering |
+| **Incremental Display** | Step-by-step content reveal with pause markers |
+
+### Usage
+
+```bash
+cargo pixel r mdpt g -r assets/demo.md   # Glow mode
+cargo pixel r mdpt s -r assets/demo.md   # SDL mode
+cargo pixel r mdpt wg -r assets/demo.md  # WGPU mode
+```
+
+## 🎮 pixel_basic: Built-in BASIC Interpreter
+
+**Write games in familiar BASIC syntax — perfect for beginners or quick prototyping!**
+
+### Features
+
+- **Classic BASIC syntax** with line numbers
+- **Game hooks**: `ON_INIT (1000)`, `ON_TICK (2000)`, `ON_DRAW (3500)`
+- **Graphics**: `PLOT x, y, char, fg, bg` / `BOX` / `CLS`
+- **Input**: `KEY("W")`, `KEY("SPACE")`
+- **Arrays**: `DIM arr(100)`
+- **Control flow**: `GOTO`, `GOSUB/RETURN`, `FOR/NEXT`, `IF/THEN`
+- **Math**: `RND()`, `INT()`, `ABS()`
+- **Strings**: `STR$()`, `LEN()`, `MID$()`
+- **Coroutines**: `YIELD`, `WAIT` — write game logic naturally
+
+### Example
+
+```basic
+10 REM SNAKE GAME
+20 X = 20: Y = 10
+30 DIM BX(100): DIM BY(100)
+40 YIELD
+50 GOTO 40
+
+1000 REM ON_INIT
+1010 BOX 0, 0, 60, 24, 1
+1020 RETURN
+
+2000 REM ON_TICK
+2010 IF KEY("W") THEN DY = -1: DX = 0
+2020 X = X + DX: Y = Y + DY
+2030 RETURN
+```
+
+### Usage
+
+```bash
+cargo pixel r basic_snake t      # Run BASIC Snake game
+```
+
+See `pixel_basic/` for the interpreter source and `apps/basic_snake/` for a complete example.
+
+## 🎨 Logo Animation Enhancement
+
+### Jitter Hold Frames
+
+Improved logo animation with frame-holding behavior for jitter effects:
+
+- **Jitter persists for 4 frames** instead of changing every frame
+- Uses deterministic random seeds based on held stage
+- Smoother visual experience with less flickering
+
+```rust
+const JITTER_HOLD_FRAMES: u32 = 4;
+let held_stage = stage / JITTER_HOLD_FRAMES;
+```
+
+### Embedded Logo Data
+
+Logo data now embedded in source code for better standalone project compatibility:
+
+- **New `logo_data.rs`** module contains logo pixel data as static string
+- **No external file dependency** — Eliminates `include_str!` compilation errors
+- Works reliably in standalone projects without `assets/logo.pix`
+
+## 📦 Charts & Diagrams in MDPT
+
+New chart rendering capabilities using pure character graphics:
+
+- **Line Charts** — Braille dot matrix or ASCII line rendering
+- **Bar Charts** — Block characters (▁▂▃▄▅▆▇█) for vertical bars
+- **Pie Charts** — Braille dot matrix for circular sectors
+- **Mermaid Flowcharts** — `graph TD/LR` support with box drawing
+
+```markdown
+\`\`\`linechart
+title: Monthly Revenue
+x: [Jan, Feb, Mar, Apr, May]
+y: [120, 200, 150, 300, 280]
+\`\`\`
+```
+
+## 🔄 Migration
+
+- Version bump from 1.0.8 to 2.0.0
+- All existing apps remain compatible
+- MDPT is a new optional app, no breaking changes
+
+---
+
 # 1.0.8 - Texture Upgrade, Code Refactoring & Color Enhancement
 
 ## 🖼️ Texture System Upgrade

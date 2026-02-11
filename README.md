@@ -101,6 +101,45 @@ Model-Render-Game pattern with Event driven
 
 ---
 
+## ⭐ Killer App: MDPT
+
+**A Markdown-first presentation toolkit with a self-rendered TUI.**
+
+**A TUI without a terminal emulator.**
+
+MDPT demonstrates RustPixel's unique capability: rendering a full-featured terminal UI in a native GPU window, completely independent of any terminal emulator.
+
+![MDPT](./screen-shot/mdpt.gif)
+
+```bash
+cargo pixel r mdpt g -r assets/demo.md   # Glow mode
+cargo pixel r mdpt s -r assets/demo.md   # SDL mode
+cargo pixel r mdpt wg -r assets/demo.md  # WGPU mode
+```
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **GPU-Accelerated Transitions** | 6 transition effects (dissolve, circle, wipe, etc.) powered by shaders |
+| **Code Highlighting** | 100+ languages with dynamic line-by-line reveal `{1-4\|6-10\|all}` |
+| **Text Animations** | Spotlight, Wave, FadeIn, Typewriter effects |
+| **Charts** | Line charts, bar charts, pie charts, Mermaid diagrams |
+| **Column Layouts** | Flexible multi-column content arrangement |
+| **PETSCII/SSF Images** | Native pixel-art and animation support |
+| **Full CJK Support** | Chinese, Japanese, Korean text rendering |
+| **Incremental Display** | Step-by-step content reveal with pause markers |
+
+### Why MDPT?
+
+Unlike terminal-based presenters (presenterm, slides), MDPT:
+- **No terminal emulator** — Runs in a native window with GPU rendering
+- **Consistent rendering** — Same look across all platforms
+- **Rich transitions** — GPU shader effects impossible in terminals
+- **True graphics** — Not limited by terminal cell constraints
+
+---
+
 ## Showcase
 
 PETSCII art browser built with RustPixel. Art by [@PETSCIIWORLD](https://x.com/PETSCIIWORLD), transitions by **gltransition**.
@@ -353,6 +392,37 @@ cd apps/poker/wasm && make run
 - **WGPU shaders** - Modern GPU rendering pipeline
 - **Game algorithms** - Pathfinding, object pools, utilities
 - **Audio support** - Sound effects and music playback
+
+---
+
+## Roadmap
+
+### Three Pillars
+
+| Pillar | Description |
+|--------|-------------|
+| **Hybrid TUI** | Same code runs in Terminal, Native Window, and Web |
+| **Scripting** | BASIC drives game logic, Rust handles engine |
+| **AI Art Pipeline** | PETSCII/ASCII art search → generation |
+
+### AI Integration
+
+- **AI-friendly API** — Refine APIs for better AI code generation compatibility
+- **AIGC for MDPT** — Auto-generate slide illustrations (converted to pixel art)
+- **PETSCII/ASCII Art Generation** — Explore AI-generated low-resolution, high-quality character art
+
+### BASIC Enhancement
+
+- **Richer Game Capabilities** — Expand BASIC to support more complex games and TUI apps
+- **Unified Script Template** — `init` / `update` / `draw` / `on_key` pattern for all apps
+
+### Toolchain
+
+- **Editor Improvements** — Enhanced character art editor with more features
+- **Asset Pipeline** — Charset/Palette/Pack import/export, versioning, hot reload
+- **Cross-Platform Consistency** — Unified input and rendering across all backends
+
+See [Roadmap 2026](doc/roadmap_2026.md) for detailed plans.
 
 ---
 
