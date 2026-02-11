@@ -1,6 +1,7 @@
-![logo](./screen-shot/logo.png)
 
 <div align="center">
+
+![logo](./screen-shot/logo.png)
 
 ![License] [![Latest Version]][crates.io] ![Downloads] [![API Documentation]][docs.rs] ![MSRV]
 
