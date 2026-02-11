@@ -70,16 +70,6 @@ Model-Render-Game pattern with Event driven
 
 ---
 
-## Rendering Modes
-
-| Mode | Backend | Output |
-|------|---------|--------|
-| **Terminal** | crossterm | ASCII / CJK / Emoji |
-| **SDL** | SDL2 + OpenGL | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
-| **Glow** | winit + OpenGL | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
-| **WGPU** | winit + wgpu | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
-| **Web** | WASM + WebGL | PETSCII / Custom Symbols / ASCII / CJK / Emoji |
-
 ### Unified Texture Architecture
 
 **Single 4096×4096 texture, 256 blocks (0-255):**
