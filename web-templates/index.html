@@ -4,10 +4,27 @@
 <head>
   <meta charset="utf-8">
   <title>RustPixelGame</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      /* Crisp pixel rendering for retro style */
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
 </head>
 
 <body>
-  <canvas id="canvas" height="800" width="1200" style="position: absolute; top: 10px; left: 10px;"></canvas>
+  <!-- Canvas size will be set dynamically by JavaScript after WGPU init -->
+  <canvas id="canvas"></canvas>
   <script src="./index.js" type="module"></script>
 </body>
 

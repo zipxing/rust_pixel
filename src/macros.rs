@@ -211,6 +211,18 @@ macro_rules! app {
                 pub fn get_ratioy(&mut self) -> f32 {
                     self.g.context.adapter.get_base().gr.ratio_y
                 }
+
+                /// Get the actual canvas size (pixel dimensions) for rendering
+                ///
+                /// Returns the width and height that should be used for the HTML canvas
+                /// to match the WGPU surface size exactly, avoiding scaling artifacts.
+                ///
+                /// # Returns
+                /// A JavaScript array [width, height] in pixels
+                pub fn get_canvas_size(&self) -> Vec<u32> {
+                    let (w, h) = self.g.context.adapter.get_canvas_size();
+                    vec![w, h]
+                }
             }
 
             pub fn run() {

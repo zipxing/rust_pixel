@@ -257,10 +257,19 @@ pub fn wasm_init_pixel_assets(
     init_game_config(game_name, ".");
 
     // 2. Set PIXEL_SYM_WIDTH/HEIGHT
-    if PIXEL_SYM_WIDTH.set(init_sym_width(tex_w)).is_err() {
+    let sym_w = init_sym_width(tex_w);
+    let sym_h = init_sym_height(tex_h);
+    web_sys::console::log_1(
+        &format!(
+            "RUST: tex_w={}, tex_h={}, sym_width={}, sym_height={}",
+            tex_w, tex_h, sym_w, sym_h
+        )
+        .into(),
+    );
+    if PIXEL_SYM_WIDTH.set(sym_w).is_err() {
         web_sys::console::warn_1(&"PIXEL_SYM_WIDTH already initialized".into());
     }
-    if PIXEL_SYM_HEIGHT.set(init_sym_height(tex_h)).is_err() {
+    if PIXEL_SYM_HEIGHT.set(sym_h).is_err() {
         web_sys::console::warn_1(&"PIXEL_SYM_HEIGHT already initialized".into());
     }
 

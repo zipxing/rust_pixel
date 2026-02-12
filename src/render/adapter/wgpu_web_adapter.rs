@@ -59,6 +59,16 @@ impl WgpuWebAdapter {
 
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
+        web_sys::console::log_1(
+            &format!(
+                "RUST: cell_w={}, cell_h={}, pixel_w={}, pixel_h={}, ratio_x={}, ratio_y={}",
+                self.base.cell_w, self.base.cell_h,
+                self.base.gr.pixel_w, self.base.gr.pixel_h,
+                self.base.gr.ratio_x, self.base.gr.ratio_y
+            )
+            .into(),
+        );
+
         // Get canvas element
         let canvas = web_sys::window()
             .unwrap()
@@ -161,6 +171,10 @@ impl Adapter for WgpuWebAdapter {
 
     fn get_base(&mut self) -> &mut AdapterBase {
         &mut self.base
+    }
+
+    fn get_canvas_size(&self) -> (u32, u32) {
+        (self.base.gr.pixel_w, self.base.gr.pixel_h)
     }
 
     fn reset(&mut self) {}
@@ -348,7 +362,8 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
             sym_height
         };
         mc.column /= (sym_width / ratiox) as u16;
-        mc.row -= 800 - pixel_h as u16;
+        // Canvas size now matches pixel_h exactly (set dynamically by JS)
+        // No offset needed since canvas top is at y=0
         mc.row /= (cell_height / ratioy) as u16;
         return Some(Event::Mouse(mc));
     }

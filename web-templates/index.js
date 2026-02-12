@@ -93,35 +93,46 @@ const wasm = await init();
 
 /**
  * Symbol Texture Loading and Processing
- * 
+ *
  * RustPixel uses a symbol atlas (symbols.png) containing all drawable characters
  * and sprites. This must be loaded and processed before the game can render.
+ *
+ * We use fetch + createImageBitmap to bypass browser Image size limits.
+ * Some browsers limit Image objects to 4096x4096, but createImageBitmap
+ * can handle larger images (up to GPU texture limits, typically 8192 or 16384).
  */
-const timg = new Image();
-timg.src = "assets/pix/symbols.png";
+const response = await fetch("assets/pix/symbols.png");
+const blob = await response.blob();
 
-/**
- * Image Decode Await Explanation:
- * 
- * The 'await timg.decode()' is essential because:
- * 1. Image loading (setting src) is asynchronous
- * 2. Browser may not have finished decoding the image data yet
- * 3. decode() returns a Promise that resolves when image is ready for use
- * 4. Without await, getImageData() might fail or return incomplete data
- * 
- * This ensures the image is FULLY loaded and decoded before processing.
- */
-await timg.decode();
+// createImageBitmap bypasses Image object size limits
+const imageBitmap = await createImageBitmap(blob);
+console.log(`[DEBUG] ImageBitmap created: ${imageBitmap.width}x${imageBitmap.height}`);
 
-// Create a canvas to extract pixel data from the loaded image
-const canvas = document.createElement("canvas");
-canvas.width = timg.width;
-canvas.height = timg.height;
-const ctx = canvas.getContext("2d");
+// Create OffscreenCanvas if available (better for large images), fallback to regular canvas
+let canvas, ctx;
+if (typeof OffscreenCanvas !== 'undefined') {
+    canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+    ctx = canvas.getContext("2d");
+    console.log(`[DEBUG] Using OffscreenCanvas: ${canvas.width}x${canvas.height}`);
+} else {
+    canvas = document.createElement("canvas");
+    canvas.width = imageBitmap.width;
+    canvas.height = imageBitmap.height;
+    ctx = canvas.getContext("2d");
+    console.log(`[DEBUG] Using regular canvas: ${canvas.width}x${canvas.height}`);
+}
 
-// Draw the image to canvas and extract raw pixel data
-ctx.drawImage(timg, 0, 0);
-const imgdata = ctx.getImageData(0, 0, timg.width, timg.height).data;
+if (!ctx) {
+    console.error("[ERROR] Failed to get 2D context!");
+}
+
+// Draw ImageBitmap to canvas and extract raw pixel data
+ctx.drawImage(imageBitmap, 0, 0);
+const imgdata = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height).data;
+console.log(`[DEBUG] getImageData complete, length: ${imgdata.length}`);
+
+// Use imageBitmap dimensions for Rust
+const timg = { width: imageBitmap.width, height: imageBitmap.height };
 
 /**
  * Unified Asset Loading (New Approach)
@@ -136,6 +147,8 @@ const symbolMapResponse = await fetch("assets/pix/symbol_map.json");
 const symbolMapText = await symbolMapResponse.text();
 
 // Initialize all assets at once: game config + texture + symbol_map
+console.log(`[DEBUG] Texture image size: ${timg.width}x${timg.height}`);
+console.log(`[DEBUG] Image data length: ${imgdata.length} bytes (expected: ${timg.width * timg.height * 4})`);
 wasm_init_pixel_assets("pixel_game", timg.width, timg.height, imgdata, symbolMapText);
 
 /**
@@ -168,7 +181,25 @@ if (dataUrl) {
  * WebGL using the pre-cached texture data.
  */
 const sg = PixelGame.new();
-sg.init_from_cache();  // Initialize WebGL using cached texture data
+
+// Initialize WGPU (async - must await!)
+await sg.init_from_cache();
+
+/**
+ * Dynamic Canvas Sizing
+ *
+ * After WGPU initialization, get the actual rendering dimensions from Rust
+ * and resize the HTML canvas to match exactly. This prevents scaling artifacts
+ * where the WGPU surface size differs from the canvas size.
+ */
+const canvasSize = sg.get_canvas_size();
+const gameCanvas = document.getElementById("canvas");
+gameCanvas.width = canvasSize[0];
+gameCanvas.height = canvasSize[1];
+// Also update CSS size to match (1:1 pixel mapping)
+gameCanvas.style.width = canvasSize[0] + "px";
+gameCanvas.style.height = canvasSize[1] + "px";
+console.log(`Canvas resized to ${canvasSize[0]}x${canvasSize[1]} (matches WGPU surface)`)
 
 // ============================================================================
 // Event System: Browser → Rust
