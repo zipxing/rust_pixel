@@ -78,8 +78,8 @@ MDPT demonstrates RustPixel's unique capability: rendering a full-featured termi
 ![MDPT](./screen-shot/mdpt.gif)
 
 ```bash
-cargo pixel r mdpt wg -r assets/demo.md  # WGPU mode (native)
-cargo pixel r mdpt w -r assets/demo.md   # Web mode (browser)
+cargo pixel r mdpt wg -r # WGPU mode (native)
+cargo pixel r mdpt w -r # Web mode (browser)
 ```
 
 ### Key Features
