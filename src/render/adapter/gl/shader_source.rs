@@ -18,7 +18,9 @@ pub const VERTEX_SRC_SYMBOLS: &str = r#"
                 vec2 origin = abs(a1.xy);
                 uv = a1.zw + vertex * a2.xy;
                 vec2 transformed = ((mat2(tw.xy, th.xy) * (mat2(a2.zw, a3.xy) * (vertex - origin) + a3.zw) + vec2(tw.z, th.z))) / vec2(tw.w, th.w) * 2.0;
-                gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
+                vec2 ndc_pos = transformed - vec2(1.0, 1.0);
+                // Flip Y to match WGPU coordinate system
+                gl_Position = vec4(ndc_pos.x, -ndc_pos.y, 0.0, 1.0);
                 colorj = color * colorFilter;
             }
         "#;

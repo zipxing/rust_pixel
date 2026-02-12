@@ -424,7 +424,8 @@ impl GlRenderSymbols {
             // Background使用独立的transform，因为background symbol (1280) 的frame尺寸
             // 与foreground symbol可能不同（如TUI字符是16x32，而填充符号是16x16）
             if let Some(b) = bg_color {
-                let mut bg_transform = UnifiedTransform::new();
+                // Use transform_stack (with Y-flip) to match WGPU behavior
+                let mut bg_transform = self.transform_stack;
                 bg_transform.translate(
                     r.x + r.cx - r.w as f32,
                     r.y + r.cy - r.h as f32,
@@ -451,7 +452,8 @@ impl GlRenderSymbols {
             let is_bold = modifier & MOD_BOLD != 0;
 
             // Foreground rendering
-            let mut transform = UnifiedTransform::new();
+            // Use transform_stack (with Y-flip) to match WGPU behavior
+            let mut transform = self.transform_stack;
             transform.translate(
                 r.x + r.cx - r.w as f32,
                 r.y + r.cy - r.h as f32,
@@ -489,7 +491,8 @@ impl GlRenderSymbols {
             // UNDERLINED 效果：在单元格底部绘制线条
             // Uses BG_FILL_SYMBOL (solid block in PETSCII) scaled to line thickness
             if modifier & MOD_UNDERLINED != 0 {
-                let mut line_transform = UnifiedTransform::new();
+                // Use transform_stack (with Y-flip) to match WGPU behavior
+                let mut line_transform = self.transform_stack;
                 // Position at bottom of cell (90% down)
                 let line_y = r.y + r.cy - r.h as f32 + cell_height * 0.9;
                 line_transform.translate(r.x + r.cx - r.w as f32, line_y);
@@ -511,7 +514,8 @@ impl GlRenderSymbols {
             // Draw CROSSED_OUT effect: a line through the middle of the cell
             // CROSSED_OUT 效果：在单元格中间绘制删除线
             if modifier & MOD_CROSSED_OUT != 0 {
-                let mut line_transform = UnifiedTransform::new();
+                // Use transform_stack (with Y-flip) to match WGPU behavior
+                let mut line_transform = self.transform_stack;
                 // Position at middle of cell (50% down, adjusted for line thickness)
                 let line_y = r.y + r.cy - r.h as f32 + cell_height * 0.46;
                 line_transform.translate(r.x + r.cx - r.w as f32, line_y);
