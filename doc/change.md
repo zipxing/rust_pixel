@@ -1,3 +1,17 @@
+# 2.1.0
+
+- MDPT and all apps now support fullscreen mode
+- Removed SDL and Glow (OpenGL) backend adapters, keeping only WGPU and terminal mode
+- Web mode now uses WGPU (with WebGL fallback) instead of Glow
+- Auto-generated cover slide for MDPT based on YAML front matter (title, author, theme)
+- Added CJK character support in GPU texture atlas
+- Fixed command line argument parsing for project path and app-specific args
+```
+cargo pixel r mdpt wg -r apps/mdpt/ demo.md
+```
+
+---
+
 # 2.0.0 - MDPT: A TUI Without a Terminal Emulator
 
 ## 🎯 Killer App: MDPT (Markdown Presentation Tool)
@@ -30,9 +44,9 @@ Unlike terminal-based presenters (presenterm, slides), MDPT:
 ### Usage
 
 ```bash
-cargo pixel r mdpt g -r assets/demo.md   # Glow mode
-cargo pixel r mdpt s -r assets/demo.md   # SDL mode
-cargo pixel r mdpt wg -r assets/demo.md  # WGPU mode
+cargo pixel r mdpt wg -r . assets/demo.md  # WGPU mode
+cargo pixel r mdpt t -r . assets/demo.md   # Terminal mode
+cargo pixel r mdpt w -r                    # Web mode
 ```
 
 ## 🎮 pixel_basic: Built-in BASIC Interpreter
