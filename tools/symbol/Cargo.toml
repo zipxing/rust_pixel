@@ -34,14 +34,8 @@ rust_pixel = { path = "../.." }  # Access to ANSI color palette and rendering sy
 
 # Feature-based conditional compilation for different rendering backends
 [features]
-# SDL2-based rendering (desktop graphics mode)
-sdl = ["rust_pixel/sdl"]
-
 # Terminal/console mode (text-based rendering)
 term = ["rust_pixel/term"]
-
-# Winit-based rendering (cross-platform windowing with OpenGL)
-glow = ["rust_pixel/glow"]
 
 # WGPU-based rendering (modern GPU API, WebGPU standard)
 wgpu = ["rust_pixel/wgpu"]

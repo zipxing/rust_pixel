@@ -26,7 +26,5 @@ rust_pixel = { path = "../..", default-features = false }
 # pixel_macro = { path = "../../pixel_macro" }
 
 [features]
-sdl = ["rust_pixel/sdl"]
-glow = ["rust_pixel/glow"]
-wgpu = ["rust_pixel/wgpu"]
 term = ["rust_pixel/term"]
+wgpu = ["rust_pixel/wgpu"]

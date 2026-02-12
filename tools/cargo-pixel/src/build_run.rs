@@ -5,13 +5,13 @@
 ///
 /// Usage:
 /// cargo pixel run snake term
-/// cargo pixel run snake sdl
+/// cargo pixel run snake wgpu
 /// cargo pixel creat games mygame
 /// cargo pixel build snake web
 ///
 /// shortcut:
 /// cargo pixel r snake t
-/// cargo pixel r snake s
+/// cargo pixel r snake wg
 /// cargo pixel r snake w
 /// ...
 ///
@@ -86,16 +86,8 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             "cargo {} -p {} --features term {} {}",
             subcmd, mod_name, release, other_part
         )),
-        "glow" | "g" => cmds.push(format!(
-            "cargo {} -p {} --features glow {} {}",
-            subcmd, mod_name, release, other_part
-        )),
         "wgpu" | "wg" => cmds.push(format!(
             "cargo {} -p {} --features wgpu {} {}",
-            subcmd, mod_name, release, other_part
-        )),
-        "sdl" | "s" => cmds.push(format!(
-            "cargo {} -p {} --features sdl {} {}",
             subcmd, mod_name, release, other_part
         )),
         "web" | "w" => {

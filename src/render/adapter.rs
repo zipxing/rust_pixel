@@ -11,22 +11,18 @@
 //! #### TextMode
 //! - **CrosstermAdapter**: Terminal text-mode rendering with crossterm
 //!
-//! #### GraphicsMode  
-//! - **SdlAdapter**: Desktop platform based on SDL2 + OpenGL
-//! - **WinitGlowAdapter**: Cross-platform OpenGL rendering (winit + glutin + glow)
-//! - **WinitWgpuAdapter**: Modern GPU rendering (winit + wgpu)
-//! - **WebAdapter**: WebGL-based browser rendering (webgl2 + glow)
+//! #### GraphicsMode
+//! - **WinitWgpuAdapter**: Modern GPU rendering (winit + wgpu) for desktop
+//! - **WebAdapter**: WebGL-based browser rendering (webgl2 + glow) for web
 //!
 //! ```text
 //! src/render/adapter.rs         # This file - adapter definitions
 //! src/render/adapter/
 //! ├── cross_adapter.rs          # Terminal rendering (crossterm)
-//! ├── sdl_adapter.rs            # SDL2 + OpenGL desktop rendering  
 //! ├── web_adapter.rs            # WebGL browser rendering
 //! ├── winit_common.rs           # Shared winit utilities
-//! ├── winit_glow_adapter.rs     # Winit + OpenGL rendering
 //! ├── winit_wgpu_adapter.rs     # Winit + WGPU modern rendering
-//! ├── gl/                       # OpenGL backend implementation
+//! ├── gl/                       # OpenGL backend (for web)
 //! └── wgpu/                     # WGPU backend implementation
 //! ```
 //!
@@ -51,11 +47,11 @@
 //!          ▼
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                Direct Adapter Dispatch                      │
-//! │ ┌─────────────┬─────────────┬─────────────┬─────────────┐   │
-//! │ │    SDL      │   Winit     │    Web      │ Crossterm   │   │
-//! │ │   Adapter   │  Adapters   │  Adapter    │  Adapter    │   │
-//! │ │             │ (Glow/WGPU) │             │             │   │
-//! │ └─────────────┴─────────────┴─────────────┴─────────────┘   │
+//! │ ┌─────────────┬─────────────┬─────────────┐                 │
+//! │ │   Winit     │    Web      │ Crossterm   │                 │
+//! │ │   WGPU      │  Adapter    │  Adapter    │                 │
+//! │ │  Adapter    │             │             │                 │
+//! │ └─────────────┴─────────────┴─────────────┘                 │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 //!
@@ -97,14 +93,14 @@
 //! │          │       GPU Rendering             │                │
 //! │          │                                 │                │
 //! │          │  ┌────────────────────────────┐ │                │
-//! │          │  │    OpenGL (SDL/Winit)      │ │                │
+//! │          │  │    WebGL2 (Web/glow)       │ │                │
 //! │          │  │  - Vertex Arrays           │ │                │
 //! │          │  │  - Shader Programs         │ │                │
 //! │          │  │  - Texture Atlases         │ │                │
 //! │          │  └────────────────────────────┘ │                │
 //! │          │                                 │                │
 //! │          │  ┌────────────────────────────┐ │                │
-//! │          │  │      WGPU (Modern)         │ │                │
+//! │          │  │  WGPU (Desktop + WebGPU)   │ │                │
 //! │          │  │  - Render Pipelines        │ │                │
 //! │          │  │  - Command Buffers         │ │                │
 //! │          │  │  - Bind Groups             │ │                │
@@ -157,31 +153,23 @@ use std::time::Duration;
 #[cfg(graphics_mode)]
 pub use crate::render::graph::{BlendMode, RtComposite, RtConfig, RtSize};
 
-/// OpenGL rendering subsystem for glow, SDL and web modes
-#[cfg(any(sdl_backend, glow_backend, wasm))]
+/// OpenGL rendering subsystem for web mode (WebGL2)
+#[cfg(wasm)]
 pub mod gl;
 
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering
 #[cfg(wgpu_backend)]
 pub mod wgpu;
 
-/// SDL adapter module - Desktop rendering backend based on SDL2
-#[cfg(sdl_backend)]
-pub mod sdl_adapter;
-
 /// Web adapter module - WebGL-based browser rendering backend
 #[cfg(wasm)]
 pub mod web_adapter;
 
-/// Winit common module - Shared code between winit_glow and winit_wgpu adapters
-#[cfg(any(glow_backend, wgpu_backend))]
+/// Winit common module - Shared code for winit_wgpu adapter
+#[cfg(wgpu_backend)]
 pub mod winit_common;
 
-/// Winit + Glow adapter module - OpenGL backend with winit window management
-#[cfg(glow_backend)]
-pub mod winit_glow_adapter;
-
-/// Winit + WGPU adapter module - Modern GPU backend with winit window management  
+/// Winit + WGPU adapter module - Modern GPU backend with winit window management
 #[cfg(wgpu_backend)]
 pub mod winit_wgpu_adapter;
 
@@ -221,15 +209,15 @@ pub use crate::render::graph::{
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
 /// │                  Adapter Interface                          │
-/// │  ┌─────────────┬─────────────┬─────────────┬─────────────┐  │
-/// │  │     SDL     │    Winit    │     Web     │  Crossterm  │  │
-/// │  │   Adapter   │   Adapter   │   Adapter   │   Adapter   │  │
-/// │  │      │      │      │      │      │      │      │      │  │
-/// │  │  ┌───▼───┐  │  ┌───▼───┐  │  ┌───▼───┐  │      │      │  │
-/// │  │  │ Base  │  │  │ Base  │  │  │ Base  │  │     N/A     │  │
-/// │  │  │ Data  │  │  │ Data  │  │  │ Data  │  │ (Terminal)  │  │
-/// │  │  └───────┘  │  └───────┘  │  └───────┘  │             │  │
-/// │  └─────────────┴─────────────┴─────────────┴─────────────┘  │
+/// │  ┌─────────────┬─────────────┬─────────────┐                │
+/// │  │    Winit    │     Web     │  Crossterm  │                │
+/// │  │   WGPU      │   Adapter   │   Adapter   │                │
+/// │  │   Adapter   │      │      │      │      │                │
+/// │  │  ┌───▼───┐  │  ┌───▼───┐  │      │      │                │
+/// │  │  │ Base  │  │  │ Base  │  │     N/A     │                │
+/// │  │  │ Data  │  │  │ Data  │  │ (Terminal)  │                │
+/// │  │  └───────┘  │  └───────┘  │             │                │
+/// │  └─────────────┴─────────────┴─────────────┘                │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 /// Base data structure shared by all rendering adapters

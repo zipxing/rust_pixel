@@ -6,7 +6,7 @@
 //! For simplicity, state is set to u8 type, you can create your own states using enums in your games.
 //! Context also integrates an RNG for user's convenience.
 //! A render adapter is also provided
-//! to make it compatible with web, SDL, or terminal modes.
+//! to make it compatible with web, WGPU, or terminal modes.
 //! Finally, an asset_manager is included as well.
 //!
 //! Note: `game_name` and `project_path` are now stored in the global `GAME_CONFIG`.
@@ -16,12 +16,6 @@ use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::R
 
 #[cfg(cross_backend)]
 use crate::render::adapter::cross_adapter::CrosstermAdapter;
-
-#[cfg(sdl_backend)]
-use crate::render::adapter::sdl_adapter::SdlAdapter;
-
-#[cfg(glow_backend)]
-use crate::render::adapter::winit_glow_adapter::WinitGlowAdapter;
 
 #[cfg(wgpu_backend)]
 use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
@@ -48,10 +42,6 @@ impl Context {
             input_events: vec![],
             #[cfg(wasm)]
             adapter: Box::new(WebAdapter::new()),
-            #[cfg(sdl_backend)]
-            adapter: Box::new(SdlAdapter::new()),
-            #[cfg(glow_backend)]
-            adapter: Box::new(WinitGlowAdapter::new()),
             #[cfg(wgpu_backend)]
             adapter: Box::new(WinitWgpuAdapter::new()),
             #[cfg(cross_backend)]

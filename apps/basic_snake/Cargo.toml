@@ -19,7 +19,5 @@ rust_pixel = { path = "../..", default-features = false }
 pixel_basic = { path = "../../pixel_basic" }
 
 [features]
-sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
-glow = ["rust_pixel/glow"]
 wgpu = ["rust_pixel/wgpu"]

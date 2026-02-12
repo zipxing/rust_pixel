@@ -30,8 +30,6 @@ texas_lib = { path = "./texas" }
 # pixel_macro = { path = "../../pixel_macro" }
 
 [features]
-sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
-glow = ["rust_pixel/glow"]
 wgpu = ["rust_pixel/wgpu"]
 

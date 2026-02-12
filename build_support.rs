@@ -11,19 +11,17 @@ fn setup_rust_pixel_cfg_aliases() {
         // Platform aliases
         wasm: { target_arch = "wasm32" },
         mobile: { any(target_os = "android", target_os = "ios") },
-        
+
         // Rendering backend aliases
-        graphics_backend: { any(feature = "sdl", feature = "glow", feature = "wgpu") },
-        
+        graphics_backend: { feature = "wgpu" },
+
         // Specific backend aliases
-        sdl_backend: { all(feature = "sdl", not(wasm)) },
-        glow_backend: { all(feature = "glow", not(wasm), not(feature = "wgpu")) },
         wgpu_backend: { all(feature = "wgpu", not(wasm)) },
         cross_backend: { not(graphics_mode) },
-        
+
         // Audio support aliases
         audio_support: { not(any(mobile, wasm)) },
-        
+
         // Graphics rendering mode (including wasm)
         graphics_mode: { any(graphics_backend, wasm) },
     }

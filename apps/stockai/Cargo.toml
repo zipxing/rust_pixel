@@ -28,7 +28,5 @@ encoding_rs = "0.8"
 rust_pixel = { path = "../..", default-features = false }
 
 [features]
-sdl = ["rust_pixel/sdl"]
 term = ["rust_pixel/term"]
-glow = ["rust_pixel/glow"]
 wgpu = ["rust_pixel/wgpu"]

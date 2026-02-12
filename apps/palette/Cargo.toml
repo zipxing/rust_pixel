@@ -27,7 +27,5 @@ palette_lib = { path = "./lib" }
 rust_pixel = { path = "../..", default-features = false }
 
 [features]
-sdl = ["rust_pixel/sdl"]
-glow = ["rust_pixel/glow"]
-wgpu = ["rust_pixel/wgpu"]
 term = ["rust_pixel/term"]
+wgpu = ["rust_pixel/wgpu"]

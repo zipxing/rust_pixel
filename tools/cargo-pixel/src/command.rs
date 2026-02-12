@@ -5,26 +5,26 @@
 ///
 /// Usage:
 /// cargo pixel run snake term
-/// cargo pixel run snake sdl
+/// cargo pixel run snake wgpu
 /// cargo pixel creat games mygame
 /// cargo pixel build snake web
 /// cargo pixel asset input_folder output_folder
 /// cargo pixel edit term .
 /// cargo pixel edit wg . file.pix
 /// cargo pixel petii image.png 40 25
-/// cargo pixel ssf t . dance.ssf
+/// cargo pixel ssf . dance.ssf
 /// cargo pixel symbol image.png 8
 /// cargo pixel ttf
 ///
 /// shortcut:
 /// cargo pixel r snake t
-/// cargo pixel r snake s
+/// cargo pixel r snake wg
 /// cargo pixel r snake w
 /// cargo pixel asset ./sprites ./output
 /// cargo pixel edit t .
 /// cargo pixel edit wg . file.pix
 /// cargo pixel p image.png 40 25
-/// cargo pixel sf t . dance.ssf
+/// cargo pixel sf . dance.ssf
 /// cargo pixel sy image.png 8
 /// cargo pixel tf
 /// ...
@@ -46,7 +46,7 @@ fn build_app() -> Command {
                 .arg(
                     Arg::new("build_type")
                         .required(true)
-                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "glow", "wgpu"]),
+                        .value_parser(["t", "w", "wg", "term", "web", "wgpu"]),
                 )
                 .arg(Arg::new("other").action(ArgAction::Append)),
         ))
@@ -58,7 +58,7 @@ fn build_app() -> Command {
                 .arg(
                     Arg::new("build_type")
                         .required(true)
-                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "glow", "wgpu"]),
+                        .value_parser(["t", "w", "wg", "term", "web", "wgpu"]),
                 ),
         ))
         .subcommand(common_arg(
@@ -102,7 +102,7 @@ fn build_app() -> Command {
                     Arg::new("mode")
                         .help("Running mode")
                         .required(false)
-                        .value_parser(["t", "s", "w", "g", "wg", "term", "sdl", "web", "glow", "wgpu"])
+                        .value_parser(["t", "w", "wg", "term", "web", "wgpu"])
                         .index(1),
                 )
                 .arg(
