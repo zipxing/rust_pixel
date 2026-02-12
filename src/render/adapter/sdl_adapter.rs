@@ -111,9 +111,10 @@ impl Adapter for SdlAdapter {
             .window(&self.base.title, self.base.gr.pixel_w, self.base.gr.pixel_h)
             .opengl()
             .position_centered()
+            .resizable()
             // Use OS window decoration (title bar, etc.) instead of borderless
             // .borderless()
-            // .fullscreen()
+            // .fullscreen_desktop()
             .build()
             .map_err(|e| e.to_string())
             .unwrap();

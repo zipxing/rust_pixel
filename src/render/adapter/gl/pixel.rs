@@ -9,7 +9,7 @@ use crate::render::adapter::{
     },
     BlendMode, RenderCell, RtComposite,
 };
-use crate::render::graph::{UnifiedColor, UnifiedTransform};
+use crate::render::graph::{UnifiedColor, UnifiedTransform, ENABLE_LETTERBOXING};
 use glow::HasContext;
 use log::info;
 
@@ -586,6 +586,8 @@ impl GlPixelRenderer {
     }
 
     /// Present with default settings and physical size for Retina displays
+    ///
+    /// When window is resized/maximized, maintains aspect ratio with letterboxing.
     pub fn present_default_with_physical_size(
         &mut self,
         ratio_x: f32,
@@ -595,20 +597,55 @@ impl GlPixelRenderer {
         // Bind screen framebuffer
         self.gl_pixel.bind_screen(&self.gl);
 
-        // Set viewport to physical size if provided (for Retina displays)
-        if let Some((pw, ph)) = physical_size {
-            unsafe {
-                self.gl.viewport(0, 0, pw as i32, ph as i32);
-            }
-        }
+        // Get original canvas size (logical content size)
+        let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
+        let content_w = canvas_width as f32;
+        let content_h = canvas_height as f32;
+        let content_aspect = content_w / content_h;
 
-        // Note: Don't clear screen here - matches original behavior
-        // Clearing would fill the entire viewport with black, which may
-        // affect transparent areas on web canvas
+        // Calculate viewport with aspect ratio preservation (if enabled)
+        let (vp_x, vp_y, vp_w, vp_h) = if let Some((phys_w, phys_h)) = physical_size {
+            let window_w = phys_w as f32;
+            let window_h = phys_h as f32;
+
+            if ENABLE_LETTERBOXING {
+                // 等比缩放模式：保持宽高比，留黑边
+                let window_aspect = window_w / window_h;
+
+                if window_aspect > content_aspect {
+                    // Window is wider - add horizontal letterboxing
+                    let scaled_w = window_h * content_aspect;
+                    let offset_x = (window_w - scaled_w) / 2.0;
+                    (offset_x as i32, 0, scaled_w as i32, window_h as i32)
+                } else {
+                    // Window is taller - add vertical letterboxing
+                    let scaled_h = window_w / content_aspect;
+                    let offset_y = (window_h - scaled_h) / 2.0;
+                    (0, offset_y as i32, window_w as i32, scaled_h as i32)
+                }
+            } else {
+                // 拉伸模式：直接填充整个窗口
+                (0, 0, window_w as i32, window_h as i32)
+            }
+        } else {
+            (0, 0, canvas_width as i32, canvas_height as i32)
+        };
+
+        // Clear entire screen to black (for letterbox bars)
+        unsafe {
+            if physical_size.is_some() {
+                let (pw, ph) = physical_size.unwrap();
+                self.gl.viewport(0, 0, pw as i32, ph as i32);
+                self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                self.gl.clear(glow::COLOR_BUFFER_BIT);
+            }
+            // Set viewport to content area (with letterboxing)
+            self.gl.viewport(vp_x, vp_y, vp_w, vp_h);
+        }
 
         let unified_color = UnifiedColor::white();
 
-        // Layer 1: Draw render_texture 2 (main game content) - fullscreen
+        // Layer 1: Draw render_texture 2 (main game content) - fullscreen within viewport
         if !self.gl_pixel.get_render_texture_hidden(2) {
             self.gl_pixel.render_texture_to_screen_impl(
                 &self.gl,
@@ -621,9 +658,8 @@ impl GlPixelRenderer {
 
         // Layer 2: Draw render_texture 3 (transition effects and overlays)
         if !self.gl_pixel.get_render_texture_hidden(3) {
-            let (canvas_width, canvas_height) = self.gl_pixel.get_canvas_size();
-            let pcw = canvas_width as f32;
-            let pch = canvas_height as f32;
+            let pcw = content_w;
+            let pch = content_h;
 
             let pw = pcw / ratio_x;
             let ph = pch / ratio_y;

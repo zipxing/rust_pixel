@@ -344,10 +344,13 @@ impl SymbolMap {
         let ch = symbol.chars().next()?;
         let (pixel_x, pixel_y) = self.cjk.get(&ch).copied()?;
 
+        // Get dynamic sizes based on texture dimensions
+        let cjk_char_size = layout::cjk_width() as u16;
+        let cjk_y_start = layout::cjk_y_start() as u16;
+
         // Convert pixel coordinates to character grid position
-        // CJK region starts at y=3072, each cell is 32x32 pixels
-        let char_col = pixel_x / 32; // 0-127 (128 columns total)
-        let char_row = (pixel_y - 3072) / 32; // 0-31 (32 rows total)
+        let char_col = pixel_x / cjk_char_size; // 0-127 (128 columns total)
+        let char_row = (pixel_y - cjk_y_start) / cjk_char_size; // 0-31 (32 rows total)
 
         // Convert to block position (16 cols × 4 rows of blocks)
         let block_col = char_col / 8; // 0-15 (which column of blocks)

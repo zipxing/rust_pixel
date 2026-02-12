@@ -299,6 +299,12 @@ impl RtComposite {
         self
     }
 
+    /// Set custom transform (for aspect ratio preservation, etc.)
+    pub fn transform(mut self, transform: UnifiedTransform) -> Self {
+        self.transform = Some(transform);
+        self
+    }
+
     /// Offset viewport position by (dx, dy) pixels
     ///
     /// Adjusts the viewport position relative to its current location.
@@ -610,6 +616,11 @@ impl RtComposite {
 /// - Emoji: Block 170-175 (8×16 chars/block, 32×32px each)
 /// - CJK: Grid-based (128×32 chars, 32×32px each)
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
+
+/// 是否启用等比缩放（letterboxing）
+/// - true: 保持宽高比，窗口边缘留黑边
+/// - false: 拉伸填充整个窗口
+pub const ENABLE_LETTERBOXING: bool = false;
 
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
 ///

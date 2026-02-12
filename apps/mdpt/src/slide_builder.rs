@@ -565,7 +565,9 @@ pub fn build_slide_page(
 
                 let data = parse_chart_data(content);
                 let chart_w = data.width.unwrap_or(w);
-                let chart_h = data.height.unwrap_or(15).min(content_height.saturating_sub(y));
+                // Default height: 20 for pie charts (need more vertical space), 15 for others
+                let default_h = if chart_type == "piechart" { 20 } else { 15 };
+                let chart_h = data.height.unwrap_or(default_h).min(content_height.saturating_sub(y));
 
                 match chart_type.as_str() {
                     "linechart" => {

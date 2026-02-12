@@ -18,6 +18,9 @@
 //! - Modern GPU hardware-accelerated rendering
 //! - Command buffer and asynchronous rendering
 //!
+//! ## Letterboxing Configuration
+//! Set `ENABLE_LETTERBOXING` to `false` to disable aspect ratio preservation
+//!
 //! ## Architecture Design
 //!
 //! ```text
@@ -42,7 +45,7 @@ use crate::render::{
         Adapter, AdapterBase, 
     },
     buffer::Buffer,
-    graph::{UnifiedColor, UnifiedTransform},
+    graph::{UnifiedColor, UnifiedTransform, ENABLE_LETTERBOXING},
     sprite::Layer,
 };
 
@@ -477,7 +480,7 @@ impl WinitWgpuAdapter {
             .with_title(&params.title)
             .with_inner_size(window_size)
             .with_decorations(true) // Use OS window decoration (title bar, etc.)
-            .with_resizable(false);
+            .with_resizable(true);
 
         let window = Arc::new(
             event_loop
@@ -785,26 +788,67 @@ impl WinitWgpuAdapter {
     /// 3. Synthesize render texture 3 onto the screen (if not hidden, for transition effects)
     ///
     /// This method now delegates to `present_wgpu` to avoid code duplication.
+    /// Supports aspect ratio preservation with letterboxing when window is resized.
     pub fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
-        use crate::render::graph::RtComposite;
+        use crate::render::graph::{RtComposite, UnifiedTransform};
         use crate::util::ARect;
 
         let rx = self.base.gr.ratio_x;
         let ry = self.base.gr.ratio_y;
 
-        // Calculate game area dimensions from actual canvas size
+        // Get canvas size (logical content size)
         let (cw, ch) = if let Some(pr) = &self.wgpu_pixel_renderer {
             (pr.canvas_width, pr.canvas_height)
         } else {
             return Err("wgpu_pixel_renderer not initialized".to_string());
         };
+
+        // Get physical window size
+        let (phys_w, phys_h) = if let Some(window) = &self.window {
+            let size = window.inner_size();
+            (size.width as f32, size.height as f32)
+        } else {
+            (cw as f32, ch as f32)
+        };
+
+        // Calculate aspect ratio preservation transform for RT2 (if enabled)
+        let content_w = cw as f32;
+        let content_h = ch as f32;
+
+        let (scale_x, scale_y) = if ENABLE_LETTERBOXING {
+            // 等比缩放模式：保持宽高比，留黑边
+            let content_aspect = content_w / content_h;
+            let window_aspect = phys_w / phys_h;
+
+            if window_aspect > content_aspect {
+                // Window is wider - scale by height, letterbox horizontally
+                let scale = phys_h / content_h;
+                let scaled_w = content_w * scale;
+                (scaled_w / phys_w, 1.0)
+            } else {
+                // Window is taller - scale by width, letterbox vertically
+                let scale = phys_w / content_w;
+                let scaled_h = content_h * scale;
+                (1.0, scaled_h / phys_h)
+            }
+        } else {
+            // 拉伸模式：直接填充整个窗口
+            (1.0, 1.0)
+        };
+
+        // Create transform for aspect ratio preservation
+        let mut rt2_transform = UnifiedTransform::new();
+        rt2_transform.scale(scale_x, scale_y);
+
+        // Calculate game area dimensions for RT3
         let pw = (cw as f32 / rx) as u32;
         let ph = (ch as f32 / ry) as u32;
 
-        // Build composites: RT2 fullscreen + RT3 game area
+        // Build composites: RT2 with aspect ratio transform + RT3 game area
         let composites = vec![
-            RtComposite::fullscreen(2),
-            RtComposite::with_viewport(3, ARect { x: 0, y: 0, w: pw, h: ph }),
+            RtComposite::fullscreen(2).transform(rt2_transform.clone()),
+            RtComposite::with_viewport(3, ARect { x: 0, y: 0, w: pw, h: ph })
+                .transform(rt2_transform),
         ];
 
         self.present_wgpu(&composites)

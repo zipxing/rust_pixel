@@ -8,34 +8,38 @@
   - tui.txt: TUI 字符和 Emoji 定义
 
 输出:
-  - symbols.png: 4096x4096 纹理图
+  - symbols.png: 4096x4096 或 8192x8192 纹理图
   - symbol_map.json: 符号映射配置
 
-4096x4096 纹理布局（Block-Based）：
+支持两种纹理尺寸:
+  - 4096x4096 (默认): 16×16px 基础符号
+  - 8192x8192 (--size 8192): 32×32px 基础符号，更高清晰度
+
+纹理布局（Block-Based，网格数量不变，像素尺寸按比例缩放）：
 ┌────────────────────────────────────────────────────────────┐
-│ Sprite 区域（y=0-2559, 2560px 高）                         │
+│ Sprite 区域                                                │
 │ - 10 rows × 16 blocks/row = 160 blocks                     │
-│ - 每 block: 256×256px (16×16 chars, 16×16px each)          │
+│ - 每 block: 256×256 grid (16×16 chars)                     │
 │ - Block 0-159: 40,960 sprites                              │
 ├────────────────────────────────────────────────────────────┤
-│ TUI + Emoji 区域（y=2560-3071, 512px 高）                  │
+│ TUI + Emoji 区域                                           │
 │                                                            │
-│ TUI 区域（x=0-2559）:                                      │
+│ TUI 区域:                                                  │
 │ - 10 blocks (Block 160-169)                                │
-│ - 每 block: 256×512px (16×16 chars, 16×32px each)          │
+│ - 每 block: 16×16 chars (1:2 宽高比)                       │
 │ - 2560 TUI 字符                                            │
 │                                                            │
-│ Emoji 区域（x=2560-4095）:                                 │
+│ Emoji 区域:                                                │
 │ - 6 blocks (Block 170-175)                                 │
-│ - 每 block: 256×512px (8×16 emojis, 32×32px each)          │
+│ - 每 block: 8×16 emojis (2x 宽高)                          │
 │ - 768 Emoji                                                │
 ├────────────────────────────────────────────────────────────┤
-│ CJK 区域（y=3072-4095, 1024px 高）                         │
-│ - 128×32 grid of 32×32px chars                             │
+│ CJK 区域                                                   │
+│ - 128×32 grid (2x 宽高)                                    │
 │ - 4096 CJK 字符                                            │
 └────────────────────────────────────────────────────────────┘
 
-线性索引:
+线性索引 (与纹理尺寸无关):
   - Sprite: [0, 40959] = 160 blocks × 256
   - TUI:    [40960, 43519] = 10 blocks × 256
   - Emoji:  [43520, 44287] = 6 blocks × 128
@@ -79,66 +83,93 @@ TUI_CACHE_DIR = os.path.join(SCRIPT_DIR, "tui_chars")
 EMOJI_CACHE_DIR = os.path.join(SCRIPT_DIR, "tui_emojis")
 TUI_FIX_DIR = os.path.join(SCRIPT_DIR, "tui_fix")
 
-# 纹理参数
-TEXTURE_SIZE = 4096
-BLOCKS_PER_ROW = 16
+# ------------------------------------------
+# 纹理尺寸配置类
+# ------------------------------------------
+class TextureConfig:
+    """纹理配置，支持 4096 和 8192 两种尺寸"""
 
-# Sprite 区域参数
-SPRITE_BLOCK_SIZE = 256
-SPRITE_CHAR_SIZE = 16
-SPRITE_CHARS_PER_BLOCK = 256
-SPRITE_BLOCKS = 160
-SPRITE_ROWS = 10
-SPRITE_AREA_HEIGHT = 2560
+    def __init__(self, size=4096):
+        if size not in (4096, 8192):
+            raise ValueError(f"不支持的纹理尺寸: {size}，只支持 4096 或 8192")
 
-# TUI 区域参数
-TUI_BLOCK_WIDTH = 256
-TUI_BLOCK_HEIGHT = 512
-TUI_CHAR_WIDTH = 16
-TUI_CHAR_HEIGHT = 32
-TUI_CHARS_PER_BLOCK = 256
-TUI_BLOCKS_START = 160
-TUI_BLOCKS_COUNT = 10
-TUI_AREA_START_Y = 2560
+        self.size = size
+        self.scale = size // 4096  # 1 for 4096, 2 for 8192
 
-# TUI 渲染参数
-TUI_RENDER_WIDTH = 40
-TUI_RENDER_HEIGHT = 80
+        # 网格常量（不随尺寸变化）
+        self.BLOCKS_PER_ROW = 16
+        self.SPRITE_CHARS_PER_BLOCK = 256
+        self.SPRITE_BLOCKS = 160
+        self.SPRITE_ROWS = 10
+        self.TUI_CHARS_PER_BLOCK = 256
+        self.TUI_BLOCKS_START = 160
+        self.TUI_BLOCKS_COUNT = 10
+        self.EMOJI_CHARS_PER_BLOCK = 128
+        self.EMOJI_BLOCKS_START = 170
+        self.EMOJI_BLOCKS_COUNT = 6
+        self.CJK_GRID_COLS = 128
+        self.CJK_GRID_ROWS = 32
+
+        # 线性索引基址（不随尺寸变化）
+        self.LINEAR_SPRITE_BASE = 0
+        self.LINEAR_TUI_BASE = 40960
+        self.LINEAR_EMOJI_BASE = 43520
+        self.LINEAR_CJK_BASE = 44288
+
+        # 像素尺寸（随 scale 缩放）
+        self._init_pixel_sizes()
+
+    def _init_pixel_sizes(self):
+        """初始化像素尺寸（基于 scale 缩放）"""
+        s = self.scale
+
+        # Sprite 区域参数
+        self.SPRITE_BLOCK_SIZE = 256 * s
+        self.SPRITE_CHAR_SIZE = 16 * s
+        self.SPRITE_AREA_HEIGHT = 2560 * s
+
+        # TUI 区域参数
+        self.TUI_BLOCK_WIDTH = 256 * s
+        self.TUI_BLOCK_HEIGHT = 512 * s
+        self.TUI_CHAR_WIDTH = 16 * s
+        self.TUI_CHAR_HEIGHT = 32 * s
+        self.TUI_AREA_START_Y = 2560 * s
+
+        # Emoji 区域参数
+        self.EMOJI_BLOCK_WIDTH = 256 * s
+        self.EMOJI_BLOCK_HEIGHT = 512 * s
+        self.EMOJI_CHAR_SIZE = 32 * s
+        self.EMOJI_AREA_START_X = 2560 * s
+        self.EMOJI_AREA_START_Y = 2560 * s
+
+        # CJK 区域参数
+        self.CJK_CHAR_SIZE = 32 * s
+        self.CJK_AREA_START_Y = 3072 * s
+
+        # 渲染参数（渲染尺寸可以更大，然后缩放到目标尺寸）
+        # 对于 8192，使用更大的渲染尺寸以获得更好的质量
+        self.TUI_RENDER_WIDTH = 40 * s
+        self.TUI_RENDER_HEIGHT = 80 * s
+        self.TUI_FONT_SIZE = 64 * s
+
+        self.EMOJI_RENDER_SIZE = 64 * s
+        self.EMOJI_FONT_SIZE = 64 * s
+
+        self.CJK_RENDER_SIZE = 64 * s
+        self.CJK_FONT_SIZE = 56 * s
+
+    def __repr__(self):
+        return f"TextureConfig(size={self.size}, scale={self.scale})"
+
+
+# 字体名称（不随尺寸变化）
 TUI_FONT_NAME = "DroidSansMono Nerd Font"
-TUI_FONT_SIZE = 64
-
-# Emoji 区域参数
-EMOJI_BLOCK_WIDTH = 256
-EMOJI_BLOCK_HEIGHT = 512
-EMOJI_CHAR_SIZE = 32
-EMOJI_CHARS_PER_BLOCK = 128
-EMOJI_BLOCKS_START = 170
-EMOJI_BLOCKS_COUNT = 6
-EMOJI_AREA_START_X = 2560
-EMOJI_AREA_START_Y = 2560
-
-# Emoji 渲染参数
-EMOJI_RENDER_SIZE = 64
 EMOJI_FONT_NAME = "Apple Color Emoji"
-EMOJI_FONT_SIZE = 64
-
-# CJK 区域参数
-CJK_CHAR_SIZE = 32
-CJK_AREA_START_Y = 3072
-CJK_GRID_COLS = 128
-CJK_GRID_ROWS = 32
-
-# CJK 渲染参数
-CJK_RENDER_SIZE = 64
 CJK_FONT_NAME = "DroidSansMono Nerd Font"
 # CJK_FONT_NAME = "PingFang SC"  # macOS 内置中文字体
-CJK_FONT_SIZE = 56
 
-# 线性索引基址
-LINEAR_SPRITE_BASE = 0
-LINEAR_TUI_BASE = 40960
-LINEAR_EMOJI_BASE = 43520
-LINEAR_CJK_BASE = 44288
+# 全局配置实例（在 main() 中初始化）
+cfg = None
 # ------------------------------------------
 
 
@@ -311,19 +342,30 @@ def render_char_quartz(char, width, height, font_name, font_size):
 
 def load_c64_block(source_path):
     """
-    加载一个 C64 源文件（16×16 个符号，每个 16×16px，间隔 1px）
+    加载一个 C64 源文件（16×16 个符号，源文件固定为 16×16px 间隔 1px）
 
     Returns:
-        list of PIL.Image: 256 个符号图像
+        list of PIL.Image: 256 个符号图像（缩放到目标尺寸）
     """
     img = Image.open(source_path).convert("RGBA")
     symbols = []
 
+    # 源文件固定为 16×16px + 1px 间隔
+    SRC_CHAR_SIZE = 16
+
     for row in range(16):
         for col in range(16):
-            x = col * (SPRITE_CHAR_SIZE + 1)
-            y = row * (SPRITE_CHAR_SIZE + 1)
-            symbol = img.crop((x, y, x + SPRITE_CHAR_SIZE, y + SPRITE_CHAR_SIZE))
+            x = col * (SRC_CHAR_SIZE + 1)
+            y = row * (SRC_CHAR_SIZE + 1)
+            symbol = img.crop((x, y, x + SRC_CHAR_SIZE, y + SRC_CHAR_SIZE))
+
+            # 如果目标尺寸不同，进行缩放
+            if cfg.SPRITE_CHAR_SIZE != SRC_CHAR_SIZE:
+                symbol = symbol.resize(
+                    (cfg.SPRITE_CHAR_SIZE, cfg.SPRITE_CHAR_SIZE),
+                    Image.LANCZOS
+                )
+
             symbols.append(symbol)
 
     return symbols
@@ -338,10 +380,10 @@ def render_tui_chars(tui_chars, use_cache=False):
         use_cache: 是否使用缓存目录中的图像
 
     Returns:
-        list of PIL.Image: TUI 字符图像（16×32px）
+        list of PIL.Image: TUI 字符图像
     """
     symbols = []
-    total = TUI_BLOCKS_COUNT * TUI_CHARS_PER_BLOCK  # 2560
+    total = cfg.TUI_BLOCKS_COUNT * cfg.TUI_CHARS_PER_BLOCK  # 2560
 
     for i in range(total):
         symbol = None
@@ -364,19 +406,19 @@ def render_tui_chars(tui_chars, use_cache=False):
         if symbol is None and i < len(tui_chars) and HAS_QUARTZ:
             char = tui_chars[i]
             rendered = render_char_quartz(
-                char, TUI_RENDER_WIDTH, TUI_RENDER_HEIGHT,
-                TUI_FONT_NAME, TUI_FONT_SIZE
+                char, cfg.TUI_RENDER_WIDTH, cfg.TUI_RENDER_HEIGHT,
+                TUI_FONT_NAME, cfg.TUI_FONT_SIZE
             )
             if rendered:
                 symbol = rendered
 
         # 如果都没有，创建空白
         if symbol is None:
-            symbol = Image.new("RGBA", (TUI_CHAR_WIDTH, TUI_CHAR_HEIGHT), (0, 0, 0, 0))
+            symbol = Image.new("RGBA", (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), (0, 0, 0, 0))
 
         # 缩放到目标尺寸
-        if symbol.size != (TUI_CHAR_WIDTH, TUI_CHAR_HEIGHT):
-            symbol = symbol.resize((TUI_CHAR_WIDTH, TUI_CHAR_HEIGHT), Image.LANCZOS)
+        if symbol.size != (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT):
+            symbol = symbol.resize((cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), Image.LANCZOS)
 
         symbols.append(symbol)
 
@@ -395,10 +437,10 @@ def render_emojis(emojis, use_cache=False):
         use_cache: 是否使用缓存目录中的图像
 
     Returns:
-        list of PIL.Image: Emoji 图像（32×32px）
+        list of PIL.Image: Emoji 图像
     """
     symbols = []
-    total = EMOJI_BLOCKS_COUNT * EMOJI_CHARS_PER_BLOCK  # 768
+    total = cfg.EMOJI_BLOCKS_COUNT * cfg.EMOJI_CHARS_PER_BLOCK  # 768
 
     for i in range(total):
         symbol = None
@@ -414,19 +456,19 @@ def render_emojis(emojis, use_cache=False):
         if symbol is None and i < len(emojis) and HAS_QUARTZ:
             emoji = emojis[i]
             rendered = render_char_quartz(
-                emoji, EMOJI_RENDER_SIZE, EMOJI_RENDER_SIZE,
-                EMOJI_FONT_NAME, EMOJI_FONT_SIZE
+                emoji, cfg.EMOJI_RENDER_SIZE, cfg.EMOJI_RENDER_SIZE,
+                EMOJI_FONT_NAME, cfg.EMOJI_FONT_SIZE
             )
             if rendered:
                 symbol = rendered
 
         # 如果都没有，创建空白
         if symbol is None:
-            symbol = Image.new("RGBA", (EMOJI_CHAR_SIZE, EMOJI_CHAR_SIZE), (0, 0, 0, 0))
+            symbol = Image.new("RGBA", (cfg.EMOJI_CHAR_SIZE, cfg.EMOJI_CHAR_SIZE), (0, 0, 0, 0))
 
         # 缩放到目标尺寸
-        if symbol.size != (EMOJI_CHAR_SIZE, EMOJI_CHAR_SIZE):
-            symbol = symbol.resize((EMOJI_CHAR_SIZE, EMOJI_CHAR_SIZE), Image.LANCZOS)
+        if symbol.size != (cfg.EMOJI_CHAR_SIZE, cfg.EMOJI_CHAR_SIZE):
+            symbol = symbol.resize((cfg.EMOJI_CHAR_SIZE, cfg.EMOJI_CHAR_SIZE), Image.LANCZOS)
 
         symbols.append(symbol)
 
@@ -470,10 +512,10 @@ def render_cjk_chars(cjk_chars, use_cache=False):
         use_cache: 是否使用缓存目录中的图像
 
     Returns:
-        list of PIL.Image: CJK 汉字图像（32×32px）
+        list of PIL.Image: CJK 汉字图像
     """
     symbols = []
-    total = CJK_GRID_COLS * CJK_GRID_ROWS  # 4096
+    total = cfg.CJK_GRID_COLS * cfg.CJK_GRID_ROWS  # 4096
 
     cjk_cache_dir = os.path.join(SCRIPT_DIR, "cjk_chars")
 
@@ -491,19 +533,19 @@ def render_cjk_chars(cjk_chars, use_cache=False):
         if symbol is None and i < len(cjk_chars) and HAS_QUARTZ:
             char = cjk_chars[i]
             rendered = render_char_quartz(
-                char, CJK_RENDER_SIZE, CJK_RENDER_SIZE,
-                CJK_FONT_NAME, CJK_FONT_SIZE
+                char, cfg.CJK_RENDER_SIZE, cfg.CJK_RENDER_SIZE,
+                CJK_FONT_NAME, cfg.CJK_FONT_SIZE
             )
             if rendered:
                 symbol = rendered
 
         # 如果都没有，创建空白
         if symbol is None:
-            symbol = Image.new("RGBA", (CJK_CHAR_SIZE, CJK_CHAR_SIZE), (0, 0, 0, 0))
+            symbol = Image.new("RGBA", (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), (0, 0, 0, 0))
 
         # 缩放到目标尺寸
-        if symbol.size != (CJK_CHAR_SIZE, CJK_CHAR_SIZE):
-            symbol = symbol.resize((CJK_CHAR_SIZE, CJK_CHAR_SIZE), Image.LANCZOS)
+        if symbol.size != (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE):
+            symbol = symbol.resize((cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), Image.LANCZOS)
 
         symbols.append(symbol)
 
@@ -518,15 +560,15 @@ def build_cjk_mappings(cjk_chars):
     构建 CJK 汉字映射表
 
     每个汉字映射到其在网格中的 (col, row) 位置
-    网格为 128 列 × 32 行
+    网格为 128 列 × 32 行（与纹理尺寸无关）
 
     Returns:
         dict: {字符: [col, row], ...}
     """
     mappings = {}
     for i, char in enumerate(cjk_chars):
-        col = i % CJK_GRID_COLS
-        row = i // CJK_GRID_COLS
+        col = i % cfg.CJK_GRID_COLS
+        row = i // cfg.CJK_GRID_COLS
         mappings[char] = [col, row]
     return mappings
 
@@ -565,47 +607,47 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
 
     symbol_map = {
         "version": 1,
-        "texture_size": TEXTURE_SIZE,
+        "texture_size": cfg.size,
         "regions": {
             "sprite": {
                 "type": "block",
-                "block_range": [0, SPRITE_BLOCKS - 1],
-                "char_size": [SPRITE_CHAR_SIZE, SPRITE_CHAR_SIZE],
-                "chars_per_block": SPRITE_CHARS_PER_BLOCK,
+                "block_range": [0, cfg.SPRITE_BLOCKS - 1],
+                "char_size": [cfg.SPRITE_CHAR_SIZE, cfg.SPRITE_CHAR_SIZE],
+                "chars_per_block": cfg.SPRITE_CHARS_PER_BLOCK,
                 "symbols": sprite_symbols,
                 "extras": sprite_extras
             },
             "tui": {
                 "type": "block",
-                "block_range": [TUI_BLOCKS_START, TUI_BLOCKS_START + TUI_BLOCKS_COUNT - 1],
-                "char_size": [TUI_CHAR_WIDTH, TUI_CHAR_HEIGHT],
-                "chars_per_block": TUI_CHARS_PER_BLOCK,
+                "block_range": [cfg.TUI_BLOCKS_START, cfg.TUI_BLOCKS_START + cfg.TUI_BLOCKS_COUNT - 1],
+                "char_size": [cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT],
+                "chars_per_block": cfg.TUI_CHARS_PER_BLOCK,
                 "symbols": tui_symbols
             },
             "emoji": {
                 "type": "block",
-                "block_range": [EMOJI_BLOCKS_START, EMOJI_BLOCKS_START + EMOJI_BLOCKS_COUNT - 1],
-                "char_size": [EMOJI_CHAR_SIZE, EMOJI_CHAR_SIZE],
-                "chars_per_block": EMOJI_CHARS_PER_BLOCK,
+                "block_range": [cfg.EMOJI_BLOCKS_START, cfg.EMOJI_BLOCKS_START + cfg.EMOJI_BLOCKS_COUNT - 1],
+                "char_size": [cfg.EMOJI_CHAR_SIZE, cfg.EMOJI_CHAR_SIZE],
+                "chars_per_block": cfg.EMOJI_CHARS_PER_BLOCK,
                 "symbols": emojis
             },
             "cjk": {
                 "type": "grid",
-                "pixel_region": [0, CJK_AREA_START_Y, TEXTURE_SIZE, TEXTURE_SIZE - CJK_AREA_START_Y],
-                "char_size": [CJK_CHAR_SIZE, CJK_CHAR_SIZE],
-                "grid_cols": CJK_GRID_COLS,
+                "pixel_region": [0, cfg.CJK_AREA_START_Y, cfg.size, cfg.size - cfg.CJK_AREA_START_Y],
+                "char_size": [cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE],
+                "grid_cols": cfg.CJK_GRID_COLS,
                 "mappings": build_cjk_mappings(cjk_chars) if cjk_chars else {}
             }
         },
         "linear_index": {
-            "sprite_base": LINEAR_SPRITE_BASE,
-            "sprite_total": SPRITE_BLOCKS * SPRITE_CHARS_PER_BLOCK,
-            "tui_base": LINEAR_TUI_BASE,
-            "tui_total": TUI_BLOCKS_COUNT * TUI_CHARS_PER_BLOCK,
-            "emoji_base": LINEAR_EMOJI_BASE,
-            "emoji_total": EMOJI_BLOCKS_COUNT * EMOJI_CHARS_PER_BLOCK,
-            "cjk_base": LINEAR_CJK_BASE,
-            "cjk_total": CJK_GRID_COLS * CJK_GRID_ROWS
+            "sprite_base": cfg.LINEAR_SPRITE_BASE,
+            "sprite_total": cfg.SPRITE_BLOCKS * cfg.SPRITE_CHARS_PER_BLOCK,
+            "tui_base": cfg.LINEAR_TUI_BASE,
+            "tui_total": cfg.TUI_BLOCKS_COUNT * cfg.TUI_CHARS_PER_BLOCK,
+            "emoji_base": cfg.LINEAR_EMOJI_BASE,
+            "emoji_total": cfg.EMOJI_BLOCKS_COUNT * cfg.EMOJI_CHARS_PER_BLOCK,
+            "cjk_base": cfg.LINEAR_CJK_BASE,
+            "cjk_total": cfg.CJK_GRID_COLS * cfg.CJK_GRID_ROWS
         }
     }
 
@@ -613,17 +655,39 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
 
 
 def main():
+    global cfg
+
     parser = argparse.ArgumentParser(description='生成 symbols.png 和 symbol_map.json')
+    parser.add_argument('--size', type=int, default=4096, choices=[4096, 8192],
+                        help='纹理尺寸: 4096 (默认) 或 8192')
     parser.add_argument('--use-cache', action='store_true',
                         help='使用缓存的字符图像而不是重新渲染')
-    parser.add_argument('--output-png', default=OUTPUT_PNG,
-                        help=f'输出 PNG 文件路径 (默认: {OUTPUT_PNG})')
-    parser.add_argument('--output-json', default=OUTPUT_JSON,
-                        help=f'输出 JSON 文件路径 (默认: {OUTPUT_JSON})')
+    parser.add_argument('--output-png', default=None,
+                        help=f'输出 PNG 文件路径 (默认: symbols.png 或 symbols_8192.png)')
+    parser.add_argument('--output-json', default=None,
+                        help=f'输出 JSON 文件路径 (默认: symbol_map.json 或 symbol_map_8192.json)')
     args = parser.parse_args()
 
+    # 初始化配置
+    cfg = TextureConfig(args.size)
+
+    # 设置默认输出文件名
+    if args.output_png is None:
+        if args.size == 8192:
+            args.output_png = os.path.join(SCRIPT_DIR, "symbols_8192.png")
+        else:
+            args.output_png = OUTPUT_PNG
+
+    if args.output_json is None:
+        if args.size == 8192:
+            args.output_json = os.path.join(SCRIPT_DIR, "symbol_map_8192.json")
+        else:
+            args.output_json = OUTPUT_JSON
+
     print("=" * 70)
-    print("生成 4096x4096 symbols.png 和 symbol_map.json")
+    print(f"生成 {cfg.size}x{cfg.size} symbols.png 和 symbol_map.json")
+    if cfg.scale > 1:
+        print(f"  缩放因子: {cfg.scale}x (基础符号: {cfg.SPRITE_CHAR_SIZE}x{cfg.SPRITE_CHAR_SIZE}px)")
     print("=" * 70)
 
     # 检查输入文件
@@ -657,8 +721,8 @@ def main():
     cjk_chars = parse_cjk_txt(CJK_TXT)
 
     # 创建空白纹理
-    print(f"\n创建 {TEXTURE_SIZE}×{TEXTURE_SIZE} 纹理...")
-    texture = Image.new("RGBA", (TEXTURE_SIZE, TEXTURE_SIZE), (0, 0, 0, 0))
+    print(f"\n创建 {cfg.size}×{cfg.size} 纹理...")
+    texture = Image.new("RGBA", (cfg.size, cfg.size), (0, 0, 0, 0))
 
     # ========== 加载 Sprite 符号 ==========
     print("\n加载 Sprite 符号...")
@@ -688,99 +752,99 @@ def main():
     print(f"  生成 {len(cjk_images)} 个 CJK 图像")
 
     # ========== 绘制 Sprite 区域 ==========
-    print(f"\n绘制 Sprite 区域 (Block 0-{SPRITE_BLOCKS-1})...")
+    print(f"\n绘制 Sprite 区域 (Block 0-{cfg.SPRITE_BLOCKS-1})...")
     sprite_idx = 0
 
-    for block_idx in range(SPRITE_BLOCKS):
+    for block_idx in range(cfg.SPRITE_BLOCKS):
         if sprite_idx >= len(all_sprites):
             break
 
-        block_row = block_idx // BLOCKS_PER_ROW
-        block_col = block_idx % BLOCKS_PER_ROW
-        block_x = block_col * SPRITE_BLOCK_SIZE
-        block_y = block_row * SPRITE_BLOCK_SIZE
+        block_row = block_idx // cfg.BLOCKS_PER_ROW
+        block_col = block_idx % cfg.BLOCKS_PER_ROW
+        block_x = block_col * cfg.SPRITE_BLOCK_SIZE
+        block_y = block_row * cfg.SPRITE_BLOCK_SIZE
 
         for row in range(16):
             for col in range(16):
                 if sprite_idx >= len(all_sprites):
                     break
 
-                x = block_x + col * SPRITE_CHAR_SIZE
-                y = block_y + row * SPRITE_CHAR_SIZE
+                x = block_x + col * cfg.SPRITE_CHAR_SIZE
+                y = block_y + row * cfg.SPRITE_CHAR_SIZE
 
                 texture.paste(all_sprites[sprite_idx], (x, y))
                 sprite_idx += 1
 
         if (block_idx + 1) % 16 == 0:
-            print(f"  已绘制 {block_idx + 1}/{SPRITE_BLOCKS} blocks")
+            print(f"  已绘制 {block_idx + 1}/{cfg.SPRITE_BLOCKS} blocks")
 
     print(f"  绘制了 {sprite_idx} 个 Sprite")
 
     # ========== 绘制 TUI 区域 ==========
-    print(f"\n绘制 TUI 区域 (Block {TUI_BLOCKS_START}-{TUI_BLOCKS_START + TUI_BLOCKS_COUNT - 1})...")
+    print(f"\n绘制 TUI 区域 (Block {cfg.TUI_BLOCKS_START}-{cfg.TUI_BLOCKS_START + cfg.TUI_BLOCKS_COUNT - 1})...")
     tui_idx = 0
 
-    for block_idx in range(TUI_BLOCKS_COUNT):
+    for block_idx in range(cfg.TUI_BLOCKS_COUNT):
         if tui_idx >= len(tui_images):
             break
 
-        block_x = block_idx * TUI_BLOCK_WIDTH
-        block_y = TUI_AREA_START_Y
+        block_x = block_idx * cfg.TUI_BLOCK_WIDTH
+        block_y = cfg.TUI_AREA_START_Y
 
         for row in range(16):
             for col in range(16):
                 if tui_idx >= len(tui_images):
                     break
 
-                x = block_x + col * TUI_CHAR_WIDTH
-                y = block_y + row * TUI_CHAR_HEIGHT
+                x = block_x + col * cfg.TUI_CHAR_WIDTH
+                y = block_y + row * cfg.TUI_CHAR_HEIGHT
 
                 texture.paste(tui_images[tui_idx], (x, y))
                 tui_idx += 1
 
-        print(f"  已绘制 Block {TUI_BLOCKS_START + block_idx}")
+        print(f"  已绘制 Block {cfg.TUI_BLOCKS_START + block_idx}")
 
     print(f"  绘制了 {tui_idx} 个 TUI 字符")
 
     # ========== 绘制 Emoji 区域 ==========
-    print(f"\n绘制 Emoji 区域 (Block {EMOJI_BLOCKS_START}-{EMOJI_BLOCKS_START + EMOJI_BLOCKS_COUNT - 1})...")
+    print(f"\n绘制 Emoji 区域 (Block {cfg.EMOJI_BLOCKS_START}-{cfg.EMOJI_BLOCKS_START + cfg.EMOJI_BLOCKS_COUNT - 1})...")
     emoji_idx = 0
 
-    for block_idx in range(EMOJI_BLOCKS_COUNT):
+    for block_idx in range(cfg.EMOJI_BLOCKS_COUNT):
         if emoji_idx >= len(emoji_images):
             break
 
-        block_x = EMOJI_AREA_START_X + block_idx * EMOJI_BLOCK_WIDTH
-        block_y = EMOJI_AREA_START_Y
+        block_x = cfg.EMOJI_AREA_START_X + block_idx * cfg.EMOJI_BLOCK_WIDTH
+        block_y = cfg.EMOJI_AREA_START_Y
 
         for row in range(16):
             for col in range(8):
                 if emoji_idx >= len(emoji_images):
                     break
 
-                x = block_x + col * EMOJI_CHAR_SIZE
-                y = block_y + row * EMOJI_CHAR_SIZE
+                x = block_x + col * cfg.EMOJI_CHAR_SIZE
+                y = block_y + row * cfg.EMOJI_CHAR_SIZE
 
                 texture.paste(emoji_images[emoji_idx], (x, y))
                 emoji_idx += 1
 
-        print(f"  已绘制 Block {EMOJI_BLOCKS_START + block_idx}")
+        print(f"  已绘制 Block {cfg.EMOJI_BLOCKS_START + block_idx}")
 
     print(f"  绘制了 {emoji_idx} 个 Emoji")
 
     # ========== 绘制 CJK 区域 ==========
-    print(f"\n绘制 CJK 区域 (y={CJK_AREA_START_Y}-{TEXTURE_SIZE - 1})...")
+    print(f"\n绘制 CJK 区域 (y={cfg.CJK_AREA_START_Y}-{cfg.size - 1})...")
     cjk_idx = 0
 
     for i, img in enumerate(cjk_images):
         if img is None:
             continue
 
-        col = i % CJK_GRID_COLS
-        row = i // CJK_GRID_COLS
+        col = i % cfg.CJK_GRID_COLS
+        row = i // cfg.CJK_GRID_COLS
 
-        x = col * CJK_CHAR_SIZE
-        y = CJK_AREA_START_Y + row * CJK_CHAR_SIZE
+        x = col * cfg.CJK_CHAR_SIZE
+        y = cfg.CJK_AREA_START_Y + row * cfg.CJK_CHAR_SIZE
 
         texture.paste(img, (x, y))
         cjk_idx += 1
@@ -805,17 +869,18 @@ def main():
     print("\n" + "=" * 70)
     print("完成!")
     print("=" * 70)
-    print(f"纹理尺寸: {TEXTURE_SIZE}×{TEXTURE_SIZE}")
+    print(f"纹理尺寸: {cfg.size}×{cfg.size} (缩放因子: {cfg.scale}x)")
+    print(f"基础符号尺寸: {cfg.SPRITE_CHAR_SIZE}×{cfg.SPRITE_CHAR_SIZE}px")
     print(f"\n区域布局:")
-    print(f"  Sprite (Block 0-{SPRITE_BLOCKS-1}): {sprite_idx} 个")
-    print(f"  TUI (Block {TUI_BLOCKS_START}-{TUI_BLOCKS_START + TUI_BLOCKS_COUNT - 1}): {tui_idx} 个")
-    print(f"  Emoji (Block {EMOJI_BLOCKS_START}-{EMOJI_BLOCKS_START + EMOJI_BLOCKS_COUNT - 1}): {emoji_idx} 个")
-    print(f"  CJK (y={CJK_AREA_START_Y}-{TEXTURE_SIZE-1}): {cjk_idx} 个 (容量 {CJK_GRID_COLS * CJK_GRID_ROWS})")
-    print(f"\n线性索引范围:")
-    print(f"  Sprite: [{LINEAR_SPRITE_BASE}, {LINEAR_TUI_BASE - 1}]")
-    print(f"  TUI:    [{LINEAR_TUI_BASE}, {LINEAR_EMOJI_BASE - 1}]")
-    print(f"  Emoji:  [{LINEAR_EMOJI_BASE}, {LINEAR_CJK_BASE - 1}]")
-    print(f"  CJK:    [{LINEAR_CJK_BASE}, {LINEAR_CJK_BASE + CJK_GRID_COLS * CJK_GRID_ROWS - 1}]")
+    print(f"  Sprite (Block 0-{cfg.SPRITE_BLOCKS-1}): {sprite_idx} 个 ({cfg.SPRITE_CHAR_SIZE}×{cfg.SPRITE_CHAR_SIZE}px)")
+    print(f"  TUI (Block {cfg.TUI_BLOCKS_START}-{cfg.TUI_BLOCKS_START + cfg.TUI_BLOCKS_COUNT - 1}): {tui_idx} 个 ({cfg.TUI_CHAR_WIDTH}×{cfg.TUI_CHAR_HEIGHT}px)")
+    print(f"  Emoji (Block {cfg.EMOJI_BLOCKS_START}-{cfg.EMOJI_BLOCKS_START + cfg.EMOJI_BLOCKS_COUNT - 1}): {emoji_idx} 个 ({cfg.EMOJI_CHAR_SIZE}×{cfg.EMOJI_CHAR_SIZE}px)")
+    print(f"  CJK (y={cfg.CJK_AREA_START_Y}-{cfg.size-1}): {cjk_idx} 个 ({cfg.CJK_CHAR_SIZE}×{cfg.CJK_CHAR_SIZE}px, 容量 {cfg.CJK_GRID_COLS * cfg.CJK_GRID_ROWS})")
+    print(f"\n线性索引范围 (与尺寸无关):")
+    print(f"  Sprite: [{cfg.LINEAR_SPRITE_BASE}, {cfg.LINEAR_TUI_BASE - 1}]")
+    print(f"  TUI:    [{cfg.LINEAR_TUI_BASE}, {cfg.LINEAR_EMOJI_BASE - 1}]")
+    print(f"  Emoji:  [{cfg.LINEAR_EMOJI_BASE}, {cfg.LINEAR_CJK_BASE - 1}]")
+    print(f"  CJK:    [{cfg.LINEAR_CJK_BASE}, {cfg.LINEAR_CJK_BASE + cfg.CJK_GRID_COLS * cfg.CJK_GRID_ROWS - 1}]")
     print(f"\n输出文件:")
     print(f"  {args.output_png} ({os.path.getsize(args.output_png) / 1024 / 1024:.2f} MB)")
     print(f"  {args.output_json}")

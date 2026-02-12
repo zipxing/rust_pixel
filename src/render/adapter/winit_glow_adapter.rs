@@ -505,7 +505,7 @@ impl WinitGlowAdapter {
                 .with_title(&params.title)
                 .with_inner_size(window_size)
                 .with_decorations(true) // Use OS window decoration (title bar, etc.)
-                .with_resizable(false),
+                .with_resizable(true),
         ));
 
         let (window, gl_config) = display_builder

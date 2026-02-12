@@ -241,7 +241,7 @@ height: 14
 title: Market Share
 labels: [Chrome, Safari, Firefox, Edge, Other]
 values: [65, 18, 7, 5, 5]
-radius: 7
+radius: 20
 ```
 
 ---

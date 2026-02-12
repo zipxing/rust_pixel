@@ -41,25 +41,31 @@ impl ChartRenderer for PieChart {
         }
 
         // Chart dimensions
-        let legend_w: u16 = 18; // space for legend on the right
+        // Reduce legend width to give more space to the pie chart
+        let legend_w: u16 = 10;
         let chart_area_w = w.saturating_sub(legend_w + 1);
         let chart_h = h.saturating_sub((cy - y) + 1);
 
-        // Radius in character cells, then convert to dot-space
-        let radius_cells = self.data.radius.unwrap_or(
-            (chart_h.min(chart_area_w / 2)).max(4) - 1,
-        );
-        let canvas_w = (radius_cells * 2 + 2) as usize;
-        let canvas_h = (radius_cells + 1) as usize;
+        // Canvas uses all available space
+        let canvas_w = chart_area_w as usize;
+        let canvas_h = chart_h as usize;
+
+        // Radius in dot-space
+        let dot_r = if let Some(r) = self.data.radius {
+            r as usize
+        } else {
+            // Default: fill the canvas
+            canvas_w.max(canvas_h * 2)
+        };
 
         if canvas_w < 4 || canvas_h < 2 {
             return;
         }
 
         // Center in dot-space
-        let dot_cx = canvas_w; // dot_width = canvas_w * 2
+        let dot_cx = canvas_w; // dot_width = canvas_w * 2, center at half
         let dot_cy = canvas_h * 2; // dot_height = canvas_h * 4, center at half
-        let dot_r_adj = (radius_cells as usize) * 2; // radius in dot-space (X direction)
+        let dot_r_adj = dot_r; // radius in dot-space
 
         // Build sectors
         let mut angle = 0.0f64;
@@ -92,21 +98,22 @@ impl ChartRenderer for PieChart {
             }
         }
 
-        // Legend (right side)
+        // Legend (right side, compact format)
         let label_style = Style::default().fg(LABEL_COLOR);
         let legend_x = x + chart_area_w + 1;
         for (i, &(_, _)) in sectors.iter().enumerate() {
             let color = CHART_COLORS[i % CHART_COLORS.len()];
             let pct = (values[i] / total) * 100.0;
-            let label = if i < labels.len() {
-                &labels[i]
+            let label: String = if i < labels.len() {
+                // Truncate label to fit legend width (char-safe for CJK)
+                labels[i].chars().take(4).collect()
             } else {
-                "?"
+                "?".to_string()
             };
             let ly = cy + i as u16;
             if ly < y + h {
                 buf.set_string(legend_x, ly, "█", Style::default().fg(color));
-                let text = format!(" {} {:.0}%", label, pct);
+                let text = format!("{} {:.0}%", label, pct);
                 buf.set_string(legend_x + 1, ly, &text, label_style);
             }
         }

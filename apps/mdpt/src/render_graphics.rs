@@ -32,7 +32,7 @@ impl Render for MdptRender {
 
         context
             .adapter
-            .init(MDPTW, MDPTH, 1.2, 1.2, "mdpt".to_string());
+            .init(MDPTW, MDPTH, 1.8, 1.8, "mdpt".to_string());
         self.scene.init(context);
 
         // Pre-create image sprite (hidden by default)
