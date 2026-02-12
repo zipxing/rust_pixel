@@ -88,7 +88,7 @@ impl MdptModel {
         #[cfg(not(target_arch = "wasm32"))]
         let md_file = {
             let args: Vec<String> = std::env::args().collect();
-            if args.len() > 1 { args[1].clone() } else { String::new() }
+            if args.len() > 2 { args[2].clone() } else { String::new() }
         };
         #[cfg(target_arch = "wasm32")]
         let md_file = String::new();

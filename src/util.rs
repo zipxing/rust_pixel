@@ -71,7 +71,7 @@ pub fn get_project_path() -> String {
             args[1].to_string()
         }
         _ => {
-            ".".to_string()
+            args[1].to_string()
         }
     }
 }
