@@ -13,17 +13,16 @@
 //!
 //! #### GraphicsMode
 //! - **WinitWgpuAdapter**: Modern GPU rendering (winit + wgpu) for desktop
-//! - **WebAdapter**: WebGL-based browser rendering (webgl2 + glow) for web
+//! - **WgpuWebAdapter**: WGPU-based browser rendering (WebGPU/WebGL2 fallback) for web
 //!
 //! ```text
 //! src/render/adapter.rs         # This file - adapter definitions
 //! src/render/adapter/
 //! ├── cross_adapter.rs          # Terminal rendering (crossterm)
-//! ├── web_adapter.rs            # WebGL browser rendering
+//! ├── wgpu_web_adapter.rs       # WGPU browser rendering (WebGPU + WebGL2 fallback)
 //! ├── winit_common.rs           # Shared winit utilities
 //! ├── winit_wgpu_adapter.rs     # Winit + WGPU modern rendering
-//! ├── gl/                       # OpenGL backend (for web)
-//! └── wgpu/                     # WGPU backend implementation
+//! └── wgpu/                     # WGPU backend implementation (shared)
 //! ```
 //!
 //! ## 🔄 Unified Rendering Pipeline
@@ -153,17 +152,14 @@ use std::time::Duration;
 #[cfg(graphics_mode)]
 pub use crate::render::graph::{BlendMode, RtComposite, RtConfig, RtSize};
 
-/// OpenGL rendering subsystem for web mode (WebGL2)
-#[cfg(wasm)]
-pub mod gl;
-
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering
-#[cfg(wgpu_backend)]
+/// Used by both desktop (via winit) and web (via wasm) adapters
+#[cfg(any(wgpu_backend, wgpu_web_backend))]
 pub mod wgpu;
 
-/// Web adapter module - WebGL-based browser rendering backend
-#[cfg(wasm)]
-pub mod web_adapter;
+/// WGPU Web adapter module - WGPU browser rendering with WebGPU/WebGL2 fallback
+#[cfg(wgpu_web_backend)]
+pub mod wgpu_web_adapter;
 
 /// Winit common module - Shared code for winit_wgpu adapter
 #[cfg(wgpu_backend)]
@@ -201,8 +197,8 @@ pub use crate::render::graph::{
 
 /// Adapter base data structure containing shared information and OpenGL resources
 ///
-/// AdapterBase holds common data and OpenGL resources shared across all graphics
-/// mode adapters (SDL, Winit, Web). This design follows the principle of separation
+/// AdapterBase holds common data and GPU resources shared across all graphics
+/// mode adapters (WinitWgpu, WgpuWeb). This design follows the principle of separation
 /// of concerns while avoiding code duplication.
 ///
 /// ## Architecture Role
@@ -262,10 +258,9 @@ impl AdapterBase {
 /// to be used interchangeably while providing a consistent API.
 ///
 /// ## Supported Backends
-/// - **SDL Adapter**: Desktop rendering with SDL2
-/// - **Winit Adapter**: Cross-platform window management with OpenGL  
-/// - **Web Adapter**: Browser rendering with WebGL
-/// - **Crossterm Adapter**: Terminal text mode rendering
+/// - **WinitWgpuAdapter**: Desktop rendering with WGPU (Vulkan/Metal/DX12)
+/// - **WgpuWebAdapter**: Browser rendering with WGPU (WebGPU/WebGL2 fallback)
+/// - **CrosstermAdapter**: Terminal text mode rendering
 ///
 /// ## Typical Usage Flow
 /// ```text

@@ -54,8 +54,8 @@
 ///
 /// With this single macro, your game can run as:
 /// - Terminal app (crossterm backend)
-/// - Desktop app (opengl or wgpu backend)
-/// - Web app (WebGL via WASM)
+/// - Desktop app (wgpu backend)
+/// - Web app (WGPU via WASM with WebGPU/WebGL2 fallback)
 /// - A library embedded in other Rust projects
 ///
 /// ## Usage
@@ -82,12 +82,10 @@ macro_rules! app {
         use rust_pixel::game::Game;
         use rust_pixel::util::get_project_path;
 
-        #[cfg(wasm)]
-        use rust_pixel::render::adapter::web_adapter::{input_events_from_web, WebAdapter};
+        #[cfg(wgpu_web_backend)]
+        use rust_pixel::render::adapter::wgpu_web_adapter::{input_events_from_web, WgpuWebAdapter};
         use wasm_bindgen::prelude::*;
-        #[cfg(wasm)]
-        use wasm_bindgen_futures::js_sys;
-        #[cfg(wasm)]
+        #[cfg(wgpu_web_backend)]
         use log::info;
 
         rust_pixel::paste::paste! {
@@ -153,7 +151,7 @@ macro_rules! app {
                 [<$name Game>] { g }
             }
 
-            #[cfg(wasm)]
+            #[cfg(wgpu_web_backend)]
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             impl [<$name Game>] {
                 pub fn new() -> Self {
@@ -170,7 +168,7 @@ macro_rules! app {
                         .context
                         .adapter
                         .as_any()
-                        .downcast_ref::<WebAdapter>()
+                        .downcast_ref::<WgpuWebAdapter>()
                         .unwrap()
                         .base;
                     if let Some(pe) = input_events_from_web(t, e, abase.gr.pixel_h, abase.gr.ratio_x, abase.gr.ratio_y, abase.gr.use_tui_height) {
@@ -178,28 +176,28 @@ macro_rules! app {
                     }
                 }
 
-                /// Initialize WebGL renderer using pre-cached texture data
+                /// Initialize WGPU renderer using pre-cached texture data
                 ///
-                /// Call this AFTER wasm_init_pixel_assets() to initialize the WebGL renderer
-                /// using the cached texture data. This is the preferred approach.
+                /// Call this AFTER wasm_init_pixel_assets() to initialize the WGPU renderer
+                /// using the cached texture data. Uses WebGPU if available, falls back to WebGL2.
                 ///
                 /// # JavaScript Example
                 /// ```js
                 /// wasm_init_pixel_assets("my_game", tex_w, tex_h, imgdata, symbolMapJson);
                 /// const sg = PixelGame.new();
-                /// sg.init_from_cache();  // Initialize WebGL using cached texture
+                /// await sg.init_from_cache();  // Initialize WGPU using cached texture (async!)
                 /// ```
-                pub fn init_from_cache(&mut self) {
-                    let wa = &mut self
+                pub async fn init_from_cache(&mut self) {
+                    let wa = self
                         .g
                         .context
                         .adapter
                         .as_any()
-                        .downcast_mut::<WebAdapter>()
+                        .downcast_mut::<WgpuWebAdapter>()
                         .unwrap();
 
-                    wa.init_glpix_from_cache();
-                    info!("RUST: WebGL initialized from cached texture data");
+                    wa.init_wgpu_from_cache_async().await;
+                    info!("RUST: WGPU Web initialized from cached texture data");
                 }
 
                 pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {

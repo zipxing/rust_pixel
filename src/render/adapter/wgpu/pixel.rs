@@ -585,6 +585,8 @@ impl WgpuPixelRender {
     /// Load the symbol texture from the specified path (legacy method)
     ///
     /// Prefer using load_symbol_texture_from_data() with pre-loaded texture data.
+    /// Note: This method is not available on wasm32 targets as it uses std::fs.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_symbol_texture(
         &mut self,
         device: &wgpu::Device,

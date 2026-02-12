@@ -20,8 +20,8 @@ use crate::render::adapter::cross_adapter::CrosstermAdapter;
 #[cfg(wgpu_backend)]
 use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
 
-#[cfg(wasm)]
-use crate::render::adapter::web_adapter::WebAdapter;
+#[cfg(wgpu_web_backend)]
+use crate::render::adapter::wgpu_web_adapter::WgpuWebAdapter;
 
 pub struct Context {
     pub stage: u32,
@@ -40,8 +40,8 @@ impl Context {
             rand: Rand::new(),
             asset_manager: AssetManager::new(),
             input_events: vec![],
-            #[cfg(wasm)]
-            adapter: Box::new(WebAdapter::new()),
+            #[cfg(wgpu_web_backend)]
+            adapter: Box::new(WgpuWebAdapter::new()),
             #[cfg(wgpu_backend)]
             adapter: Box::new(WinitWgpuAdapter::new()),
             #[cfg(cross_backend)]

@@ -13,16 +13,22 @@ fn setup_rust_pixel_cfg_aliases() {
         mobile: { any(target_os = "android", target_os = "ios") },
 
         // Rendering backend aliases
-        graphics_backend: { feature = "wgpu" },
+        // Both native wgpu and wasm are graphics backends
+        graphics_backend: { any(feature = "wgpu", wasm) },
 
         // Specific backend aliases
+        // Native wgpu with winit window management
         wgpu_backend: { all(feature = "wgpu", not(wasm)) },
+        // Web wgpu - uses wgpu with canvas (no winit)
+        // Uses wasm target detection (no feature flag needed)
+        wgpu_web_backend: { wasm },
+        // Terminal mode (crossterm)
         cross_backend: { not(graphics_mode) },
 
         // Audio support aliases
         audio_support: { not(any(mobile, wasm)) },
 
-        // Graphics rendering mode (including wasm)
+        // Graphics rendering mode (both native wgpu and web wgpu)
         graphics_mode: { any(graphics_backend, wasm) },
     }
 }

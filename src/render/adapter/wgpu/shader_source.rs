@@ -272,6 +272,8 @@ fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
 "#;
 
 /// Instanced fragment shader for symbols (matches OpenGL behavior)
+/// Note: Uses textureSampleLevel instead of textureSample in non-uniform control flow
+/// to comply with WebGPU uniform control flow requirements for derivative operations.
 pub const SYMBOLS_INSTANCED_FRAGMENT_SHADER: &str = r#"
 @group(0) @binding(1)
 var source: texture_2d<f32>;
@@ -287,12 +289,14 @@ struct VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    var texColor = textureSample(source, source_sampler, input.uv);
+    // Use textureSampleLevel with explicit LOD=0 to allow non-uniform control flow
+    // This is required because input.v_bold creates non-uniform branching
+    var texColor = textureSampleLevel(source, source_sampler, input.uv, 0.0);
     if (input.v_bold > 0.5) {
         let ts = vec2<f32>(textureDimensions(source));
         let dx = 0.35 / ts.x;
-        texColor = max(texColor, textureSample(source, source_sampler, input.uv + vec2<f32>(dx, 0.0)));
-        texColor = max(texColor, textureSample(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0)));
+        texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(dx, 0.0), 0.0));
+        texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0), 0.0));
         texColor.a = smoothstep(0.15, 0.95, texColor.a);
     }
     return texColor * input.colorj;

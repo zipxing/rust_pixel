@@ -24,3 +24,4 @@ web-sys = "0.3.80"
 [features]
 term = ["rust_pixel/term"]
 wgpu = ["rust_pixel/wgpu"]
+web = ["rust_pixel/web"]
