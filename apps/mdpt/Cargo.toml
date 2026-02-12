@@ -18,8 +18,8 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 log = "0.4"
 wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4.53"
-web-sys = "0.3.80"
+wasm-bindgen-futures = "0.4.58"
+web-sys = "0.3.85"
 
 [features]
 term = ["rust_pixel/term"]

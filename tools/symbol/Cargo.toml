@@ -19,11 +19,11 @@ categories = ["command-line-utilities", "graphics", "multimedia::images"]
 
 [dependencies]
 # Logging infrastructure for debug and info messages
-log = "0.4.28"
+log = "0.4.29"
 log4rs = "1.4.0"  # File-based logging configuration
 
 # Image processing and manipulation
-image = "0.25.8"   # Load, decode and manipulate various image formats
+image = "0.25.9"   # Load, decode and manipulate various image formats
 
 # Color science and analysis
 lab = "0.11.0"     # LAB color space conversions for perceptual color analysis

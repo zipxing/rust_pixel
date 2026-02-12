@@ -13,8 +13,8 @@ path = "src/lib.rs"
 cfg_aliases = { workspace = true }
 
 [dependencies]
-log = "0.4.28"
-wasm-bindgen = "0.2.103"
+log = "0.4.29"
+wasm-bindgen = "0.2.108"
 rust_pixel = { path = "../..", default-features = false }
 pixel_basic = { path = "../../pixel_basic" }
 
