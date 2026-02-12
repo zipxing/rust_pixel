@@ -104,8 +104,9 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             }
 
             // Execute wasm-pack build directly
+            // Set RUSTFLAGS for getrandom 0.3.x wasm support
             env::set_var("RUSTFLAGS", r#"--cfg getrandom_backend="wasm_js""#);
-            
+
             let mut wasm_cmd = Command::new("wasm-pack");
             wasm_cmd.args(&["build", "--target", "web", &crate_path]);
             

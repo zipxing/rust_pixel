@@ -56,6 +56,11 @@ pub mod render_transition;
 /// Final composition and screen mapping for wgpu
 pub mod render_general2d;
 
+/// Shared render core for both native and web adapters
+pub mod render_core;
+
+pub use render_core::{WgpuRenderCore, WgpuRenderCoreBuilder};
+
 use wgpu;
 use bytemuck;
 
