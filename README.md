@@ -71,17 +71,9 @@ Model-Render-Game pattern with Event driven
 
 ---
 
-### Unified Texture Architecture
-
-Single 4096×4096 texture (16MB VRAM), 256 blocks: Sprite(0-159), TUI(160-169), Emoji(170-175), CJK(176-239) — one texture binding, one draw call, zero texture switching.
-
----
-
 ## ⭐ Killer App: MDPT
 
-**A Markdown-first presentation toolkit with a self-rendered TUI.**
-
-**A TUI without a terminal emulator.**
+**A Markdown-first presentation toolkit with a self-rendered TUI(no terminal emulator needed).**
 
 MDPT demonstrates RustPixel's unique capability: rendering a full-featured terminal UI in a native GPU window, completely independent of any terminal emulator.
 
@@ -112,6 +104,12 @@ Unlike terminal-based presenters (presenterm, slides), MDPT:
 - **Consistent rendering** — Same look across all platforms
 - **Rich transitions** — GPU shader effects impossible in terminals
 - **True graphics** — Not limited by terminal cell constraints
+
+---
+
+### Unified Texture Architecture
+
+Single 4096×4096 texture (16MB VRAM), 256 blocks: Sprite(0-159), TUI(160-169), Emoji(170-175), CJK(176-239) — one texture binding, one draw call, zero texture switching.
 
 ---
 
