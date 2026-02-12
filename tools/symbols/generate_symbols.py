@@ -605,14 +605,19 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
     # 构建 Sprite symbols（C64 字符集）
     sprite_symbols = "@abcdefghijklmnopqrstuvwxyz[£]↑← !\"#$%&'()*+,-./0123456789:;<=>?─ABCDEFGHIJKLMNOPQRSTUVWXYZ┼"
 
+    # Note: texture_size and char_size are NOT included because they are
+    # computed dynamically in Rust based on actual loaded texture dimensions.
+    # See src/render/symbol_map.rs layout module for the calculation logic:
+    #   - sprite: 1x1 base units
+    #   - tui: 1x2 base units (double height)
+    #   - emoji: 2x2 base units
+    #   - cjk: 2x2 base units
     symbol_map = {
         "version": 1,
-        "texture_size": cfg.size,
         "regions": {
             "sprite": {
                 "type": "block",
                 "block_range": [0, cfg.SPRITE_BLOCKS - 1],
-                "char_size": [cfg.SPRITE_CHAR_SIZE, cfg.SPRITE_CHAR_SIZE],
                 "chars_per_block": cfg.SPRITE_CHARS_PER_BLOCK,
                 "symbols": sprite_symbols,
                 "extras": sprite_extras
@@ -620,21 +625,17 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
             "tui": {
                 "type": "block",
                 "block_range": [cfg.TUI_BLOCKS_START, cfg.TUI_BLOCKS_START + cfg.TUI_BLOCKS_COUNT - 1],
-                "char_size": [cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT],
                 "chars_per_block": cfg.TUI_CHARS_PER_BLOCK,
                 "symbols": tui_symbols
             },
             "emoji": {
                 "type": "block",
                 "block_range": [cfg.EMOJI_BLOCKS_START, cfg.EMOJI_BLOCKS_START + cfg.EMOJI_BLOCKS_COUNT - 1],
-                "char_size": [cfg.EMOJI_CHAR_SIZE, cfg.EMOJI_CHAR_SIZE],
                 "chars_per_block": cfg.EMOJI_CHARS_PER_BLOCK,
                 "symbols": emojis
             },
             "cjk": {
                 "type": "grid",
-                "pixel_region": [0, cfg.CJK_AREA_START_Y, cfg.size, cfg.size - cfg.CJK_AREA_START_Y],
-                "char_size": [cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE],
                 "grid_cols": cfg.CJK_GRID_COLS,
                 "mappings": build_cjk_mappings(cjk_chars) if cjk_chars else {}
             }

@@ -117,6 +117,8 @@ base = ["log4rs"]
 
 [profile.release]
 opt-level = 's'
+codegen-units = 1
+lto = true # FullLTO - the most aggressive LTO version
 
 [workspace]
 members = [

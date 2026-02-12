@@ -290,22 +290,19 @@ impl SymbolMap {
     }
 
     fn parse_grid_region(region: &RegionConfig, map: &mut HashMap<char, (u16, u16)>) {
-        let pixel_region = region.pixel_region.as_ref();
-        let char_size = region.char_size.as_ref();
+        // Use layout module for dynamic size calculation instead of JSON fields
+        // This allows the same symbol_map.json to work with different texture sizes
+        let char_w = layout::cjk_width() as u16;
+        let char_h = layout::cjk_height() as u16;
+        let base_y = layout::cjk_y_start() as u16;
 
-        if let (Some(pr), Some(cs)) = (pixel_region, char_size) {
-            let base_x = pr[0] as u16;
-            let base_y = pr[1] as u16;
-            let char_w = cs[0] as u16;
-            let char_h = cs[1] as u16;
-
-            if let Some(mappings) = &region.mappings {
-                for (ch, coords) in mappings {
-                    if let Some(c) = ch.chars().next() {
-                        let pixel_x = base_x + coords[0] as u16 * char_w;
-                        let pixel_y = base_y + coords[1] as u16 * char_h;
-                        map.insert(c, (pixel_x, pixel_y));
-                    }
+        if let Some(mappings) = &region.mappings {
+            for (ch, coords) in mappings {
+                if let Some(c) = ch.chars().next() {
+                    // coords[0] = col, coords[1] = row in grid
+                    let pixel_x = coords[0] as u16 * char_w;
+                    let pixel_y = base_y + coords[1] as u16 * char_h;
+                    map.insert(c, (pixel_x, pixel_y));
                 }
             }
         }
@@ -859,8 +856,9 @@ pub fn iter_symbol_frames() -> SymbolFrameIterator {
 struct SymbolMapConfig {
     #[allow(dead_code)]
     version: u32,
+    /// Deprecated: texture_size is now computed from actual loaded texture dimensions
     #[allow(dead_code)]
-    texture_size: u32,
+    texture_size: Option<u32>,
     regions: HashMap<String, RegionConfig>,
 }
 
@@ -870,10 +868,14 @@ struct RegionConfig {
     #[allow(dead_code)]
     region_type: Option<String>,
     block_range: Option<[u8; 2]>,
+    /// Deprecated: char_size is now computed dynamically from texture dimensions
+    #[allow(dead_code)]
     char_size: Option<[u32; 2]>,
     chars_per_block: Option<u32>,
     symbols: Option<SymbolsValue>,
     extras: Option<HashMap<String, [u8; 2]>>,
+    /// Deprecated: pixel_region is now computed dynamically from texture dimensions
+    #[allow(dead_code)]
     pixel_region: Option<[u32; 4]>,
     #[allow(dead_code)]
     grid_cols: Option<u32>,
