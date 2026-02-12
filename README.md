@@ -103,9 +103,8 @@ MDPT demonstrates RustPixel's unique capability: rendering a full-featured termi
 ![MDPT](./screen-shot/mdpt.gif)
 
 ```bash
-cargo pixel r mdpt g -r assets/demo.md   # Glow mode
-cargo pixel r mdpt s -r assets/demo.md   # SDL mode
-cargo pixel r mdpt wg -r assets/demo.md  # WGPU mode
+cargo pixel r mdpt wg -r assets/demo.md  # WGPU mode (native)
+cargo pixel r mdpt w -r assets/demo.md   # Web mode (browser)
 ```
 
 ### Key Features
@@ -153,9 +152,8 @@ cd ~/rust_pixel_work
 
 ```bash
 cargo pixel r snake t            # Snake - Terminal mode
-cargo pixel r snake s            # Snake - SDL mode
+cargo pixel r snake wg           # Snake - WGPU mode (native window)
 cargo pixel r tetris w           # Tetris - Web mode (localhost:8080)
-cargo pixel r petview g -r       # Petview - Glow mode (release)
 cargo pixel r petview wg -r      # Petview - WGPU mode (release)
 ```
 
@@ -167,7 +165,7 @@ cargo pixel r mygame t           # Run it!
 
 # Or create standalone project
 cargo pixel c myapp ..           # Create in ../myapp
-cd ../myapp && cargo pixel r myapp s
+cd ../myapp && cargo pixel r myapp wg
 ```
 
 ### Write Games in BASIC
@@ -244,7 +242,7 @@ See `pixel_basic/` for the interpreter source code.
 PETSCII animations with smooth gameplay
 
 ```bash
-cargo pixel r snake s -r    # SDL
+cargo pixel r snake wg -r   # WGPU (native)
 cargo pixel r snake t -r    # Terminal
 cargo pixel r snake w -r    # Web
 ```
@@ -258,7 +256,7 @@ cargo pixel r snake w -r    # Web
 Play against AI
 
 ```bash
-cargo pixel r tetris s -r   # SDL
+cargo pixel r tetris wg -r  # WGPU (native)
 cargo pixel r tetris t -r   # Terminal
 cargo pixel r tetris w -r   # Web
 ```
@@ -274,7 +272,7 @@ cargo pixel r tetris w -r   # Web
 Pixel-perfect sprite movement
 
 ```bash
-cargo pixel r tower s -r    # SDL
+cargo pixel r tower wg -r   # WGPU (native)
 cargo pixel r tower w -r    # Web
 ```
 
@@ -314,7 +312,7 @@ cargo pixel r palette t -r
 
 ```bash
 cargo pixel e t . assets/logo.txt    # Terminal mode
-cargo pixel e s . assets/logo.pix    # SDL mode
+cargo pixel e wg . assets/logo.pix   # WGPU mode
 ```
 
 <table><tr>
@@ -326,7 +324,7 @@ cargo pixel e s . assets/logo.pix    # SDL mode
 
 ```bash
 cargo pixel p assets/lion.png 40 40 > lion.pix
-cargo pixel e g . lion.pix
+cargo pixel e wg . lion.pix
 ```
 
 <table><tr>
@@ -379,8 +377,7 @@ cd apps/poker/wasm && make run
 - **Model/Render pattern** - Clean separation of logic and presentation
 - **Event/Timer system** - Built-in messaging mechanism
 - **Unified adapter trait** - Same code for all rendering backends
-- **OpenGL shaders** - Instance rendering, transitions, 2D effects
-- **WGPU shaders** - Modern GPU rendering pipeline
+- **WGPU shaders** - Modern GPU rendering pipeline (native + WebGL2/WebGPU)
 - **Game algorithms** - Pathfinding, object pools, utilities
 - **Audio support** - Sound effects and music playback
 
