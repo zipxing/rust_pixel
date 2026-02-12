@@ -673,7 +673,8 @@ pub fn build_cover_page(
         let author_y = title_y + 3;
         let author_style = Style::default()
             .fg(Color::Rgba(140, 200, 160, 255))
-            .scale(0.95, 0.95);
+            .scale(0.95, 0.95)
+            .add_modifier(Modifier::ITALIC);
         let mut label = Label::new(&front_matter.author)
             .with_style(author_style)
             .with_align(TextAlign::Center);
