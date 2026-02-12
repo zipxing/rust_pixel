@@ -37,7 +37,7 @@
 
 ### Everything is Tiles
 
-Cell → Buffer → Sprite → Layer → Scene
+Scene > Layer > Sprite > Buffer > Cell
 
 Unified rendering abstraction
 
@@ -50,7 +50,7 @@ High performance - **One texture, one draw call**
 
 Terminal | Desktop | Web
 
-**TUI in native windows — no terminal emulator required**
+**TUI in GPU windows — no terminal emulator**
 
 One codebase, multiple targets
 
