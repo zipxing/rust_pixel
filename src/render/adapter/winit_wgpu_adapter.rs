@@ -44,7 +44,7 @@ pub use winit::{
     dpi::LogicalSize,
     event::{Event as WinitEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{Cursor, CustomCursor, Window},
+    window::{Cursor, CustomCursor, Fullscreen, Window},
 };
 
 /// Winit + WGPU adapter main structure
@@ -376,11 +376,20 @@ impl WinitWgpuAdapter {
 
         let window_size = LogicalSize::new(self.base.gr.pixel_w, self.base.gr.pixel_h);
 
+        // Check if fullscreen mode is requested from GameConfig
+        let game_config = crate::get_game_config();
+        let fullscreen = if game_config.fullscreen {
+            Some(Fullscreen::Borderless(None))
+        } else {
+            None
+        };
+
         let window_attributes = winit::window::Window::default_attributes()
             .with_title(&params.title)
             .with_inner_size(window_size)
             .with_decorations(true)
-            .with_resizable(true);
+            .with_resizable(true)
+            .with_fullscreen(fullscreen);
 
         let window = Arc::new(
             event_loop

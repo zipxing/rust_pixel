@@ -1944,8 +1944,9 @@ where
 
             // Row-based scanline offset - each row has a large random horizontal shift
             // Use held_stage so the offset persists for multiple frames
-            let row_seed = (y as u32 * 7919 + held_stage * 31) % 65536;
-            let row_rand = ((row_seed * 1103515245 + 12345) >> 16) & 0x7fff;
+            // Use wrapping operations for pseudo-random number generation
+            let row_seed = (y as u32).wrapping_mul(7919).wrapping_add(held_stage.wrapping_mul(31)) % 65536;
+            let row_rand = (row_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
 
             let r: u8;
             let g: u8;
@@ -1970,10 +1971,11 @@ where
                 };
 
                 // Per-cell deterministic random based on held_stage (persists for JITTER_HOLD_FRAMES)
-                let cell_seed = (sci as u32 * 2654435761 + held_stage * 1664525) as u32;
-                let cell_rand1 = ((cell_seed * 1103515245 + 12345) >> 16) & 0x7fff;
-                let cell_rand2 = ((cell_seed * 214013 + 2531011) >> 16) & 0x7fff;
-                let cell_rand3 = ((cell_seed * 48271 + 1) >> 16) & 0x7fff;
+                // Use wrapping operations for pseudo-random number generation
+                let cell_seed = (sci as u32).wrapping_mul(2654435761).wrapping_add(held_stage.wrapping_mul(1664525));
+                let cell_rand1 = (cell_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
+                let cell_rand2 = (cell_seed.wrapping_mul(214013).wrapping_add(2531011) >> 16) & 0x7fff;
+                let cell_rand3 = (cell_seed.wrapping_mul(48271).wrapping_add(1) >> 16) & 0x7fff;
 
                 // Additional per-cell random jitter
                 let cell_jitter = (symw_px * 2.0 * chaos) as u32;
@@ -1999,14 +2001,14 @@ where
 
                 // ═══ Random Color Effects ═══
                 // Row-based color shift (each row can have a different hue tint)
-                let row_color_seed = ((row_seed * 48271) >> 8) & 0xff;
+                let row_color_seed = (row_seed.wrapping_mul(48271) >> 8) & 0xff;
                 let row_hue_shift = (row_color_seed as i32 - 128) as f32 * chaos * 0.8;
 
                 // Per-cell random color (chromatic aberration / RGB split effect)
                 // Use deterministic seeds for consistent hold behavior
-                let color_seed1 = ((cell_seed * 16807 + 1) >> 8) & 0xffff;
-                let color_seed2 = ((cell_seed * 48271 + 7) >> 8) & 0xffff;
-                let color_seed3 = ((cell_seed * 69621 + 13) >> 8) & 0xffff;
+                let color_seed1 = (cell_seed.wrapping_mul(16807).wrapping_add(1) >> 8) & 0xffff;
+                let color_seed2 = (cell_seed.wrapping_mul(48271).wrapping_add(7) >> 8) & 0xffff;
+                let color_seed3 = (cell_seed.wrapping_mul(69621).wrapping_add(13) >> 8) & 0xffff;
                 let cell_color_chaos = (150.0 * chaos) as i32;
                 let rand_r = if cell_color_chaos > 0 { (color_seed1 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
                 let rand_g = if cell_color_chaos > 0 { (color_seed2 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
@@ -2067,11 +2069,12 @@ where
                 a = 255u8.saturating_sub((fade_progress * 200.0) as u8);
 
                 // Scatter effect during fade out (also uses held_stage for consistent hold)
+                // Use wrapping operations for pseudo-random number generation
                 let scatter = (symw_px * 3.0 * (1.0 - fade_progress)) as i32;
                 if scatter > 0 {
-                    let scatter_seed = (sci as u32 * 2654435761 + held_stage * 1664525) as u32;
-                    let scatter_rand1 = ((scatter_seed * 1103515245 + 12345) >> 16) & 0x7fff;
-                    let scatter_rand2 = ((scatter_seed * 214013 + 2531011) >> 16) & 0x7fff;
+                    let scatter_seed = (sci as u32).wrapping_mul(2654435761).wrapping_add(held_stage.wrapping_mul(1664525));
+                    let scatter_rand1 = (scatter_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
+                    let scatter_rand2 = (scatter_seed.wrapping_mul(214013).wrapping_add(2531011) >> 16) & 0x7fff;
                     rand_x = (scatter_rand1 as i32 % (scatter * 2 + 1)) - scatter;
                     rand_y = (scatter_rand2 as i32 % (scatter + 1)) - scatter / 2;
                 }

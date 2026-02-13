@@ -80,7 +80,7 @@ macro_rules! app {
         #[cfg(graphics_mode)]
         use crate::{model::*, render_graphics::*};
         use rust_pixel::game::Game;
-        use rust_pixel::util::get_project_path;
+        use rust_pixel::util::{get_project_path, is_fullscreen_requested};
 
         #[cfg(wgpu_web_backend)]
         use rust_pixel::render::adapter::wgpu_web_adapter::{input_events_from_web, WgpuWebAdapter};
@@ -118,7 +118,8 @@ macro_rules! app {
 
             pub fn init_game() -> [<$name Game>] {
                 let pp = get_project_path();
-                println!("asset path : {:?}", pp);
+                let fullscreen = is_fullscreen_requested();
+                println!("asset path : {:?}, fullscreen: {}", pp, fullscreen);
 
                 // Initialize assets based on mode:
                 // - Graphics mode (native): load texture + symbol_map via init_pixel_assets
@@ -126,21 +127,21 @@ macro_rules! app {
                 // - WASM mode: JS already called wasm_init_pixel_assets before this
                 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
                 {
-                    rust_pixel::init_pixel_assets(stringify!([<$name:lower>]), &pp)
+                    rust_pixel::init_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen)
                         .expect("Failed to initialize pixel assets");
                 }
 
                 #[cfg(not(graphics_mode))]
                 {
                     // Terminal mode: only need game config, no texture
-                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp);
+                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, fullscreen);
                 }
 
                 #[cfg(target_arch = "wasm32")]
                 {
                     // WASM mode: JS should have already called wasm_init_pixel_assets
                     // Just set game config if not already set
-                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp);
+                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, false);
                 }
 
                 // Now create Model and Render (they can safely use symbol_map functions)

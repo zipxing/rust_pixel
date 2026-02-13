@@ -38,6 +38,8 @@ pub struct GameConfig {
     pub game_name: String,
     /// Project root path for asset loading
     pub project_path: String,
+    /// Whether to start in fullscreen mode
+    pub fullscreen: bool,
 }
 
 /// Global static game configuration
@@ -46,10 +48,11 @@ pub static GAME_CONFIG: OnceLock<GameConfig> = OnceLock::new();
 /// Initialize the global game configuration
 ///
 /// This should be called once at program startup before any other initialization.
-pub fn init_game_config(game_name: &str, project_path: &str) {
+pub fn init_game_config(game_name: &str, project_path: &str, fullscreen: bool) {
     let _ = GAME_CONFIG.set(GameConfig {
         game_name: game_name.to_string(),
         project_path: project_path.to_string(),
+        fullscreen,
     });
 }
 
@@ -63,6 +66,7 @@ pub fn get_game_config() -> &'static GameConfig {
         GameConfig {
             game_name: String::new(),
             project_path: ".".to_string(),
+            fullscreen: false,
         }
     })
 }
@@ -151,13 +155,13 @@ pub fn get_pixel_texture_data() -> &'static PixelTextureData {
 /// let render = MyRender::new();
 /// ```
 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
-pub fn init_pixel_assets(game_name: &str, project_path: &str) -> Result<(), String> {
+pub fn init_pixel_assets(game_name: &str, project_path: &str, fullscreen: bool) -> Result<(), String> {
     use crate::render::adapter::{
         init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     };
 
     // 1. Set global game configuration
-    init_game_config(game_name, project_path);
+    init_game_config(game_name, project_path, fullscreen);
 
     // 2. Load texture file into memory
     let texture_path = format!(

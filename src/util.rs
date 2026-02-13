@@ -23,6 +23,28 @@ pub use particle::*;
 mod rand;
 pub use rand::*;
 
+/// Check if fullscreen mode is requested via command line arguments.
+///
+/// Looks for `-f` or `--fullscreen` in command line arguments.
+///
+/// # Returns
+/// `true` if fullscreen flag is present, `false` otherwise.
+///
+/// # Examples
+/// ```
+/// // When run with: my_app -f
+/// // Returns: true
+///
+/// // When run with: my_app --fullscreen
+/// // Returns: true
+///
+/// // When run with: my_app
+/// // Returns: false
+/// ```
+pub fn is_fullscreen_requested() -> bool {
+    std::env::args().any(|arg| arg == "-f" || arg == "--fullscreen")
+}
+
 /// Intelligently determines the project path based on command line arguments and environment variables.
 ///
 /// This function provides a smart way to resolve the working directory for RustPixel applications
@@ -58,7 +80,10 @@ pub use rand::*;
 /// - Tools launched by `cargo-pixel` that receive the project path as an argument
 /// - Development scenarios where `CARGO_MANIFEST_DIR` provides the correct path
 pub fn get_project_path() -> String {
-    let args: Vec<String> = std::env::args().collect();
+    // Filter out flags like -f and --fullscreen
+    let args: Vec<String> = std::env::args()
+        .filter(|arg| arg != "-f" && arg != "--fullscreen")
+        .collect();
     match args.len() {
         1 => {
             if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
