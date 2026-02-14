@@ -1,3 +1,21 @@
+# 2.1.1
+
+- Font rendering now supports SDF/MSDF textures — TUI and CJK characters stay crisp at any scale
+- MDPT fullscreen mode uses MSDF rendering for sharper text on high-DPI displays
+- Added `-f` / `--fullscreen` command line flag for all apps to launch in fullscreen mode
+- MDPT: added `--no-status` flag to hide the bottom status bar; `--status` to force show it. In fullscreen mode the status bar is hidden by default
+```
+cargo pixel r mdpt wg -r -f                # fullscreen, status bar hidden
+cargo pixel r mdpt wg -r -f --status       # fullscreen, status bar visible
+cargo pixel r mdpt wg -r --no-status       # windowed, status bar hidden
+```
+- Optimized web mode: canvas auto-fits browser window with proper aspect ratio
+- Improved pie chart and bar chart rendering
+- Fixed WASM crash caused by `get_project_path()` panic on empty args
+- Fixed WebGPU shader validation error (`fwidth` in non-uniform control flow)
+
+---
+
 # 2.1.0
 
 - MDPT and all apps now support fullscreen mode
