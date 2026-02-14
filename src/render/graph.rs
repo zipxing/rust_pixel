@@ -620,9 +620,9 @@ pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 /// 是否启用等比缩放（letterboxing）
 /// - true: 保持宽高比，窗口边缘留黑边
 /// - false: 拉伸填充整个窗口
-/// 全屏模式下自动启用，窗口模式下关闭
+/// 全屏模式下也填满屏幕，不留黑边
 pub fn is_letterboxing_enabled() -> bool {
-    crate::init::get_game_config().fullscreen
+    false
 }
 
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)

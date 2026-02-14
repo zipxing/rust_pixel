@@ -830,6 +830,16 @@ impl WgpuPixelRender {
         self.general2d_renderer.set_sharpness(sharpness);
     }
 
+    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
+    pub fn set_msdf_enabled(&mut self, enabled: bool) {
+        self.symbol_renderer.set_msdf_enabled(enabled);
+    }
+
+    /// Get whether MSDF/SDF rendering is currently enabled.
+    pub fn get_msdf_enabled(&self) -> bool {
+        self.symbol_renderer.get_msdf_enabled()
+    }
+
     /// Bind screen as render target (matches OpenGL GlPixel interface)
     ///
     /// This method sets the render target to screen, equivalent to OpenGL's

@@ -277,6 +277,12 @@ impl Adapter for WgpuWebAdapter {
             core.set_sharpness(sharpness);
         }
     }
+
+    fn set_msdf_enabled(&mut self, enabled: bool) {
+        if let Some(core) = &mut self.render_core {
+            core.set_msdf_enabled(enabled);
+        }
+    }
 }
 
 macro_rules! web_event {

@@ -304,7 +304,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         // === MSDF path ===
         // RGB channels store distance field, reconstruct single-channel via median
         let d = median3(texColor.r, texColor.g, texColor.b);
-        let w = fwidth(d);
+        // Ensure minimum anti-aliasing width to avoid jagged edges at large scales
+        let w = max(fwidth(d), 0.03);
         var threshold = 0.5;
         if (input.v_bold > 0.5) {
             threshold = 0.45; // Bold: lower threshold to expand glyph

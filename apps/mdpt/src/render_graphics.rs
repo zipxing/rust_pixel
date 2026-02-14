@@ -31,7 +31,7 @@ impl Render for MdptRender {
         context.adapter.get_base().gr.set_use_tui_height(true);
 
         let scale = if rust_pixel::init::get_game_config().fullscreen {
-            2.0
+            1.0
         } else {
             2.0
         };
@@ -50,7 +50,7 @@ impl Render for MdptRender {
         context.adapter.set_rt_visible(3, true);
 
         // Enable CAS (Contrast Adaptive Sharpening) for crisp text on high-DPI
-        context.adapter.set_sharpness(1.0);
+        // context.adapter.set_sharpness(0.4);
     }
 
     fn handle_event(&mut self, _context: &mut Context, _data: &mut Self::Model, _dt: f32) {}

@@ -311,42 +311,98 @@ def bitmap_to_sdf(bitmap_img, spread=6):
     return Image.fromarray(result, 'RGBA')
 
 
-def extract_pingfang_sc():
+def _try_extract_from_ttc(font_display_name, ct_name, ttc_match, out_filename):
     """
-    从系统 PingFang.ttc 提取 PingFang SC Regular 为独立 .ttf 文件
-    msdfgen 不能加载 .ttc，需要提取。
+    从 .ttc 提取字体并验证 msdfgen 可用
+
+    Args:
+        font_display_name: 显示名称（日志用）
+        ct_name: CoreText 查询名
+        ttc_match: 在 TTC 中匹配的字体名
+        out_filename: 输出 .ttf 文件名
 
     Returns:
-        str: 提取的 .ttf 文件路径，或 None
+        str: 提取的 .ttf 路径，或 None
     """
-    import CoreText as CT
-    out_path = os.path.join(SCRIPT_DIR, "PingFangSC-Regular.ttf")
+    import subprocess
+    out_path = os.path.join(SCRIPT_DIR, out_filename)
+
+    # 已存在则验证 msdfgen 能加载
     if os.path.exists(out_path):
-        return out_path
-
-    # 通过 CoreText 找到 PingFang.ttc 的实际路径
-    font = CT.CTFontCreateWithName("PingFang SC", 24, None)
-    url = CT.CTFontCopyAttribute(font, CT.kCTFontURLAttribute)
-    if not url:
-        print("  警告: 无法定位 PingFang SC 字体文件")
-        return None
-
-    ttc_path = str(url.path())
-    if not ttc_path.endswith('.ttc'):
-        # 如果已经是独立 .ttf/.otf，直接返回
-        return ttc_path
+        result = subprocess.run(
+            [MSDFGEN_BIN, 'msdf', '-font', out_path, '65',
+             '-size', '16', '16', '-autoframe', '-o', '/tmp/_msdfgen_test.png'],
+            capture_output=True, timeout=5
+        )
+        if result.returncode == 0:
+            print(f"  CJK 字体: {font_display_name} (已缓存)")
+            return out_path
 
     try:
+        import CoreText as CT
+        font = CT.CTFontCreateWithName(ct_name, 24, None)
+        url = CT.CTFontCopyAttribute(font, CT.kCTFontURLAttribute)
+        if not url:
+            return None
+
+        ttc_path = str(url.path())
+        if not ttc_path.endswith('.ttc'):
+            return ttc_path
+
         from fontTools.ttLib import TTCollection
         tc = TTCollection(ttc_path)
         for i, f in enumerate(tc):
             name = f['name'].getDebugName(4)
-            if name and 'PingFang SC' in name and 'Regular' in name:
+            if name and ttc_match in name and 'glyf' in f:
                 f.save(out_path)
-                print(f"  提取 PingFang SC Regular -> {out_path}")
-                return out_path
-    except Exception as e:
-        print(f"  警告: 提取 PingFang SC 失败: {e}")
+                result = subprocess.run(
+                    [MSDFGEN_BIN, 'msdf', '-font', out_path, '65',
+                     '-size', '16', '16', '-autoframe', '-o', '/tmp/_msdfgen_test.png'],
+                    capture_output=True, timeout=5
+                )
+                if result.returncode == 0:
+                    print(f"  CJK 字体: {font_display_name} (从 .ttc 提取)")
+                    return out_path
+    except Exception:
+        pass
+
+    return None
+
+
+def find_cjk_msdf_font():
+    """
+    查找可用于 msdfgen 的 CJK 字体文件。
+
+    msdfgen 不能加载 .ttc，需要独立的 .ttf/.otf。
+    优先级：
+    1. 兰亭黑 SC Demibold（黑体风格，高质量）
+    2. Heiti SC Medium（黑体，系统自带）
+    3. Arial Unicode.ttf（独立 .ttf，msdfgen 直接可用）
+
+    Returns:
+        str: 字体文件路径，或 None
+    """
+    # 1. 兰亭黑 SC Extralight
+    result = _try_extract_from_ttc(
+        "Lantinghei SC Extralight", "Lantinghei SC",
+        "Lantinghei SC Extralight", "LantingheiSC-Extralight.ttf"
+    )
+    if result:
+        return result
+
+    # 2. Heiti SC Medium
+    result = _try_extract_from_ttc(
+        "Heiti SC Medium", "Heiti SC",
+        "Heiti SC Medium", "HeitiSC-Medium.ttf"
+    )
+    if result:
+        return result
+
+    # 3. Arial Unicode - 独立 .ttf，msdfgen 直接支持
+    arial_unicode = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
+    if os.path.exists(arial_unicode):
+        print(f"  CJK 字体: Arial Unicode.ttf")
+        return arial_unicode
 
     return None
 
@@ -371,14 +427,21 @@ def get_font_metrics(font_path):
     """
     读取字体的度量信息，用于 msdfgen 的一致 scale/translate
 
+    使用 max(sTypo, usWin) 度量来确保所有字形（特别是 CJK）
+    都能完整放入目标区域。sTypoAscender/Descender 有时不够大。
+
     Returns:
-        dict: {upm, ascent, descent, advance_em, total_em, scale_h64, ty}
+        dict: {upm, ascent, descent, advance_em, total_em}
     """
     from fontTools.ttLib import TTFont
     font = TTFont(font_path)
     upm = font['head'].unitsPerEm
-    ascent = font['OS/2'].sTypoAscender
-    descent = font['OS/2'].sTypoDescender
+    os2 = font['OS/2']
+
+    # 取 sTypo 和 usWin 中更大的范围，确保 CJK 等大字形不被裁切
+    ascent = max(os2.sTypoAscender, os2.usWinAscent)
+    descent = min(os2.sTypoDescender, -os2.usWinDescent)  # descent 为负值
+
     # 取等宽字体的 advance（用 'A' 或第一个可用字符）
     cmap = font.getBestCmap()
     hmtx = font['hmtx']
@@ -1045,13 +1108,9 @@ def main():
             cmap = load_font_cmap(MSDFGEN_BRAILLE_FONT)
             print(f"  Braille: {os.path.basename(MSDFGEN_BRAILLE_FONT)} ({len(cmap)} glyphs)")
 
-        # CJK 字体：从 PingFang.ttc 提取
-        MSDFGEN_CJK_FONT = extract_pingfang_sc()
-        if MSDFGEN_CJK_FONT:
-            cmap = load_font_cmap(MSDFGEN_CJK_FONT)
-            print(f"  CJK: {os.path.basename(MSDFGEN_CJK_FONT)} ({len(cmap)} glyphs)")
-        else:
-            print("  警告: CJK 字体不可用，将使用 bitmap-to-SDF fallback")
+        # CJK: 使用 PingFang SC bitmap-to-SDF（效果最佳）
+        MSDFGEN_CJK_FONT = None
+        print(f"  CJK: {CJK_FONT_NAME} (Quartz bitmap-to-SDF)")
 
         print(f"  msdfgen: {MSDFGEN_BIN}")
         print(f"  pxrange: {args.msdf_pxrange}")

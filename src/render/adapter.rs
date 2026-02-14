@@ -683,6 +683,22 @@ pub trait Adapter {
         // Default no-op; WGPU adapters override this
     }
 
+    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
+    ///
+    /// When enabled, TUI and CJK symbols use MSDF distance field rendering
+    /// for crisp edges at any scale. When disabled, all symbols use bitmap
+    /// rendering (for legacy 4096 textures).
+    ///
+    /// By default, this is auto-detected from texture size:
+    /// 8192+ = MSDF enabled, 4096 = bitmap only.
+    ///
+    /// # Parameters
+    /// - `enabled`: true to enable MSDF rendering, false for bitmap-only
+    #[cfg(graphics_mode)]
+    fn set_msdf_enabled(&mut self, _enabled: bool) {
+        // Default no-op; WGPU adapters override this
+    }
+
     fn set_size(&mut self, w: u16, h: u16) -> &mut Self
     where
         Self: Sized,

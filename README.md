@@ -93,6 +93,7 @@ cargo pixel r mdpt w -r # Web mode (browser)
 | **Column Layouts** | Flexible multi-column content arrangement |
 | **PETSCII/SSF Images** | Native pixel-art and animation support |
 | **Full CJK Support** | Chinese, Japanese, Korean text rendering |
+| **MSDF Font Rendering** | [MSDF/SDF](doc/sdf.md) distance field rendering for crisp text at any scale |
 | **Incremental Display** | Step-by-step content reveal with pause markers |
 
 ### Why MDPT?

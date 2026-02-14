@@ -61,6 +61,17 @@ impl WgpuRenderCore {
         self.pixel_renderer.set_sharpness(sharpness);
     }
 
+    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
+    /// When disabled, all symbols use bitmap rendering (for legacy 4096 textures).
+    pub fn set_msdf_enabled(&mut self, enabled: bool) {
+        self.pixel_renderer.set_msdf_enabled(enabled);
+    }
+
+    /// Get whether MSDF/SDF rendering is currently enabled.
+    pub fn get_msdf_enabled(&self) -> bool {
+        self.pixel_renderer.get_msdf_enabled()
+    }
+
     /// Get canvas dimensions
     pub fn canvas_size(&self) -> (u32, u32) {
         (self.pixel_renderer.canvas_width, self.pixel_renderer.canvas_height)

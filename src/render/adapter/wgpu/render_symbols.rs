@@ -123,6 +123,10 @@ pub struct WgpuSymbolRenderer {
     /// Ratio parameters for coordinate transformation
     pub ratio_x: f32,
     pub ratio_y: f32,
+
+    /// Whether the loaded texture contains MSDF/SDF data for TUI/CJK regions.
+    /// Automatically detected: 8192+ textures use MSDF/SDF, 4096 textures use bitmap.
+    msdf_enabled: bool,
 }
 
 
@@ -151,6 +155,7 @@ impl WgpuSymbolRenderer {
             max_instances,
             ratio_x: 1.0,
             ratio_y: 1.0,
+            msdf_enabled: false,
         }
     }
     
@@ -163,6 +168,8 @@ impl WgpuSymbolRenderer {
     /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
     pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
         self.symbols.clear();
+        // 8192+ textures contain MSDF/SDF data for TUI/CJK; 4096 textures are pure bitmap
+        self.msdf_enabled = texw >= 8192;
 
         let tex_width = texw as f32;
         let tex_height = texh as f32;
@@ -355,7 +362,7 @@ impl WgpuSymbolRenderer {
             transform.scale(scale_x, scale_y);
             
             // Draw foreground symbol with modified color
-            let use_msdf = Self::is_msdf_symbol(r.texsym);
+            let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
             self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], is_bold, use_msdf);
             
             // Draw UNDERLINED effect: a line at the bottom of the cell
@@ -524,6 +531,17 @@ impl WgpuSymbolRenderer {
         self.transform_stack.m21 = height as f32;
     }
     
+    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
+    /// When disabled, all symbols use bitmap rendering (for legacy 4096 textures).
+    pub fn set_msdf_enabled(&mut self, enabled: bool) {
+        self.msdf_enabled = enabled;
+    }
+
+    /// Get whether MSDF/SDF rendering is currently enabled.
+    pub fn get_msdf_enabled(&self) -> bool {
+        self.msdf_enabled
+    }
+
     /// Set ratio parameters for coordinate transformation
     pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
         self.ratio_x = ratio_x;
