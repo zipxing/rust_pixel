@@ -30,9 +30,14 @@ impl Render for MdptRender {
         // Enable TUI character height mode for UI components
         context.adapter.get_base().gr.set_use_tui_height(true);
 
+        let scale = if rust_pixel::init::get_game_config().fullscreen {
+            2.0
+        } else {
+            2.0
+        };
         context
             .adapter
-            .init(MDPTW, MDPTH, 2.0, 2.0, "mdpt".to_string());
+            .init(MDPTW, MDPTH, scale, scale, "mdpt".to_string());
         self.scene.init(context);
 
         // Pre-create image sprite (hidden by default)

@@ -217,6 +217,7 @@ struct VertexOutput {
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
     @location(2) v_bold: f32,
+    @location(3) v_msdf: f32,
 }
 
 // Transform uniform (matches OpenGL layout)
@@ -235,6 +236,8 @@ fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
 
     // Extract bold flag from origin_x sign (negative = bold)
     output.v_bold = select(0.0, 1.0, instance.a1.x < 0.0);
+    // Extract MSDF flag from origin_y sign (negative = MSDF)
+    output.v_msdf = select(0.0, 1.0, instance.a1.y < 0.0);
     let origin = abs(instance.a1.xy);
 
     // Calculate UV coordinates: uv = a1.zw + position * a2.xy
@@ -274,6 +277,7 @@ fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
 /// Instanced fragment shader for symbols (matches OpenGL behavior)
 /// Note: Uses textureSampleLevel instead of textureSample in non-uniform control flow
 /// to comply with WebGPU uniform control flow requirements for derivative operations.
+/// Supports MSDF (Multi-channel Signed Distance Field) for TUI/CJK characters.
 pub const SYMBOLS_INSTANCED_FRAGMENT_SHADER: &str = r#"
 @group(0) @binding(1)
 var source: texture_2d<f32>;
@@ -285,21 +289,44 @@ struct VertexOutput {
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
     @location(2) v_bold: f32,
+    @location(3) v_msdf: f32,
+}
+
+fn median3(r: f32, g: f32, b: f32) -> f32 {
+    return max(min(r, g), min(max(r, g), b));
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    // Use textureSampleLevel with explicit LOD=0 to allow non-uniform control flow
-    // This is required because input.v_bold creates non-uniform branching
     var texColor = textureSampleLevel(source, source_sampler, input.uv, 0.0);
-    if (input.v_bold > 0.5) {
-        let ts = vec2<f32>(textureDimensions(source));
-        let dx = 0.35 / ts.x;
-        texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(dx, 0.0), 0.0));
-        texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0), 0.0));
-        texColor.a = smoothstep(0.15, 0.95, texColor.a);
+
+    if (input.v_msdf > 0.5) {
+        // === MSDF path ===
+        // RGB channels store distance field, reconstruct single-channel via median
+        let d = median3(texColor.r, texColor.g, texColor.b);
+        let w = fwidth(d);
+        var threshold = 0.5;
+        if (input.v_bold > 0.5) {
+            threshold = 0.45; // Bold: lower threshold to expand glyph
+        }
+        let alpha = smoothstep(threshold - w, threshold + w, d);
+        return vec4<f32>(input.colorj.rgb, input.colorj.a * alpha);
+    } else {
+        // === Bitmap path (existing logic) ===
+        if (input.v_bold > 0.5) {
+            let ts = vec2<f32>(textureDimensions(source));
+            let dx = 0.35 / ts.x;
+            texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(dx, 0.0), 0.0));
+            texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0), 0.0));
+            texColor.a = smoothstep(0.15, 0.95, texColor.a);
+        }
+        // Alpha edge sharpening: use screen-space derivatives to tighten edges
+        let edge = fwidth(texColor.a);
+        if (edge > 0.001) {
+            texColor.a = smoothstep(0.5 - edge, 0.5 + edge, texColor.a);
+        }
+        return texColor * input.colorj;
     }
-    return texColor * input.colorj;
 }
 "#;
 
@@ -351,7 +378,8 @@ fn vs_main(vertex: VertexInput) -> VertexOutput {
     return out;
 }
 
-// Fragment shader with CAS (Contrast Adaptive Sharpening)
+// Fragment shader with RCAS (Robust Contrast-Adaptive Sharpening)
+// Based on AMD FidelityFX CAS, uses luma-based weighting to avoid color fringing
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let tex_color = textureSample(texture_input, texture_sampler, input.tex_coords);
@@ -362,24 +390,35 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let tex_size = vec2<f32>(textureDimensions(texture_input));
         let texel = 1.0 / tex_size;
 
-        // Sample 4 neighbors
+        // Sample 4 neighbors (cross pattern)
         let n = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(0.0, -texel.y));
         let s = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(0.0, texel.y));
         let e = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(texel.x, 0.0));
         let w = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(-texel.x, 0.0));
 
-        // CAS: compute local min/max for contrast-adaptive weight
-        let mn = min(min(n, s), min(e, w));
-        let mx = max(max(n, s), max(e, w));
-        let d = mx - mn;
+        // RCAS: compute luma for perceptually-correct sharpening
+        let luma = vec3<f32>(0.299, 0.587, 0.114);
+        let luma_n = dot(n.rgb, luma);
+        let luma_s = dot(s.rgb, luma);
+        let luma_e = dot(e.rgb, luma);
+        let luma_w = dot(w.rgb, luma);
+        let luma_c = dot(tex_color.rgb, luma);
 
-        // Adaptive weight: less sharpening in high-contrast areas (edges),
-        // more in low-contrast areas (blurry regions)
-        let amp = clamp(vec4<f32>(1.0) - d, vec4<f32>(0.0), vec4<f32>(1.0)) * sharpness;
+        // Local contrast via luma min/max
+        let mn = min(min(luma_n, luma_s), min(luma_e, luma_w));
+        let mx = max(max(luma_n, luma_s), max(luma_e, luma_w));
 
-        // Apply sharpening: center + (center - average_neighbors) * weight
-        let avg = (n + s + e + w) * 0.25;
-        result = clamp(tex_color + (tex_color - avg) * amp, vec4<f32>(0.0), vec4<f32>(1.0));
+        // Peak-limited weight to prevent over-sharpening
+        // mix(8,5) maps sharpness-adaptive range; tighter limit in high-contrast
+        let peak = -1.0 / mix(8.0, 5.0, clamp(min(mn, 1.0 - mx), 0.0, 1.0));
+        let wt = clamp(peak * (luma_n + luma_s + luma_e + luma_w - 4.0 * luma_c), -0.25, 0.0) * sharpness;
+        let weight = 1.0 / (1.0 + 4.0 * wt);
+
+        // Apply: weighted blend of neighbors and center
+        result = vec4<f32>(
+            clamp((wt * (n.rgb + s.rgb + e.rgb + w.rgb) + tex_color.rgb) * weight, vec3<f32>(0.0), vec3<f32>(1.0)),
+            tex_color.a
+        );
     }
 
     return result * uniforms.color;
