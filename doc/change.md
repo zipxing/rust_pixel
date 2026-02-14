@@ -6,8 +6,7 @@
 - MDPT: added `--no-status` flag to hide the bottom status bar; `--status` to force show it. In fullscreen mode the status bar is hidden by default
 ```
 cargo pixel r mdpt wg -r -f                # fullscreen, status bar hidden
-cargo pixel r mdpt wg -r -f --status       # fullscreen, status bar visible
-cargo pixel r mdpt wg -r --no-status       # windowed, status bar hidden
+cargo pixel r mdpt wg -r                   # windowed, status bar shown
 ```
 - Optimized web mode: canvas auto-fits browser window with proper aspect ratio
 - Improved pie chart and bar chart rendering
