@@ -41,8 +41,8 @@ impl ChartRenderer for PieChart {
         }
 
         // Chart dimensions
-        // Reduce legend width to give more space to the pie chart
-        let legend_w: u16 = 10;
+        // Legend width: enough for "█label 100%"
+        let legend_w: u16 = 16;
         let chart_area_w = w.saturating_sub(legend_w + 1);
         let chart_h = h.saturating_sub((cy - y) + 1);
 
@@ -106,7 +106,7 @@ impl ChartRenderer for PieChart {
             let pct = (values[i] / total) * 100.0;
             let label: String = if i < labels.len() {
                 // Truncate label to fit legend width (char-safe for CJK)
-                labels[i].chars().take(4).collect()
+                labels[i].chars().take(10).collect()
             } else {
                 "?".to_string()
             };
@@ -114,7 +114,7 @@ impl ChartRenderer for PieChart {
             if ly < y + h {
                 buf.set_string(legend_x, ly, "█", Style::default().fg(color));
                 let text = format!("{} {:.0}%", label, pct);
-                buf.set_string(legend_x + 1, ly, &text, label_style);
+                buf.set_string(legend_x + 2, ly, &text, label_style);
             }
         }
     }

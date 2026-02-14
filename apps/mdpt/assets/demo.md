@@ -2,10 +2,11 @@
 title: MDPT Demo
 author: zipxing
 theme: dark
-transition: circle
+transition: cycle
 title_animation: typewriter
 code_theme: base16-ocean.dark
 margin: 4
+transition_duration: 0.2
 ---
 
 # Welcome to MDPT...

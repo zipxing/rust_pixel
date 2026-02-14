@@ -35,7 +35,7 @@ impl ChartRenderer for BarChart {
         if let Some(ref title) = self.data.title {
             let tx = x + (w.saturating_sub(title.len() as u16)) / 2;
             buf.set_string(tx, cy, title, Style::default().fg(TITLE_COLOR));
-            cy += 1;
+            cy += 4;
         }
 
         // Chart area dimensions
@@ -98,13 +98,12 @@ impl ChartRenderer for BarChart {
                 buf.set_string(bx, ry, &block_str, color_style);
             }
 
-            // Value label on top of bar
+            // Value label above the bar (always drawn)
             let val_str = format_val(val);
-            if full_rows + 1 < chart_h as usize {
-                let vy = cy + chart_h - 2 - full_rows as u16;
-                let vx = bx + (bar_w as u16).saturating_sub(val_str.len() as u16) / 2;
-                buf.set_string(vx, vy, &val_str, label_style);
-            }
+            let total_bar_rows = full_rows + if partial > 0 { 1 } else { 0 };
+            let vy = (cy + chart_h).saturating_sub(total_bar_rows as u16 + 1);
+            let vx = bx + (bar_w as u16).saturating_sub(val_str.len() as u16) / 2;
+            buf.set_string(vx, vy, &val_str, label_style);
 
             // Bottom label
             if i < labels.len() {

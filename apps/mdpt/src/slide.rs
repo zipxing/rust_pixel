@@ -11,6 +11,7 @@ pub struct FrontMatter {
     pub title_animation: String,
     pub code_theme: String,
     pub margin: u16,
+    pub transition_duration: f32,
 }
 
 impl Default for FrontMatter {
@@ -23,6 +24,7 @@ impl Default for FrontMatter {
             title_animation: "typewriter".to_string(),
             code_theme: "base16-ocean.dark".to_string(),
             margin: 2,
+            transition_duration: 0.0,
         }
     }
 }

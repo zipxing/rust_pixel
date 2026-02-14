@@ -269,6 +269,9 @@ impl MdptModel {
         let gpu_count = GpuTransition::count();      // 7
         let total = cpu_count + gpu_count;            // 12
 
+        // User-configured duration (0.0 means use defaults)
+        let custom_dur = self.presentation.front_matter.transition_duration;
+
         // Check if front_matter locks to a specific GPU transition
         let fm_trans = &self.presentation.front_matter.transition;
         let fixed_gpu = match fm_trans.as_str() {
@@ -283,7 +286,7 @@ impl MdptModel {
         };
         if let Some(gpu_trans) = fixed_gpu {
             self.use_gpu_transition = true;
-            self.transition.duration = 1.0;
+            self.transition.duration = if custom_dur > 0.0 { custom_dur * 2.0 } else { 1.0 };
             self.gpu_effect = GpuBlendEffect::new(gpu_trans, 0.0);
             return;
         }
@@ -305,12 +308,12 @@ impl MdptModel {
                 };
             }
             self.transition.transition = t.create();
-            self.transition.duration = 0.5;
+            self.transition.duration = if custom_dur > 0.0 { custom_dur } else { 0.5 };
             self.gpu_effect = GpuBlendEffect::default();
         } else {
             // GPU transition
             self.use_gpu_transition = true;
-            self.transition.duration = 1.0;
+            self.transition.duration = if custom_dur > 0.0 { custom_dur * 2.0 } else { 1.0 };
             let gpu_idx = idx - cpu_count;
             let gpu_trans = GpuTransition::from_index(gpu_idx);
             self.gpu_effect = GpuBlendEffect::new(gpu_trans, 0.0);
