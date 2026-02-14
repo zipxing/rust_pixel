@@ -80,7 +80,9 @@ impl MdptRender {
         tui_buffer.merge(source_buffer, 255, true);
 
         // Draw status bar
-        self.draw_status_bar(data);
+        if data.show_status_bar {
+            self.draw_status_bar(data);
+        }
 
         // Handle image sprite
         let sprite = self.scene.get_sprite(IMAGE_TAG);

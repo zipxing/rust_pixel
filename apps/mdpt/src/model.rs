@@ -80,18 +80,31 @@ pub struct MdptModel {
     pub use_gpu_transition: bool,
     /// Unified transition index cycling through all CPU+GPU effects
     unified_transition_idx: usize,
+    /// Whether to show the bottom status bar
+    pub show_status_bar: bool,
 }
 
 impl MdptModel {
     pub fn new() -> Self {
         log::info!("[mdpt] MdptModel::new: start");
         #[cfg(not(target_arch = "wasm32"))]
-        let md_file = {
+        let (md_file, show_status_bar) = {
             let args: Vec<String> = std::env::args().collect();
-            if args.len() > 2 { args[2].clone() } else { String::new() }
+            let md = if args.len() > 2 { args[2].clone() } else { String::new() };
+            let explicit_no = args.iter().any(|a| a == "--no-status");
+            let explicit_yes = args.iter().any(|a| a == "--status");
+            // Fullscreen defaults to hidden; --status forces it on, --no-status forces it off
+            let show = if explicit_yes {
+                true
+            } else if explicit_no || rust_pixel::init::get_game_config().fullscreen {
+                false
+            } else {
+                true
+            };
+            (md, show)
         };
         #[cfg(target_arch = "wasm32")]
-        let md_file = String::new();
+        let (md_file, show_status_bar) = (String::new(), true);
 
         log::info!("[mdpt] MdptModel::new: creating highlighter...");
         let highlighter = CodeHighlighter::new();
@@ -120,6 +133,7 @@ impl MdptModel {
             gpu_effect: GpuBlendEffect::default(),
             use_gpu_transition: true,
             unified_transition_idx: 0,
+            show_status_bar,
         }
     }
 

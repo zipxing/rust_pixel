@@ -42,23 +42,24 @@ impl Render for MdptRender {
         tui_buffer.merge(source_buffer, 255, true);
 
         // Draw status bar on the last row
-        let info = format!(
-            " mdpt | slide {}/{} | step {}/{} | {}",
-            data.current_slide + 1,
-            data.total_slides().max(1),
-            data.current_step + 1,
-            data.current_step_count().max(1),
-            if data.md_file.is_empty() {
-                "demo.md"
-            } else {
-                &data.md_file
-            }
-        );
-        let status_y = MDPTH - 1;
-        // Fill status bar background
-        let status_bg = " ".repeat(MDPTW as usize);
-        tui_buffer.set_color_str(0, status_y, &status_bg, Color::White, Color::DarkGray);
-        tui_buffer.set_color_str(0, status_y, &info, Color::White, Color::DarkGray);
+        if data.show_status_bar {
+            let info = format!(
+                " mdpt | slide {}/{} | step {}/{} | {}",
+                data.current_slide + 1,
+                data.total_slides().max(1),
+                data.current_step + 1,
+                data.current_step_count().max(1),
+                if data.md_file.is_empty() {
+                    "demo.md"
+                } else {
+                    &data.md_file
+                }
+            );
+            let status_y = MDPTH - 1;
+            let status_bg = " ".repeat(MDPTW as usize);
+            tui_buffer.set_color_str(0, status_y, &status_bg, Color::White, Color::DarkGray);
+            tui_buffer.set_color_str(0, status_y, &info, Color::White, Color::DarkGray);
+        }
 
         self.scene.draw(ctx).unwrap();
     }
