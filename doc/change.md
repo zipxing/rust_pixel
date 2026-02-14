@@ -1,3 +1,9 @@
+# 2.1.2
+
+- Fix a doc error
+
+---
+
 # 2.1.1
 
 - Font rendering now supports SDF/MSDF textures — TUI and CJK characters stay crisp at any scale
