@@ -1947,15 +1947,11 @@ where
             let row_seed = row_group.wrapping_mul(7919).wrapping_add(held_stage.wrapping_mul(31)) % 65536;
             let row_rand = (row_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
 
-            // Column-based seed for Y offset (entire column shifts together)
-            let col_seed = (x as u32).wrapping_mul(6599).wrapping_add(held_stage.wrapping_mul(47)) % 65536;
-            let col_rand = (col_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
-
             let r: u8;
             let g: u8;
             let b: u8;
             let a: u8;
-            let mut rand_x: i32 = 0;
+            let rand_x: i32;
             let mut rand_y: i32 = 0;
             let final_symidx = symidx;
             let final_texidx = texidx;
@@ -2000,26 +1996,48 @@ where
                 b = fc.2;
                 a = 255;
             } else {
-                // Stage 3: Fade out with row/column scatter
-                let fade_progress = (stage - sg as u32 * 2) as f32 / sg as f32;
-                let fade_amount = (fade_progress * 255.0) as u8;
-                r = fc.0.saturating_sub(fade_amount);
-                g = fc.1.saturating_sub(fade_amount);
-                b = fc.2.saturating_sub(fade_amount);
-                a = 255u8.saturating_sub((fade_progress * 200.0) as u8);
+                // Stage 3: Fly-out scatter + fade out
+                let p = ((stage - sg as u32 * 2) as f32 / sg as f32).clamp(0.0, 1.0);
+                let ep = p * p * p; // ease-in: slow start, accelerating
 
-                // Row-based X scatter, column-based Y scatter
-                let scatter_x = (symw_px * 5.0 * (1.0 - fade_progress)) as i32;
-                let scatter_y = {
-                    let symh_px = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry * scale;
-                    (symh_px * 3.0 * (1.0 - fade_progress)) as i32
+                // Per-cell deterministic direction for scatter
+                let h = {
+                    let mut v = (sci as u32).wrapping_mul(0x9e3779b9);
+                    v ^= v >> 16;
+                    v = v.wrapping_mul(0x7feb352d);
+                    v ^= v >> 15;
+                    v
                 };
-                if scatter_x > 0 {
-                    rand_x = (row_rand as i32 % (scatter_x * 2 + 1)) - scatter_x;
-                }
-                if scatter_y > 0 {
-                    rand_y = (col_rand as i32 % (scatter_y * 2 + 1)) - scatter_y;
-                }
+                let angle = (h & 0xffff) as f32 / 65536.0 * std::f32::consts::TAU;
+                let dist = ((h >> 16) & 0xffff) as f32 / 65536.0 * 0.5 + 0.5;
+
+                // Direction: mix of center-outward + random angle
+                let cx_logo = logo_pixel_w / 2.0;
+                let cy_logo = logo_pixel_h / 2.0;
+                let cell_lx = x as f32 * symw_px;
+                let cell_ly = y as f32 * symh;
+                let dir_x = cell_lx - cx_logo;
+                let dir_y = cell_ly - cy_logo;
+
+                // Fly outward: center-direction * 2 + random direction
+                let fly_range = logo_pixel_w * 1.2;
+                let out_x = dir_x * ep * 3.0 + angle.cos() * fly_range * dist * ep;
+                let out_y = dir_y * ep * 3.0 + angle.sin() * fly_range * dist * ep;
+
+                rand_x = out_x as i32;
+                rand_y = out_y as i32;
+
+                // Fade: farther from center → faster alpha decay
+                let nx = (x as f32 / PIXEL_LOGO_WIDTH as f32 - 0.5) * 2.0;
+                let ny = (y as f32 / PIXEL_LOGO_HEIGHT as f32 - 0.5) * 2.0;
+                let dist_c = (nx * nx + ny * ny).sqrt().min(1.0); // 0=center, 1=corner
+                // Outer cells fade much faster: effective progress boosted by distance
+                let fade_p = (ep + dist_c * p * 2.0).clamp(0.0, 1.0);
+                let brightness = (1.0 - fade_p).max(0.0);
+                r = (fc.0 as f32 * brightness) as u8;
+                g = (fc.1 as f32 * brightness) as u8;
+                b = (fc.2 as f32 * brightness) as u8;
+                a = ((1.0 - fade_p) * 255.0) as u8;
             }
 
             // Apply position jitter
