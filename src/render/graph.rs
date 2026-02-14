@@ -1939,14 +1939,17 @@ where
 
             // Hold frames: jitter persists for this many frames before changing
             // This creates a more rhythmic, intentional glitch effect
-            const JITTER_HOLD_FRAMES: u32 = 4;
+            const JITTER_HOLD_FRAMES: u32 = 40;
             let held_stage = stage / JITTER_HOLD_FRAMES;
 
-            // Row-based scanline offset - each row has a large random horizontal shift
-            // Use held_stage so the offset persists for multiple frames
-            // Use wrapping operations for pseudo-random number generation
-            let row_seed = (y as u32).wrapping_mul(7919).wrapping_add(held_stage.wrapping_mul(31)) % 65536;
+            // Row-group seed for X offset (every 10 rows share the same offset)
+            let row_group = (y / 5) as u32;
+            let row_seed = row_group.wrapping_mul(7919).wrapping_add(held_stage.wrapping_mul(31)) % 65536;
             let row_rand = (row_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
+
+            // Column-based seed for Y offset (entire column shifts together)
+            let col_seed = (x as u32).wrapping_mul(6599).wrapping_add(held_stage.wrapping_mul(47)) % 65536;
+            let col_rand = (col_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
 
             let r: u8;
             let g: u8;
@@ -1954,96 +1957,36 @@ where
             let a: u8;
             let mut rand_x: i32 = 0;
             let mut rand_y: i32 = 0;
-            let mut final_symidx = symidx;
+            let final_symidx = symidx;
+            let final_texidx = texidx;
 
             if stage <= sg as u32 {
-                // Stage 1: Emergence with strong scanline displacement
+                // Stage 1: Emergence — row/col displacement + alpha fade-in, original colors
                 let stage_progress = stage as f32 / sg as f32;
                 let chaos = 1.0 - stage_progress; // 1.0 at start, 0.0 at end
 
-                // Large row-based horizontal displacement (scanline glitch effect)
-                // Displacement decreases as stage progresses
-                let max_row_offset = (symw_px * 8.0 * chaos) as i32; // Up to 8 symbols width
+                // Row-based horizontal displacement (entire row shifts together)
+                let max_row_offset = (symw_px * 12.0 * chaos) as i32;
                 let row_offset = if max_row_offset > 0 {
                     (row_rand as i32 % (max_row_offset * 2 + 1)) - max_row_offset
                 } else {
                     0
                 };
 
-                // Per-cell deterministic random based on held_stage (persists for JITTER_HOLD_FRAMES)
-                // Use wrapping operations for pseudo-random number generation
-                let cell_seed = (sci as u32).wrapping_mul(2654435761).wrapping_add(held_stage.wrapping_mul(1664525));
-                let cell_rand1 = (cell_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
-                let cell_rand2 = (cell_seed.wrapping_mul(214013).wrapping_add(2531011) >> 16) & 0x7fff;
-                let cell_rand3 = (cell_seed.wrapping_mul(48271).wrapping_add(1) >> 16) & 0x7fff;
+                rand_x = row_offset;
 
-                // Additional per-cell random jitter
-                let cell_jitter = (symw_px * 2.0 * chaos) as u32;
-                let cell_rand_x = if cell_jitter > 0 {
-                    (cell_rand1 as i32 % (cell_jitter as i32 * 2 + 1)) - cell_jitter as i32
-                } else {
-                    0
-                };
-                let cell_rand_y = if cell_jitter > 0 {
-                    (cell_rand2 as i32 % (cell_jitter as i32 + 1)) - (cell_jitter / 2) as i32
-                } else {
-                    0
-                };
 
-                rand_x = row_offset + cell_rand_x;
-                rand_y = cell_rand_y;
-
-                // Glitch symbol substitution - more likely early on
-                let glitch_chance = (50.0 * chaos * chaos) as u32; // 50% at start, decreasing
-                if cell_rand3 % 100 < glitch_chance {
-                    final_symidx = (cell_rand1 % 128) as usize;
-                }
-
-                // ═══ Random Color Effects ═══
-                // Row-based color shift (each row can have a different hue tint)
-                let row_color_seed = (row_seed.wrapping_mul(48271) >> 8) & 0xff;
-                let row_hue_shift = (row_color_seed as i32 - 128) as f32 * chaos * 0.8;
-
-                // Per-cell random color (chromatic aberration / RGB split effect)
-                // Use deterministic seeds for consistent hold behavior
-                let color_seed1 = (cell_seed.wrapping_mul(16807).wrapping_add(1) >> 8) & 0xffff;
-                let color_seed2 = (cell_seed.wrapping_mul(48271).wrapping_add(7) >> 8) & 0xffff;
-                let color_seed3 = (cell_seed.wrapping_mul(69621).wrapping_add(13) >> 8) & 0xffff;
-                let cell_color_chaos = (150.0 * chaos) as i32;
-                let rand_r = if cell_color_chaos > 0 { (color_seed1 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
-                let rand_g = if cell_color_chaos > 0 { (color_seed2 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
-                let rand_b = if cell_color_chaos > 0 { (color_seed3 as i32 % (cell_color_chaos * 2 + 1)) - cell_color_chaos } else { 0 };
-
-                // Random full-color replacement for some cells (pure random color)
-                let color_glitch_chance = (30.0 * chaos * chaos) as u32;
-                let use_random_color = (cell_rand2 % 100) < color_glitch_chance;
-
-                let base_bright = (stage_progress * 200.0) as u8;
-                let blend = stage_progress;
-
-                if use_random_color {
-                    // Completely random vibrant color (deterministic for frame hold)
-                    r = (color_seed1 & 0xff) as u8;
-                    g = (color_seed2 & 0xff) as u8;
-                    b = (color_seed3 & 0xff) as u8;
-                } else {
-                    // Blend from random/noisy to original with per-channel noise
-                    let base_r = (base_bright as f32 * (1.0 - blend) + fc.0 as f32 * blend) as i32;
-                    let base_g = (base_bright as f32 * (1.0 - blend) + fc.1 as f32 * blend) as i32;
-                    let base_b = (base_bright as f32 * (1.0 - blend) + fc.2 as f32 * blend) as i32;
-
-                    r = (base_r + rand_r + row_hue_shift as i32).clamp(0, 255) as u8;
-                    g = (base_g + rand_g - (row_hue_shift * 0.5) as i32).clamp(0, 255) as u8;
-                    b = (base_b + rand_b - row_hue_shift as i32).clamp(0, 255) as u8;
-                }
-                a = 255;
+                r = fc.0;
+                g = fc.1;
+                b = fc.2;
+                a = (stage_progress * 255.0) as u8;
             } else if stage <= sg as u32 * 2 {
                 // Stage 2: Settling phase - residual jitter decreasing to stable
                 let stage_progress = (stage as f32 - sg as f32) / sg as f32;
                 let residual = 1.0 - stage_progress; // 1.0 -> 0.0
 
-                // Small residual row offset
-                let residual_offset = (symw_px * 1.5 * residual) as i32;
+                // Residual row offset
+                let residual_offset = (symw_px * 10.0 * residual) as i32;
                 let row_offset = if residual_offset > 0 {
                     (row_rand as i32 % (residual_offset * 2 + 1)) - residual_offset
                 } else {
@@ -2052,38 +1995,37 @@ where
 
                 rand_x = row_offset;
 
-                // Subtle breathing effect on color
-                let breath = ((stage as f32 * 0.3).sin() * 8.0) as i32;
-                r = (fc.0 as i32 + breath).clamp(0, 255) as u8;
-                g = (fc.1 as i32 + breath).clamp(0, 255) as u8;
-                b = (fc.2 as i32 + breath).clamp(0, 255) as u8;
+                r = fc.0;
+                g = fc.1;
+                b = fc.2;
                 a = 255;
             } else {
-                // Stage 3: Fade out with dissolve scatter
+                // Stage 3: Fade out with row/column scatter
                 let fade_progress = (stage - sg as u32 * 2) as f32 / sg as f32;
                 let fade_amount = (fade_progress * 255.0) as u8;
                 r = fc.0.saturating_sub(fade_amount);
                 g = fc.1.saturating_sub(fade_amount);
                 b = fc.2.saturating_sub(fade_amount);
-                // Alpha fade for smoother disappearance
                 a = 255u8.saturating_sub((fade_progress * 200.0) as u8);
 
-                // Scatter effect during fade out (also uses held_stage for consistent hold)
-                // Use wrapping operations for pseudo-random number generation
-                let scatter = (symw_px * 3.0 * (1.0 - fade_progress)) as i32;
-                if scatter > 0 {
-                    let scatter_seed = (sci as u32).wrapping_mul(2654435761).wrapping_add(held_stage.wrapping_mul(1664525));
-                    let scatter_rand1 = (scatter_seed.wrapping_mul(1103515245).wrapping_add(12345) >> 16) & 0x7fff;
-                    let scatter_rand2 = (scatter_seed.wrapping_mul(214013).wrapping_add(2531011) >> 16) & 0x7fff;
-                    rand_x = (scatter_rand1 as i32 % (scatter * 2 + 1)) - scatter;
-                    rand_y = (scatter_rand2 as i32 % (scatter + 1)) - scatter / 2;
+                // Row-based X scatter, column-based Y scatter
+                let scatter_x = (symw_px * 5.0 * (1.0 - fade_progress)) as i32;
+                let scatter_y = {
+                    let symh_px = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry * scale;
+                    (symh_px * 3.0 * (1.0 - fade_progress)) as i32
+                };
+                if scatter_x > 0 {
+                    rand_x = (row_rand as i32 % (scatter_x * 2 + 1)) - scatter_x;
+                }
+                if scatter_y > 0 {
+                    rand_y = (col_rand as i32 % (scatter_y * 2 + 1)) - scatter_y;
                 }
             }
 
             // Apply position jitter
             s2.x += rand_x;
             s2.y += rand_y;
-            f(&(r, g, b, a), s2, texidx, final_symidx);
+            f(&(r, g, b, a), s2, final_texidx, final_symidx);
         }
     }
 }
