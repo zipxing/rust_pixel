@@ -30,7 +30,7 @@ pub fn run_with_file(work_dir: &str, file_path: &str) -> Result<(), Box<dyn std:
 
     #[cfg(not(graphics_mode))]
     {
-        rust_pixel::init_game_config("pixel_edit", work_dir);
+        rust_pixel::init_game_config("pixel_edit", work_dir, false);
     }
 
     let m = TeditModel::new();

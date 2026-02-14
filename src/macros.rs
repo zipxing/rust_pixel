@@ -117,6 +117,9 @@ macro_rules! app {
             }
 
             pub fn init_game() -> [<$name Game>] {
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&"[init_game] start".into());
+
                 let pp = get_project_path();
                 let fullscreen = is_fullscreen_requested();
                 println!("asset path : {:?}, fullscreen: {}", pp, fullscreen);
@@ -141,14 +144,29 @@ macro_rules! app {
                 {
                     // WASM mode: JS should have already called wasm_init_pixel_assets
                     // Just set game config if not already set
-                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, false);
+                    web_sys::console::log_1(&"[init_game] calling init_game_config for wasm".into());
+                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, true);
                 }
 
                 // Now create Model and Render (they can safely use symbol_map functions)
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&"[init_game] creating Model...".into());
                 let m = [<$name Model>]::new();
+
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&"[init_game] creating Render...".into());
                 let r = [<$name Render>]::new();
+
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&"[init_game] creating Game...".into());
                 let mut g = Game::new(m, r);
+
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&"[init_game] calling g.init()...".into());
                 g.init();
+
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&"[init_game] done!".into());
                 [<$name Game>] { g }
             }
 

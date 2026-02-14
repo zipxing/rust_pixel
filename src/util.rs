@@ -85,15 +85,13 @@ pub fn get_project_path() -> String {
         .filter(|arg| arg != "-f" && arg != "--fullscreen")
         .collect();
     match args.len() {
+        0 => ".".to_string(),
         1 => {
             if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
                 manifest_dir.to_string()
             } else {
                 ".".to_string()
             }
-        }
-        2 => {
-            args[1].to_string()
         }
         _ => {
             args[1].to_string()

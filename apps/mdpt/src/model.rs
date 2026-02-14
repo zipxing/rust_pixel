@@ -87,6 +87,9 @@ pub struct MdptModel {
 impl MdptModel {
     pub fn new() -> Self {
         log::info!("[mdpt] MdptModel::new: start");
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[MdptModel::new] start".into());
+
         #[cfg(not(target_arch = "wasm32"))]
         let (md_file, show_status_bar) = {
             let args: Vec<String> = std::env::args().collect();
@@ -106,8 +109,13 @@ impl MdptModel {
         #[cfg(target_arch = "wasm32")]
         let (md_file, show_status_bar) = (String::new(), true);
 
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[MdptModel::new] creating highlighter...".into());
         log::info!("[mdpt] MdptModel::new: creating highlighter...");
         let highlighter = CodeHighlighter::new();
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[MdptModel::new] highlighter created, building Self...".into());
         log::info!("[mdpt] MdptModel::new: highlighter created, building Self...");
 
         Self {

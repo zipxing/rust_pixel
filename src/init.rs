@@ -257,8 +257,8 @@ pub fn wasm_init_pixel_assets(
 ) -> bool {
     use crate::render::adapter::{init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 
-    // 1. Set game configuration (use "." as project_path for web mode)
-    init_game_config(game_name, ".");
+    // 1. Set game configuration (use "." as project_path for web mode, fullscreen for presentation)
+    init_game_config(game_name, ".", true);
 
     // 2. Set PIXEL_SYM_WIDTH/HEIGHT
     let sym_w = init_sym_width(tex_w);

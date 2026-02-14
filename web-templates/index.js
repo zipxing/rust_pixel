@@ -196,10 +196,22 @@ const canvasSize = sg.get_canvas_size();
 const gameCanvas = document.getElementById("canvas");
 gameCanvas.width = canvasSize[0];
 gameCanvas.height = canvasSize[1];
-// Also update CSS size to match (1:1 pixel mapping)
-gameCanvas.style.width = canvasSize[0] + "px";
-gameCanvas.style.height = canvasSize[1] + "px";
-console.log(`Canvas resized to ${canvasSize[0]}x${canvasSize[1]} (matches WGPU surface)`)
+
+// Scale canvas CSS size to fit browser window while maintaining aspect ratio
+function fitCanvasToWindow() {
+    const scaleX = window.innerWidth / canvasSize[0];
+    const scaleY = window.innerHeight / canvasSize[1];
+    const scale = Math.min(scaleX, scaleY);
+    const displayW = Math.floor(canvasSize[0] * scale);
+    const displayH = Math.floor(canvasSize[1] * scale);
+    gameCanvas.style.width = displayW + "px";
+    gameCanvas.style.height = displayH + "px";
+    gameCanvas.style.left = Math.floor((window.innerWidth - displayW) / 2) + "px";
+    gameCanvas.style.top = Math.floor((window.innerHeight - displayH) / 2) + "px";
+}
+fitCanvasToWindow();
+window.addEventListener("resize", fitCanvasToWindow);
+console.log(`Canvas: ${canvasSize[0]}x${canvasSize[1]} (WGPU), scaled to fit window`)
 
 // ============================================================================
 // Event System: Browser → Rust
