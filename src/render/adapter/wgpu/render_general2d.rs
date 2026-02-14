@@ -30,6 +30,7 @@ pub struct General2dUniforms {
     pub transform: [[f32; 4]; 4],  // 4x4 transformation matrix
     pub area: [f32; 4],            // [x, y, width, height]
     pub color: [f32; 4],           // [r, g, b, a]
+    pub params: [f32; 4],          // [sharpness, 0, 0, 0]
 }
 
 /// WGPU General2D renderer for texture rendering
@@ -48,6 +49,9 @@ pub struct WgpuGeneral2dRender {
 
     /// Current color modulation
     color: UnifiedColor,
+
+    /// CAS sharpness (0.0 = off, 0.5 = moderate, 1.0 = maximum)
+    sharpness: f32,
 
     /// Vertex buffer for quad geometry
     vertex_buffer: Option<wgpu::Buffer>,
@@ -78,6 +82,7 @@ impl WgpuRender for WgpuGeneral2dRender {
             area: [0.0, 0.0, 1.0, 1.0],  // Default to full texture
             transform: UnifiedTransform::new(),
             color: UnifiedColor::white(),
+            sharpness: 0.0,
             vertex_buffer: None,
             index_buffer: None,
             uniform_buffer: None,
@@ -135,6 +140,7 @@ impl WgpuRender for WgpuGeneral2dRender {
             transform: self.transform.to_matrix4(),
             area: self.area,
             color: self.color.to_array(),
+            params: [self.sharpness, 0.0, 0.0, 0.0],
         };
 
         // Create a NEW uniform buffer for each draw call to avoid state conflicts
@@ -371,11 +377,20 @@ impl WgpuGeneral2dRender {
     }
 
     /// Set the color modulation
-    /// 
+    ///
     /// # Parameters
     /// - `color`: Color to multiply with texture
     pub fn set_color(&mut self, color: &UnifiedColor) -> &mut Self {
         self.color = *color;
+        self
+    }
+
+    /// Set CAS (Contrast Adaptive Sharpening) intensity
+    ///
+    /// # Parameters
+    /// - `sharpness`: 0.0 = off, 0.5 = moderate, 1.0 = maximum
+    pub fn set_sharpness(&mut self, sharpness: f32) -> &mut Self {
+        self.sharpness = sharpness;
         self
     }
 } 

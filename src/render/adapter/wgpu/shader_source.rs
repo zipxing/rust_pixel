@@ -322,6 +322,7 @@ struct General2dUniforms {
     transform: mat4x4<f32>,
     area: vec4<f32>,     // [x, y, width, height]
     color: vec4<f32>,    // [r, g, b, a]
+    params: vec4<f32>,   // [sharpness, 0, 0, 0]
 }
 
 @group(0) @binding(0)
@@ -337,24 +338,51 @@ var texture_sampler: sampler;
 @vertex
 fn vs_main(vertex: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    
+
     // Apply area mapping to texture coordinates
     out.tex_coords = vec2<f32>(
         mix(uniforms.area.x, uniforms.area.x + uniforms.area.z, vertex.tex_coords.x),
         mix(uniforms.area.y, uniforms.area.y + uniforms.area.w, vertex.tex_coords.y)
     );
-    
+
     // Apply transform matrix to vertex position
     out.clip_position = uniforms.transform * vec4<f32>(vertex.position, 0.0, 1.0);
-    
+
     return out;
 }
 
-// Fragment shader
+// Fragment shader with CAS (Contrast Adaptive Sharpening)
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let tex_color = textureSample(texture_input, texture_sampler, input.tex_coords);
-    return tex_color * uniforms.color;
+    var result = tex_color;
+
+    let sharpness = uniforms.params.x;
+    if (sharpness > 0.0) {
+        let tex_size = vec2<f32>(textureDimensions(texture_input));
+        let texel = 1.0 / tex_size;
+
+        // Sample 4 neighbors
+        let n = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(0.0, -texel.y));
+        let s = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(0.0, texel.y));
+        let e = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(texel.x, 0.0));
+        let w = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(-texel.x, 0.0));
+
+        // CAS: compute local min/max for contrast-adaptive weight
+        let mn = min(min(n, s), min(e, w));
+        let mx = max(max(n, s), max(e, w));
+        let d = mx - mn;
+
+        // Adaptive weight: less sharpening in high-contrast areas (edges),
+        // more in low-contrast areas (blurry regions)
+        let amp = clamp(vec4<f32>(1.0) - d, vec4<f32>(0.0), vec4<f32>(1.0)) * sharpness;
+
+        // Apply sharpening: center + (center - average_neighbors) * weight
+        let avg = (n + s + e + w) * 0.25;
+        result = clamp(tex_color + (tex_color - avg) * amp, vec4<f32>(0.0), vec4<f32>(1.0));
+    }
+
+    return result * uniforms.color;
 }
 "#;
 
@@ -375,6 +403,7 @@ struct General2dUniforms {
     transform: mat4x4<f32>,
     area: vec4<f32>,     // [x, y, width, height]
     color: vec4<f32>,    // [r, g, b, a]
+    params: vec4<f32>,   // [sharpness, 0, 0, 0]
 }
 
 @group(0) @binding(0)
@@ -383,16 +412,16 @@ var<uniform> uniforms: General2dUniforms;
 @vertex
 fn vs_main(vertex: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    
+
     // Apply area mapping to texture coordinates
     out.tex_coords = vec2<f32>(
         mix(uniforms.area.x, uniforms.area.x + uniforms.area.z, vertex.tex_coords.x),
         mix(uniforms.area.y, uniforms.area.y + uniforms.area.w, vertex.tex_coords.y)
     );
-    
+
     // Apply transform matrix to vertex position
     out.clip_position = uniforms.transform * vec4<f32>(vertex.position, 0.0, 1.0);
-    
+
     return out;
 }
 "#;
@@ -408,7 +437,25 @@ var texture_sampler: sampler;
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let tex_color = textureSample(texture_input, texture_sampler, input.tex_coords);
-    return tex_color * uniforms.color;
+    var result = tex_color;
+
+    let sharpness = uniforms.params.x;
+    if (sharpness > 0.0) {
+        let tex_size = vec2<f32>(textureDimensions(texture_input));
+        let texel = 1.0 / tex_size;
+        let n = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(0.0, -texel.y));
+        let s = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(0.0, texel.y));
+        let e = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(texel.x, 0.0));
+        let w = textureSample(texture_input, texture_sampler, input.tex_coords + vec2<f32>(-texel.x, 0.0));
+        let mn = min(min(n, s), min(e, w));
+        let mx = max(max(n, s), max(e, w));
+        let d = mx - mn;
+        let amp = clamp(vec4<f32>(1.0) - d, vec4<f32>(0.0), vec4<f32>(1.0)) * sharpness;
+        let avg = (n + s + e + w) * 0.25;
+        result = clamp(tex_color + (tex_color - avg) * amp, vec4<f32>(0.0), vec4<f32>(1.0));
+    }
+
+    return result * uniforms.color;
 }
 "#;
 

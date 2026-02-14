@@ -767,4 +767,10 @@ impl Adapter for WinitWgpuAdapter {
             eprintln!("WinitWgpuAdapter: Failed to present_default: {}", e);
         }
     }
+
+    fn set_sharpness(&mut self, sharpness: f32) {
+        if let Some(core) = &mut self.render_core {
+            core.set_sharpness(sharpness);
+        }
+    }
 }

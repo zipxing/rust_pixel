@@ -822,6 +822,14 @@ impl WgpuPixelRender {
         self.symbol_renderer.set_ratio(ratio_x, ratio_y);
     }
 
+    /// Set CAS (Contrast Adaptive Sharpening) intensity for the General2D renderer
+    ///
+    /// Applied during the final RT-to-screen composition (Stage 4).
+    /// 0.0 = off, 0.5 = moderate, 1.0 = maximum.
+    pub fn set_sharpness(&mut self, sharpness: f32) {
+        self.general2d_renderer.set_sharpness(sharpness);
+    }
+
     /// Bind screen as render target (matches OpenGL GlPixel interface)
     ///
     /// This method sets the render target to screen, equivalent to OpenGL's

@@ -271,6 +271,12 @@ impl Adapter for WgpuWebAdapter {
     fn present_default(&mut self) {
         self.present(&[RtComposite::fullscreen(2)]);
     }
+
+    fn set_sharpness(&mut self, sharpness: f32) {
+        if let Some(core) = &mut self.render_core {
+            core.set_sharpness(sharpness);
+        }
+    }
 }
 
 macro_rules! web_event {

@@ -43,6 +43,9 @@ impl Render for MdptRender {
 
         // Enable RT3 for GPU transition effects
         context.adapter.set_rt_visible(3, true);
+
+        // Enable CAS (Contrast Adaptive Sharpening) for crisp text on high-DPI
+        context.adapter.set_sharpness(1.0);
     }
 
     fn handle_event(&mut self, _context: &mut Context, _data: &mut Self::Model, _dt: f32) {}

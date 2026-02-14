@@ -53,6 +53,14 @@ impl WgpuRenderCore {
         self.pixel_renderer.set_ratio(rx, ry);
     }
 
+    /// Set CAS (Contrast Adaptive Sharpening) intensity
+    ///
+    /// Applied during final RT-to-screen composition (Stage 4).
+    /// 0.0 = off, 0.5 = moderate, 1.0 = maximum.
+    pub fn set_sharpness(&mut self, sharpness: f32) {
+        self.pixel_renderer.set_sharpness(sharpness);
+    }
+
     /// Get canvas dimensions
     pub fn canvas_size(&self) -> (u32, u32) {
         (self.pixel_renderer.canvas_width, self.pixel_renderer.canvas_height)

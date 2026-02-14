@@ -42,7 +42,7 @@ Block assignment:
 - 176-239: CJK characters
 
 ### Why does MDPT use an 8192x8192 texture?
-Standard games use 4096x4096 (16px per glyph cell). For fullscreen presentation at high DPI, 16px cells look blurry. MDPT uses 8192x8192 (32px per glyph cell) for crisp text rendering. The engine auto-detects cell size from the atlas dimensions at startup.
+Standard games use 4096x4096. For fullscreen presentation at high DPI, those cells look blurry. MDPT uses 8192x8192 for higher resolution. Cell sizes vary by glyph type: TUI characters are 32x64 (half-width), CJK characters are 64x64 (full-width). The engine auto-detects cell size from the atlas dimensions at startup. Even at 8192, fullscreen on high-DPI displays may still show slight edge blurring — a further increase to 16384 would solve this but doubles VRAM usage.
 
 ### What is the 4-stage GPU pipeline?
 1. **Data → RenderBuffer**: Collect cells from Buffer/Sprites into `Vec<RenderCell>`

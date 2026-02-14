@@ -117,12 +117,16 @@ Block 176-239: CJK characters
 
 One texture binding, one draw call, zero texture switching.
 
-Atlas size is configurable per app. The default is 4096x4096 (16x16 blocks, each block 256x256). Apps that need fullscreen high-DPI rendering (e.g. MDPT) use an 8192x8192 atlas with 32x32 pixel cells for crisp text at large window sizes. The engine auto-detects cell size from the atlas dimensions at startup:
+Atlas size is configurable per app. The default is 4096x4096. Apps that need fullscreen high-DPI rendering (e.g. MDPT) use 8192x8192 for crisper text. The engine auto-detects cell size from the atlas dimensions at startup. Different glyph regions have different cell sizes to match character widths:
+
 ```
-cell_size = atlas_width / (blocks_per_row * glyphs_per_block_row)
-  4096 → 16px cells (standard games)
-  8192 → 32px cells (fullscreen presentations)
+               4096 atlas          8192 atlas
+TUI cells:     16x32              32x64           (half-width)
+CJK cells:     32x32              64x64           (full-width)
+Sprite cells:  16x16              32x32
 ```
+
+Even at 8192, fullscreen on high-DPI displays may show slight edge blurring — the tradeoff between atlas size (VRAM) and rendering sharpness.
 
 ## Asset System
 

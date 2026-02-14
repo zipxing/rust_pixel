@@ -670,6 +670,19 @@ pub trait Adapter {
         self.present(&[RtComposite::fullscreen(2)]);
     }
 
+    /// Set CAS (Contrast Adaptive Sharpening) intensity
+    ///
+    /// Applied during the final RT-to-screen composition pass (Stage 4).
+    /// Useful for improving text clarity on high-DPI displays when
+    /// the texture atlas resolution causes slight edge blur.
+    ///
+    /// # Parameters
+    /// - `sharpness`: 0.0 = off, 0.5 = moderate, 1.0 = maximum
+    #[cfg(graphics_mode)]
+    fn set_sharpness(&mut self, _sharpness: f32) {
+        // Default no-op; WGPU adapters override this
+    }
+
     fn set_size(&mut self, w: u16, h: u16) -> &mut Self
     where
         Self: Sized,
