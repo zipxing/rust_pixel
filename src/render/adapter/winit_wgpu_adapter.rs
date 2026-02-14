@@ -30,7 +30,7 @@ use crate::render::{
         Adapter, AdapterBase, RtComposite,
     },
     buffer::Buffer,
-    graph::{UnifiedTransform, ENABLE_LETTERBOXING},
+    graph::{UnifiedTransform, is_letterboxing_enabled},
     sprite::Layer,
 };
 
@@ -569,7 +569,7 @@ impl WinitWgpuAdapter {
         let content_w = cw as f32;
         let content_h = ch as f32;
 
-        let (scale_x, scale_y) = if ENABLE_LETTERBOXING {
+        let (scale_x, scale_y) = if is_letterboxing_enabled() {
             let content_aspect = content_w / content_h;
             let window_aspect = phys_w / phys_h;
 

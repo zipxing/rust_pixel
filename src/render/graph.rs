@@ -620,7 +620,10 @@ pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 /// 是否启用等比缩放（letterboxing）
 /// - true: 保持宽高比，窗口边缘留黑边
 /// - false: 拉伸填充整个窗口
-pub const ENABLE_LETTERBOXING: bool = false;
+/// 全屏模式下自动启用，窗口模式下关闭
+pub fn is_letterboxing_enabled() -> bool {
+    crate::init::get_game_config().fullscreen
+}
 
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
 ///
@@ -2033,11 +2036,16 @@ where
                 let dist_c = (nx * nx + ny * ny).sqrt().min(1.0); // 0=center, 1=corner
                 // Outer cells fade much faster: effective progress boosted by distance
                 let fade_p = (ep + dist_c * p * 2.0).clamp(0.0, 1.0);
-                let brightness = (1.0 - fade_p).max(0.0);
-                r = (fc.0 as f32 * brightness) as u8;
-                g = (fc.1 as f32 * brightness) as u8;
-                b = (fc.2 as f32 * brightness) as u8;
-                a = ((1.0 - fade_p) * 255.0) as u8;
+                // Randomly hide 2/3 of cells for sparse scatter
+                let visible = (h % 3) == 0;
+                let hr = (h.wrapping_mul(0x45d9f3b) >> 8) as u8;
+                let hg = (h.wrapping_mul(0x119de1f3) >> 8) as u8;
+                let hb = (h.wrapping_mul(0x16a6b885) >> 8) as u8;
+                let brightness = if visible { (1.0 - fade_p).max(0.0) } else { 0.0 };
+                r = (hr as f32 * brightness) as u8;
+                g = (hg as f32 * brightness) as u8;
+                b = (hb as f32 * brightness) as u8;
+                a = if visible { ((1.0 - fade_p) * 255.0) as u8 } else { 0 };
             }
 
             // Apply position jitter
