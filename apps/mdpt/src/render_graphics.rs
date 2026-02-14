@@ -31,7 +31,7 @@ impl Render for MdptRender {
         context.adapter.get_base().gr.set_use_tui_height(true);
 
         let scale = if rust_pixel::init::get_game_config().fullscreen {
-            1.0
+            2.0
         } else {
             2.0
         };
