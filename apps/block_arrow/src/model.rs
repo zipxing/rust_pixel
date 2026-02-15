@@ -20,23 +20,24 @@ const FLY_ANIM_FRAMES: u8 = 10;
 #[repr(u8)]
 pub enum GameState {
     Playing,
-    Won,
+    Won,      // fly animation may still be running
+    Showcase, // all done, show pixel art
 }
 
 /// One cell of the fly-away animation
 pub struct FlyAnimCell {
-    pub sx: u16,          // original screen x
-    pub sy: u16,          // original screen y
+    pub sx: u16,
+    pub sy: u16,
     pub border_type: u8,
     pub color: i8,
-    pub arrow_str: String, // empty or arrow char
+    pub arrow_str: String,
 }
 
 /// Fly-away animation state
 pub struct FlyAnim {
     pub cells: Vec<FlyAnimCell>,
     pub direction: Direction,
-    pub frame: u8,        // counts up from 0
+    pub frame: u8,
 }
 
 pub struct Block_arrowModel {
@@ -50,6 +51,7 @@ pub struct Block_arrowModel {
     pub flash_block: Option<usize>,
     pub flash_timer: u8,
     pub fly_anim: Option<FlyAnim>,
+    pub bitmap: Vec<Vec<u8>>, // original pixel art, preserved for showcase
 }
 
 impl Block_arrowModel {
@@ -59,6 +61,7 @@ impl Block_arrowModel {
         let level = generate_level(bitmap).expect("Failed to generate level 1");
         let w = level.width;
         let h = level.height;
+        let saved_bitmap = level.bitmap.clone();
         let board = Board::from_level(&level);
 
         let mut m = Self {
@@ -72,6 +75,7 @@ impl Block_arrowModel {
             flash_block: None,
             flash_timer: 0,
             fly_anim: None,
+            bitmap: saved_bitmap,
         };
         m.update_render_state();
         m
@@ -86,6 +90,7 @@ impl Block_arrowModel {
         if let Some(level) = generate_level(bitmap) {
             let w = level.width;
             let h = level.height;
+            self.bitmap = level.bitmap.clone();
             self.board = Board::from_level(&level);
             self.board_width = w;
             self.board_height = h;
@@ -114,19 +119,16 @@ impl Block_arrowModel {
     }
 
     fn handle_click(&mut self, col: u16, row: u16) {
-        // Ignore clicks during fly animation
         if self.fly_anim.is_some() {
             return;
         }
 
         if let Some((bx, by)) = self.screen_to_board(col, row) {
             if let Some(bid) = self.board.block_at(bx, by) {
-                // Capture block info BEFORE try_fly removes it
                 let block = &self.board.blocks[bid];
                 let direction = block.arrow;
                 let first_cell = block.cells[0];
 
-                // Collect animation cell data
                 let anim_cells: Vec<FlyAnimCell> = block
                     .cells
                     .iter()
@@ -153,7 +155,6 @@ impl Block_arrowModel {
                     self.flash_block = None;
                     self.flash_timer = 0;
                     self.update_render_state();
-                    // Start fly animation
                     self.fly_anim = Some(FlyAnim {
                         cells: anim_cells,
                         direction,
@@ -161,7 +162,7 @@ impl Block_arrowModel {
                     });
                     if self.board.all_removed() {
                         self.game_state = GameState::Won;
-                        self.message = "YOU WIN! Click or press N for next level".to_string();
+                        self.message = "YOU WIN!".to_string();
                     }
                 } else {
                     self.message = "Blocked! Can't fly.".to_string();
@@ -209,7 +210,7 @@ impl Model for Block_arrowModel {
                             GameState::Playing => {
                                 self.handle_click(me.column, me.row);
                             }
-                            GameState::Won => {
+                            GameState::Won | GameState::Showcase => {
                                 if self.fly_anim.is_none() {
                                     let next =
                                         (self.level_index + 1) % builtin_levels().len();
@@ -226,7 +227,8 @@ impl Model for Block_arrowModel {
                         event_emit("BlockArrow.Redraw");
                     }
                     KeyCode::Char('n') => {
-                        if matches!(self.game_state, GameState::Won) && self.fly_anim.is_none() {
+                        if !matches!(self.game_state, GameState::Playing) && self.fly_anim.is_none()
+                        {
                             let next = (self.level_index + 1) % builtin_levels().len();
                             self.load_level(next);
                             event_emit("BlockArrow.Redraw");
@@ -256,6 +258,11 @@ impl Model for Block_arrowModel {
             anim.frame += 1;
             if anim.frame >= FLY_ANIM_FRAMES {
                 self.fly_anim = None;
+                // Transition Won → Showcase after last fly animation ends
+                if matches!(self.game_state, GameState::Won) {
+                    self.game_state = GameState::Showcase;
+                    self.message = "Click or press N for next level".to_string();
+                }
             }
             need_redraw = true;
         }

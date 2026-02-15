@@ -269,9 +269,88 @@ impl Block_arrowRender {
             if !d.message.is_empty() {
                 let color = match d.game_state {
                     crate::model::GameState::Won => Color::Green,
+                    crate::model::GameState::Showcase => Color::Green,
                     _ => Color::Yellow,
                 };
                 msg.set_color_str(1, 0, &d.message, color, Color::Reset);
+            }
+        }
+    }
+
+    /// Showcase mode: draw original bitmap as solid borderless color blocks
+    pub fn draw_showcase(&mut self, _ctx: &mut Context, d: &mut Block_arrowModel) {
+        let w = d.board_width;
+        let h = d.board_height;
+
+        // Clear background
+        {
+            let back = self.scene.get_sprite("back");
+            back.content.reset();
+        }
+
+        // Clear all cell sprites
+        for i in 0..MAX_CELLS {
+            let l = self.scene.get_sprite(&format!("cc{}", i));
+            l.content.resize(Rect::new(0, 0, CELLW as u16, CELLH as u16));
+            l.content.reset();
+            l.set_pos(0, 0);
+        }
+
+        // Draw border walls
+        {
+            let back = self.scene.get_sprite("back");
+            let wall_color = Color::Rgba(0xc0, 0xc0, 0xc0, 0xff);
+            for i in 0..w * CELLW + 2 {
+                back.set_color_str(i as u16, 0, "░", wall_color, Color::Reset);
+                back.set_color_str(i as u16, (h * CELLH + 1) as u16, "░", wall_color, Color::Reset);
+            }
+            for i in 0..h * CELLH + 2 {
+                back.set_color_str(0, i as u16, "░", wall_color, Color::Reset);
+                back.set_color_str((w * CELLW + 1) as u16, i as u16, "░", wall_color, Color::Reset);
+            }
+        }
+
+        // Draw each pixel as a solid color block (no border)
+        for y in 0..h {
+            for x in 0..w {
+                let color_val = d.bitmap[y][x];
+                if color_val == 0 {
+                    continue;
+                }
+                let idx = y * w + x;
+                let sx = (x * CELLW) as u16 + 1;
+                let sy = (y * CELLH) as u16 + 1;
+                let fg = COLORS[color_val as usize % COLORS.len()];
+
+                let l = self.scene.get_sprite(&format!("cc{}", idx));
+                l.content.resize(Rect::new(0, 0, CELLW as u16, CELLH as u16));
+                l.content.reset();
+                l.set_pos(sx, sy);
+                // Fill entire cell with solid color
+                l.content.set_style(
+                    l.content.area,
+                    Style::default().bg(fg),
+                );
+            }
+        }
+
+        // Status bar
+        {
+            let status = self.scene.get_sprite("status");
+            status.content.reset();
+            let info = format!(
+                " Lv{}  CLEAR!  [Click/N]Next [R]Restart",
+                d.level_index + 1,
+            );
+            status.set_color_str(0, 0, &info, Color::Green, Color::Reset);
+        }
+
+        // Message
+        {
+            let msg = self.scene.get_sprite("msg");
+            msg.content.reset();
+            if !d.message.is_empty() {
+                msg.set_color_str(1, 0, &d.message, Color::Green, Color::Reset);
             }
         }
     }
@@ -288,14 +367,22 @@ impl Render for Block_arrowRender {
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
         if event_check("BlockArrow.Redraw", "redraw") {
-            self.draw_board(ctx, data);
+            if matches!(data.game_state, crate::model::GameState::Showcase) {
+                self.draw_showcase(ctx, data);
+            } else {
+                self.draw_board(ctx, data);
+            }
         }
     }
 
     fn handle_timer(&mut self, _ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        self.draw_board(ctx, data);
+        if matches!(data.game_state, crate::model::GameState::Showcase) {
+            self.draw_showcase(ctx, data);
+        } else {
+            self.draw_board(ctx, data);
+        }
         self.scene.draw(ctx).unwrap();
     }
 }
