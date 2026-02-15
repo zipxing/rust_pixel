@@ -1,5 +1,5 @@
 #![allow(non_camel_case_types)]
-use block_arrow_lib::{generate_level, builtin_levels, Board, Direction};
+use block_arrow_lib::{generate_level, builtin_levels, evaluate_difficulty, Board, Direction};
 use rust_pixel::{
     context::Context,
     event::{event_emit, Event, KeyCode, MouseButton, MouseEventKind},
@@ -52,6 +52,7 @@ pub struct Block_arrowModel {
     pub flash_timer: u8,
     pub fly_anim: Option<FlyAnim>,
     pub bitmap: Vec<Vec<u8>>, // original pixel art, preserved for showcase
+    pub difficulty_score: f32,
 }
 
 impl Block_arrowModel {
@@ -62,6 +63,7 @@ impl Block_arrowModel {
         let w = level.width;
         let h = level.height;
         let saved_bitmap = level.bitmap.clone();
+        let diff = evaluate_difficulty(&level);
         let board = Board::from_level(&level);
 
         let mut m = Self {
@@ -76,6 +78,7 @@ impl Block_arrowModel {
             flash_timer: 0,
             fly_anim: None,
             bitmap: saved_bitmap,
+            difficulty_score: diff.score,
         };
         m.update_render_state();
         m
@@ -91,6 +94,7 @@ impl Block_arrowModel {
             let w = level.width;
             let h = level.height;
             self.bitmap = level.bitmap.clone();
+            self.difficulty_score = evaluate_difficulty(&level).score;
             self.board = Board::from_level(&level);
             self.board_width = w;
             self.board_height = h;

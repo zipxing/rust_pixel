@@ -255,9 +255,10 @@ impl Block_arrowRender {
             let status = self.scene.get_sprite("status");
             status.content.reset();
             let info = format!(
-                " Lv{}  Blocks:{}  [Click]Fly [R]Restart [N]Next",
+                " Lv{}  Blocks:{}  Diff:{:.0}  [Click]Fly [R]Restart",
                 d.level_index + 1,
-                d.board.remaining_count()
+                d.board.remaining_count(),
+                d.difficulty_score,
             );
             status.set_color_str(0, 0, &info, Color::Cyan, Color::Reset);
         }
