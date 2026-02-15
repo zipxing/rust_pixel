@@ -110,6 +110,11 @@ pub fn build_shape_library() -> Vec<ShapeFamily> {
         ("Z4", vec![(0, 0), (1, 0), (1, 1), (2, 1)]),
         ("J4", vec![(0, 0), (0, 1), (1, 1), (2, 1)]),
         ("L4", vec![(2, 0), (0, 1), (1, 1), (2, 1)]),
+        // pentomino
+        ("P5", vec![(0, 0), (0, 1), (1, 1), (0, 2), (1, 2)]),
+        ("F5", vec![(1, 0), (0, 1), (1, 1), (0, 2), (1, 2)]),
+        ("U5", vec![(0, 0), (2, 0), (0, 1), (1, 1), (2, 1)]),
+        ("N5", vec![(0, 0), (0, 1), (1, 1), (1, 2), (2, 2)]),
     ];
 
     shapes
@@ -611,6 +616,10 @@ mod tests {
                 "Z4" => assert_eq!(family.variants.len(), 2),
                 "J4" => assert_eq!(family.variants.len(), 4),
                 "L4" => assert_eq!(family.variants.len(), 4),
+                "P5" => assert_eq!(family.variants.len(), 4),
+                "F5" => assert_eq!(family.variants.len(), 4),
+                "U5" => assert_eq!(family.variants.len(), 4),
+                "N5" => assert_eq!(family.variants.len(), 4),
                 _ => {}
             }
         }
