@@ -1,0 +1,13 @@
+[package]
+name = "block_arrow_ffi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rust_pixel = { path = "../../..", default-features = false, features = ["base"] }
+block_arrow_lib = { path = "../lib" }
+
+[lib]
+crate-type=["staticlib","cdylib"]
