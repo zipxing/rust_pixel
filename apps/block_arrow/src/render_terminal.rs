@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(non_camel_case_types)]
-use crate::model::{Block_arrowModel, CELLH, CELLW, BLOCK_ARROWH, BLOCK_ARROWW};
+use crate::model::{Block_arrowModel, FlyAnim, CELLH, CELLW, BLOCK_ARROWH, BLOCK_ARROWW};
 use block_arrow_lib::Direction;
 use rust_pixel::{
     asset::AssetType,
@@ -81,35 +81,47 @@ impl Block_arrowRender {
     pub fn draw_cell(
         &mut self,
         ctx: &mut Context,
-        id: usize,
+        sprite_key: &str,
         x: u16,
         y: u16,
         border_type: u8,
         border_color: i8,
         msg: &str,
         msg_color: i8,
+        flash: bool,
+        alpha: u8, // 255 = fully opaque, used for fly fade
     ) {
-        let l = self.scene.get_sprite(&format!("cc{}", id));
+        let l = self.scene.get_sprite(sprite_key);
         let area = Rect::new(0, 0, CELLW as u16, CELLH as u16);
         l.content.resize(area);
         l.content.reset();
         let cn = format!("cc{}.txt", border_type);
         asset2sprite!(l, ctx, &cn);
         l.set_pos(x, y);
-        let fg = COLORS[border_color as usize % COLORS.len()];
-        let bg = Self::dim_color(fg, 140); // ~55% brightness fill
-        l.content.set_style(
-            l.content.area,
-            Style::default().fg(fg).bg(bg),
-        );
-        if !msg.is_empty() {
-            l.set_color_str(
-                3,
-                2,
-                msg,
-                COLORS[msg_color as usize % COLORS.len()],
-                bg,
+        let base_fg = COLORS[border_color as usize % COLORS.len()];
+        let fg = Self::dim_color(base_fg, alpha);
+        let bg = Self::dim_color(fg, 140);
+        if flash {
+            l.content.set_style(
+                l.content.area,
+                Style::default()
+                    .fg(Color::Rgba(0xff, 0xff, 0xff, 0xff))
+                    .bg(fg),
             );
+        } else {
+            l.content.set_style(
+                l.content.area,
+                Style::default().fg(fg).bg(bg),
+            );
+        }
+        if !msg.is_empty() {
+            let msg_bg = if flash { fg } else { bg };
+            let msg_fg = if flash {
+                Color::Rgba(0xff, 0xff, 0xff, 0xff)
+            } else {
+                Self::dim_color(COLORS[msg_color as usize % COLORS.len()], alpha)
+            };
+            l.set_color_str(3, 2, msg, msg_fg, msg_bg);
         }
     }
 
@@ -123,22 +135,22 @@ impl Block_arrowRender {
             back.content.reset();
         }
 
-        // Clear all cell sprites
-        for i in 0..(w * h) {
+        // Clear all cell sprites (board + anim slots) — must resize+reset
+        for i in 0..MAX_CELLS {
             let l = self.scene.get_sprite(&format!("cc{}", i));
+            l.content.resize(Rect::new(0, 0, CELLW as u16, CELLH as u16));
             l.content.reset();
+            l.set_pos(0, 0);
         }
 
         // Draw board border walls
         {
             let back = self.scene.get_sprite("back");
             let wall_color = Color::Rgba(0xc0, 0xc0, 0xc0, 0xff);
-            // Top and bottom walls
             for i in 0..w * CELLW + 2 {
                 back.set_color_str(i as u16, 0, "░", wall_color, Color::Reset);
                 back.set_color_str(i as u16, (h * CELLH + 1) as u16, "░", wall_color, Color::Reset);
             }
-            // Left and right walls
             for i in 0..h * CELLH + 2 {
                 back.set_color_str(0, i as u16, "░", wall_color, Color::Reset);
                 back.set_color_str((w * CELLW + 1) as u16, i as u16, "░", wall_color, Color::Reset);
@@ -150,12 +162,18 @@ impl Block_arrowRender {
             std::collections::HashMap::new();
         for block in &d.board.blocks {
             if !d.board.removed[block.id] && !block.cells.is_empty() {
-                // Use first cell as arrow position
                 arrow_cells.insert(block.id, block.cells[0]);
             }
         }
 
-        // Draw cells
+        // Flash state
+        let flash_bid = if d.flash_timer > 0 && d.flash_timer % 3 != 0 {
+            d.flash_block
+        } else {
+            None
+        };
+
+        // Draw board cells
         for i in 0..(w * h) {
             let (border_type, color) = d.render_state[i];
             if color >= 0 {
@@ -164,34 +182,71 @@ impl Block_arrowRender {
                 let sx = (x * CELLW) as u16 + 1;
                 let sy = (y * CELLH) as u16 + 1;
 
-                // Check if this cell should show the arrow
                 let mut arrow_str = "";
+                let mut is_flash = false;
                 if let Some(block_id) = d.board.block_at(x, y) {
                     if let Some(&(ax, ay)) = arrow_cells.get(&block_id) {
                         if ax == x && ay == y {
                             arrow_str = d.board.blocks[block_id].arrow.arrow_char();
                         }
                     }
+                    if flash_bid == Some(block_id) {
+                        is_flash = true;
+                    }
                 }
 
-                self.draw_cell(ctx, i, sx, sy, border_type, color, arrow_str, color);
+                self.draw_cell(
+                    ctx,
+                    &format!("cc{}", i),
+                    sx, sy,
+                    border_type, color,
+                    arrow_str, color,
+                    is_flash,
+                    255,
+                );
             }
         }
 
-        // Draw cursor highlight
-        if d.cursor_x < w && d.cursor_y < h {
-            let cx = (d.cursor_x * CELLW) as u16 + 1;
-            let cy = (d.cursor_y * CELLH) as u16 + 1;
-            let cursor_id = d.cursor_y * w + d.cursor_x;
-            if cursor_id < w * h {
-                let l = self.scene.get_sprite(&format!("cc{}", cursor_id));
-                // Highlight selected block with white background
-                if d.selected_block.is_some() {
-                    l.content.set_style(
-                        l.content.area,
-                        Style::default().bg(Color::Rgba(0x40, 0x40, 0x40, 0xff)),
-                    );
+        // Draw fly-away animation (use sprite slots after board area)
+        if let Some(ref anim) = d.fly_anim {
+            let base_slot = w * h; // start after board sprites
+            let progress = anim.frame as f32 / 10.0; // 0.0 → 1.0
+            // Offset: accelerate over time (ease-in)
+            let offset = (progress * progress * 20.0) as i16;
+            // Fade: 255 → 40
+            let alpha = (255.0 * (1.0 - progress * 0.85)) as u8;
+
+            let (dx, dy): (i16, i16) = match anim.direction {
+                Direction::Up => (0, -1),
+                Direction::Down => (0, 1),
+                Direction::Left => (-1, 0),
+                Direction::Right => (1, 0),
+            };
+
+            for (ci, cell) in anim.cells.iter().enumerate() {
+                let slot = base_slot + ci;
+                if slot >= MAX_CELLS {
+                    break;
                 }
+                // Horizontal moves by CELLW-sized steps, vertical by CELLH-sized steps
+                let nx = cell.sx as i16 + dx * offset * if dx != 0 { 3 } else { 1 };
+                let ny = cell.sy as i16 + dy * offset;
+                // Skip if any part of the sprite would be off-screen
+                if nx < 0 || ny < 0
+                    || nx + CELLW as i16 > BLOCK_ARROWW as i16
+                    || ny + CELLH as i16 > BLOCK_ARROWH as i16
+                {
+                    continue;
+                }
+                self.draw_cell(
+                    ctx,
+                    &format!("cc{}", slot),
+                    nx as u16, ny as u16,
+                    cell.border_type, cell.color,
+                    &cell.arrow_str, cell.color,
+                    false,
+                    alpha,
+                );
             }
         }
 
@@ -200,7 +255,7 @@ impl Block_arrowRender {
             let status = self.scene.get_sprite("status");
             status.content.reset();
             let info = format!(
-                " Lv{}  Blocks:{}  [Arrows]Move [Space]Fly [R]Restart [N]Next",
+                " Lv{}  Blocks:{}  [Click]Fly [R]Restart [N]Next",
                 d.level_index + 1,
                 d.board.remaining_count()
             );

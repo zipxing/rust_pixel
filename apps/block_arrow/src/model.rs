@@ -1,8 +1,8 @@
 #![allow(non_camel_case_types)]
-use block_arrow_lib::{generate_level, builtin_levels, Board};
+use block_arrow_lib::{generate_level, builtin_levels, Board, Direction};
 use rust_pixel::{
     context::Context,
-    event::{event_emit, Event, KeyCode},
+    event::{event_emit, Event, KeyCode, MouseButton, MouseEventKind},
     game::Model,
 };
 
@@ -14,24 +14,42 @@ pub const CELLH: usize = 5;
 pub const BLOCK_ARROWW: u16 = 92;
 pub const BLOCK_ARROWH: u16 = 49;
 
+const FLASH_DURATION: u8 = 12;
+const FLY_ANIM_FRAMES: u8 = 10;
+
 #[repr(u8)]
 pub enum GameState {
     Playing,
     Won,
 }
 
+/// One cell of the fly-away animation
+pub struct FlyAnimCell {
+    pub sx: u16,          // original screen x
+    pub sy: u16,          // original screen y
+    pub border_type: u8,
+    pub color: i8,
+    pub arrow_str: String, // empty or arrow char
+}
+
+/// Fly-away animation state
+pub struct FlyAnim {
+    pub cells: Vec<FlyAnimCell>,
+    pub direction: Direction,
+    pub frame: u8,        // counts up from 0
+}
+
 pub struct Block_arrowModel {
     pub board: Board,
-    pub cursor_x: usize,
-    pub cursor_y: usize,
-    pub selected_block: Option<usize>,
     pub game_state: GameState,
     pub level_index: usize,
-    // Render state: (border_type, color) per grid cell, -1 color = empty
     pub render_state: Vec<(u8, i8)>,
     pub board_width: usize,
     pub board_height: usize,
     pub message: String,
+    pub flash_block: Option<usize>,
+    pub flash_timer: u8,
+    pub fly_anim: Option<FlyAnim>,
 }
 
 impl Block_arrowModel {
@@ -45,17 +63,16 @@ impl Block_arrowModel {
 
         let mut m = Self {
             board,
-            cursor_x: w / 2,
-            cursor_y: h / 2,
-            selected_block: None,
             game_state: GameState::Playing,
             level_index: 1,
             render_state: vec![(0, -1); w * h],
             board_width: w,
             board_height: h,
             message: String::new(),
+            flash_block: None,
+            flash_timer: 0,
+            fly_anim: None,
         };
-        m.update_cursor_selection();
         m.update_render_state();
         m
     }
@@ -72,20 +89,88 @@ impl Block_arrowModel {
             self.board = Board::from_level(&level);
             self.board_width = w;
             self.board_height = h;
-            self.cursor_x = w / 2;
-            self.cursor_y = h / 2;
-            self.selected_block = None;
             self.game_state = GameState::Playing;
             self.level_index = index;
             self.render_state = vec![(0, -1); w * h];
             self.message = String::new();
-            self.update_cursor_selection();
+            self.flash_block = None;
+            self.flash_timer = 0;
+            self.fly_anim = None;
             self.update_render_state();
         }
     }
 
-    fn update_cursor_selection(&mut self) {
-        self.selected_block = self.board.block_at(self.cursor_x, self.cursor_y);
+    fn screen_to_board(&self, col: u16, row: u16) -> Option<(usize, usize)> {
+        if col < 1 || row < 1 {
+            return None;
+        }
+        let bx = (col as usize - 1) / CELLW;
+        let by = (row as usize - 1) / CELLH;
+        if bx < self.board_width && by < self.board_height {
+            Some((bx, by))
+        } else {
+            None
+        }
+    }
+
+    fn handle_click(&mut self, col: u16, row: u16) {
+        // Ignore clicks during fly animation
+        if self.fly_anim.is_some() {
+            return;
+        }
+
+        if let Some((bx, by)) = self.screen_to_board(col, row) {
+            if let Some(bid) = self.board.block_at(bx, by) {
+                // Capture block info BEFORE try_fly removes it
+                let block = &self.board.blocks[bid];
+                let direction = block.arrow;
+                let first_cell = block.cells[0];
+
+                // Collect animation cell data
+                let anim_cells: Vec<FlyAnimCell> = block
+                    .cells
+                    .iter()
+                    .map(|&(cx, cy)| {
+                        let border = self.board.border_type(cx, cy, bid);
+                        let color = block.color as i8;
+                        let arrow_str = if (cx, cy) == first_cell {
+                            direction.arrow_char().to_string()
+                        } else {
+                            String::new()
+                        };
+                        FlyAnimCell {
+                            sx: (cx * CELLW) as u16 + 1,
+                            sy: (cy * CELLH) as u16 + 1,
+                            border_type: border,
+                            color,
+                            arrow_str,
+                        }
+                    })
+                    .collect();
+
+                if self.board.try_fly(bid) {
+                    self.message = format!("Block {} flew away!", bid);
+                    self.flash_block = None;
+                    self.flash_timer = 0;
+                    self.update_render_state();
+                    // Start fly animation
+                    self.fly_anim = Some(FlyAnim {
+                        cells: anim_cells,
+                        direction,
+                        frame: 0,
+                    });
+                    if self.board.all_removed() {
+                        self.game_state = GameState::Won;
+                        self.message = "YOU WIN! Click or press N for next level".to_string();
+                    }
+                } else {
+                    self.message = "Blocked! Can't fly.".to_string();
+                    self.flash_block = Some(bid);
+                    self.flash_timer = FLASH_DURATION;
+                }
+                event_emit("BlockArrow.Redraw");
+            }
+        }
     }
 
     pub fn update_render_state(&mut self) {
@@ -118,81 +203,68 @@ impl Model for Block_arrowModel {
         let es = context.input_events.clone();
         for e in &es {
             match e {
-                Event::Key(key) => {
-                    match self.game_state {
-                        GameState::Playing => match key.code {
-                            KeyCode::Up => {
-                                if self.cursor_y > 0 {
-                                    self.cursor_y -= 1;
-                                    self.update_cursor_selection();
+                Event::Mouse(me) => {
+                    if let MouseEventKind::Down(MouseButton::Left) = me.kind {
+                        match self.game_state {
+                            GameState::Playing => {
+                                self.handle_click(me.column, me.row);
+                            }
+                            GameState::Won => {
+                                if self.fly_anim.is_none() {
+                                    let next =
+                                        (self.level_index + 1) % builtin_levels().len();
+                                    self.load_level(next);
                                     event_emit("BlockArrow.Redraw");
                                 }
                             }
-                            KeyCode::Down => {
-                                if self.cursor_y + 1 < self.board_height {
-                                    self.cursor_y += 1;
-                                    self.update_cursor_selection();
-                                    event_emit("BlockArrow.Redraw");
-                                }
-                            }
-                            KeyCode::Left => {
-                                if self.cursor_x > 0 {
-                                    self.cursor_x -= 1;
-                                    self.update_cursor_selection();
-                                    event_emit("BlockArrow.Redraw");
-                                }
-                            }
-                            KeyCode::Right => {
-                                if self.cursor_x + 1 < self.board_width {
-                                    self.cursor_x += 1;
-                                    self.update_cursor_selection();
-                                    event_emit("BlockArrow.Redraw");
-                                }
-                            }
-                            KeyCode::Char(' ') | KeyCode::Enter => {
-                                if let Some(bid) = self.selected_block {
-                                    if self.board.try_fly(bid) {
-                                        self.message = format!("Block {} flew away!", bid);
-                                        self.update_render_state();
-                                        self.update_cursor_selection();
-                                        if self.board.all_removed() {
-                                            self.game_state = GameState::Won;
-                                            self.message =
-                                                "YOU WIN! Press N for next level".to_string();
-                                        }
-                                    } else {
-                                        self.message = "Blocked! Can't fly.".to_string();
-                                    }
-                                    event_emit("BlockArrow.Redraw");
-                                }
-                            }
-                            KeyCode::Char('r') => {
-                                self.load_level(self.level_index);
-                                event_emit("BlockArrow.Redraw");
-                            }
-                            _ => {}
-                        },
-                        GameState::Won => match key.code {
-                            KeyCode::Char('n') => {
-                                let next = (self.level_index + 1) % builtin_levels().len();
-                                self.load_level(next);
-                                event_emit("BlockArrow.Redraw");
-                            }
-                            KeyCode::Char('r') => {
-                                self.load_level(self.level_index);
-                                event_emit("BlockArrow.Redraw");
-                            }
-                            _ => {}
-                        },
+                        }
                     }
                 }
-                _ => {}
+                Event::Key(key) => match key.code {
+                    KeyCode::Char('r') => {
+                        self.load_level(self.level_index);
+                        event_emit("BlockArrow.Redraw");
+                    }
+                    KeyCode::Char('n') => {
+                        if matches!(self.game_state, GameState::Won) && self.fly_anim.is_none() {
+                            let next = (self.level_index + 1) % builtin_levels().len();
+                            self.load_level(next);
+                            event_emit("BlockArrow.Redraw");
+                        }
+                    }
+                    _ => {}
+                },
             }
         }
         context.input_events.clear();
     }
 
-    fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {}
+    fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {
+        let mut need_redraw = false;
+
+        // Flash countdown
+        if self.flash_timer > 0 {
+            self.flash_timer -= 1;
+            if self.flash_timer == 0 {
+                self.flash_block = None;
+            }
+            need_redraw = true;
+        }
+
+        // Fly animation
+        if let Some(ref mut anim) = self.fly_anim {
+            anim.frame += 1;
+            if anim.frame >= FLY_ANIM_FRAMES {
+                self.fly_anim = None;
+            }
+            need_redraw = true;
+        }
+
+        if need_redraw {
+            event_emit("BlockArrow.Redraw");
+        }
+    }
+
     fn handle_event(&mut self, _context: &mut Context, _dt: f32) {}
     fn handle_timer(&mut self, _context: &mut Context, _dt: f32) {}
 }
