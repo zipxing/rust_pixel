@@ -448,6 +448,123 @@ pub fn generate_level(bitmap: &[Vec<u8>]) -> Option<Level> {
 }
 
 // ============================================================
+// Difficulty evaluation
+// ============================================================
+
+#[derive(Clone, Debug)]
+pub struct LevelDifficulty {
+    pub block_count: usize,
+    pub color_count: usize,
+    pub board_density: f32,       // non-zero pixels / total pixels
+    pub max_chain: usize,         // longest dependency chain
+    pub initial_free_ratio: f32,  // blocks flyable at start / total
+    pub score: f32,               // weighted total (0~100)
+}
+
+/// Find which blocks are blocking `block` from flying in its arrow direction
+fn blockers_of(block: &PlacedBlock, all_blocks: &[PlacedBlock], width: usize, height: usize) -> Vec<usize> {
+    let block_cells: HashSet<(usize, usize)> = block.cells.iter().cloned().collect();
+    let mut result = HashSet::new();
+
+    for &(x, y) in &block.cells {
+        let path_cells: Vec<(usize, usize)> = match block.arrow {
+            Direction::Up    => (0..y).rev().map(|cy| (x, cy)).collect(),
+            Direction::Down  => ((y + 1)..height).map(|cy| (x, cy)).collect(),
+            Direction::Left  => (0..x).rev().map(|cx| (cx, y)).collect(),
+            Direction::Right => ((x + 1)..width).map(|cx| (cx, y)).collect(),
+        };
+        for pos in path_cells {
+            if block_cells.contains(&pos) {
+                continue;
+            }
+            for other in all_blocks {
+                if other.id != block.id && other.cells.contains(&pos) {
+                    result.insert(other.id);
+                }
+            }
+        }
+    }
+
+    result.into_iter().collect()
+}
+
+pub fn evaluate_difficulty(level: &Level) -> LevelDifficulty {
+    let w = level.width;
+    let h = level.height;
+    let total_pixels = w * h;
+    let blocks = &level.blocks;
+    let n = blocks.len();
+
+    // 1. Block count
+    let block_count = n;
+
+    // 2. Color count
+    let colors: HashSet<u8> = blocks.iter().map(|b| b.color).collect();
+    let color_count = colors.len();
+
+    // 3. Board density
+    let filled = blocks.iter().map(|b| b.cells.len()).sum::<usize>();
+    let board_density = filled as f32 / total_pixels as f32;
+
+    // 4. Dependency graph → max chain (longest path in DAG)
+    //    blockers[i] = set of block IDs that must be removed before block i can fly
+    let mut deps: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for block in blocks {
+        deps[block.id] = blockers_of(block, blocks, w, h);
+    }
+
+    // Longest path via memoized DFS
+    let mut depth_cache: Vec<Option<usize>> = vec![None; n];
+    fn longest_path(id: usize, deps: &[Vec<usize>], cache: &mut [Option<usize>]) -> usize {
+        if let Some(d) = cache[id] {
+            return d;
+        }
+        let d = if deps[id].is_empty() {
+            0
+        } else {
+            deps[id].iter().map(|&dep| 1 + longest_path(dep, deps, cache)).max().unwrap_or(0)
+        };
+        cache[id] = Some(d);
+        d
+    }
+    let max_chain = (0..n)
+        .map(|i| longest_path(i, &deps, &mut depth_cache))
+        .max()
+        .unwrap_or(0);
+
+    // 5. Initial free ratio: how many blocks can fly at start
+    let all_refs: Vec<&PlacedBlock> = blocks.iter().collect();
+    let initial_free = blocks
+        .iter()
+        .filter(|b| can_fly(b, b.arrow, &all_refs, w, h))
+        .count();
+    let initial_free_ratio = if n > 0 { initial_free as f32 / n as f32 } else { 1.0 };
+
+    // 6. Weighted score (0 ~ 100)
+    //    chain is the dominant factor
+    let chain_norm = if n > 1 { max_chain as f32 / (n - 1) as f32 } else { 0.0 }; // 0~1
+    let block_norm = (block_count as f32 / 30.0).min(1.0);  // cap at 30 blocks
+    let color_norm = (color_count as f32 / 8.0).min(1.0);   // cap at 8 colors
+    let stuck_ratio = 1.0 - initial_free_ratio;              // higher = harder
+
+    let score = (chain_norm * 40.0       // chain depth:   40% weight
+        + stuck_ratio * 25.0             // stuck blocks:  25% weight
+        + block_norm * 15.0              // block count:   15% weight
+        + board_density * 10.0           // density:       10% weight
+        + color_norm * 10.0)             // color variety: 10% weight
+        .min(100.0);
+
+    LevelDifficulty {
+        block_count,
+        color_count,
+        board_density,
+        max_chain,
+        initial_free_ratio,
+        score,
+    }
+}
+
+// ============================================================
 // Built-in level bitmaps
 // ============================================================
 
@@ -653,6 +770,23 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_difficulty_evaluation() {
+        let levels = builtin_levels();
+        for (i, bitmap) in levels.iter().enumerate() {
+            let level = generate_level(bitmap).unwrap();
+            let diff = evaluate_difficulty(&level);
+            println!(
+                "Level {}: blocks={}, colors={}, density={:.2}, chain={}, free={:.2}, score={:.1}",
+                i, diff.block_count, diff.color_count, diff.board_density,
+                diff.max_chain, diff.initial_free_ratio, diff.score
+            );
+            assert!(diff.score >= 0.0 && diff.score <= 100.0);
+            assert!(diff.max_chain < diff.block_count);
+            assert!(diff.initial_free_ratio >= 0.0 && diff.initial_free_ratio <= 1.0);
         }
     }
 }
