@@ -25,12 +25,12 @@ pub fn run_with_file(work_dir: &str, file_path: &str) -> Result<(), Box<dyn std:
     // Initialize assets based on mode
     #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
     {
-        let _ = rust_pixel::init_pixel_assets("pixel_edit", work_dir);
+        let _ = rust_pixel::init_pixel_assets("pixel_edit", work_dir, false, false);
     }
 
     #[cfg(not(graphics_mode))]
     {
-        rust_pixel::init_game_config("pixel_edit", work_dir, false);
+        rust_pixel::init_game_config("pixel_edit", work_dir, false, false);
     }
 
     let m = TeditModel::new();

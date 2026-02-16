@@ -620,9 +620,9 @@ pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 /// 是否启用等比缩放（letterboxing）
 /// - true: 保持宽高比，窗口边缘留黑边
 /// - false: 拉伸填充整个窗口
-/// 全屏模式下也填满屏幕，不留黑边
+/// 通过 -tf 命令行参数启用
 pub fn is_letterboxing_enabled() -> bool {
-    false
+    crate::get_game_config().fullscreen_fit
 }
 
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
@@ -1118,6 +1118,8 @@ impl Graph {
     /// # Parameters
     /// - `rx`: X-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratiox(&mut self, rx: f32) {
+        // Force ratio to 1.0 in fullscreen mode (fullscreen handles scaling)
+        let rx = if crate::get_game_config().fullscreen { 1.0 } else { rx };
         self.ratio_x = rx;
         let _ = PIXEL_RATIO_X.set(rx);
     }
@@ -1131,6 +1133,8 @@ impl Graph {
     /// # Parameters
     /// - `ry`: Y-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratioy(&mut self, ry: f32) {
+        // Force ratio to 1.0 in fullscreen mode (fullscreen handles scaling)
+        let ry = if crate::get_game_config().fullscreen { 1.0 } else { ry };
         self.ratio_y = ry;
         let _ = PIXEL_RATIO_Y.set(ry);
     }

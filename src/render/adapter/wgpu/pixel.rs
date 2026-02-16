@@ -1133,8 +1133,12 @@ impl WgpuRender for WgpuPixelRender {
             mapped_at_creation: false,
         });
 
-        // Create instance buffer with enough space for many instances
-        let max_instances = self.base.canvas_width * self.base.canvas_height; // Conservative estimate
+        // Create instance buffer sized by cell count (not pixel count)
+        let sym_w = crate::render::PIXEL_SYM_WIDTH.get().copied().unwrap_or(16.0);
+        let sym_h = crate::render::PIXEL_SYM_HEIGHT.get().copied().unwrap_or(16.0);
+        let cols = (self.base.canvas_width as f32 / sym_w).ceil() as u32;
+        let rows = (self.base.canvas_height as f32 / sym_h).ceil() as u32;
+        let max_instances = (cols * rows * 2).max(65536); // *2 margin, min 64K
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Symbol Instance Buffer"),
             size: (max_instances as usize * std::mem::size_of::<WgpuSymbolInstance>()) as u64,

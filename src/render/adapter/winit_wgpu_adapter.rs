@@ -170,18 +170,41 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                 unsafe {
                     let adapter = &*self.adapter_ref;
                     if let Some(window) = &adapter.window {
-                        let scale_factor = window.scale_factor();
                         let actual_size = window.inner_size();
-                        // Compensate for OS window size adjustment (e.g., window too tall for screen)
-                        // Map cursor from actual window coords to expected render coords
-                        let actual_logical_w = actual_size.width as f64 / scale_factor;
-                        let actual_logical_h = actual_size.height as f64 / scale_factor;
                         let expected_w = adapter.base.gr.pixel_w as f64;
                         let expected_h = adapter.base.gr.pixel_h as f64;
-                        self.cursor_position = (
-                            position.x / scale_factor * (expected_w / actual_logical_w),
-                            position.y / scale_factor * (expected_h / actual_logical_h),
-                        );
+                        let phys_w = actual_size.width as f64;
+                        let phys_h = actual_size.height as f64;
+
+                        if is_letterboxing_enabled() {
+                            // Content is centered with black borders; adjust cursor mapping
+                            let content_aspect = expected_w / expected_h;
+                            let window_aspect = phys_w / phys_h;
+
+                            if window_aspect > content_aspect {
+                                // Black bars on left/right
+                                let content_phys_w = phys_h * content_aspect;
+                                let offset_x = (phys_w - content_phys_w) / 2.0;
+                                self.cursor_position = (
+                                    (position.x - offset_x) / content_phys_w * expected_w,
+                                    position.y / phys_h * expected_h,
+                                );
+                            } else {
+                                // Black bars on top/bottom
+                                let content_phys_h = phys_w / content_aspect;
+                                let offset_y = (phys_h - content_phys_h) / 2.0;
+                                self.cursor_position = (
+                                    position.x / phys_w * expected_w,
+                                    (position.y - offset_y) / content_phys_h * expected_h,
+                                );
+                            }
+                        } else {
+                            // No letterboxing: content stretches to fill window
+                            self.cursor_position = (
+                                position.x / phys_w * expected_w,
+                                position.y / phys_h * expected_h,
+                            );
+                        }
                     } else {
                         self.cursor_position = (position.x, position.y);
                     }

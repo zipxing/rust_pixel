@@ -40,6 +40,8 @@ pub struct GameConfig {
     pub project_path: String,
     /// Whether to start in fullscreen mode
     pub fullscreen: bool,
+    /// Whether to preserve aspect ratio in fullscreen (letterboxing with black borders)
+    pub fullscreen_fit: bool,
 }
 
 /// Global static game configuration
@@ -48,11 +50,12 @@ pub static GAME_CONFIG: OnceLock<GameConfig> = OnceLock::new();
 /// Initialize the global game configuration
 ///
 /// This should be called once at program startup before any other initialization.
-pub fn init_game_config(game_name: &str, project_path: &str, fullscreen: bool) {
+pub fn init_game_config(game_name: &str, project_path: &str, fullscreen: bool, fullscreen_fit: bool) {
     let _ = GAME_CONFIG.set(GameConfig {
         game_name: game_name.to_string(),
         project_path: project_path.to_string(),
         fullscreen,
+        fullscreen_fit,
     });
 }
 
@@ -67,6 +70,7 @@ pub fn get_game_config() -> &'static GameConfig {
             game_name: String::new(),
             project_path: ".".to_string(),
             fullscreen: false,
+            fullscreen_fit: false,
         }
     })
 }
@@ -155,13 +159,13 @@ pub fn get_pixel_texture_data() -> &'static PixelTextureData {
 /// let render = MyRender::new();
 /// ```
 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
-pub fn init_pixel_assets(game_name: &str, project_path: &str, fullscreen: bool) -> Result<(), String> {
+pub fn init_pixel_assets(game_name: &str, project_path: &str, fullscreen: bool, fullscreen_fit: bool) -> Result<(), String> {
     use crate::render::adapter::{
         init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
     };
 
     // 1. Set global game configuration
-    init_game_config(game_name, project_path, fullscreen);
+    init_game_config(game_name, project_path, fullscreen, fullscreen_fit);
 
     // 2. Load texture file into memory
     let texture_path = format!(
@@ -258,7 +262,7 @@ pub fn wasm_init_pixel_assets(
     use crate::render::adapter::{init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 
     // 1. Set game configuration (use "." as project_path for web mode, fullscreen for presentation)
-    init_game_config(game_name, ".", true);
+    init_game_config(game_name, ".", true, false);
 
     // 2. Set PIXEL_SYM_WIDTH/HEIGHT
     let sym_w = init_sym_width(tex_w);

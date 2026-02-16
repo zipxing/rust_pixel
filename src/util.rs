@@ -42,7 +42,15 @@ pub use rand::*;
 /// // Returns: false
 /// ```
 pub fn is_fullscreen_requested() -> bool {
-    std::env::args().any(|arg| arg == "-f" || arg == "--fullscreen")
+    std::env::args().any(|arg| arg == "-f" || arg == "--fullscreen" || arg == "-tf" || arg == "-ft")
+}
+
+/// Check if fullscreen-fit mode is requested via command line arguments.
+///
+/// Looks for `-tf` or `-ft` in command line arguments. This enables fullscreen mode
+/// with preserved aspect ratio (letterboxing with black borders).
+pub fn is_fullscreen_fit_requested() -> bool {
+    std::env::args().any(|arg| arg == "-tf" || arg == "-ft")
 }
 
 /// Intelligently determines the project path based on command line arguments and environment variables.
@@ -82,7 +90,7 @@ pub fn is_fullscreen_requested() -> bool {
 pub fn get_project_path() -> String {
     // Filter out flags like -f and --fullscreen
     let args: Vec<String> = std::env::args()
-        .filter(|arg| arg != "-f" && arg != "--fullscreen")
+        .filter(|arg| arg != "-f" && arg != "--fullscreen" && arg != "-tf" && arg != "-ft")
         .collect();
     match args.len() {
         0 => ".".to_string(),
