@@ -33,6 +33,10 @@ pub struct Panel {
     title: Option<String>,
     /// Canvas buffer for direct character drawing (always available)
     canvas: Buffer,
+    /// Horizontal divider lines (y coordinates relative to panel bounds)
+    hdividers: Vec<u16>,
+    /// Vertical divider lines (x, y_start, y_end) relative to panel bounds
+    vdividers: Vec<(u16, u16, u16)>,
 }
 
 impl Panel {
@@ -45,6 +49,8 @@ impl Panel {
             border_style: BorderStyle::None,
             title: None,
             canvas: Buffer::empty(Rect::new(0, 0, 0, 0)),
+            hdividers: Vec::new(),
+            vdividers: Vec::new(),
         }
     }
     
@@ -184,6 +190,39 @@ impl Panel {
         bounds.y = y;
         self.set_bounds(bounds);
     }
+
+    // ========== Divider API ==========
+
+    /// Add a horizontal divider at y (relative to panel bounds, full width)
+    pub fn with_hdivider(mut self, y: u16) -> Self {
+        self.hdividers.push(y);
+        self
+    }
+
+    /// Add a vertical divider at x from y_start to y_end (relative to panel bounds)
+    pub fn with_vdivider(mut self, x: u16, y_start: u16, y_end: u16) -> Self {
+        self.vdividers.push((x, y_start, y_end));
+        self
+    }
+
+    /// Add a horizontal divider at runtime
+    pub fn add_hdivider(&mut self, y: u16) {
+        self.hdividers.push(y);
+        self.mark_dirty();
+    }
+
+    /// Add a vertical divider at runtime
+    pub fn add_vdivider(&mut self, x: u16, y_start: u16, y_end: u16) {
+        self.vdividers.push((x, y_start, y_end));
+        self.mark_dirty();
+    }
+
+    /// Clear all dividers
+    pub fn clear_dividers(&mut self) {
+        self.hdividers.clear();
+        self.vdividers.clear();
+        self.mark_dirty();
+    }
 }
 
 impl Widget for Panel {
@@ -234,6 +273,11 @@ impl Widget for Panel {
         // Render title
         if let Some(ref title) = self.title {
             self.render_title(buffer, title, style)?;
+        }
+
+        // Render dividers (after border, before canvas/children)
+        if !self.hdividers.is_empty() || !self.vdividers.is_empty() {
+            self.render_dividers(buffer, style)?;
         }
 
         // Render canvas content
@@ -443,6 +487,103 @@ impl Panel {
         };
 
         buffer.set_string(title_x, title_y, display_title, style);
+
+        Ok(())
+    }
+
+    /// Get divider character set based on border_style
+    fn divider_chars(&self) -> (&str, &str, &str, &str, &str, &str, &str) {
+        // (horizontal, vertical, left_tee, right_tee, top_tee, bottom_tee, cross)
+        match self.border_style {
+            BorderStyle::Double => ("═", "║", "╠", "╣", "╦", "╩", "╬"),
+            _ => ("─", "│", "├", "┤", "┬", "┴", "┼"),
+        }
+    }
+
+    /// Render horizontal and vertical dividers with automatic junction characters
+    fn render_dividers(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
+        let bounds = self.bounds();
+        let has_border = self.border_style != BorderStyle::None;
+        let (h_char, v_char, left_tee, right_tee, top_tee, bottom_tee, cross) = self.divider_chars();
+
+        let right_x = bounds.x + bounds.width - 1;
+        let bottom_y = bounds.y + bounds.height - 1;
+
+        // Build a set of hdivider y-coordinates for quick lookup
+        let hdivider_set: std::collections::HashSet<u16> = self.hdividers.iter().copied().collect();
+
+        // Render horizontal dividers
+        for &dy in &self.hdividers {
+            let y = bounds.y + dy;
+            if y <= bounds.y || y >= bottom_y {
+                continue; // skip if on outer border
+            }
+
+            // Fill horizontal line
+            for x in (bounds.x + 1)..right_x {
+                if Self::in_buffer(buffer, x, y) {
+                    buffer.get_mut(x, y).set_symbol(h_char).set_style(style);
+                }
+            }
+
+            // Left junction (with left border)
+            if has_border && Self::in_buffer(buffer, bounds.x, y) {
+                buffer.get_mut(bounds.x, y).set_symbol(left_tee).set_style(style);
+            }
+
+            // Right junction (with right border)
+            if has_border && Self::in_buffer(buffer, right_x, y) {
+                buffer.get_mut(right_x, y).set_symbol(right_tee).set_style(style);
+            }
+        }
+
+        // Render vertical dividers
+        for &(dx, dy_start, dy_end) in &self.vdividers {
+            let x = bounds.x + dx;
+            let y_start = bounds.y + dy_start;
+            let y_end = bounds.y + dy_end;
+
+            if x <= bounds.x || x >= right_x {
+                continue; // skip if on outer border
+            }
+
+            for y in y_start..=y_end {
+                if !Self::in_buffer(buffer, x, y) {
+                    continue;
+                }
+
+                let on_top_border = y == bounds.y;
+                let on_bottom_border = y == bottom_y;
+                let on_hdivider = hdivider_set.contains(&(y - bounds.y));
+                let is_start = y == y_start;
+                let is_end = y == y_end;
+
+                let sym = if on_top_border && has_border {
+                    top_tee
+                } else if on_bottom_border && has_border {
+                    bottom_tee
+                } else if on_hdivider {
+                    // Junction with horizontal divider
+                    let extends_up = y > y_start;
+                    let extends_down = y < y_end;
+                    if extends_up && extends_down {
+                        cross
+                    } else if extends_down || is_start {
+                        top_tee
+                    } else {
+                        bottom_tee
+                    }
+                } else if is_start && !on_top_border {
+                    v_char
+                } else if is_end && !on_bottom_border {
+                    v_char
+                } else {
+                    v_char
+                };
+
+                buffer.get_mut(x, y).set_symbol(sym).set_style(style);
+            }
+        }
 
         Ok(())
     }

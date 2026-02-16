@@ -14,8 +14,10 @@ use rust_pixel::{
     event::{Event, KeyCode, MouseButton, MouseEventKind::*},
     game::Model,
     render::Buffer,
-    render::style::{Color, ColorPro, ColorSpace, ColorSpace::*, COLOR_SPACE_COUNT},
+    render::style::{Color, ColorPro, ColorSpace, ColorSpace::*, Style, COLOR_SPACE_COUNT},
     ui::UIPage,
+    ui::components::panel::{Panel, BorderStyle},
+    util::Rect,
 };
 use PaletteState::*;
 
@@ -24,7 +26,7 @@ pub const PL_ARROW: &str = "▶";
 // Menu tab separator: "\u{E0B0}", fallback: "▸" or "|"
 pub const MENU_SEP: &str = "";
 pub const PALETTEW: u16 = 80;
-pub const PALETTEH: u16 = 40;
+pub const PALETTEH: u16 = 35;
 pub const MENUX: u16 = 12;
 pub const RANDOM_X: u16 = 6;
 pub const RANDOM_Y: u16 = 4;
@@ -85,7 +87,15 @@ impl PaletteModel {
         let mut ncolors = COLORS_WITH_NAME.clone();
         ncolors.sort_by_key(|nc| (1000.0 - nc.1.brightness() * 1000.0) as i32);
 
-        let page = UIPage::new(PALETTEW, PALETTEH);
+        let mut page = UIPage::new(PALETTEW, PALETTEH);
+        let frame = Panel::new()
+            .with_bounds(Rect::new(0, 0, PALETTEW, 35))
+            .with_border(BorderStyle::Rounded)
+            .with_style(Style::default().fg(Color::Indexed(250)).bg(Color::Black))
+            .with_hdivider(22)
+            .with_hdivider(32)
+            .with_vdivider(59, 22, 32);
+        page.set_root_widget(Box::new(frame));
 
         Self {
             data: PaletteData::new(),
@@ -114,13 +124,14 @@ impl PaletteModel {
     }
 
     fn redraw_all(&mut self) {
-        let buf = self.page.buffer_mut();
-        buf.reset();
+        // Render Panel frame (border + dividers)
+        let _ = self.page.render();
 
-        // Draw background frame
-        Self::draw_background(buf);
-        // Draw menu
+        let buf = self.page.buffer_mut();
+        // Draw menu (overwrites row 0)
         Self::draw_menu_to(buf, self.state);
+        // Draw checkerboard + "Similar" label
+        Self::draw_checkerboard(buf);
         // Draw main color info
         Self::draw_main_color_to(buf, self.main_color, self.main_color_similar);
         // Draw help message
@@ -143,61 +154,9 @@ impl PaletteModel {
             &self.gradient_input_colors, &self.gradient_colors);
     }
 
-    // ========== Background ==========
+    // ========== Checkerboard + labels ==========
 
-    fn draw_background(buf: &mut Buffer) {
-        let bc = Color::Indexed(250);
-        let bg = Color::Black;
-
-        // Left/right borders (rows 1..21)
-        for y in 1..22 {
-            buf.set_color_str(0, y, "│", bc, bg);
-            buf.set_color_str(PALETTEW - 1, y, "│", bc, bg);
-        }
-
-        // Horizontal divider at row 22
-        buf.set_color_str(0, 22, "├", bc, bg);
-        for x in 1..59 {
-            buf.set_color_str(x, 22, "─", bc, bg);
-        }
-        buf.set_color_str(59, 22, "┬", bc, bg);
-        for x in 60..PALETTEW - 1 {
-            buf.set_color_str(x, 22, "─", bc, bg);
-        }
-        buf.set_color_str(PALETTEW - 1, 22, "┤", bc, bg);
-
-        // Left/right borders and middle divider (rows 23..32)
-        for y in 23..33 {
-            buf.set_color_str(0, y, "│", bc, bg);
-            buf.set_color_str(59, y, "│", bc, bg);
-            buf.set_color_str(PALETTEW - 1, y, "│", bc, bg);
-        }
-
-        // "Similar" label (centered in cols 60-78)
-        buf.set_color_str(66, 24, "Similar", Color::Indexed(7), bg);
-
-        // Horizontal divider at row 33
-        buf.set_color_str(0, 33, "├", bc, bg);
-        for x in 1..59 {
-            buf.set_color_str(x, 33, "─", bc, bg);
-        }
-        buf.set_color_str(59, 33, "┴", bc, bg);
-        for x in 60..PALETTEW - 1 {
-            buf.set_color_str(x, 33, "─", bc, bg);
-        }
-        buf.set_color_str(PALETTEW - 1, 33, "┤", bc, bg);
-
-        // Left/right borders (row 34)
-        buf.set_color_str(0, 34, "│", bc, bg);
-        buf.set_color_str(PALETTEW - 1, 34, "│", bc, bg);
-
-        // Bottom border
-        buf.set_color_str(0, 35, "╰", bc, bg);
-        for x in 1..PALETTEW - 1 {
-            buf.set_color_str(x, 35, "─", bc, bg);
-        }
-        buf.set_color_str(PALETTEW - 1, 35, "╯", bc, bg);
-
+    fn draw_checkerboard(buf: &mut Buffer) {
         // Color preview checkerboard frame (rows 24-31, cols 3-18)
         for y in 24..32 {
             buf.set_color_str(3, y, "▀▄", Color::Indexed(15), Color::Indexed(7));
@@ -207,6 +166,8 @@ impl PaletteModel {
             buf.set_color_str(x as u16, 24, "▀▄", Color::Indexed(15), Color::Indexed(7));
             buf.set_color_str(x as u16, 31, "▀▄", Color::Indexed(15), Color::Indexed(7));
         }
+        // "Similar" label (centered in cols 60-78)
+        buf.set_color_str(66, 24, "Similar", Color::Indexed(7), Color::Black);
     }
 
     // ========== Menu ==========
@@ -292,7 +253,7 @@ impl PaletteModel {
             Gradient => "a : add input color  d : delete input color  tab ← ↑ → ↓ : change value",
             Golden => "← ↑ → ↓ mouse : select PHI(golden ratio) colors",
         };
-        buf.set_color_str(ADJX + 1, ADJY + 32, help, Color::Gray, Color::Reset);
+        buf.set_color_str(ADJX + 1, ADJY + 31, help, Color::Gray, Color::Reset);
     }
 
     // ========== Main color info ==========
