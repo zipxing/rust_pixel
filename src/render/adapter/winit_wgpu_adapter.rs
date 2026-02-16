@@ -171,8 +171,17 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                     let adapter = &*self.adapter_ref;
                     if let Some(window) = &adapter.window {
                         let scale_factor = window.scale_factor();
-                        self.cursor_position =
-                            (position.x / scale_factor, position.y / scale_factor);
+                        let actual_size = window.inner_size();
+                        // Compensate for OS window size adjustment (e.g., window too tall for screen)
+                        // Map cursor from actual window coords to expected render coords
+                        let actual_logical_w = actual_size.width as f64 / scale_factor;
+                        let actual_logical_h = actual_size.height as f64 / scale_factor;
+                        let expected_w = adapter.base.gr.pixel_w as f64;
+                        let expected_h = adapter.base.gr.pixel_h as f64;
+                        self.cursor_position = (
+                            position.x / scale_factor * (expected_w / actual_logical_w),
+                            position.y / scale_factor * (expected_h / actual_logical_h),
+                        );
                     } else {
                         self.cursor_position = (position.x, position.y);
                     }
@@ -216,68 +225,24 @@ impl ApplicationHandler for WinitWgpuAppHandler {
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 match (state, button) {
-                    (winit::event::ElementState::Pressed, winit::event::MouseButton::Left) => {
-                        unsafe {
-                            let adapter = &mut *self.adapter_ref;
-                            let bs =
-                                adapter.in_border(self.cursor_position.0, self.cursor_position.1);
-                            match bs {
-                                BorderArea::TopBar | BorderArea::Other => {
-                                    adapter.drag.draging = true;
-                                    adapter.drag.mouse_x = self.cursor_position.0;
-                                    adapter.drag.mouse_y = self.cursor_position.1;
-                                }
-                                BorderArea::Close => {
-                                    self.should_exit = true;
-                                    event_loop.exit();
-                                }
-                                _ => {
-                                    let winit_event = WinitEvent::WindowEvent {
-                                        window_id: _window_id,
-                                        event: WindowEvent::MouseInput {
-                                            device_id: winit::event::DeviceId::dummy(),
-                                            state,
-                                            button,
-                                        },
-                                    };
-                                    if let Some(pixel_event) = input_events_from_winit(
-                                        &winit_event,
-                                        self.ratio_x,
-                                        self.ratio_y,
-                                        self.use_tui_height,
-                                        &mut self.cursor_position,
-                                    ) {
-                                        self.pending_events.push(pixel_event);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    (winit::event::ElementState::Pressed, winit::event::MouseButton::Left) |
                     (winit::event::ElementState::Released, winit::event::MouseButton::Left) => {
-                        unsafe {
-                            let adapter = &mut *self.adapter_ref;
-                            let was_dragging = adapter.drag.draging;
-                            adapter.drag.draging = false;
-
-                            if !was_dragging {
-                                let winit_event = WinitEvent::WindowEvent {
-                                    window_id: _window_id,
-                                    event: WindowEvent::MouseInput {
-                                        device_id: winit::event::DeviceId::dummy(),
-                                        state,
-                                        button,
-                                    },
-                                };
-                                if let Some(pixel_event) = input_events_from_winit(
-                                    &winit_event,
-                                    self.ratio_x,
-                                    self.ratio_y,
-                                    self.use_tui_height,
-                                    &mut self.cursor_position,
-                                ) {
-                                    self.pending_events.push(pixel_event);
-                                }
-                            }
+                        let winit_event = WinitEvent::WindowEvent {
+                            window_id: _window_id,
+                            event: WindowEvent::MouseInput {
+                                device_id: winit::event::DeviceId::dummy(),
+                                state,
+                                button,
+                            },
+                        };
+                        if let Some(pixel_event) = input_events_from_winit(
+                            &winit_event,
+                            self.ratio_x,
+                            self.ratio_y,
+                            self.use_tui_height,
+                            &mut self.cursor_position,
+                        ) {
+                            self.pending_events.push(pixel_event);
                         }
                     }
                     _ => {

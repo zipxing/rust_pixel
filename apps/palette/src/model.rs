@@ -45,6 +45,17 @@ pub const ADJY: u16 = 2;
 pub const COL_COUNT: u16 = 4;
 pub const ROW_COUNT: u16 = 19;
 pub const C_WIDTH: u16 = 19;
+// Frame divider positions (shared by Panel and mouse_in)
+pub const HDIV1: u16 = 22;  // upper horizontal divider
+pub const HDIV2: u16 = 32;  // lower horizontal divider
+pub const VDIV1: u16 = 59;  // vertical divider (between info and similar)
+// Derived content boundaries
+pub const CONTENT_X1: u16 = ADJX;                   // content left edge
+pub const CONTENT_X2: u16 = PALETTEW - 2;           // content right edge
+pub const CONTENT_Y1: u16 = ADJY;                   // content top edge
+pub const CONTENT_Y2: u16 = HDIV1 - 1;              // main area bottom (row 21)
+pub const HUE_BAR_Y: u16 = ADJY + PICKER_COUNT_Y;  // hue bar row (row 20)
+pub const RGB_BAR_Y: u16 = 9;                       // RGB picker bars start row
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
@@ -89,12 +100,12 @@ impl PaletteModel {
 
         let mut page = UIPage::new(PALETTEW, PALETTEH);
         let frame = Panel::new()
-            .with_bounds(Rect::new(0, 0, PALETTEW, 35))
+            .with_bounds(Rect::new(0, 0, PALETTEW, PALETTEH))
             .with_border(BorderStyle::Rounded)
             .with_style(Style::default().fg(Color::Indexed(250)).bg(Color::Black))
-            .with_hdivider(22)
-            .with_hdivider(32)
-            .with_vdivider(59, 22, 32);
+            .with_hdivider(HDIV1)
+            .with_hdivider(HDIV2)
+            .with_vdivider(VDIV1, HDIV1, HDIV2);
         page.set_root_widget(Box::new(frame));
 
         Self {
@@ -356,7 +367,7 @@ impl PaletteModel {
                 HSVA, i as f64 * (360.0 / w as f64), 1.0, 1.0, 1.0,
             );
             let color = Color::from(cr);
-            buf.set_color_str(2 + i, 20, " ", color, color);
+            buf.set_color_str(ADJX + i, HUE_BAR_Y, " ", color, color);
         }
     }
 
@@ -366,7 +377,7 @@ impl PaletteModel {
         let pcs = [Color::Red, Color::Green, Color::Blue];
         for y in 0..3u16 {
             for x in 0..PICKER_COUNT_X {
-                buf.set_color_str(2 + x, 9 + y * 2, " ", Color::Reset, pcs[y as usize]);
+                buf.set_color_str(ADJX + x, RGB_BAR_Y + y * 2, " ", Color::Reset, pcs[y as usize]);
             }
         }
     }
@@ -390,11 +401,11 @@ impl PaletteModel {
     // ========== Gradient ==========
 
     fn draw_gradient_to(buf: &mut Buffer, input_colors: &[ColorPro], gradient_colors: &[ColorPro]) {
-        // Input colors
+        // Input colors (right of vdivider)
         for i in 0..GRADIENT_INPUT_COUNT as usize {
             if i < input_colors.len() {
                 buf.set_color_str(
-                    60, i as u16 + ADJY,
+                    VDIV1 + 1, i as u16 + ADJY,
                     "████████",
                     Color::from(input_colors[i]), Color::Reset,
                 );
@@ -406,7 +417,7 @@ impl PaletteModel {
                 let idx = (y * GRADIENT_X + x) as usize;
                 if idx < gradient_colors.len() {
                     buf.set_color_str(
-                        67 + ADJX, y + ADJY,
+                        VDIV1 + 10, y + ADJY,
                         "         ",
                         Color::White, Color::from(gradient_colors[idx]),
                     );
@@ -426,42 +437,42 @@ impl PaletteModel {
     ) {
         match state {
             NameA | NameB => {
-                let cx = 2 + select.ranges[0].x as u16 * C_WIDTH;
-                let cy = 2 + select.ranges[0].y as u16;
+                let cx = ADJX + select.ranges[0].x as u16 * C_WIDTH;
+                let cy = ADJY + select.ranges[0].y as u16;
                 buf.set_color_str(cx, cy, PL_ARROW, Color::Green, Color::Black);
             }
             Random | Golden => {
-                let cx = 1 + select.ranges[0].x as u16 * RANDOM_W;
-                let cy = 2 + select.ranges[0].y as u16;
+                let cx = ADJX - 1 + select.ranges[0].x as u16 * RANDOM_W;
+                let cy = ADJY + select.ranges[0].y as u16;
                 buf.set_color_str(cx, cy, PL_ARROW, Color::Green, Color::Black);
             }
             PickerB => {
                 // Area indicator
                 let idx = select.area;
-                buf.set_color_str(1, 9 + idx as u16 * 2, PL_ARROW, Color::Green, Color::Black);
+                buf.set_color_str(ADJX - 1, RGB_BAR_Y + idx as u16 * 2, PL_ARROW, Color::Green, Color::Black);
                 // RGB slider dots
                 let bcs = [Color::Red, Color::Green, Color::Blue];
                 for i in 0..3 {
                     let x = select.ranges[i].x;
-                    let px = (x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + 2;
-                    buf.set_color_str(px, 9 + i as u16 * 2, "∙", Color::Black, bcs[i]);
+                    let px = (x as f64 / 256.0 * PICKER_COUNT_X as f64) as u16 + ADJX;
+                    buf.set_color_str(px, RGB_BAR_Y + i as u16 * 2, "∙", Color::Black, bcs[i]);
                 }
             }
             PickerA | Gradient => {
                 let idx = select.area;
                 // Area indicator arrow
                 if state == PickerA {
-                    buf.set_color_str(1, idx as u16 * 18 + 2, PL_ARROW, Color::Green, Color::Black);
+                    buf.set_color_str(ADJX - 1, idx as u16 * PICKER_COUNT_Y + ADJY, PL_ARROW, Color::Green, Color::Black);
                 } else if idx < 3 {
                     buf.set_color_str(
-                        1 + idx as u16 / 2 * (PICKER_COUNT_X_GRADIENT + 1),
-                        idx as u16 % 2 * 18 + 2,
+                        ADJX - 1 + idx as u16 / 2 * (PICKER_COUNT_X_GRADIENT + 1),
+                        idx as u16 % 2 * PICKER_COUNT_Y + ADJY,
                         PL_ARROW, Color::Green, Color::Black,
                     );
                 } else {
                     buf.set_color_str(
                         PICKER_COUNT_X_GRADIENT + 11,
-                        (idx - 1) as u16 % 2 * 18 + 2,
+                        (idx - 1) as u16 % 2 * PICKER_COUNT_Y + ADJY,
                         PL_ARROW, Color::Green, Color::Black,
                     );
                 }
@@ -474,8 +485,8 @@ impl PaletteModel {
                     select.ranges[1].x, 0,
                 );
                 buf.set_color_str(
-                    select.ranges[0].x as u16 + 2,
-                    select.ranges[0].y as u16 + 2,
+                    select.ranges[0].x as u16 + ADJX,
+                    select.ranges[0].y as u16 + ADJY,
                     "∙",
                     if cr.is_dark() { Color::White } else { Color::Black },
                     Color::from(cr),
@@ -488,7 +499,7 @@ impl PaletteModel {
                     select.ranges[1].x, 1,
                 );
                 buf.set_color_str(
-                    (select.ranges[1].x / 4) as u16 + 2, 20,
+                    (select.ranges[1].x / 4) as u16 + ADJX, HUE_BAR_Y,
                     "∙",
                     if cr2.is_dark() { Color::White } else { Color::Black },
                     Color::from(cr2),
@@ -499,8 +510,8 @@ impl PaletteModel {
                     if !gradient_input_colors.is_empty() {
                         let cr = gradient_input_colors[select.ranges[2].y];
                         buf.set_color_str(
-                            select.ranges[2].x as u16 + 3 + PICKER_COUNT_X_GRADIENT,
-                            select.ranges[2].y as u16 + 2,
+                            select.ranges[2].x as u16 + VDIV1 + 2,
+                            select.ranges[2].y as u16 + ADJY,
                             "∙",
                             if cr.is_dark() { Color::White } else { Color::Black },
                             Color::from(cr),
@@ -509,8 +520,8 @@ impl PaletteModel {
                     if !gradient_colors.is_empty() {
                         let cr = gradient_colors[select.ranges[3].y];
                         buf.set_color_str(
-                            select.ranges[3].x as u16 + 12 + PICKER_COUNT_X_GRADIENT,
-                            select.ranges[3].y as u16 + 2,
+                            select.ranges[3].x as u16 + VDIV1 + 11,
+                            select.ranges[3].y as u16 + ADJY,
                             "∙",
                             if cr.is_dark() { Color::White } else { Color::Black },
                             Color::from(cr),
@@ -524,7 +535,7 @@ impl PaletteModel {
     // ========== Mouse hit testing ==========
 
     fn mouse_in(&mut self, x: u16, y: u16) -> Option<MouseArea> {
-        // Menu
+        // Menu bar (row 0)
         if y == 0 {
             let menuidx = match x {
                 0..=22 => 0,
@@ -535,65 +546,81 @@ impl PaletteModel {
             };
             return Some(MouseArea::Menu(menuidx));
         }
+
+        // Main content area: rows ADJY..HDIV1, cols ADJX..CONTENT_X2
+        let in_content = x >= CONTENT_X1 && x <= CONTENT_X2 && y >= CONTENT_Y1 && y <= CONTENT_Y2;
+        let cx = x.saturating_sub(ADJX); // content-relative x
+        let cy = y.saturating_sub(ADJY); // content-relative y
+
         match self.state {
             NameA | NameB => {
-                if x >= 2 && y >= 2 {
-                    let a = (x - 2) / C_WIDTH;
-                    let b = y - 2;
+                if x >= ADJX && y >= ADJY {
+                    let a = (x - ADJX) / C_WIDTH;
+                    let b = y - ADJY;
                     if (b as usize * self.select.cur().width + a as usize) < self.select.cur().count {
                         return Some(MouseArea::Named(a, b));
                     }
                 }
             }
             PickerA => {
-                if (2..20).contains(&y) && (2..=77).contains(&x) {
-                    let c = x - 2;
-                    let d = y - 2;
-                    return Some(MouseArea::Picker(0, 0, c, d));
+                // SV picker area
+                if in_content && cx < PICKER_COUNT_X && cy < PICKER_COUNT_Y {
+                    return Some(MouseArea::Picker(0, 0, cx, cy));
                 }
-                if y == 20 && (2..=77).contains(&x) {
-                    let c = x - 2;
-                    return Some(MouseArea::Picker(0, 1, (c as f64 * 4.0) as u16, 0));
+                // Hue bar
+                if y == HUE_BAR_Y && x >= ADJX && cx < PICKER_COUNT_X {
+                    return Some(MouseArea::Picker(0, 1, (cx as f64 * 4.0) as u16, 0));
                 }
             }
             PickerB => {
-                let c = ((x - 1) as f64 / PICKER_COUNT_X as f64 * 255.0) as u16;
-                if y == 9 && (2..=77).contains(&x) {
-                    return Some(MouseArea::Picker(1, 0, c, 0));
-                }
-                if y == 11 && (2..=77).contains(&x) {
-                    return Some(MouseArea::Picker(1, 1, c, 0));
-                }
-                if y == 13 && (2..=77).contains(&x) {
-                    return Some(MouseArea::Picker(1, 2, c, 0));
+                let picker_x2 = ADJX + PICKER_COUNT_X - 1;
+                if x >= ADJX && x <= picker_x2 {
+                    let c = ((x - 1) as f64 / PICKER_COUNT_X as f64 * 255.0) as u16;
+                    for i in 0..3u16 {
+                        if y == RGB_BAR_Y + i * 2 {
+                            return Some(MouseArea::Picker(1, i, c, 0));
+                        }
+                    }
                 }
             }
             Random => {
-                if (2..=5).contains(&y) && (1..=78).contains(&x) {
+                if y >= ADJY && y < ADJY + RANDOM_Y && x >= 1 && x <= CONTENT_X2 {
                     let a = (x - 1) / RANDOM_W;
-                    let b = y - 2;
+                    let b = y - ADJY;
                     return Some(MouseArea::Random(a, b));
                 }
             }
             Golden => {
-                if (2..=5).contains(&y) && (1..=78).contains(&x) {
+                if y >= ADJY && y < ADJY + RANDOM_Y && x >= 1 && x <= CONTENT_X2 {
                     let a = (x - 1) / RANDOM_W;
-                    let b = y - 2;
+                    let b = y - ADJY;
                     return Some(MouseArea::Golden(a, b));
                 }
             }
             Gradient => {
-                if (2..=19).contains(&y) && (2..=58).contains(&x) {
-                    return Some(MouseArea::Gradient(0, x - 2, y - 2));
+                let gw = PICKER_COUNT_X_GRADIENT;
+                let picker_x2 = ADJX + gw - 1;
+                // SV picker area
+                if y >= ADJY && cy < PICKER_COUNT_Y && x >= ADJX && x <= picker_x2 {
+                    return Some(MouseArea::Gradient(0, cx, cy));
                 }
-                if y == 20 && (2..=58).contains(&x) {
-                    return Some(MouseArea::Gradient(1, ((x - 2) as f64 * 4.0) as u16, 0));
+                // Hue bar
+                if y == HUE_BAR_Y && x >= ADJX && x <= picker_x2 {
+                    return Some(MouseArea::Gradient(1, ((cx) as f64 * 4.0) as u16, 0));
                 }
-                if (2..=9).contains(&y) && (60..=67).contains(&x) && ((y - 2) as usize) < self.select.ranges[2].count {
-                    return Some(MouseArea::Gradient(2, 0, y - 2));
+                // Input colors (right of vdivider)
+                if y >= ADJY && y < ADJY + GRADIENT_INPUT_COUNT
+                    && x >= VDIV1 + 1 && x <= VDIV1 + 8
+                    && (cy as usize) < self.select.ranges[2].count
+                {
+                    return Some(MouseArea::Gradient(2, 0, cy));
                 }
-                if (2..=20).contains(&y) && (69..=77).contains(&x) && ((y - 2) as usize) < self.select.ranges[3].count {
-                    return Some(MouseArea::Gradient(3, 0, y - 2));
+                // Gradient output
+                if y >= ADJY && y <= HUE_BAR_Y
+                    && x >= VDIV1 + 10 && x <= CONTENT_X2
+                    && (cy as usize) < self.select.ranges[3].count
+                {
+                    return Some(MouseArea::Gradient(3, 0, cy));
                 }
             }
         }

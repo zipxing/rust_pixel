@@ -311,7 +311,23 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if (input.v_bold > 0.5) {
             threshold = 0.45; // Bold: lower threshold to expand glyph
         }
-        let alpha = smoothstep(threshold - w_msdf, threshold + w_msdf, d);
+
+        // Corner artifact correction:
+        // At sharp corners, two edges meet in different MSDF channels.
+        // The median overshoots (picks the middle value instead of the
+        // intersection = min of the two edge channels), causing small bumps.
+        // Detect corners by counting channels near the threshold edge:
+        // normal edge = 1 channel transitioning, corner = 2 channels.
+        let msd = texColor.rgb;
+        let near_r = 1.0 - smoothstep(0.0, 0.15, abs(msd.r - threshold));
+        let near_g = 1.0 - smoothstep(0.0, 0.15, abs(msd.g - threshold));
+        let near_b = 1.0 - smoothstep(0.0, 0.15, abs(msd.b - threshold));
+        let edge_count = near_r + near_g + near_b;
+        let is_corner = smoothstep(1.5, 2.0, edge_count);
+        let d_min = min(msd.r, min(msd.g, msd.b));
+        let corrected_d = mix(d, d_min, is_corner * 0.35);
+
+        let alpha = smoothstep(threshold - w_msdf, threshold + w_msdf, corrected_d);
         return vec4<f32>(input.colorj.rgb, input.colorj.a * alpha);
     } else {
         // === Bitmap path (existing logic) ===
