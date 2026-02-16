@@ -21,8 +21,8 @@ use rust_pixel::{
 };
 use PaletteState::*;
 
-// Powerline arrow: "\u{E0B0}", fallback: "▶" or ">"
-pub const PL_ARROW: &str = "▶";
+// Selection indicator
+pub const PL_ARROW: &str = "▸";
 // Menu tab separator: "\u{E0B0}", fallback: "▸" or "|"
 pub const MENU_SEP: &str = "";
 pub const PALETTEW: u16 = 80;
@@ -197,7 +197,7 @@ impl PaletteModel {
             buf.set_color_str(x, 0, " ", Color::Reset, bar_bg);
         }
         // Title "Palette"
-        buf.set_color_str(1, 0, "🎨", Color::Indexed(236), bar_bg);
+        buf.set_color_str(1, 0, "🌈 ", Color::Indexed(236), bar_bg);
         buf.set_color_str(4, 0, "P", Color::Indexed(111), bar_bg);
         buf.set_color_str(5, 0, "a", Color::Indexed(221), bar_bg);
         buf.set_color_str(6, 0, "l", Color::Indexed(116), bar_bg);
@@ -389,10 +389,15 @@ impl PaletteModel {
             for x in 0..RANDOM_X {
                 let i = (y * RANDOM_X + x) as usize;
                 if i >= colors.len() { break; }
+                let cr = colors[i];
+                let rgb = cr.get_srgba_u8();
+                let hex = format!("{:02X}{:02X}{:02X}", rgb.0, rgb.1, rgb.2);
+                let label = format!("{:^width$}", hex, width = RANDOM_W as usize - 1);
+                let fg = if cr.is_dark() { Color::White } else { Color::Black };
                 buf.set_color_str(
-                    ADJX + x * RANDOM_W, ADJY + y,
-                    &format!(" {:width$}", " ", width = RANDOM_W as usize - 2),
-                    Color::Reset, Color::from(colors[i]),
+                    ADJX + x * RANDOM_W, ADJY + y * 2,
+                    &label,
+                    fg, Color::from(cr),
                 );
             }
         }
@@ -401,25 +406,35 @@ impl PaletteModel {
     // ========== Gradient ==========
 
     fn draw_gradient_to(buf: &mut Buffer, input_colors: &[ColorPro], gradient_colors: &[ColorPro]) {
-        // Input colors (right of vdivider)
+        // Input colors (right of vdivider, 8 chars wide)
         for i in 0..GRADIENT_INPUT_COUNT as usize {
             if i < input_colors.len() {
+                let cr = input_colors[i];
+                let rgb = cr.get_srgba_u8();
+                let hex = format!("{:02X}{:02X}{:02X}", rgb.0, rgb.1, rgb.2);
+                let label = format!("{:^8}", hex);
+                let fg = if cr.is_dark() { Color::White } else { Color::Black };
                 buf.set_color_str(
                     VDIV1 + 1, i as u16 + ADJY,
-                    "████████",
-                    Color::from(input_colors[i]), Color::Reset,
+                    &label,
+                    fg, Color::from(cr),
                 );
             }
         }
-        // Gradient output
+        // Gradient output (9 chars wide)
         for y in 0..GRADIENT_Y {
             for x in 0..GRADIENT_X {
                 let idx = (y * GRADIENT_X + x) as usize;
                 if idx < gradient_colors.len() {
+                    let cr = gradient_colors[idx];
+                    let rgb = cr.get_srgba_u8();
+                    let hex = format!("{:02X}{:02X}{:02X}", rgb.0, rgb.1, rgb.2);
+                    let label = format!("{:^9}", hex);
+                    let fg = if cr.is_dark() { Color::White } else { Color::Black };
                     buf.set_color_str(
                         VDIV1 + 10, y + ADJY,
-                        "         ",
-                        Color::White, Color::from(gradient_colors[idx]),
+                        &label,
+                        fg, Color::from(cr),
                     );
                 }
             }
@@ -443,7 +458,7 @@ impl PaletteModel {
             }
             Random | Golden => {
                 let cx = ADJX - 1 + select.ranges[0].x as u16 * RANDOM_W;
-                let cy = ADJY + select.ranges[0].y as u16;
+                let cy = ADJY + select.ranges[0].y as u16 * 2;
                 buf.set_color_str(cx, cy, PL_ARROW, Color::Green, Color::Black);
             }
             PickerB => {
@@ -505,26 +520,27 @@ impl PaletteModel {
                     Color::from(cr2),
                 );
 
-                // Gradient-specific cursors
+                // Gradient-specific cursors (only show active area)
                 if state == Gradient {
-                    if !gradient_input_colors.is_empty() {
-                        let cr = gradient_input_colors[select.ranges[2].y];
+                    // Clear old ▸ markers
+                    for row in 0..GRADIENT_Y {
+                        buf.set_color_str(VDIV1, row + ADJY, " ", Color::Reset, Color::Black);
+                        buf.set_color_str(VDIV1 + 9, row + ADJY, " ", Color::Reset, Color::Black);
+                    }
+                    if idx == 2 && !gradient_input_colors.is_empty() {
                         buf.set_color_str(
-                            select.ranges[2].x as u16 + VDIV1 + 2,
+                            VDIV1,
                             select.ranges[2].y as u16 + ADJY,
-                            "∙",
-                            if cr.is_dark() { Color::White } else { Color::Black },
-                            Color::from(cr),
+                            PL_ARROW,
+                            Color::Green, Color::Black,
                         );
                     }
-                    if !gradient_colors.is_empty() {
-                        let cr = gradient_colors[select.ranges[3].y];
+                    if idx == 3 && !gradient_colors.is_empty() {
                         buf.set_color_str(
-                            select.ranges[3].x as u16 + VDIV1 + 11,
+                            VDIV1 + 9,
                             select.ranges[3].y as u16 + ADJY,
-                            "∙",
-                            if cr.is_dark() { Color::White } else { Color::Black },
-                            Color::from(cr),
+                            PL_ARROW,
+                            Color::Green, Color::Black,
                         );
                     }
                 }
@@ -584,17 +600,23 @@ impl PaletteModel {
                 }
             }
             Random => {
-                if y >= ADJY && y < ADJY + RANDOM_Y && x >= 1 && x <= CONTENT_X2 {
-                    let a = (x - 1) / RANDOM_W;
-                    let b = y - ADJY;
-                    return Some(MouseArea::Random(a, b));
+                if y >= ADJY && y < ADJY + RANDOM_Y * 2 && x >= 1 && x <= CONTENT_X2 {
+                    let rel_y = y - ADJY;
+                    if rel_y % 2 == 0 {
+                        let a = (x - 1) / RANDOM_W;
+                        let b = rel_y / 2;
+                        return Some(MouseArea::Random(a, b));
+                    }
                 }
             }
             Golden => {
-                if y >= ADJY && y < ADJY + RANDOM_Y && x >= 1 && x <= CONTENT_X2 {
-                    let a = (x - 1) / RANDOM_W;
-                    let b = y - ADJY;
-                    return Some(MouseArea::Golden(a, b));
+                if y >= ADJY && y < ADJY + RANDOM_Y * 2 && x >= 1 && x <= CONTENT_X2 {
+                    let rel_y = y - ADJY;
+                    if rel_y % 2 == 0 {
+                        let a = (x - 1) / RANDOM_W;
+                        let b = rel_y / 2;
+                        return Some(MouseArea::Golden(a, b));
+                    }
                 }
             }
             Gradient => {

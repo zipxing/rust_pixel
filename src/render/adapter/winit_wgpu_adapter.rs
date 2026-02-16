@@ -507,6 +507,7 @@ impl WinitWgpuAdapter {
         }
     }
 
+    #[allow(dead_code)]
     fn in_border(&self, x: f64, y: f64) -> BorderArea {
         check_border_area(x, y, &self.base)
     }
