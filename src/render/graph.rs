@@ -617,12 +617,22 @@ impl RtComposite {
 /// - CJK: Grid-based (128×32 chars, 32×32px each)
 pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
 
+/// Runtime letterboxing override (for maximize/fullscreen toggle)
+static LETTERBOXING_OVERRIDE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// 是否启用等比缩放（letterboxing）
 /// - true: 保持宽高比，窗口边缘留黑边
 /// - false: 拉伸填充整个窗口
-/// 通过 -tf 命令行参数启用
+/// 通过 -tf 命令行参数启用，或运行时最大化/全屏时自动启用
 pub fn is_letterboxing_enabled() -> bool {
     crate::get_game_config().fullscreen_fit
+        || LETTERBOXING_OVERRIDE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Set runtime letterboxing override
+pub fn set_letterboxing_override(enabled: bool) {
+    LETTERBOXING_OVERRIDE.store(enabled, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)

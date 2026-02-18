@@ -579,11 +579,6 @@ where
     let cell_h = base.cell_h;
     base.gr.set_pixel_size(cell_w, cell_h);
 
-    info!(
-        "Window pixel size: {}x{}",
-        base.gr.pixel_w, base.gr.pixel_h
-    );
-
     // 3. Create event loop
     let event_loop = EventLoop::new().unwrap();
 

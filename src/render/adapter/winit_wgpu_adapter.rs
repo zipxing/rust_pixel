@@ -30,7 +30,7 @@ use crate::render::{
         Adapter, AdapterBase, RtComposite,
     },
     buffer::Buffer,
-    graph::{UnifiedTransform, is_letterboxing_enabled},
+    graph::{UnifiedTransform, is_letterboxing_enabled, set_letterboxing_override},
     sprite::Layer,
 };
 
@@ -86,6 +86,12 @@ pub struct WinitWgpuAdapter {
 
     /// Window drag data
     drag: Drag,
+
+    /// Original ratio values (saved before maximize override)
+    original_ratio_x: f32,
+    original_ratio_y: f32,
+    /// Whether ratio was overridden by maximize
+    ratio_overridden: bool,
 }
 
 /// Winit + WGPU application event handler
@@ -164,6 +170,58 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                     &mut self.cursor_position,
                 ) {
                     self.pending_events.push(pixel_event);
+                }
+            }
+            WindowEvent::Resized(new_size) => {
+                if new_size.width > 0 && new_size.height > 0 {
+                    unsafe {
+                        let adapter = &mut *self.adapter_ref;
+
+                        let is_max = adapter.window.as_ref()
+                            .map(|w| w.is_maximized()).unwrap_or(false);
+                        let is_fullscreen = adapter.window.as_ref()
+                            .and_then(|w| w.fullscreen()).is_some();
+
+                        // Reconfigure surface to match new window size
+                        if let (Some(surface), Some(config), Some(core)) = (
+                            &adapter.wgpu_surface,
+                            adapter.wgpu_surface_config.as_mut(),
+                            &adapter.render_core,
+                        ) {
+                            config.width = new_size.width;
+                            config.height = new_size.height;
+                            surface.configure(&core.device, config);
+                        }
+
+                        // On maximize/fullscreen: force ratio=1.0, enable letterboxing,
+                        // and rebuild render core for crisp rendering
+                        // On restore: restore original ratio and disable letterboxing
+                        let should_override = (is_max || is_fullscreen)
+                            && !adapter.ratio_overridden
+                            && adapter.base.gr.ratio_x > 1.0;
+
+                        if should_override {
+                            adapter.original_ratio_x = adapter.base.gr.ratio_x;
+                            adapter.original_ratio_y = adapter.base.gr.ratio_y;
+                            adapter.base.gr.ratio_x = 1.0;
+                            adapter.base.gr.ratio_y = 1.0;
+                            adapter.base.gr.set_pixel_size(
+                                adapter.base.cell_w, adapter.base.cell_h,
+                            );
+                            set_letterboxing_override(true);
+                            adapter.rebuild_render_core();
+                            adapter.ratio_overridden = true;
+                        } else if !is_max && !is_fullscreen && adapter.ratio_overridden {
+                            adapter.base.gr.ratio_x = adapter.original_ratio_x;
+                            adapter.base.gr.ratio_y = adapter.original_ratio_y;
+                            adapter.base.gr.set_pixel_size(
+                                adapter.base.cell_w, adapter.base.cell_h,
+                            );
+                            set_letterboxing_override(false);
+                            adapter.rebuild_render_core();
+                            adapter.ratio_overridden = false;
+                        }
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -326,6 +384,9 @@ impl WinitWgpuAdapter {
             custom_cursor: None,
             cursor_set: false,
             drag: Default::default(),
+            original_ratio_x: 1.0,
+            original_ratio_y: 1.0,
+            ratio_overridden: false,
         }
     }
 
@@ -377,7 +438,7 @@ impl WinitWgpuAdapter {
             .with_inner_size(window_size)
             .with_decorations(true)
             .with_resizable(true)
-            .with_fullscreen(fullscreen);
+            .with_fullscreen(fullscreen.clone());
 
         let window = Arc::new(
             event_loop
@@ -386,10 +447,6 @@ impl WinitWgpuAdapter {
         );
 
         let physical_size = window.inner_size();
-        info!(
-            "Window created - logical: {}x{}, physical: {}x{}",
-            self.base.gr.pixel_w, self.base.gr.pixel_h, physical_size.width, physical_size.height
-        );
 
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -482,8 +539,6 @@ impl WinitWgpuAdapter {
         self.wgpu_surface = Some(wgpu_surface);
         self.wgpu_surface_config = Some(wgpu_surface_config);
         self.render_core = Some(render_core);
-
-        info!("WGPU window & context initialized successfully");
     }
 
     fn clear_screen_wgpu(&mut self) {
@@ -527,6 +582,34 @@ impl WinitWgpuAdapter {
                 self.custom_cursor = Some(cursor.clone());
                 apply_cursor_to_window(window, &cursor);
             }
+        }
+    }
+
+    /// Rebuild render core with current pixel_w/pixel_h and ratio settings.
+    /// Extracts device/queue from old core, builds new core, reconfigures surface.
+    fn rebuild_render_core(&mut self) {
+        if let Some(old_core) = self.render_core.take() {
+            let device = old_core.device;
+            let queue = old_core.queue;
+            let format = self.wgpu_surface_config.as_ref().unwrap().format;
+
+            let tex_data = crate::get_pixel_texture_data();
+            let new_core = WgpuRenderCoreBuilder::new(
+                self.base.gr.pixel_w,
+                self.base.gr.pixel_h,
+                format,
+            )
+            .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
+            .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
+            .expect("Failed to rebuild render core");
+
+            info!(
+                "Render core rebuilt: {}x{}, ratio: ({}, {})",
+                self.base.gr.pixel_w, self.base.gr.pixel_h,
+                self.base.gr.ratio_x, self.base.gr.ratio_y
+            );
+
+            self.render_core = Some(new_core);
         }
     }
 
