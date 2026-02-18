@@ -341,14 +341,28 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
     }
 
     if let Some(mouse_e) = wasm_bindgen::JsCast::dyn_ref::<web_sys::MouseEvent>(&e) {
+        // Convert viewport coordinates to canvas internal pixel coordinates
+        // The canvas CSS size (display) differs from internal resolution (rendering)
+        // due to fitCanvasToWindow() scaling + centering
+        let (canvas_x, canvas_y) = {
+            let document = web_sys::window().unwrap().document().unwrap();
+            let canvas_elem = document.get_element_by_id("canvas").unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+            let rect = canvas_elem.get_bounding_client_rect();
+            let cw = canvas_elem.width() as f64;
+            let ch = canvas_elem.height() as f64;
+            let x = (mouse_e.client_x() as f64 - rect.left()) / rect.width() * cw;
+            let y = (mouse_e.client_y() as f64 - rect.top()) / rect.height() * ch;
+            (x.max(0.0) as i32, y.max(0.0) as i32)
+        };
         let medat = (
             mouse_e.buttons(),
             mouse_e.screen_x(),
             mouse_e.screen_y(),
             mouse_e.client_x(),
             mouse_e.client_y(),
-            mouse_e.x(),
-            mouse_e.y(),
+            canvas_x,
+            canvas_y,
         );
         match t {
             1 => {

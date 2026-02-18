@@ -26,7 +26,7 @@ impl Render for PaletteRender {
         context.adapter.get_base().gr.set_use_tui_height(true);
         context
             .adapter
-            .init(PALETTEW + 2, PALETTEH, 2.5, 2.5, "palette".to_string());
+            .init(PALETTEW + 2, PALETTEH, 3.0, 3.0, "palette".to_string());
         self.scene.init(context);
         data.need_redraw = true;
     }

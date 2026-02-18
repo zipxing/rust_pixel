@@ -463,16 +463,36 @@ def get_font_metrics(font_path):
     }
 
 
-def compute_msdf_params(font_path, target_w, target_h):
+def is_graphic_char(ch):
+    """
+    判断字符是否为图形字符（需要填满格子以正确拼接）
+
+    包括: Box Drawing, Block Elements, Braille, Powerline/NerdFont
+    """
+    cp = ord(ch)
+    return (
+        (0x2500 <= cp <= 0x257F) or  # Box Drawing
+        (0x2580 <= cp <= 0x259F) or  # Block Elements
+        (0x2800 <= cp <= 0x28FF) or  # Braille Patterns
+        (cp >= 0xE000)               # Private Use / NerdFont / Powerline
+    )
+
+
+def compute_msdf_params(font_path, target_w, target_h, padding=1.0):
     """
     计算 msdfgen 的 -emnormalize -scale -translate 参数，
     使所有字符保持一致的尺寸和位置。
+
+    Args:
+        font_path: 字体文件路径
+        target_w, target_h: 输出尺寸
+        padding: 填充系数 (0~1)，1.0=满填充，0.95=留5%空白
 
     Returns:
         (scale, tx, ty)
     """
     m = get_font_metrics(font_path)
-    scale = target_h / m['total_em']
+    scale = target_h * padding / m['total_em']
     ty = -m['descent'] / m['upm']
     tx = (target_w / scale - m['advance_em']) / 2
     return scale, tx, ty
@@ -675,7 +695,7 @@ def load_c64_block(source_path):
     return symbols
 
 
-def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4):
+def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4, tui_sdf=False, text_padding=0.92):
     """
     渲染 TUI 字符
 
@@ -693,14 +713,23 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4)
     msdf_count = 0
     sdf_fallback_count = 0
 
-    # 预计算各字体的 msdfgen 参数（一致 scale/translate）
-    font_params = {}
+    # 预计算各字体的 msdfgen 参数：文本字符(带 padding) 和 图形字符(满填充)
+    font_params_text = {}     # 文本字符用，带 padding
+    font_params_graphic = {}  # 图形字符用，满填充
     if use_msdf:
         for fpath in [MSDFGEN_TUI_FONT, MSDFGEN_BRAILLE_FONT]:
             if fpath and os.path.exists(fpath):
                 try:
-                    s, tx, ty = compute_msdf_params(fpath, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT)
-                    font_params[fpath] = (s, tx, ty)
+                    s, tx, ty = compute_msdf_params(
+                        fpath, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
+                        padding=text_padding
+                    )
+                    font_params_text[fpath] = (s, tx, ty)
+                    s2, tx2, ty2 = compute_msdf_params(
+                        fpath, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
+                        padding=1.0
+                    )
+                    font_params_graphic[fpath] = (s2, tx2, ty2)
                 except Exception as e:
                     print(f"    警告: 计算字体参数失败 {fpath}: {e}")
 
@@ -712,19 +741,22 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4)
 
         if use_msdf and i < len(tui_chars):
             char = tui_chars[i]
-            # 1. 尝试 msdfgen（真正 MSDF）
-            font_path = find_tui_font_for_char(char)
-            if font_path and font_path in font_params:
-                s, tx, ty = font_params[font_path]
-                symbol = render_char_msdfgen(
-                    char, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
-                    font_path, pxrange=msdf_pxrange,
-                    scale=s, tx=tx, ty=ty
-                )
-                if symbol:
-                    msdf_count += 1
+            # 1. 尝试 msdfgen（真正 MSDF），tui_sdf 模式跳过此步
+            if not tui_sdf:
+                font_path = find_tui_font_for_char(char)
+                # 根据字符类型选择参数：图形字符满填充，文本字符带 padding
+                params = font_params_graphic if is_graphic_char(char) else font_params_text
+                if font_path and font_path in params:
+                    s, tx, ty = params[font_path]
+                    symbol = render_char_msdfgen(
+                        char, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
+                        font_path, pxrange=msdf_pxrange,
+                        scale=s, tx=tx, ty=ty
+                    )
+                    if symbol:
+                        msdf_count += 1
 
-            # 2. Fallback: Quartz bitmap → SDF
+            # 2. Quartz bitmap → SDF (tui_sdf 模式直接走这里)
             if symbol is None and HAS_QUARTZ:
                 render_w = cfg.TUI_RENDER_WIDTH * sdf_scale
                 render_h = cfg.TUI_RENDER_HEIGHT * sdf_scale
@@ -854,7 +886,7 @@ def parse_cjk_txt(filepath):
     return cjk_chars
 
 
-def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4):
+def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4, text_padding=0.92):
     """
     渲染 CJK 汉字
 
@@ -877,7 +909,10 @@ def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4)
     cjk_font_params = None
     if use_msdf and MSDFGEN_CJK_FONT and os.path.exists(MSDFGEN_CJK_FONT):
         try:
-            s, tx, ty = compute_msdf_params(MSDFGEN_CJK_FONT, cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE)
+            s, tx, ty = compute_msdf_params(
+                MSDFGEN_CJK_FONT, cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE,
+                padding=text_padding
+            )
             cjk_font_params = (s, tx, ty)
         except Exception as e:
             print(f"    警告: 计算 CJK 字体参数失败: {e}")
@@ -1063,8 +1098,12 @@ def main():
                         help=f'输出 JSON 文件路径 (默认: symbol_map.json 或 symbol_map_8192.json)')
     parser.add_argument('--msdf', action='store_true',
                         help='TUI/CJK 使用 MSDF 渲染（msdfgen 生成，fallback 到 bitmap-to-SDF）')
+    parser.add_argument('--tui-sdf', action='store_true',
+                        help='TUI 强制使用 Quartz bitmap-to-SDF（保留 macOS 字体风格，需配合 --msdf）')
     parser.add_argument('--msdf-pxrange', type=int, default=4,
                         help='MSDF 距离场像素范围 (默认: 4)')
+    parser.add_argument('--text-padding', type=float, default=0.92,
+                        help='文本字符 MSDF 缩放系数 (0~1, 默认: 0.92, 图形字符始终为 1.0)')
     parser.add_argument('--msdfgen', default=MSDFGEN_BIN,
                         help=f'msdfgen 可执行文件路径 (默认: {MSDFGEN_BIN})')
     args = parser.parse_args()
@@ -1119,7 +1158,9 @@ def main():
     print(f"生成 {cfg.size}x{cfg.size} symbols.png 和 symbol_map.json")
     if cfg.scale > 1:
         print(f"  缩放因子: {cfg.scale}x (基础符号: {cfg.SPRITE_CHAR_SIZE}x{cfg.SPRITE_CHAR_SIZE}px)")
-    if args.msdf:
+    if args.msdf and args.tui_sdf:
+        print(f"  模式: MSDF (TUI: Quartz bitmap-to-SDF, CJK: bitmap-to-SDF)")
+    elif args.msdf:
         print(f"  模式: MSDF (msdfgen + bitmap-to-SDF fallback)")
     print("=" * 70)
 
@@ -1167,7 +1208,9 @@ def main():
     print(f"  总共 {len(all_sprites)} 个 Sprite 符号")
 
     # ========== 渲染 TUI 字符 ==========
-    if args.msdf:
+    if args.msdf and args.tui_sdf:
+        print(f"\n渲染 TUI 字符 (Quartz bitmap-to-SDF, pxrange={args.msdf_pxrange})...")
+    elif args.msdf:
         print(f"\n渲染 TUI 字符 (MSDF, pxrange={args.msdf_pxrange})...")
     else:
         print("\n渲染 TUI 字符...")
@@ -1176,7 +1219,9 @@ def main():
         args.use_cache = True
     tui_images = render_tui_chars(tui_chars, args.use_cache,
                                    use_msdf=args.msdf,
-                                   msdf_pxrange=args.msdf_pxrange)
+                                   msdf_pxrange=args.msdf_pxrange,
+                                   tui_sdf=args.tui_sdf,
+                                   text_padding=args.text_padding)
     print(f"  生成 {len(tui_images)} 个 TUI 字符图像")
 
     # ========== 渲染 Emoji ==========
@@ -1191,7 +1236,8 @@ def main():
         print("\n渲染 CJK 汉字...")
     cjk_images = render_cjk_chars(cjk_chars, args.use_cache,
                                     use_msdf=args.msdf,
-                                    msdf_pxrange=args.msdf_pxrange)
+                                    msdf_pxrange=args.msdf_pxrange,
+                                    text_padding=args.text_padding)
     print(f"  生成 {len(cjk_images)} 个 CJK 图像")
 
     # ========== 绘制 Sprite 区域 ==========
