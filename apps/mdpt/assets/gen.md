@@ -6,7 +6,7 @@ transition: cycle
 title_animation: typewriter
 code_theme: base16-ocean.dark
 margin: 4
-height: 30
+height: 26
 transition_duration: 0.2
 ---
 
