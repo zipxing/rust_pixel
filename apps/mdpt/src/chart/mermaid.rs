@@ -2,6 +2,7 @@ use super::{AXIS_COLOR, CHART_COLORS, LABEL_COLOR};
 use rust_pixel::render::buffer::Buffer;
 use rust_pixel::render::style::{Color, Style};
 use std::collections::HashMap;
+use unicode_width::UnicodeWidthStr;
 
 /// Direction of the flowchart.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -239,7 +240,7 @@ fn render_td(
     let node_widths: Vec<u16> = graph
         .nodes
         .iter()
-        .map(|n| n.label.len() as u16 + 4)
+        .map(|n| n.label.width() as u16 + 4)
         .collect();
 
     let layer_h = (h / n_layers as u16).max(3);
@@ -308,7 +309,7 @@ fn render_lr(
     let node_widths: Vec<u16> = graph
         .nodes
         .iter()
-        .map(|n| n.label.len() as u16 + 4)
+        .map(|n| n.label.width() as u16 + 4)
         .collect();
 
     let max_nw = *node_widths.iter().max().unwrap_or(&8);
@@ -364,8 +365,12 @@ fn draw_box(buf: &mut Buffer, x: u16, y: u16, w: u16, _h: u16, label: &str, colo
     let inner_w = w.saturating_sub(2) as usize;
     let top = format!("┌{}┐", "─".repeat(inner_w));
     let bot = format!("└{}┘", "─".repeat(inner_w));
-    let label_padded = format!("{:^width$}", label, width = inner_w);
-    let mid = format!("│{}│", label_padded);
+    // Manual centering: pad with spaces based on display width, not byte/char count
+    let label_display_w = label.width();
+    let total_pad = inner_w.saturating_sub(label_display_w);
+    let left_pad = total_pad / 2;
+    let right_pad = total_pad - left_pad;
+    let mid = format!("│{}{}{}│", " ".repeat(left_pad), label, " ".repeat(right_pad));
 
     buf.set_string(x, y, &top, style);
     buf.set_string(x, y + 1, &mid, style);

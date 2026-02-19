@@ -15,6 +15,8 @@
 /// cargo pixel ssf t . dance.ssf
 /// cargo pixel symbol image.png 8
 /// cargo pixel ttf font.ttf output.png 8
+/// cargo pixel gen "Rust语言入门"
+/// cargo pixel gen "Rust语言入门" --img
 ///
 /// shortcut:
 /// cargo pixel r snake t
@@ -27,6 +29,8 @@
 /// cargo pixel sf t . dance.ssf             # equivalent to: cargo pixel r ssf t -r . dance.ssf
 /// cargo pixel sy image.png 8               # equivalent to: cargo pixel r symbol t -r image.png 8
 /// cargo pixel tf font.ttf output.png 8    # equivalent to: cargo pixel r ttf t -r font.ttf output.png 8
+/// cargo pixel g "Rust语言入门"             # equivalent to: cargo run -p mdpt --features wgpu --bin gen -- "topic"
+/// cargo pixel g "topic" --img              # also generate images for each slide
 /// ...
 ///
 use serde::{Deserialize, Serialize};
@@ -598,6 +602,33 @@ fn pixel_ttf(ctx: &PixelContext, sub_m: &ArgMatches) {
     }
 }
 
+/// Handle the gen subcommand - generate MDPT presentation using AI
+/// cargo pixel gen "topic" [--img] -> cargo run -p mdpt --features wgpu --bin gen -- "topic" [--img]
+fn pixel_gen(ctx: &PixelContext, sub_m: &ArgMatches) {
+    if ctx.cdir_state == PState::NotPixel {
+        println!("🚫 Not pixel directory.");
+        return;
+    }
+
+    let topic = sub_m.get_one::<String>("topic").unwrap();
+    let gen_img = sub_m.get_flag("img");
+
+    let mut cmd = format!(
+        "cargo run -p mdpt --features wgpu --bin gen -- \"{}\"",
+        topic
+    );
+    if gen_img {
+        cmd.push_str(" --img");
+    }
+
+    println!("🤖 Generating MDPT presentation: \"{}\"", topic);
+    if gen_img {
+        println!("   (with image generation enabled)");
+    }
+    println!();
+    exec_cmd(&cmd);
+}
+
 fn main() {
     let ctx = check_pixel_env();
     // println!("{:?}", ctx);
@@ -613,6 +644,7 @@ fn main() {
         Some(("ssf", sub_m)) => pixel_ssf(&ctx, sub_m),
         Some(("symbol", sub_m)) => pixel_symbol(&ctx, sub_m),
         Some(("ttf", sub_m)) => pixel_ttf(&ctx, sub_m),
+        Some(("gen", sub_m)) => pixel_gen(&ctx, sub_m),
         _ => {
             // No subcommand provided, show help
             use crate::command::make_parser_app;

@@ -27,6 +27,8 @@
 /// cargo pixel sf . dance.ssf
 /// cargo pixel sy image.png 8
 /// cargo pixel tf
+/// cargo pixel g "Rust语言入门"
+/// cargo pixel g "Rust语言入门" --img
 /// ...
 ///
 use clap::{Arg, ArgAction, ArgMatches, Command};
@@ -262,6 +264,23 @@ fn build_app() -> Command {
                         .help("Show detailed analysis: 0=false, 1=true (default: 0)")
                         .required(false)
                         .index(5),
+                ),
+        )
+        .subcommand(
+            Command::new("gen")
+                .alias("g")
+                .about("Generate MDPT presentation using AI (Gemini API)")
+                .arg(
+                    Arg::new("topic")
+                        .help("Presentation topic (e.g., \"Rust语言入门\")")
+                        .required(true)
+                        .index(1),
+                )
+                .arg(
+                    Arg::new("img")
+                        .long("img")
+                        .help("Also generate images for each slide")
+                        .action(ArgAction::SetTrue),
                 ),
         )
 }

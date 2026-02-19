@@ -21,7 +21,7 @@ use crate::ui::{
     Widget, BaseWidget, WidgetId, WidgetState, UIEvent, UIResult,
     next_widget_id
 };
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthStr, UnicodeWidthChar};
 
 /// Text alignment options
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -413,8 +413,8 @@ impl Label {
         let active_scale = 1.0 + scale_amplitude * (progress * std::f32::consts::PI).sin();
         let normal_style = base_style.scale(1.0, 1.0);
 
+        let mut x = start_x;
         for (i, ch) in self.text.chars().enumerate() {
-            let x = start_x + i as u16;
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
             let style = if i == active_idx {
                 // Scale both axes but keep slot width fixed (no horizontal spacing change)
@@ -423,6 +423,7 @@ impl Label {
                 normal_style
             };
             buffer.set_string(x, bounds.y, &ch.to_string(), style);
+            x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
         }
     }
 
@@ -432,8 +433,8 @@ impl Label {
         let buffer_area = *buffer.area();
         let pi2 = 2.0 * std::f32::consts::PI;
 
+        let mut x = start_x;
         for (i, ch) in self.text.chars().enumerate() {
-            let x = start_x + i as u16;
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
 
             let phase = speed * self.frame as f32 + i as f32 * pi2 / wavelength;
@@ -441,6 +442,7 @@ impl Label {
             // Only scale Y for a gentle vertical wave effect
             let style = base_style.scale(1.0, scale_y);
             buffer.set_string(x, bounds.y, &ch.to_string(), style);
+            x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
         }
     }
 
@@ -462,8 +464,8 @@ impl Label {
         let sub_progress = (effective_frame % frames_per_char) as f32 / frames_per_char as f32;
         let normal_style = base_style.scale_uniform(1.0);
 
+        let mut x = start_x;
         for (i, ch) in self.text.chars().enumerate() {
-            let x = start_x + i as u16;
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
 
             if i < fully_revealed {
@@ -476,6 +478,7 @@ impl Label {
                 buffer.set_string(x, bounds.y, &ch.to_string(), style);
             }
             // Unrevealed chars: leave buffer cell untouched (invisible)
+            x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
         }
     }
 
@@ -498,19 +501,20 @@ impl Label {
         let revealed = (effective_frame / frames_per_char).min(char_count);
         let normal_style = base_style.scale_uniform(1.0);
 
+        let mut x = start_x;
         for (i, ch) in self.text.chars().enumerate() {
-            let x = start_x + i as u16;
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
 
             if i < revealed {
                 buffer.set_string(x, bounds.y, &ch.to_string(), normal_style);
             }
             // Unrevealed chars: leave buffer cell untouched
+            x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
         }
 
         // Blinking cursor at typing position
         if show_cursor && revealed < char_count {
-            let cursor_x = start_x + revealed as u16;
+            let cursor_x = start_x + self.text.chars().take(revealed).map(|c| UnicodeWidthChar::width(c).unwrap_or(1) as u16).sum::<u16>();
             if cursor_x < bounds.x + bounds.width && cursor_x < buffer_area.x + buffer_area.width {
                 // Blink: visible for 8 frames, invisible for 8 frames
                 if (self.frame / 8) % 2 == 0 {

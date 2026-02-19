@@ -1,4 +1,4 @@
-use crate::model::{MdptModel, MDPTH, MDPTW};
+use crate::model::MdptModel;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -26,9 +26,13 @@ impl MdptRender {
 impl Render for MdptRender {
     type Model = MdptModel;
 
-    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
+    fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
         // Enable TUI character height mode for UI components
         context.adapter.get_base().gr.set_use_tui_height(true);
+
+        // Use frontmatter dimensions (parsed in Model::init before Render::init)
+        let w = data.presentation.front_matter.width;
+        let h = data.presentation.front_matter.height;
 
         let scale = if rust_pixel::init::get_game_config().fullscreen {
             1.0
@@ -37,12 +41,12 @@ impl Render for MdptRender {
         };
         context
             .adapter
-            .init(MDPTW, MDPTH, scale, scale, "mdpt".to_string());
+            .init(w, h, scale, scale, "mdpt".to_string());
         self.scene.init(context);
 
         // Pre-create image sprite (hidden by default)
-        // Use a large buffer (80x50) to accommodate SSF assets without clipping
-        let mut sprite = Sprite::new(0, 0, 80, 50);
+        // Use a large buffer to accommodate SSF assets without clipping
+        let mut sprite = Sprite::new(0, 0, w, 50u16.max(h));
         sprite.set_hidden(true);
         self.scene.add_sprite(sprite, IMAGE_TAG);
 
@@ -160,8 +164,8 @@ impl MdptRender {
                 &data.md_file
             }
         );
-        let status_y = MDPTH - 1;
-        let status_bg = " ".repeat(MDPTW as usize);
+        let status_y = data.presentation.front_matter.height - 1;
+        let status_bg = " ".repeat(data.presentation.front_matter.width as usize);
         let tui_buffer = self.scene.tui_buffer_mut();
         tui_buffer.set_color_str(0, status_y, &status_bg, Color::White, Color::DarkGray);
         tui_buffer.set_color_str(0, status_y, &info, Color::White, Color::DarkGray);

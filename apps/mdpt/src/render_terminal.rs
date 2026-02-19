@@ -1,4 +1,4 @@
-use crate::model::{MdptModel, MDPTH, MDPTW};
+use crate::model::MdptModel;
 use rust_pixel::{
     context::Context,
     game::Render,
@@ -21,10 +21,12 @@ impl MdptRender {
 impl Render for MdptRender {
     type Model = MdptModel;
 
-    fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
+    fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
+        let w = data.presentation.front_matter.width;
+        let h = data.presentation.front_matter.height;
         context
             .adapter
-            .init(MDPTW, MDPTH, 0.5, 0.5, "mdpt".to_string());
+            .init(w, h, 0.5, 0.5, "mdpt".to_string());
         self.scene.init(context);
     }
 
@@ -55,8 +57,8 @@ impl Render for MdptRender {
                     &data.md_file
                 }
             );
-            let status_y = MDPTH - 1;
-            let status_bg = " ".repeat(MDPTW as usize);
+            let status_y = data.presentation.front_matter.height - 1;
+            let status_bg = " ".repeat(data.presentation.front_matter.width as usize);
             tui_buffer.set_color_str(0, status_y, &status_bg, Color::White, Color::DarkGray);
             tui_buffer.set_color_str(0, status_y, &info, Color::White, Color::DarkGray);
         }

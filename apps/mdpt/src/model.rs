@@ -189,6 +189,14 @@ impl MdptModel {
         self.presentation = parse_markdown(&contents);
         log::info!("[mdpt] load_presentation: parse_markdown done, {} slides", self.presentation.slides.len());
 
+        // Resize output buffer to match frontmatter dimensions
+        let fw = self.presentation.front_matter.width;
+        let fh = self.presentation.front_matter.height;
+        if fw != MDPTW || fh != MDPTH {
+            log::info!("[mdpt] load_presentation: custom dimensions {}x{}", fw, fh);
+            self.output_buffer = Buffer::empty(Rect::new(0, 0, fw, fh));
+        }
+
         // Insert auto-generated cover slide at index 0 if title is set
         if !self.presentation.front_matter.title.is_empty() {
             let mut cover = crate::slide::SlideContent::new();
@@ -256,13 +264,15 @@ impl MdptModel {
 
     fn rebuild_current_page(&mut self) {
         log::info!("[mdpt] rebuild_current_page: slide={} step={}", self.current_slide, self.current_step);
+        let w = self.presentation.front_matter.width;
+        let h = self.presentation.front_matter.height;
         if let Some(slide) = self.presentation.slides.get(self.current_slide) {
             let (page, images) = if slide.is_cover {
                 log::info!("[mdpt] rebuild_current_page: building cover page");
                 let page = build_cover_page(
                     &self.presentation.front_matter,
-                    MDPTW,
-                    MDPTH,
+                    w,
+                    h,
                 );
                 (page, Vec::new())
             } else {
@@ -273,8 +283,8 @@ impl MdptModel {
                     self.current_step,
                     &self.highlight_cache,
                     &self.presentation.front_matter,
-                    MDPTW,
-                    MDPTH,
+                    w,
+                    h,
                 )
             };
             log::info!("[mdpt] rebuild_current_page: done, {} images", images.len());
