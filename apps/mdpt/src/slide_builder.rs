@@ -126,12 +126,15 @@ pub fn build_slide_page(
                     col_max_y = y;
                 }
                 current_col = *idx;
-                // Calculate x position for this column
+                // Calculate x position for this column (with 1-char gap between columns)
                 let total_weight: u32 = column_widths.iter().sum();
+                let num_gaps = column_widths.len().saturating_sub(1) as u16;
+                let available = content_width.saturating_sub(num_gaps);
                 let mut x_offset: u16 = margin;
                 for i in 0..current_col {
                     if i < column_widths.len() {
-                        x_offset += (content_width as u32 * column_widths[i] / total_weight) as u16;
+                        x_offset += (available as u32 * column_widths[i] / total_weight) as u16;
+                        x_offset += 1; // 1-char gap between columns
                     }
                 }
                 col_x = x_offset;
@@ -186,8 +189,9 @@ pub fn build_slide_page(
                     y += 1;
                 }
 
-                // Add spacing after titles
-                if *level <= 2 {
+                // Add spacing after titles (level 3 also needs it to avoid
+                // descender clipping from scale(1.1) on letters like "g", "y")
+                if *level <= 3 {
                     y += 1;
                 }
             }
@@ -715,13 +719,15 @@ pub fn build_cover_page(
     page
 }
 
-/// Calculate column width from weights.
+/// Calculate column width from weights (accounts for 1-char gap between columns).
 fn col_width(weights: &[u32], col_idx: usize, total_width: u16) -> u16 {
     let total_weight: u32 = weights.iter().sum();
     if total_weight == 0 || col_idx >= weights.len() {
         return total_width;
     }
-    (total_width as u32 * weights[col_idx] / total_weight) as u16
+    let num_gaps = weights.len().saturating_sub(1) as u16;
+    let available = total_width.saturating_sub(num_gaps);
+    (available as u32 * weights[col_idx] / total_weight) as u16
 }
 
 /// Estimate content height for vertical centering.
@@ -731,7 +737,7 @@ fn estimate_content_height(elements: &[SlideElement], width: u16) -> u16 {
         match elem {
             SlideElement::Title { level, .. } => {
                 h += 1;
-                if *level <= 2 {
+                if *level <= 3 {
                     h += 1;
                 }
             }
