@@ -243,8 +243,8 @@ fn render_td(
         .map(|n| n.label.width() as u16 + 4)
         .collect();
 
-    let layer_h = (h / n_layers as u16).max(3);
     let node_h: u16 = 3;
+    let layer_h = (h / n_layers as u16).max(node_h);
 
     let id_to_idx: HashMap<&str, usize> = graph
         .nodes
@@ -312,8 +312,7 @@ fn render_lr(
         .map(|n| n.label.width() as u16 + 4)
         .collect();
 
-    let max_nw = *node_widths.iter().max().unwrap_or(&8);
-    let layer_w = (w / n_layers as u16).max(max_nw + 4);
+    let layer_w = w / n_layers as u16;
     let node_h: u16 = 3;
 
     let id_to_idx: HashMap<&str, usize> = graph
@@ -361,6 +360,18 @@ fn render_lr(
 }
 
 fn draw_box(buf: &mut Buffer, x: u16, y: u16, w: u16, _h: u16, label: &str, color: Color) {
+    let area = buf.area();
+    // Skip if box starts outside buffer
+    if x >= area.x + area.width || y + 2 >= area.y + area.height {
+        return;
+    }
+    // Clamp box width to fit within buffer
+    let max_w = (area.x + area.width).saturating_sub(x);
+    let w = w.min(max_w);
+    if w < 3 {
+        return;
+    }
+
     let style = Style::default().fg(color);
     let inner_w = w.saturating_sub(2) as usize;
     let top = format!("┌{}┐", "─".repeat(inner_w));
@@ -385,6 +396,9 @@ fn draw_vertical_edge(
     ty: u16,
     label: &Option<String>,
 ) {
+    let area = buf.area();
+    let bx = area.x + area.width;
+    let by = area.y + area.height;
     let axis_style = Style::default().fg(AXIS_COLOR);
     let label_style = Style::default().fg(LABEL_COLOR);
 
@@ -394,6 +408,9 @@ fn draw_vertical_edge(
     let mid_y = (fy + ty) / 2;
 
     for row in fy..ty {
+        if fx >= bx || row >= by {
+            continue;
+        }
         if row == ty - 1 {
             buf.set_string(fx, row, "↓", axis_style);
         } else {
@@ -404,16 +421,23 @@ fn draw_vertical_edge(
     if fx != tx {
         let (lx, rx) = if fx < tx { (fx, tx) } else { (tx, fx) };
         for col in lx + 1..rx {
-            buf.set_string(col, mid_y, "─", axis_style);
+            if col < bx && mid_y < by {
+                buf.set_string(col, mid_y, "─", axis_style);
+            }
         }
-        if fx < tx {
-            buf.set_string(fx, mid_y, "└", axis_style);
-            buf.set_string(tx, mid_y, "┐", axis_style);
-        } else {
-            buf.set_string(fx, mid_y, "┘", axis_style);
-            buf.set_string(tx, mid_y, "┌", axis_style);
+        if mid_y < by {
+            if fx < tx {
+                if fx < bx { buf.set_string(fx, mid_y, "└", axis_style); }
+                if tx < bx { buf.set_string(tx, mid_y, "┐", axis_style); }
+            } else {
+                if fx < bx { buf.set_string(fx, mid_y, "┘", axis_style); }
+                if tx < bx { buf.set_string(tx, mid_y, "┌", axis_style); }
+            }
         }
         for row in mid_y + 1..ty {
+            if tx >= bx || row >= by {
+                continue;
+            }
             if row == ty - 1 {
                 buf.set_string(tx, row, "↓", axis_style);
             } else {
@@ -424,7 +448,9 @@ fn draw_vertical_edge(
 
     if let Some(ref lbl) = label {
         let lx = fx + 1;
-        buf.set_string(lx, mid_y, lbl, label_style);
+        if lx < bx && mid_y < by {
+            buf.set_string(lx, mid_y, lbl, label_style);
+        }
     }
 }
 
@@ -436,6 +462,9 @@ fn draw_horizontal_edge(
     ty: u16,
     label: &Option<String>,
 ) {
+    let area = buf.area();
+    let bx = area.x + area.width;
+    let by = area.y + area.height;
     let axis_style = Style::default().fg(AXIS_COLOR);
     let label_style = Style::default().fg(LABEL_COLOR);
 
@@ -445,6 +474,9 @@ fn draw_horizontal_edge(
 
     if fy == ty {
         for col in fx..tx {
+            if col >= bx || fy >= by {
+                continue;
+            }
             if col == tx - 1 {
                 buf.set_string(col, fy, "→", axis_style);
             } else {
@@ -454,13 +486,20 @@ fn draw_horizontal_edge(
     } else {
         let mid_x = (fx + tx) / 2;
         for col in fx..mid_x {
-            buf.set_string(col, fy, "─", axis_style);
+            if col < bx && fy < by {
+                buf.set_string(col, fy, "─", axis_style);
+            }
         }
         let (top_y, bot_y) = if fy < ty { (fy, ty) } else { (ty, fy) };
         for row in top_y..=bot_y {
-            buf.set_string(mid_x, row, "│", axis_style);
+            if mid_x < bx && row < by {
+                buf.set_string(mid_x, row, "│", axis_style);
+            }
         }
         for col in mid_x + 1..tx {
+            if col >= bx || ty >= by {
+                continue;
+            }
             if col == tx - 1 {
                 buf.set_string(col, ty, "→", axis_style);
             } else {
@@ -471,6 +510,9 @@ fn draw_horizontal_edge(
 
     if let Some(ref lbl) = label {
         let mid_x = (fx + tx) / 2;
-        buf.set_string(mid_x + 1, fy.min(ty), lbl, label_style);
+        let ly = fy.min(ty);
+        if mid_x + 1 < bx && ly < by {
+            buf.set_string(mid_x + 1, ly, lbl, label_style);
+        }
     }
 }
