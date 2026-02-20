@@ -244,7 +244,8 @@ fn render_td(
         .collect();
 
     let node_h: u16 = 3;
-    let layer_h = (h / n_layers as u16).max(node_h);
+    // Ensure at least 1 row gap between boxes for connecting line (↓)
+    let layer_h = (h / n_layers as u16).max(node_h + 1);
 
     let id_to_idx: HashMap<&str, usize> = graph
         .nodes
@@ -403,6 +404,23 @@ fn draw_vertical_edge(
     let label_style = Style::default().fg(LABEL_COLOR);
 
     if fy >= ty {
+        // Tight layout: no vertical space between boxes.
+        // Draw arrow on source box bottom border to indicate connection.
+        if fy > 0 && fx < bx && (fy - 1) < by {
+            buf.set_string(fx, fy - 1, "↓", axis_style);
+        }
+        if fx != tx && tx < bx && ty < by {
+            // Also mark target box top border for horizontal connections
+            buf.set_string(tx, ty, "↓", axis_style);
+        }
+        // Draw edge label next to arrow if there's room
+        if let Some(ref lbl) = label {
+            let lx = fx + 1;
+            let ly = if fy > 0 { fy - 1 } else { fy };
+            if lx < bx && ly < by {
+                buf.set_string(lx, ly, lbl, label_style);
+            }
+        }
         return;
     }
     let mid_y = (fy + ty) / 2;

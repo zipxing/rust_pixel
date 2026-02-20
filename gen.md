@@ -6,7 +6,7 @@ transition: cycle
 title_animation: typewriter
 code_theme: base16-ocean.dark
 margin: 4
-height: 26
+height: 28
 transition_duration: 0.2
 ---
 
@@ -613,6 +613,18 @@ D --> E{Advanced Path}
 E -->|Systems| F[unsafe/FFI]
 E -->|Web| G[Actix/Axum]
 E -->|Async| H[tokio/async]
+```
+
+---
+
+## Data Processing Pipeline
+
+```mermaid
+graph LR
+A[Input] --> B[Parse]
+B --> C[Validate]
+C --> D[Transform]
+D --> E[Output]
 ```
 
 ---

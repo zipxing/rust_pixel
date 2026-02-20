@@ -598,7 +598,8 @@ pub fn build_slide_page(
                 };
 
                 if let Some(graph) = parse_mermaid(content) {
-                    let chart_h = 15u16.min(content_height.saturating_sub(y));
+                    // Use all remaining available space for mermaid chart
+                    let chart_h = content_height.saturating_sub(y);
                     render_mermaid(&graph, buf, x_start, y, w, chart_h);
                     y += chart_h + 1;
                 } else {
