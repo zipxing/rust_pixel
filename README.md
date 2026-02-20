@@ -104,6 +104,12 @@ Unlike terminal-based presenters (presenterm, slides), MDPT:
 - **Rich transitions** — GPU shader effects impossible in terminals
 - **True graphics** — Not limited by terminal cell constraints
 
+### AI-Powered Slide Generation
+
+The `gen-mdpt` Claude Code skill can automatically generate complete MDPT presentations from any topic or document — including code blocks, charts, tables, column layouts, and animations.
+
+![gen-mdpt](./screen-shot/rust.gif)
+
 ---
 
 ### Unified Texture Architecture

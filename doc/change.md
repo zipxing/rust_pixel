@@ -1,3 +1,23 @@
+# 2.2.0
+
+- Added `gen-mdpt` Claude Code skill for AI-powered MDPT presentation generation
+  - Automatically generates 18-30 slide presentations from topics or documents
+  - Supports all MDPT elements: charts, code blocks, tables, column layouts, animations
+  - Skill reference files located in `.claude/skills/gen-mdpt/`
+- MDPT: Added custom presentation dimensions via YAML frontmatter (`width`, `height`)
+- MDPT: Added 1-character gap between columns in column layouts for better readability
+- MDPT: Added spacing after level-3 headings (`###`) to prevent descender clipping (e.g. "g", "y") from `scale(1.1)` overlap with subsequent code blocks
+- MDPT: Fixed heading scale pushing adjacent column content — added `FIXED_SLOT` modifier to all heading styles
+- MDPT: Fixed Mermaid LR layout crash (buffer overflow when node positions exceed canvas width)
+- MDPT: Fixed Mermaid TD layout vertical node overlap
+- MDPT: Fixed bar chart not displaying when height is small (reduced title spacing from 4 to 2 rows)
+- MDPT: Fixed CJK title centering in all chart types (`.len()` → `.width()` using UnicodeWidthStr)
+- MDPT: Added bounds checking in Mermaid `draw_box`, `draw_vertical_edge`, `draw_horizontal_edge`
+- Updated `symbols.png` generation tool to support additional CJK characters and full-width punctuation
+- Fixed web mouse event handling
+
+---
+
 # 2.1.2
 
 - Fix a doc error
