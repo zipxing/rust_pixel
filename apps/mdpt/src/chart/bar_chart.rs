@@ -1,6 +1,7 @@
 use super::{ChartData, ChartRenderer, AXIS_COLOR, CHART_COLORS, LABEL_COLOR, TITLE_COLOR};
 use rust_pixel::render::buffer::Buffer;
 use rust_pixel::render::style::Style;
+use unicode_width::UnicodeWidthStr;
 
 /// Block element characters for 1/8 height precision (index 0 = empty, 8 = full).
 const BLOCKS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -33,9 +34,9 @@ impl ChartRenderer for BarChart {
 
         // Title
         if let Some(ref title) = self.data.title {
-            let tx = x + (w.saturating_sub(title.len() as u16)) / 2;
+            let tx = x + (w.saturating_sub(title.width() as u16)) / 2;
             buf.set_string(tx, cy, title, Style::default().fg(TITLE_COLOR));
-            cy += 4;
+            cy += 2;
         }
 
         // Chart area dimensions

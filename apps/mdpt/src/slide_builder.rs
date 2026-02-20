@@ -799,23 +799,25 @@ fn is_line_in_ranges(line: usize, ranges: Option<&Vec<LineRange>>) -> bool {
 }
 
 /// Style for heading levels.
+/// Uses FIXED_SLOT so that scale doesn't push subsequent cells in the same row
+/// (important for column layouts where left column headings share rows with right column content).
 fn title_style(level: u8) -> Style {
     match level {
         1 => Style::default()
             .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD)
+            .add_modifier(Modifier::BOLD | Modifier::FIXED_SLOT)
             .scale(1.1, 1.1),
         2 => Style::default()
             .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
+            .add_modifier(Modifier::BOLD | Modifier::FIXED_SLOT)
             .scale(1.1, 1.1),
         3 => Style::default()
             .fg(Color::Green)
-            .add_modifier(Modifier::BOLD)
+            .add_modifier(Modifier::BOLD | Modifier::FIXED_SLOT)
             .scale(1.1, 1.1),
         _ => Style::default()
             .fg(Color::White)
-            .add_modifier(Modifier::BOLD)
+            .add_modifier(Modifier::BOLD | Modifier::FIXED_SLOT)
             .scale(1.1, 1.1),
     }
 }

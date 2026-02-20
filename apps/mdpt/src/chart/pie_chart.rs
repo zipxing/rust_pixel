@@ -2,6 +2,7 @@ use super::braille::BrailleCanvas;
 use super::{ChartData, ChartRenderer, CHART_COLORS, LABEL_COLOR, TITLE_COLOR};
 use rust_pixel::render::buffer::Buffer;
 use rust_pixel::render::style::Style;
+use unicode_width::UnicodeWidthStr;
 use std::f64::consts::TAU;
 
 pub struct PieChart {
@@ -35,7 +36,7 @@ impl ChartRenderer for PieChart {
 
         // Title
         if let Some(ref title) = self.data.title {
-            let tx = x + (w.saturating_sub(title.len() as u16)) / 2;
+            let tx = x + (w.saturating_sub(title.width() as u16)) / 2;
             buf.set_string(tx, cy, title, Style::default().fg(TITLE_COLOR));
             cy += 1;
         }
