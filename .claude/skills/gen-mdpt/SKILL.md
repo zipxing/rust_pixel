@@ -13,7 +13,7 @@ You are generating a markdown presentation for **MDPT** (Markdown Presentation T
 
 ## Output
 
-Write the generated markdown to `apps/mdpt/assets/gen.md` in the rust_pixel project root.
+Write the generated markdown to `gen.md` in the current working directory.
 
 ## MDPT Format Specification
 
@@ -200,7 +200,7 @@ Supports `.pix` and `.ssf` (sequence frame) image formats.
 
 ## Guidelines
 
-1. Generate **12-20 slides** with rich, substantial content
+1. Generate **18-30 slides** with rich, substantial content
 2. **First slide**: title slide using `# Title` with a subtitle line
 3. **Last slide**: ending slide using `<!-- jump_to_middle -->` and `# Thank You!` or similar
 4. Use **varied elements**: lists, code blocks, tables, charts, columns, quotes, animations
@@ -211,12 +211,12 @@ Supports `.pix` and `.ssf` (sequence frame) image formats.
 9. Use the language matching the topic (Chinese topic → Chinese content, English → English)
 10. Use `<!-- anim: ... -->` sparingly for emphasis (1-3 times in the whole presentation)
 11. Output **only** the raw markdown with YAML frontmatter, no wrapping fences
-12. Read `apps/mdpt/assets/demo.md` first as a reference for syntax and style
+12. Read `references/examples/demo.md` first as a reference for syntax and style
 
 ## Process
 
-1. First read `apps/mdpt/assets/demo.md` to understand the format in practice
+1. First read `references/examples/demo.md` to understand the format in practice
 2. If the user provided a document/file path, read it to extract content
 3. Generate the MDPT markdown presentation
-4. Write to `apps/mdpt/assets/gen.md`
+4. Write to `gen.md` in the current working directory
 5. Report the number of slides generated
