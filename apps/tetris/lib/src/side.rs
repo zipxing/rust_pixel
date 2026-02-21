@@ -395,14 +395,20 @@ impl TetrisCell {
         //扫描判断满行,放入fullrows数组
         for m in 0..4 {
             let mut fflag = true;
+            let mut in_grid_count = 0;
             for n in 0..HENG {
                 if self.is_in_grid(cy + m, (n + 2) as i8) {
+                    in_grid_count += 1;
                     let gd = self.get_gd(cy + m, (n + 2) as i8);
                     if gd < 100 || gd == 200 {
                         fflag = false;
                         break;
                     }
                 }
+            }
+            // Row must have all HENG cells in grid to be considered full
+            if in_grid_count < HENG {
+                fflag = false;
             }
             if fflag {
                 let fr = cy + m;
@@ -437,10 +443,8 @@ impl TetrisCell {
                 self.core.attack[1] = self.core.block_index;
                 self.stat.clear_lines += self.core.full_row_count as i32;
                 let fs: [i64; 4] = [50, 150, 300, 500];
-                //TODO: thread 'main' panicked at games/tetris/lib/src/side.rs:443:32: 
-                //index out of bounds: the len is 4 but the index is 4
-                self.stat
-                    .add_score(fs[(self.core.full_row_count - 1) as usize]);
+                let idx = ((self.core.full_row_count - 1) as usize).min(3);
+                self.stat.add_score(fs[idx]);
                 let mut fv: Vec<i8> = vec!();
                 for f in 0..self.core.full_row_count {
                     fv.push(self.core.full_rows[f as usize]);

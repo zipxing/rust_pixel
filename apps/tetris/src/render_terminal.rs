@@ -1,7 +1,5 @@
 use crate::model::TetrisModel;
 use tetris_lib::constant::*;
-//use std::fs::File;
-//use std::io::Write;
 use rust_pixel::{
     asset::AssetType,
     asset2sprite,
@@ -13,6 +11,14 @@ use rust_pixel::{
     render::style::Color,
 };
 
+const CANVAS_W: u16 = 80;
+const CANVAS_H: u16 = 30;
+
+// Colors for stats overlay
+const VALUE_FG: Color = Color::White;
+const DIM_FG: Color = Color::Indexed(244);
+const BG: Color = Color::Reset;
+
 pub struct TetrisRender {
     pub scene: Scene,
 }
@@ -21,18 +27,22 @@ impl TetrisRender {
     pub fn new() -> Self {
         let mut t = Scene::new();
 
-        let tsback = Sprite::new(0, 0, 80, 30);
+        let tsback = Sprite::new(0, 0, CANVAS_W, CANVAS_H);
         t.add_sprite(tsback, "back");
 
+        // Player grid (1P)
         let l0 = Sprite::new(2, 7, HENG * 2, ZONG);
         t.add_sprite(l0, "grid0");
 
+        // AI grid
         let l1 = Sprite::new(55, 7, HENG * 2, ZONG);
         t.add_sprite(l1, "grid1");
 
+        // Next piece preview
         let l2 = Sprite::new(27, 8, 8, 4);
         t.add_sprite(l2, "next");
 
+        // Hold piece
         let l3 = Sprite::new(42, 8, 8, 4);
         t.add_sprite(l3, "hold");
 
@@ -41,6 +51,60 @@ impl TetrisRender {
         event_register("Tetris.RedrawMsg", "redraw_msg");
 
         Self { scene: t }
+    }
+
+    fn draw_stats(&mut self, data: &TetrisModel) {
+        let back = self.scene.get_sprite("back");
+        let stat = &data.sides[0].stat;
+
+        // Draw stats inside the middle info box (x≈27, rows 16-26)
+        let sx: u16 = 28;
+
+        back.set_color_str(sx, 16, "Lines:", DIM_FG, BG);
+        let lines_str = format!("  {:<6}", stat.clear_lines);
+        back.set_color_str(sx, 17, &lines_str, VALUE_FG, BG);
+
+        back.set_color_str(sx, 19, "Score:", DIM_FG, BG);
+        let score_str = format!("  {:<6}", stat.score);
+        back.set_color_str(sx, 20, &score_str, VALUE_FG, BG);
+
+        back.set_color_str(sx, 22, "Level:", DIM_FG, BG);
+        let level_str = format!("  {:<6}", stat.level);
+        back.set_color_str(sx, 23, &level_str, VALUE_FG, BG);
+
+        if stat.combo_current > 0 {
+            let combo_str = format!("Combo: {:<3}", stat.combo_current);
+            back.set_color_str(sx, 25, &combo_str, Color::LightYellow, BG);
+        } else {
+            back.set_color_str(sx, 25, "              ", BG, BG);
+        }
+
+        // Game over indicator
+        if data.sides[0].core.game_over {
+            back.set_color_str(sx, 15, " GAME OVER! ", Color::LightRed, BG);
+        }
+
+        // Keybinds (right column of the info box)
+        let kx: u16 = 39;
+        let key_fg = Color::LightCyan;
+        back.set_color_str(kx, 16, "KEYS", VALUE_FG, BG);
+        back.set_color_str(kx, 17, "────────", DIM_FG, BG);
+        back.set_color_str(kx, 18, "o", key_fg, BG);
+        back.set_color_str(kx + 1, 18, "/", DIM_FG, BG);
+        back.set_color_str(kx + 2, 18, "i", key_fg, BG);
+        back.set_color_str(kx + 4, 18, "turn", DIM_FG, BG);
+        back.set_color_str(kx, 19, "j", key_fg, BG);
+        back.set_color_str(kx + 1, 19, "/", DIM_FG, BG);
+        back.set_color_str(kx + 2, 19, "l", key_fg, BG);
+        back.set_color_str(kx + 4, 19, "move", DIM_FG, BG);
+        back.set_color_str(kx, 20, "k", key_fg, BG);
+        back.set_color_str(kx + 4, 20, "down", DIM_FG, BG);
+        back.set_color_str(kx, 21, "s", key_fg, BG);
+        back.set_color_str(kx + 4, 21, "hold", DIM_FG, BG);
+        back.set_color_str(kx, 22, "spc", key_fg, BG);
+        back.set_color_str(kx + 4, 22, "drop", DIM_FG, BG);
+        back.set_color_str(kx, 23, "r", key_fg, BG);
+        back.set_color_str(kx + 4, 23, "new", DIM_FG, BG);
     }
 
     fn set_block(&mut self, sname: &str, x: u16, y: u16, c: u8) {
@@ -88,8 +152,8 @@ impl TetrisRender {
                 bg = Color::Reset;
             }
             _ => {
-                c1 = "[";
-                c2 = "]";
+                c1 = "█";
+                c2 = "█";
                 fg = cv[(c % 100) as usize % cv.len()];
                 bg = Color::Reset;
             }
@@ -104,6 +168,13 @@ impl TetrisRender {
     }
 
     pub fn redraw_hold(&mut self, d: &mut TetrisModel) {
+        // Clear hold area first
+        let l = self.scene.get_sprite("hold");
+        for iy in 0..4u16 {
+            for ix in 0..8u16 {
+                l.set_color_str(ix, iy, " ", BG, BG);
+            }
+        }
         for i in 0..4 {
             for j in 0..4 {
                 let rx = j * 2;
@@ -122,6 +193,13 @@ impl TetrisRender {
     }
 
     pub fn redraw_next(&mut self, d: &mut TetrisModel) {
+        // Clear next area first
+        let l = self.scene.get_sprite("next");
+        for iy in 0..4u16 {
+            for ix in 0..8u16 {
+                l.set_color_str(ix, iy, " ", BG, BG);
+            }
+        }
         for i in 0..4 {
             for j in 0..4 {
                 let rx = j * 2;
@@ -139,14 +217,49 @@ impl TetrisRender {
         }
     }
 
+    /// Compute gradient color for hard-drop trail using xterm-256 6x6x6 cube.
+    fn trail_color(color_idx: usize, ratio: f32) -> Color {
+        const BASE_RGB: [[f32; 3]; 8] = [
+            [5.0, 0.0, 5.0], // 0: Magenta
+            [0.0, 5.0, 5.0], // 1: Cyan
+            [5.0, 1.0, 1.0], // 2: LightRed
+            [1.0, 5.0, 1.0], // 3: LightGreen
+            [1.0, 1.0, 5.0], // 4: LightBlue
+            [5.0, 5.0, 1.0], // 5: LightYellow
+            [5.0, 1.0, 5.0], // 6: LightMagenta
+            [1.0, 5.0, 5.0], // 7: LightCyan
+        ];
+        let rgb = BASE_RGB[color_idx % 8];
+        let scale = 1.0 - ratio * 0.8;
+        let r = (rgb[0] * scale).round().clamp(0.0, 5.0) as u8;
+        let g = (rgb[1] * scale).round().clamp(0.0, 5.0) as u8;
+        let b = (rgb[2] * scale).round().clamp(0.0, 5.0) as u8;
+        Color::Indexed(16 + 36 * r + 6 * g + b)
+    }
+
+    /// Density-based ASCII luminance map for trail effect.
+    /// Index 0 = densest (near landing), index 7 = sparsest (near origin).
+    /// Each entry is a pair of chars for the double-width cell.
+    const TRAIL_GLYPHS: [(&'static str, &'static str); 8] = [
+        ("█", "█"),  // 0: densest
+        ("▓", "▓"),  // 1
+        ("▒", "▒"),  // 2
+        ("░", "░"),  // 3
+        ("│", "│"),  // 4
+        (":", ":"),  // 5
+        ("·", "·"),  // 6
+        (".", "."),  // 7: sparsest
+    ];
+
     pub fn draw_grid(&mut self, _context: &mut Context, d: &mut TetrisModel) {
         for n in 0..2 {
             let frs = timer_stage(&format!("clear-row{}", n));
             let mut fri: Vec<i8> = vec![];
             if frs != 0 {
                 let fr = timer_exdata(&format!("clear-row{}", n)).unwrap();
-                fri = bincode::serde::decode_from_slice(&fr, bincode::config::standard()).unwrap().0;
-                //info!("frs..{} fri..{:?}", frs, fri);
+                fri = bincode::serde::decode_from_slice(&fr, bincode::config::standard())
+                    .unwrap()
+                    .0;
             }
             for i in 0..ZONG {
                 for j in 0..HENG {
@@ -172,6 +285,70 @@ impl TetrisRender {
                     }
                 }
             }
+            // Draw hard-drop trail with gradient during fall animation
+            let fall_stage = timer_stage(&format!("fall{}", n));
+            if fall_stage != 0 {
+                let block = d.sides[n].core.cur_block;
+                let z = d.sides[n].core.cur_z;
+                let cy = d.sides[n].core.cur_y;
+                let cx = d.sides[n].core.cur_x;
+                let sy = d.sides[n].core.shadow_y;
+                // Collect trail cells: (sprite_x, sprite_y, color_index, y_offset)
+                // y_offset: 0 = near landing (dense), increases toward origin (sparse)
+                let mut trail_cells: Vec<(u16, u16, usize, usize)> = Vec::new();
+                for j in 0..4i8 {
+                    let mut bottom = -1i8;
+                    let mut trail_md: u8 = 0;
+                    for i in (0..4i8).rev() {
+                        if d.sides[n].get_md(block, z, i * 4 + j) != 0 {
+                            bottom = i;
+                            trail_md = d.sides[n].get_md(block, z, i * 4 + j);
+                            break;
+                        }
+                    }
+                    if bottom >= 0 {
+                        let col = cx + j;
+                        let trail_start = cy + bottom + 1;
+                        let trail_end = sy + bottom;
+                        let ci = (trail_md as usize) % 8;
+                        for ty in trail_start..trail_end {
+                            if ty >= 0 && (ty as u16) < ZONG
+                                && d.sides[n].is_in_grid(ty, col)
+                                && d.sides[n].get_gd(ty, col) == 0
+                            {
+                                let rx = (col - 2) * 2;
+                                if rx >= 0 && (rx as u16) < HENG * 2 {
+                                    // y_offset: distance from landing (trail_end)
+                                    // 0 at bottom (near shadow), large at top (near block)
+                                    let y_offset = (trail_end - 1 - ty) as usize;
+                                    trail_cells.push((rx as u16, ty as u16, ci, y_offset));
+                                }
+                            }
+                        }
+                    }
+                }
+                // Density-based trail drawing: spatial (y_offset) + temporal (fall_stage) decay
+                // fall_stage counts down from 6 to 1; dt = 6 - fall_stage (0..5)
+                let dt = (6u32.saturating_sub(fall_stage)) as usize;
+                let sname = format!("grid{}", n);
+                let l = self.scene.get_sprite(&sname);
+                for &(rx, ty, ci, y_offset) in &trail_cells {
+                    // Combined index: spatial distance + temporal decay
+                    let glyph_idx = y_offset * 4 / 7 + dt;
+                    if glyph_idx >= Self::TRAIL_GLYPHS.len() {
+                        // Beyond sparsest glyph — leave empty
+                        l.set_color_str(rx, ty, " ", Color::Reset, Color::Reset);
+                        l.set_color_str(rx + 1, ty, " ", Color::Reset, Color::Reset);
+                    } else {
+                        let ratio = glyph_idx as f32 / 7.0;
+                        let fg = Self::trail_color(ci, ratio);
+                        let (c1, c2) = Self::TRAIL_GLYPHS[glyph_idx];
+                        l.set_color_str(rx, ty, c1, fg, Color::Reset);
+                        l.set_color_str(rx + 1, ty, c2, fg, Color::Reset);
+                    }
+                }
+            }
+
             for i in 0..4 {
                 for j in 0..4 {
                     let ttx = d.sides[n].core.shadow_x + j;
@@ -184,10 +361,13 @@ impl TetrisRender {
                         ) != 0
                         {
                             let rx = ttx * 2 - 4;
-                            //Ensure that when the shadow and the normal block overlap, the shadow
-                            //does not cover the normal block...
                             if d.sides[n].get_gd(tty, ttx) == 0 {
-                                self.set_block(&format!("grid{}", n), rx as u16, tty as u16, 20);
+                                self.set_block(
+                                    &format!("grid{}", n),
+                                    rx as u16,
+                                    tty as u16,
+                                    20,
+                                );
                             }
                         }
                     }
@@ -201,14 +381,19 @@ impl Render for TetrisRender {
     type Model = TetrisModel;
 
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
-        context.adapter.init(80, 30, 1.0, 1.0, "tetris".to_string());
+        context
+            .adapter
+            .init(CANVAS_W, CANVAS_H, 1.0, 1.0, "tetris".to_string());
         self.scene.init(context);
+
+        // Load back.txt as background
         let l = self.scene.get_sprite("back");
         let bp = "back.txt";
         asset2sprite!(l, context, &bp);
     }
 
     fn draw(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
+        self.draw_stats(data);
         self.draw_grid(context, data);
         self.scene.draw(context).unwrap();
     }

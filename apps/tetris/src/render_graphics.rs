@@ -134,6 +134,26 @@ impl TetrisRender {
         }
     }
 
+    /// Compute gradient color for hard-drop trail using xterm-256 6x6x6 cube.
+    fn trail_color(color_idx: usize, ratio: f32) -> Color {
+        const BASE_RGB: [[f32; 3]; 8] = [
+            [5.0, 0.0, 5.0], // 0: Magenta
+            [0.0, 5.0, 5.0], // 1: Cyan
+            [5.0, 1.0, 1.0], // 2: LightRed
+            [1.0, 5.0, 1.0], // 3: LightGreen
+            [1.0, 1.0, 5.0], // 4: LightBlue
+            [5.0, 5.0, 1.0], // 5: LightYellow
+            [5.0, 1.0, 5.0], // 6: LightMagenta
+            [1.0, 5.0, 5.0], // 7: LightCyan
+        ];
+        let rgb = BASE_RGB[color_idx % 8];
+        let scale = 1.0 - ratio * 0.8;
+        let r = (rgb[0] * scale).round().clamp(0.0, 5.0) as u8;
+        let g = (rgb[1] * scale).round().clamp(0.0, 5.0) as u8;
+        let b = (rgb[2] * scale).round().clamp(0.0, 5.0) as u8;
+        Color::Indexed(16 + 36 * r + 6 * g + b)
+    }
+
     pub fn draw_grid(&mut self, _context: &mut Context, d: &mut TetrisModel) {
         for n in 0..2 {
             let frs = timer_stage(&format!("clear-row{}", n));
@@ -167,6 +187,62 @@ impl TetrisRender {
                     }
                 }
             }
+            // Draw hard-drop trail with gradient during fall animation
+            let fall_stage = timer_stage(&format!("fall{}", n));
+            if fall_stage != 0 {
+                let block = d.sides[n].core.cur_block;
+                let z = d.sides[n].core.cur_z;
+                let cy = d.sides[n].core.cur_y;
+                let cx = d.sides[n].core.cur_x;
+                let sy = d.sides[n].core.shadow_y;
+                // Collect trail cells: (sprite_x, sprite_y, color_index, ratio)
+                let mut trail_cells: Vec<(u16, u16, usize, f32)> = Vec::new();
+                for j in 0..4i8 {
+                    let mut bottom = -1i8;
+                    let mut trail_md: u8 = 0;
+                    for i in (0..4i8).rev() {
+                        if d.sides[n].get_md(block, z, i * 4 + j) != 0 {
+                            bottom = i;
+                            trail_md = d.sides[n].get_md(block, z, i * 4 + j);
+                            break;
+                        }
+                    }
+                    if bottom >= 0 {
+                        let col = cx + j;
+                        let trail_start = cy + bottom + 1;
+                        let trail_end = sy + bottom;
+                        let trail_len = (trail_end - trail_start).max(1) as f32;
+                        let ci = (trail_md as usize) % 8;
+                        for ty in trail_start..trail_end {
+                            if ty >= 0 && (ty as u16) < ZONG
+                                && d.sides[n].is_in_grid(ty, col)
+                                && d.sides[n].get_gd(ty, col) == 0
+                            {
+                                let rx = col - 2;
+                                if rx >= 0 && (rx as u16) < HENG {
+                                    let ratio = 1.0 - (ty - trail_start) as f32 / trail_len;
+                                    trail_cells.push((rx as u16, ty as u16, ci, ratio));
+                                }
+                            }
+                        }
+                    }
+                }
+                // Batch draw trail on sprite with random gaps
+                let sname = format!("grid{}", n);
+                let l = self.scene.get_sprite(&sname);
+                for &(rx, ty, ci, ratio) in &trail_cells {
+                    let h = (rx as u32).wrapping_mul(73856093)
+                        ^ (ty as u32).wrapping_mul(19349663)
+                        ^ fall_stage.wrapping_mul(83492791);
+                    if h % 10 < 4 {
+                        l.set_graph_sym(rx, ty, 0, 32, Color::Reset); // space
+                    } else {
+                        let fg = Self::trail_color(ci, ratio);
+                        l.set_graph_sym(rx, ty, 0, 124, fg); // '|'
+                    }
+                }
+            }
+
             for i in 0..4 {
                 for j in 0..4 {
                     let ttx = d.sides[n].core.shadow_x + j;
