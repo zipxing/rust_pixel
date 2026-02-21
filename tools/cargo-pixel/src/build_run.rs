@@ -86,7 +86,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             "cargo {} -p {} --features term {} {}",
             subcmd, mod_name, release, other_part
         )),
-        "wgpu" | "wg" => cmds.push(format!(
+        "wgpu" | "wg" | "g" => cmds.push(format!(
             "cargo {} -p {} --features wgpu {} {}",
             subcmd, mod_name, release, other_part
         )),

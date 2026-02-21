@@ -49,11 +49,19 @@ impl PresentListItem {
 }
 
 /// Emoji markers used for unordered list bullets at different depths.
+/// In terminal mode, use single-width Unicode symbols instead of emoji.
+#[cfg(graphics_mode)]
 pub const DEFAULT_MARKERS: [&str; 3] = ["🟢", "🔵", "🟡"];
+#[cfg(not(graphics_mode))]
+pub const DEFAULT_MARKERS: [&str; 3] = ["◆", "●", "◇"];
 
-/// Default marker style (half-scale emoji).
+/// Default marker style (half-scale emoji in GPU mode, normal in terminal).
 pub fn default_marker_style() -> Style {
-    Style::default().fg(Color::Cyan).scale(0.5, 0.5)
+    if cfg!(graphics_mode) {
+        Style::default().fg(Color::Cyan).scale(0.5, 0.5)
+    } else {
+        Style::default().fg(Color::Cyan)
+    }
 }
 
 /// Lightweight read-only list widget with emoji bullets and nested indentation.
@@ -126,8 +134,10 @@ impl PresentList {
             let marker = &self.markers[marker_idx];
             buf.set_string(x, y, &indent, self.prefix_style);
             buf.set_string(x + indent_width, y, marker, self.marker_style);
-            // emoji(2 cells) + space(1 cell) = 3
-            buf.set_string(x + indent_width + 3, y, &item.text, self.text_style);
+            // GPU: emoji(2 cells) + space(1 cell) = 3
+            // Terminal: symbol(1 cell) + space(1 cell) = 2
+            let marker_offset: u16 = if cfg!(graphics_mode) { 3 } else { 2 };
+            buf.set_string(x + indent_width + marker_offset, y, &item.text, self.text_style);
         }
     }
 }

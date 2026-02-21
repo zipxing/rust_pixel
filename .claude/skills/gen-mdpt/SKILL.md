@@ -189,6 +189,22 @@ C -->|No| E[Other]
 
 Supports `graph TD` (top-down) and `graph LR` (left-right). Node shapes: `[rect]`, `(round)`, `{diamond}`.
 
+### Mermaid Sequence Diagram
+
+````markdown
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: Request
+    S-->>C: Response
+```
+````
+
+- `participant ID as Label` declares a participant (optional, auto-created from messages)
+- `->>` solid arrow, `-->>` dashed arrow
+- `A->>B: message` sends message from A to B
+
 ### Images
 
 ```markdown

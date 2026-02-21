@@ -261,6 +261,21 @@ E --> F
 
 ---
 
+## Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant D as Database
+    C->>S: HTTP Request
+    S->>D: SQL Query
+    D-->>S: Result Set
+    S-->>C: JSON Response
+```
+
+---
+
 <!-- jump_to_middle -->
 
 # Thank You!

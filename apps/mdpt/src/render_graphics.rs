@@ -83,9 +83,11 @@ impl MdptRender {
         tui_buffer.reset();
         tui_buffer.merge(source_buffer, 255, true);
 
-        // Draw status bar
+        // Draw status bar or minimal page number
         if data.show_status_bar {
             self.draw_status_bar(data);
+        } else {
+            self.draw_page_number(data);
         }
 
         // Handle image sprite
@@ -150,6 +152,23 @@ impl MdptRender {
         ctx.adapter.present_default();
     }
 
+    /// Draw minimal page number in the bottom-right corner
+    fn draw_page_number(&mut self, data: &MdptModel) {
+        let page_info = format!(
+            "{}/{}",
+            data.current_slide + 1,
+            data.total_slides().max(1),
+        );
+        let w = data.presentation.front_matter.width;
+        let h = data.presentation.front_matter.height;
+        let x = w.saturating_sub(page_info.len() as u16 + 1);
+        let y = h - 1;
+        let tui_buffer = self.scene.tui_buffer_mut();
+        let fg = Color::Rgba(100, 100, 100, 255);
+        let bg = Color::Reset;
+        tui_buffer.set_color_str(x, y, &page_info, fg, bg);
+    }
+
     /// Draw status bar on the last row of tui_buffer
     fn draw_status_bar(&mut self, data: &MdptModel) {
         let info = format!(
@@ -167,7 +186,9 @@ impl MdptRender {
         let status_y = data.presentation.front_matter.height - 1;
         let status_bg = " ".repeat(data.presentation.front_matter.width as usize);
         let tui_buffer = self.scene.tui_buffer_mut();
-        tui_buffer.set_color_str(0, status_y, &status_bg, Color::White, Color::DarkGray);
-        tui_buffer.set_color_str(0, status_y, &info, Color::White, Color::DarkGray);
+        let status_fg = Color::Rgba(140, 140, 140, 255);
+        let status_bg_color = Color::Rgba(30, 30, 35, 255);
+        tui_buffer.set_color_str(0, status_y, &status_bg, status_fg, status_bg_color);
+        tui_buffer.set_color_str(0, status_y, &info, status_fg, status_bg_color);
     }
 }

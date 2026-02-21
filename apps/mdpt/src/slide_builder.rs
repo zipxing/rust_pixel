@@ -1,6 +1,6 @@
 use crate::chart::bar_chart::BarChart;
 use crate::chart::line_chart::LineChart;
-use crate::chart::mermaid::{parse_mermaid, render_mermaid};
+use crate::chart::mermaid::{parse_mermaid, parse_sequence, render_mermaid, render_sequence};
 use crate::chart::pie_chart::PieChart;
 use crate::chart::{parse_chart_data, ChartRenderer};
 use crate::highlight::HighlightedLine;
@@ -442,12 +442,13 @@ pub fn build_slide_page(
                     (margin, content_width)
                 };
 
-                // Draw emoji bullet on canvas (shared style with PresentList)
+                // Draw bullet marker on canvas (shared style with PresentList)
                 log::info!("[mdpt] AnimatedText: calling set_string for marker");
                 buf.set_string(x_start, y, DEFAULT_MARKERS[0], default_marker_style());
-                // Label starts after emoji(2) + space(1) = 3 cells
-                let label_x = x_start + 3;
-                let label_w = w.saturating_sub(3);
+                // GPU: emoji(2) + space(1) = 3; Terminal: symbol(1) + space(1) = 2
+                let marker_offset: u16 = if cfg!(graphics_mode) { 3 } else { 2 };
+                let label_x = x_start + marker_offset;
+                let label_w = w.saturating_sub(marker_offset);
                 let bounds = Rect::new(label_x, y, label_w, 1);
                 let mut label = match animation {
                     AnimationType::Spotlight => {
@@ -602,6 +603,10 @@ pub fn build_slide_page(
                     let chart_h = content_height.saturating_sub(y);
                     render_mermaid(&graph, buf, x_start, y, w, chart_h);
                     y += chart_h + 1;
+                } else if let Some(seq) = parse_sequence(content) {
+                    let chart_h = content_height.saturating_sub(y);
+                    render_sequence(&seq, buf, x_start, y, w, chart_h);
+                    y += chart_h + 1;
                 } else {
                     // Fallback: render as plain code block
                     let style = Style::default().fg(Color::Gray);
@@ -662,10 +667,12 @@ pub fn build_cover_page(
     // ── Title (large, centered, static) ──
     let title_y = mid_y.saturating_sub(3);
     if !front_matter.title.is_empty() {
-        let title_style = Style::default()
+        let mut title_style = Style::default()
             .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD)
-            .scale(1.8, 1.8);
+            .add_modifier(Modifier::BOLD);
+        if cfg!(graphics_mode) {
+            title_style = title_style.scale(1.8, 1.8);
+        }
         let mut label = Label::new(&front_matter.title)
             .with_style(title_style)
             .with_align(TextAlign::Center);
@@ -676,10 +683,12 @@ pub fn build_cover_page(
     // ── Author ──
     if !front_matter.author.is_empty() {
         let author_y = title_y + 3;
-        let author_style = Style::default()
+        let mut author_style = Style::default()
             .fg(Color::Rgba(140, 200, 160, 255))
-            .scale(0.95, 0.95)
             .add_modifier(Modifier::ITALIC);
+        if cfg!(graphics_mode) {
+            author_style = author_style.scale(0.95, 0.95);
+        }
         let mut label = Label::new(&front_matter.author)
             .with_style(author_style)
             .with_align(TextAlign::Center);
@@ -699,15 +708,21 @@ pub fn build_cover_page(
         "{}  ·  {}  ·  {}",
         front_matter.theme, front_matter.transition, front_matter.code_theme
     );
-    let info_style = Style::default().fg(Color::Rgba(90, 95, 100, 255)).scale(0.85, 0.85);
+    let mut info_style = Style::default().fg(Color::Rgba(90, 95, 100, 255));
+    if cfg!(graphics_mode) {
+        info_style = info_style.scale(0.85, 0.85);
+    }
     let info_x = cx + (content_width.saturating_sub(info.len() as u16)) / 2;
     buf.set_string(info_x, sep_y + 1, &info, info_style);
 
     // ── Hint ──
     let hint = "Press Space to begin →";
-    let hint_style = Style::default().fg(Color::Rgba(80, 85, 90, 255)).scale(0.85, 0.85);
+    let mut hint_style = Style::default().fg(Color::Rgba(80, 85, 90, 255));
+    if cfg!(graphics_mode) {
+        hint_style = hint_style.scale(0.85, 0.85);
+    }
     let hint_x = cx + (content_width.saturating_sub(hint.len() as u16)) / 2;
-    buf.set_string(hint_x, sep_y + 3, hint, hint_style);
+    buf.set_string(hint_x, sep_y + 2, hint, hint_style);
 
     // Add deferred widgets
     for widget in deferred_widgets {

@@ -534,3 +534,256 @@ fn draw_horizontal_edge(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Sequence Diagram
+// ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct SequenceParticipant {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SequenceMessage {
+    pub from: String,
+    pub to: String,
+    pub label: String,
+    pub dashed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SequenceDiagram {
+    pub participants: Vec<SequenceParticipant>,
+    pub messages: Vec<SequenceMessage>,
+}
+
+/// Parse a Mermaid sequence diagram. Returns None if not a sequence diagram.
+pub fn parse_sequence(content: &str) -> Option<SequenceDiagram> {
+    let mut lines = content.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
+
+    let first = lines.next()?;
+    if first != "sequenceDiagram" {
+        return None;
+    }
+
+    let mut participants: Vec<SequenceParticipant> = Vec::new();
+    let mut messages: Vec<SequenceMessage> = Vec::new();
+    let mut seen_ids: Vec<String> = Vec::new();
+
+    for line in lines {
+        if let Some(rest) = line.strip_prefix("participant ") {
+            let rest = rest.trim();
+            if let Some(as_pos) = rest.find(" as ") {
+                let id = rest[..as_pos].trim().to_string();
+                let label = rest[as_pos + 4..].trim().to_string();
+                if !seen_ids.contains(&id) {
+                    seen_ids.push(id.clone());
+                    participants.push(SequenceParticipant { id, label });
+                }
+            } else {
+                let id = rest.to_string();
+                if !seen_ids.contains(&id) {
+                    seen_ids.push(id.clone());
+                    participants.push(SequenceParticipant {
+                        id: id.clone(),
+                        label: id,
+                    });
+                }
+            }
+        } else if let Some(msg) = parse_sequence_message(line) {
+            // Auto-add participants from messages
+            for pid in [&msg.from, &msg.to] {
+                if !seen_ids.contains(pid) {
+                    seen_ids.push(pid.clone());
+                    participants.push(SequenceParticipant {
+                        id: pid.clone(),
+                        label: pid.clone(),
+                    });
+                }
+            }
+            messages.push(msg);
+        }
+    }
+
+    if participants.is_empty() {
+        return None;
+    }
+
+    Some(SequenceDiagram {
+        participants,
+        messages,
+    })
+}
+
+fn parse_sequence_message(line: &str) -> Option<SequenceMessage> {
+    // Match patterns: A->>B: msg, A-->>B: msg, A->>+B: msg, A-->>-B: msg
+    let (dashed, arrow) = if line.contains("-->>") {
+        (true, "-->>")
+    } else if line.contains("->>") {
+        (false, "->>")
+    } else {
+        return None;
+    };
+
+    let arrow_pos = line.find(arrow)?;
+    let from = line[..arrow_pos].trim().to_string();
+    let after_arrow = line[arrow_pos + arrow.len()..].trim();
+
+    // Skip optional +/- activation markers
+    let after_arrow = after_arrow.trim_start_matches(['+', '-']);
+
+    let (to, label) = if let Some(colon_pos) = after_arrow.find(':') {
+        let to = after_arrow[..colon_pos].trim().to_string();
+        let label = after_arrow[colon_pos + 1..].trim().to_string();
+        (to, label)
+    } else {
+        (after_arrow.trim().to_string(), String::new())
+    };
+
+    if from.is_empty() || to.is_empty() {
+        return None;
+    }
+
+    Some(SequenceMessage {
+        from,
+        to,
+        label,
+        dashed,
+    })
+}
+
+/// Render a sequence diagram to buffer.
+pub fn render_sequence(
+    diagram: &SequenceDiagram,
+    buf: &mut Buffer,
+    x: u16,
+    y: u16,
+    w: u16,
+    h: u16,
+) {
+    let area = buf.area();
+    let bx = area.x + area.width;
+    let by = area.y + area.height;
+
+    let n = diagram.participants.len();
+    if n == 0 {
+        return;
+    }
+
+    // Calculate column positions: evenly distribute participants across width
+    let col_spacing = w / n as u16;
+    let col_centers: Vec<u16> = (0..n)
+        .map(|i| x + col_spacing / 2 + i as u16 * col_spacing)
+        .collect();
+
+    let id_to_col: HashMap<&str, u16> = diagram
+        .participants
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.id.as_str(), col_centers[i]))
+        .collect();
+
+    let node_h: u16 = 3;
+    let axis_style = Style::default().fg(AXIS_COLOR);
+
+    // Draw participant boxes at top
+    for (i, p) in diagram.participants.iter().enumerate() {
+        let cx = col_centers[i];
+        let label_w = p.label.width() as u16;
+        let box_w = label_w + 4;
+        let box_x = cx.saturating_sub(box_w / 2);
+        let color = CHART_COLORS[i % CHART_COLORS.len()];
+        draw_box(buf, box_x, y, box_w, node_h, &p.label, color);
+    }
+
+    // Draw lifelines and messages
+    let msg_start_y = y + node_h;
+    let total_msg_rows = diagram.messages.len() as u16 * 2;
+    let lifeline_end = (msg_start_y + total_msg_rows + 1).min(y + h).min(by);
+
+    // Draw all lifelines first
+    for &cx in &col_centers {
+        if cx >= bx {
+            continue;
+        }
+        for row in msg_start_y..lifeline_end {
+            if row >= by {
+                break;
+            }
+            buf.set_string(cx, row, "│", axis_style);
+        }
+    }
+
+    // Draw messages
+    let mut msg_y = msg_start_y + 1;
+    for msg in &diagram.messages {
+        if msg_y >= y + h || msg_y >= by {
+            break;
+        }
+
+        let from_x = id_to_col.get(msg.from.as_str()).copied().unwrap_or(x);
+        let to_x = id_to_col.get(msg.to.as_str()).copied().unwrap_or(x);
+
+        draw_sequence_arrow(buf, from_x, to_x, msg_y, &msg.label, msg.dashed, bx, by);
+
+        msg_y += 2;
+    }
+}
+
+fn draw_sequence_arrow(
+    buf: &mut Buffer,
+    from_x: u16,
+    to_x: u16,
+    y: u16,
+    label: &str,
+    dashed: bool,
+    bx: u16,
+    by: u16,
+) {
+    if y >= by {
+        return;
+    }
+
+    let axis_style = Style::default().fg(AXIS_COLOR);
+    let label_style = Style::default().fg(LABEL_COLOR);
+    let line_char = if dashed { "-" } else { "─" };
+
+    let (lx, rx, going_right) = if from_x < to_x {
+        (from_x + 1, to_x, true)
+    } else if from_x > to_x {
+        (to_x + 1, from_x, false)
+    } else {
+        return; // self-message not supported yet
+    };
+
+    // Draw the line
+    for col in lx..rx {
+        if col >= bx {
+            break;
+        }
+        buf.set_string(col, y, line_char, axis_style);
+    }
+
+    // Draw arrowhead
+    if going_right {
+        if to_x > 0 && to_x < bx {
+            buf.set_string(to_x - 1, y, ">", axis_style);
+        }
+    } else {
+        if lx < bx {
+            buf.set_string(lx, y, "<", axis_style);
+        }
+    }
+
+    // Draw label centered on the arrow
+    if !label.is_empty() {
+        let label_w = label.width() as u16;
+        let mid = (lx + rx) / 2;
+        let label_x = mid.saturating_sub(label_w / 2);
+        if label_x < bx {
+            buf.set_string(label_x, y, label, label_style);
+        }
+    }
+}

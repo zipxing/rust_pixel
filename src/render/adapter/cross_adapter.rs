@@ -30,6 +30,8 @@ use crossterm::{
 use std::any::Any;
 use std::io::{self, Write};
 use std::time::Duration;
+#[cfg(cross_backend)]
+use unicode_width::UnicodeWidthStr;
 // use log::info;
 
 #[cfg(cross_backend)]
@@ -165,13 +167,13 @@ impl Adapter for CrosstermAdapter {
         let mut fg = Color::Reset;
         let mut bg = Color::Reset;
         let mut modifier = Modifier::empty();
+        let buf_width = current_buffer.area().width;
         let mut last_pos: Option<(u16, u16)> = None;
         for (x, y, cell) in updates {
             // Move the cursor if the previous location was not (x - 1, y)
             if !matches!(last_pos, Some(p) if x == p.0 + 1 && y == p.1) {
                 to_error(queue!(self.writer, MoveTo(x, y)))?;
             }
-            last_pos = Some((x, y));
             if cell.modifier != modifier {
                 let diff = ModifierDiff {
                     from: modifier,
@@ -191,7 +193,16 @@ impl Adapter for CrosstermAdapter {
                 bg = cell.bg;
             }
 
-            to_error(queue!(self.writer, Print(&cell.symbol)))?;
+            let sym_width = cell.symbol.width() as u16;
+            // Prevent wide characters at the right edge from spilling beyond buffer
+            if sym_width > 1 && x + sym_width > buf_width {
+                to_error(queue!(self.writer, Print(" ")))?;
+                last_pos = Some((x, y));
+            } else {
+                to_error(queue!(self.writer, Print(&cell.symbol)))?;
+                // Track cursor position accounting for wide character advance
+                last_pos = Some((x + sym_width.saturating_sub(1), y));
+            }
         }
         to_error(queue!(
             self.writer,

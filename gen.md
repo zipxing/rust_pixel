@@ -617,14 +617,19 @@ E -->|Async| H[tokio/async]
 
 ---
 
-## Data Processing Pipeline
+## Client-Server Interaction
+
+<!-- spacer: 5 -->
 
 ```mermaid
-graph LR
-A[Input] --> B[Parse]
-B --> C[Validate]
-C --> D[Transform]
-D --> E[Output]
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant D as Database
+    C->>S: HTTP Request
+    S->>D: Query
+    D-->>S: Results
+    S-->>C: HTTP Response
 ```
 
 ---
