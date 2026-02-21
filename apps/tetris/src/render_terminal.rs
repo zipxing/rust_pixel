@@ -349,6 +349,11 @@ impl TetrisRender {
                 }
             }
 
+            // Shadow (same color as block, dimmed)
+            let shadow_ci = (d.sides[n].core.cur_block as usize + 1) % 8;
+            let shadow_fg = Self::trail_color(shadow_ci, 0.6);
+            let sname = format!("grid{}", n);
+            let sl = self.scene.get_sprite(&sname);
             for i in 0..4 {
                 for j in 0..4 {
                     let ttx = d.sides[n].core.shadow_x + j;
@@ -362,12 +367,8 @@ impl TetrisRender {
                         {
                             let rx = ttx * 2 - 4;
                             if d.sides[n].get_gd(tty, ttx) == 0 {
-                                self.set_block(
-                                    &format!("grid{}", n),
-                                    rx as u16,
-                                    tty as u16,
-                                    20,
-                                );
+                                sl.set_color_str(rx as u16, tty as u16, "░", shadow_fg, Color::Reset);
+                                sl.set_color_str(rx as u16 + 1, tty as u16, "░", shadow_fg, Color::Reset);
                             }
                         }
                     }
