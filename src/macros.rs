@@ -46,6 +46,18 @@ macro_rules! app_body {
                 rust_pixel::set_wasm_app_data(data);
             }
 
+            /// Receive loaded asset data from JavaScript — safe free function.
+            ///
+            /// Pushes data to a global queue instead of directly accessing Game.
+            /// This avoids double mutable borrow when JS fetch callbacks fire
+            /// during async init_from_cache().
+            /// Queue is drained synchronously at the start of each tick().
+            #[cfg(target_arch = "wasm32")]
+            #[wasm_bindgen]
+            pub fn wasm_on_asset_loaded(url: &str, data: &[u8]) {
+                rust_pixel::asset::wasm_queue_asset_data(url, data);
+            }
+
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             pub struct [<$name Game>] {
                 g: Game<[<$name Model>], [<$name Render>]>,
@@ -114,6 +126,13 @@ macro_rules! app_body {
                 }
 
                 pub fn tick(&mut self, dt: f32) {
+                    // Drain the global asset queue before game logic.
+                    // Assets loaded by JS fetch callbacks are queued via
+                    // wasm_on_asset_loaded() and processed here synchronously,
+                    // avoiding the double mutable borrow race condition.
+                    #[cfg(target_arch = "wasm32")]
+                    self.g.context.asset_manager.process_queued_assets();
+
                     self.g.on_tick(dt);
                 }
 
@@ -153,10 +172,6 @@ macro_rules! app_body {
 
                     wa.init_wgpu_from_cache_async().await;
                     info!("RUST: WGPU Web initialized from cached texture data");
-                }
-
-                pub fn on_asset_loaded(&mut self, url: &str, data: &[u8]) {
-                    self.g.context.asset_manager.set_data(url, data);
                 }
 
                 pub fn get_ratiox(&mut self) -> f32 {

@@ -11,11 +11,15 @@
 
 /**
  * Asset Loading Bridge Function
- * 
+ *
  * This function is called FROM Rust code to load assets asynchronously.
  * The Rust WASM code cannot directly use fetch(), so it delegates to this JS function.
- * 
+ *
  * Flow: Rust calls js_load_asset(url) → fetch → arrayBuffer → Uint8Array → back to Rust
+ *
+ * IMPORTANT: Uses wasm_on_asset_loaded() (a free function) instead of sg.on_asset_loaded()
+ * (an instance method). This avoids double mutable borrow when fetch callbacks fire
+ * during async init_from_cache(). Data is queued and processed in tick().
  */
 export const js_load_asset = (url) => {
     fetch(url)
@@ -24,9 +28,8 @@ export const js_load_asset = (url) => {
             return data.arrayBuffer();
         })
         .then(res => {
-            // Convert ArrayBuffer to Uint8Array and send back to Rust
-            // sg.on_asset_loaded() is the WASM-exported function from Rust
-            sg.on_asset_loaded(url, new Uint8Array(res));
+            // Queue asset data via free function (no &mut Game needed)
+            wasm_on_asset_loaded(url, new Uint8Array(res));
         })
         .catch(error => {
             console.error(`Failed to load asset: ${url}`, error);
@@ -88,7 +91,7 @@ utils.loop = update => {
  * - WebAssembly.instantiate() is inherently async
  * - Memory allocation and linking must complete before use
  */
-import init, {PixelGame, wasm_init_pixel_assets, wasm_set_app_data} from "./pkg/pixel.js";
+import init, {PixelGame, wasm_init_pixel_assets, wasm_set_app_data, wasm_on_asset_loaded} from "./pkg/pixel.js";
 const wasm = await init();
 
 /**

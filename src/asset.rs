@@ -16,7 +16,41 @@ use crate::{
 use log::info;
 use std::collections::HashMap;
 #[cfg(wasm)]
+use std::cell::RefCell;
+#[cfg(wasm)]
 use wasm_bindgen::prelude::*;
+
+// ============================================================================
+// WASM Asset Queue
+//
+// In WASM mode, JS fetch callbacks can fire during async awaits (e.g.,
+// init_from_cache), causing double mutable borrow on the Game struct.
+// This global queue decouples asset data arrival from Game access:
+//   - JS calls wasm_on_asset_loaded() → pushes to queue (no &mut Game)
+//   - tick() drains queue → calls asset_manager.set_data() synchronously
+// ============================================================================
+
+#[cfg(wasm)]
+thread_local! {
+    static ASSET_QUEUE: RefCell<Vec<(String, Vec<u8>)>> = RefCell::new(Vec::new());
+}
+
+/// Push asset data to the global queue (called from JS via wasm_on_asset_loaded).
+/// This is a free function — no &mut self on Game, so no borrow conflict.
+#[cfg(wasm)]
+pub fn wasm_queue_asset_data(url: &str, data: &[u8]) {
+    ASSET_QUEUE.with(|q| {
+        q.borrow_mut().push((url.to_string(), data.to_vec()));
+    });
+}
+
+/// Drain all queued asset data. Called at the start of tick().
+#[cfg(wasm)]
+pub fn drain_asset_queue() -> Vec<(String, Vec<u8>)> {
+    ASSET_QUEUE.with(|q| {
+        std::mem::take(&mut *q.borrow_mut())
+    })
+}
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum AssetState {
@@ -161,6 +195,16 @@ impl AssetManager {
             self.assets[*idx - 1].set_state(AssetState::Parsing);
             self.assets[*idx - 1].parse();
             self.assets[*idx - 1].set_state(AssetState::Ready);
+        }
+    }
+
+    /// Drain the global asset queue and process all pending assets.
+    /// Called at the start of each tick() in WASM mode.
+    #[cfg(wasm)]
+    pub fn process_queued_assets(&mut self) {
+        let queued = drain_asset_queue();
+        for (url, data) in queued {
+            self.set_data(&url, &data);
         }
     }
 }
