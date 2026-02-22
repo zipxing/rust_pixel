@@ -1,4 +1,4 @@
-use log::debug;
+// use log::debug;
 use rust_pixel::event::{Event, KeyCode};
 //use rand::prelude::*;
 use rust_pixel::{
@@ -87,7 +87,7 @@ impl TetrisModel {
             }
             Move::DropDown => {
                 timer_fire(&format!("fall{}", index), 0);
-                debug!("fire fall{}", index);
+                // debug!("fire fall{}", index);
             }
             Move::Down => {
                 if self.sides[index].move_block(d, false) == MoveRet::ReachBottom {
@@ -110,9 +110,12 @@ impl TetrisModel {
 impl Model for TetrisModel {
     fn init(&mut self, _context: &mut Context) {
         self.reset();
-        log::info!("Starting tetris background music...");
-        self.audio.play_file("back.mp3", true);
-        log::info!("Tetris background music play_file called");
+        #[cfg(audio_support)]
+        {
+            log::info!("Starting tetris background music...");
+            self.audio.play_file("back.mp3", true);
+            log::info!("Tetris background music play_file called");
+        }
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
@@ -181,7 +184,7 @@ impl Model for TetrisModel {
         if self.timeout_ai > 0.1 {
             self.timeout_ai = 0.0;
             let c = self.tai.get_ai_act(&self.block_queue, &mut self.sides[1]);
-            debug!("getAiAct::{}", c);
+            // debug!("getAiAct::{}", c);
             let d: Option<Move> = match c {
                 'S' => Some(Move::Save),
                 'T' => Some(Move::TurnCw),

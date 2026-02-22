@@ -37,6 +37,8 @@ pub struct TetrisRender {
     pub panel: Panel,
     /// WidgetId of the transparent overlay child for dynamic content
     overlay_id: WidgetId,
+    /// Whether back.txt has been loaded into the root panel's canvas
+    back_loaded: bool,
 }
 
 impl TetrisRender {
@@ -64,6 +66,7 @@ impl TetrisRender {
             scene,
             panel,
             overlay_id,
+            back_loaded: false,
         }
     }
 
@@ -402,15 +405,21 @@ impl Render for TetrisRender {
             .init(CANVAS_W, CANVAS_H, 2.0, 2.0, "tetris".to_string());
         self.scene.init(context);
 
-        // Load back.txt into root panel's canvas, then hide the temp sprite
-        let l = self.scene.get_sprite("back");
-        let bp = "back.txt";
-        asset2sprite!(l, context, &bp);
-        self.panel.canvas_mut().merge(&l.content, 255, true);
-        l.set_hidden(true);
+        // back.txt loading is deferred to draw() to avoid wasm async borrow conflict
+        // (init() runs during new()/init_from_cache() which holds &mut self across await)
     }
 
     fn draw(&mut self, context: &mut Context, data: &mut Self::Model, _dt: f32) {
+        // Retry loading back.txt if not yet ready (async in wasm)
+        if !self.back_loaded {
+            let l = self.scene.get_sprite("back");
+            let bp = "back.txt";
+            if asset2sprite!(l, context, &bp) {
+                self.panel.canvas_mut().merge(&l.content, 255, true);
+                l.set_hidden(true);
+                self.back_loaded = true;
+            }
+        }
         // Get overlay child panel, reset and draw dynamic content
         {
             let overlay = self.panel.get_child_mut(self.overlay_id).unwrap()

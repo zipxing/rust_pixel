@@ -1,6 +1,6 @@
 use crate::constant::*;
 //use crossterm::event::{Event, KeyCode};
-use log::debug;
+// use log::debug;
 //use rand::prelude::*;
 //use std::any::Any;
 use rust_pixel::{
@@ -77,11 +77,11 @@ impl TetrisCore {
                     s.push('.');
                 }
             }
-            debug!("{}", s);
+            // debug!("{}", s);
         }
-        debug!("col_hole={:?}", self.col_hole);
-        debug!("col_top={:?}", self.col_top);
-        debug!("top_line={:?}", self.top_line);
+        // debug!("col_hole={:?}", self.col_hole);
+        // debug!("col_top={:?}", self.col_top);
+        // debug!("top_line={:?}", self.top_line);
     }
 }
 
