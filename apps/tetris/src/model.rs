@@ -4,9 +4,8 @@ use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::{
     audio::Audio,
     context::Context,
-    event::{event_emit, timer_fire},
+    event::{event_emit, timer_fire, timer_stage},
     game::Model,
-    //timer_cancel, timer_fire, timer_register,
     util::Rand,
 };
 use tetris_lib::{
@@ -119,12 +118,16 @@ impl Model for TetrisModel {
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
+        let falling = timer_stage("fall0") != 0;
         let es = context.input_events.clone();
         for e in &es {
             match e {
                 Event::Key(key) => {
                     let mut d: Option<Move> = None;
                     match key.code {
+                        KeyCode::Char('r') => d = Some(Move::Restart),
+                        // Block all gameplay input during hard-drop animation
+                        _ if falling => {}
                         KeyCode::Char(' ') => {
                             d = Some(Move::DropDown);
                         }
@@ -134,7 +137,6 @@ impl Model for TetrisModel {
                         KeyCode::Char('k') => d = Some(Move::Down),
                         KeyCode::Char('l') => d = Some(Move::Right),
                         KeyCode::Char('s') => d = Some(Move::Save),
-                        KeyCode::Char('r') => d = Some(Move::Restart),
                         _ => {}
                     }
                     if d != None {
@@ -163,6 +165,7 @@ impl Model for TetrisModel {
                     self.sides[i].core.attack[1],
                 );
                 self.sides[1 - i].make_shadow();
+                timer_fire(&format!("attack{}", i), 0);
                 self.sides[i].core.attack[0] = 0;
             }
         }

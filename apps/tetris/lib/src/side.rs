@@ -156,11 +156,11 @@ impl TetrisCell {
 
         timer_register(&format!("next-block{}", self.index), 0.8, "_");
         timer_register(&format!("pre-stable{}", self.index), 0.8, "_");
-        timer_register(&format!("clear-row{}", self.index), 0.3, "_");
+        timer_register(&format!("clear-row{}", self.index), 0.14, "_");
         timer_register(&format!("game-over{}", self.index), 0.12, "_");
         timer_register(&format!("fall{}", self.index), 0.1, "_");
         timer_register(&format!("combo{}", self.index), 0.8, "_");
-        timer_register(&format!("attack{}", self.index), 0.8, "_");
+        timer_register(&format!("attack{}", self.index), 0.5, "_");
     }
 
     pub fn timer_process(&mut self, blocks: &[i8]) {

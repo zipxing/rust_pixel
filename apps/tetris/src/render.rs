@@ -3,7 +3,7 @@ use rust_pixel::{
     asset::AssetType,
     asset2sprite,
     context::Context,
-    event::{event_check, event_register, timer_exdata, timer_stage},
+    event::{event_check, event_register, timer_exdata, timer_percent, timer_stage},
     game::Render,
     render::scene::Scene,
     render::sprite::Sprite,
@@ -149,8 +149,8 @@ impl TetrisRender {
                 bg = Color::Reset;
             }
             11 => {
-                c1 = "█";
-                c2 = "█";
+                c1 = "▓";
+                c2 = "▓";
                 fg = Color::Indexed(240);
                 bg = Color::Reset;
             }
@@ -161,8 +161,8 @@ impl TetrisRender {
                 bg = Color::Reset;
             }
             30 => {
-                c1 = "-";
-                c2 = "=";
+                c1 = "<";
+                c2 = "<";
                 fg = Color::Indexed(231);
                 bg = Color::Reset;
             }
@@ -292,14 +292,23 @@ impl TetrisRender {
                             Self::set_block_on(p, gx, gy, rx, i, 0);
                         }
                         _ => {
-                            let mut hidden_fullrow = false;
-                            if frs != 0 {
-                                if fri.contains(&(i as i8)) && frs / 3 % 2 == 0 {
-                                    hidden_fullrow = true;
+                            if frs != 0 && fri.contains(&(i as i8)) {
+                                // Left-to-right sweep effect for clearing rows
+                                let pct = 1.0 - timer_percent(&format!("clear-row{}", n));
+                                let sweep_col = (pct * (HENG as f32 + 1.0)) as u16;
+                                if j < sweep_col {
+                                    let ax = gx + rx;
+                                    let ay = gy + i;
+                                    let fg = if j + 1 == sweep_col {
+                                        Color::Indexed(231) // bright white at sweep front
+                                    } else {
+                                        Color::Indexed(239) // light gray behind
+                                    };
+                                    p.set_color_str(ax, ay, "▸", fg, Color::Reset);
+                                    p.set_color_str(ax + 1, ay, "▸", fg, Color::Reset);
+                                } else {
+                                    Self::set_block_on(p, gx, gy, rx, i, gv % 100);
                                 }
-                            }
-                            if hidden_fullrow {
-                                Self::set_block_on(p, gx, gy, rx, i, 30);
                             } else {
                                 Self::set_block_on(p, gx, gy, rx, i, gv % 100);
                             }
@@ -386,6 +395,52 @@ impl TetrisRender {
                                 p.set_color_str(ax + 1, ay, "░", shadow_fg, Color::Reset);
                             }
                         }
+                    }
+                }
+            }
+
+        }
+
+        // Attack flight animation: marker flies between grids
+        // 1P attacks: 1P bottom-right → 2P bottom-left
+        // 2P attacks: 2P bottom-left → 1P bottom-right
+        for n in 0..2usize {
+            let attack_stg = timer_stage(&format!("attack{}", n));
+            if attack_stg != 0 {
+                let pct = 1.0 - timer_percent(&format!("attack{}", n));
+                let ay = GRID0_Y + ZONG;
+
+                // Flight path endpoints (x coordinates)
+                let (start_x, end_x) = if n == 0 {
+                    // 1P attacks: right edge of 1P grid → left edge of 2P grid
+                    (GRID0_X + HENG * 2, GRID1_X)
+                } else {
+                    // 2P attacks: left edge of 2P grid → right edge of 1P grid
+                    (GRID1_X, GRID0_X + HENG * 2)
+                };
+
+                let head_x = start_x as f32 + pct * (end_x as f32 - start_x as f32);
+                let head_x = head_x as i16;
+                let going_right = end_x > start_x;
+                let trail_dir: i16 = if going_right { -1 } else { 1 };
+
+                // Head
+                if head_x >= 0 && (head_x as u16) + 1 < CANVAS_W {
+                    p.set_color_str(head_x as u16, ay, "♦", Color::White, Color::Reset);
+                    p.set_color_str(head_x as u16 + 1, ay, "♦", Color::White, Color::Reset);
+                }
+
+                // Trail (3 segments behind the head)
+                for t in 1..=3i16 {
+                    let tx = head_x + trail_dir * t * 2;
+                    if tx >= 0 && (tx as u16) + 1 < CANVAS_W {
+                        let fg = match t {
+                            1 => Color::Indexed(255),
+                            2 => Color::Indexed(250),
+                            _ => Color::Indexed(245),
+                        };
+                        p.set_color_str(tx as u16, ay, "·", fg, Color::Reset);
+                        p.set_color_str(tx as u16 + 1, ay, "·", fg, Color::Reset);
                     }
                 }
             }
