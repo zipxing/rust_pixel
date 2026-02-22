@@ -23,9 +23,13 @@ impl Render for PaletteRender {
     type Model = PaletteModel;
 
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
+        #[cfg(graphics_mode)]
+        context.adapter.get_base().gr.set_use_tui_height(true);
+
+        let (sx, sy) = if cfg!(graphics_mode) { (3.0, 3.0) } else { (1.0, 1.0) };
         context
             .adapter
-            .init(PALETTEW + 2, PALETTEH, 1.0, 1.0, "palette".to_string());
+            .init(PALETTEW + 2, PALETTEH, sx, sy, "palette".to_string());
         self.scene.init(context);
         data.need_redraw = true;
     }
