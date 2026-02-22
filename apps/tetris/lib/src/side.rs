@@ -93,6 +93,7 @@ pub struct TetrisStat {
     pub level: i16,
     pub score: i64,
     pub clear_lines: i32,
+    pub attack_lines: i32,
 }
 
 impl TetrisStat {

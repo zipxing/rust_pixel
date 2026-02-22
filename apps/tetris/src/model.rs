@@ -153,6 +153,7 @@ impl Model for TetrisModel {
             }
             self.sides[i].timer_process(&self.block_queue);
             if self.sides[i].core.attack[0] != 0 {
+                self.sides[i].stat.attack_lines += self.sides[i].core.attack[0] as i32;
                 self.sides[1 - i].attacked(
                     &mut self.trand,
                     self.sides[i].core.attack[0],

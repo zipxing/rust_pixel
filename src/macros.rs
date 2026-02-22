@@ -6,79 +6,14 @@
 //! This module provides the `app!` macro which generates the boilerplate code
 //! needed for a RustPixel application to run across multiple platforms.
 
-/// Macro `app!` to scaffold a RustPixel application entry.
+/// Internal macro containing shared application scaffolding code.
 ///
-/// ## Architecture
-///
-/// This macro implements the conventional `lib.rs` + `main.rs` split used by RustPixel apps.
-/// Although the split may look redundant, it is crucial for cross‑platform deployment and a
-/// consistent framework architecture.
-///
-/// ### Why split `lib.rs` and `main.rs`?
-///
-/// - WASM builds require `crate-type = ["cdylib", "rlib"]` and do not use `main()`; instead,
-///   exported functions are called from JavaScript. The generated `{Name}Game` methods such as
-///   `new()`, `tick()`, and `key_event()` can be exported for the Web frontend.
-/// - Multi‑platform deployment:
-///   - Native binary: `main.rs` calls `{crate_name}::run()` from `lib.rs`.
-///   - WASM library: JavaScript calls `{Name}Game::new()`, `tick()`, etc., from `lib.rs`.
-///   - Library dependency: Other crates can depend on the library API in `lib.rs`.
-/// - Unified architecture: All RustPixel games follow the same Model + Render + Game pattern,
-///   enabling consistent interfaces across terminal, SDL2, and Web backends.
-/// - Code organization: `lib.rs` defines the public API and integration points; `main.rs`
-///   provides the native entry point. This improves testability and conditional compilation.
-///
-/// ### What does the macro generate?
-///
-/// ```rust,ignore
-/// // Module structure
-/// mod model;           // Game logic and state
-/// mod render_terminal; // Terminal-mode rendering (text-based)
-/// mod render_graphics; // Graphics-mode rendering (SDL/Web)
-///
-/// // Generated structs and functions
-/// pub struct {Name}Game {
-///     g: Game<{Name}Model, {Name}Render>,
-/// }
-///
-/// pub fn init_game() -> {Name}Game { /* ... */ }
-/// pub fn run() { /* ... */ } // Called by main.rs
-///
-/// // WASM-specific exports
-/// impl {Name}Game {
-///     pub fn new() -> Self { /* ... */ }          // WASM constructor
-///     pub fn tick(&mut self, dt: f32) { /* ... */ } // WASM game loop
-///     pub fn key_event(&mut self, /* ... */) { /* ... */ } // WASM input
-/// }
-/// ```
-///
-/// With this single macro, your game can run as:
-/// - Terminal app (crossterm backend)
-/// - Desktop app (wgpu backend)
-/// - Web app (WGPU via WASM with WebGPU/WebGL2 fallback)
-/// - A library embedded in other Rust projects
-///
-/// ## Usage
-///
-/// In your app's `lib.rs`:
-/// ```rust,ignore
-/// use rust_pixel::app;
-/// app!(MyGame);
-/// ```
+/// This is used by `app!` to avoid duplicating the Game struct, init_game,
+/// WASM exports, and run function across different render module strategies.
 #[cfg(not(feature = "base"))]
 #[macro_export]
-macro_rules! app {
+macro_rules! app_body {
     ($name:ident) => {
-        mod model;
-        #[cfg(not(graphics_mode))]
-        mod render_terminal;
-        #[cfg(graphics_mode)]
-        mod render_graphics;
-
-        #[cfg(not(graphics_mode))]
-        use crate::{model::*, render_terminal::*};
-        #[cfg(graphics_mode)]
-        use crate::{model::*, render_graphics::*};
         use rust_pixel::game::Game;
         use rust_pixel::util::{get_project_path, is_fullscreen_requested, is_fullscreen_fit_requested};
 
@@ -254,3 +189,43 @@ macro_rules! app {
     };
 }
 
+/// Macro `app!` to scaffold a RustPixel application entry.
+///
+/// ## Usage
+///
+/// ### Dual-file mode (separate render_terminal.rs + render_graphics.rs):
+/// ```rust,ignore
+/// use rust_pixel::app;
+/// app!(MyGame);
+/// ```
+///
+/// ### Unified mode (single render.rs with cfg for minor differences):
+/// ```rust,ignore
+/// use rust_pixel::app;
+/// app!(MyGame, unified);
+/// ```
+#[cfg(not(feature = "base"))]
+#[macro_export]
+macro_rules! app {
+    // Unified render mode: single render.rs file
+    ($name:ident, unified) => {
+        mod model;
+        mod render;
+        use crate::{model::*, render::*};
+        $crate::app_body!($name);
+    };
+    // Dual-file render mode (default, backward compatible)
+    ($name:ident) => {
+        mod model;
+        #[cfg(not(graphics_mode))]
+        mod render_terminal;
+        #[cfg(graphics_mode)]
+        mod render_graphics;
+
+        #[cfg(not(graphics_mode))]
+        use crate::{model::*, render_terminal::*};
+        #[cfg(graphics_mode)]
+        use crate::{model::*, render_graphics::*};
+        $crate::app_body!($name);
+    };
+}

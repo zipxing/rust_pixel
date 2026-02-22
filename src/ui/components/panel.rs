@@ -262,9 +262,6 @@ impl Widget for Panel {
         // Use base style for now
         let style = self.base.style;
 
-        // Clear background
-        self.render_background(buffer, style)?;
-
         // Render border
         if self.border_style != BorderStyle::None {
             self.render_border(buffer, style)?;
@@ -374,30 +371,6 @@ impl Panel {
     fn in_buffer(buf: &Buffer, x: u16, y: u16) -> bool {
         let a = buf.area();
         x >= a.x && x < a.x + a.width && y >= a.y && y < a.y + a.height
-    }
-
-    fn render_background(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {
-        let bounds = self.bounds();
-        let ba = *buffer.area();
-
-        // Clip to buffer area
-        let x0 = bounds.x.max(ba.x);
-        let y0 = bounds.y.max(ba.y);
-        let x1 = (bounds.x + bounds.width).min(ba.x + ba.width);
-        let y1 = (bounds.y + bounds.height).min(ba.y + ba.height);
-
-        // Fully reset all cells first, then apply panel style.
-        // cell.reset() clears fg/bg to Color::Reset, ensuring no stale styles bleed through.
-        // set_style() alone won't clear colors when style has fg=None/bg=None.
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let cell = buffer.get_mut(x, y);
-                cell.reset();
-                cell.set_style(style);
-            }
-        }
-
-        Ok(())
     }
 
     fn render_border(&self, buffer: &mut Buffer, style: Style) -> UIResult<()> {

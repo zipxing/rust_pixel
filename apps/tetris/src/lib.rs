@@ -1,2 +1,2 @@
 use rust_pixel::app;
-app!(Tetris);
+app!(Tetris, unified);
