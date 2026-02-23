@@ -39,6 +39,7 @@ use rust_pixel::{
         style::Color,
     },
     util::{ARect, Rect},
+    LOGO_FRAME,
 };
 
 const PIXW: u16 = 40;
@@ -201,8 +202,11 @@ impl Render for PetviewRender {
 
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         if !model.tex_ready {
-            // Enable RT3 for transition effects
-            ctx.adapter.set_rt_visible(3, true);
+            // Only enable RT3 after logo animation finishes
+            // On Windows Vulkan, showing RT3 with garbage content causes white patches
+            if ctx.stage > LOGO_FRAME {
+                ctx.adapter.set_rt_visible(3, true);
+            }
 
             // Load all 4 sprites at once
             self.scene.with_sprites(&["petimg1", "petimg2", "petimg3", "petimg4"], |sprites| {
@@ -275,6 +279,13 @@ impl Render for PetviewRender {
 
         // Step 1: Render scene content to RT2 (without present)
         self.scene.draw_to_rt(ctx).unwrap();
+
+        // During logo animation, only render RT2 (skip RT3 which may contain garbage)
+        // On Windows Vulkan, uninitialized GPU memory can show as white patches
+        if ctx.stage <= LOGO_FRAME {
+            ctx.adapter.present(&[RtComposite::fullscreen(2)]);
+            return;
+        }
 
         // Step 2: Custom present based on state
         let state = PetviewState::from_usize(ctx.state as usize).unwrap();
