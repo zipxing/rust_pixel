@@ -1,0 +1,570 @@
+
+
+
+2026-02-23 14:27:38 INFO rust_pixel::game petview(rust_pixel) start..."c:\\Users\\zipxi\\rust_pixel\\apps\\petview"
+
+2026-02-23 14:27:38 INFO rust_pixel::game Init game...
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_wgpu_adapter Initializing WinitWgpu adapter with WGPU backend...
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_wgpu_adapter Initializing Winit adapter with WGPU backend...
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_common Initializing Winit adapter common components...
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_common Using pre-loaded texture: 4096x4096
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_common Symbol dimensions: 16x16 (Sprite: 16x16, TUI: 16x32)
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_common Common initialization completed, window will be created in resumed()
+
+2026-02-23 14:27:38 INFO rust_pixel::render::scene scene init size...Rect { x: 0, y: 0, width: 50, height: 30 }
+
+2026-02-23 14:27:38 INFO rust_pixel::asset asset load:"c:\\Users\\zipxi\\rust_pixel\\apps\\petview\\assets\\1.pix"
+
+2026-02-23 14:27:38 INFO rust_pixel::render::image::pix w..40 h..25 l..255
+
+2026-02-23 14:27:38 INFO rust_pixel::asset asset load:"c:\\Users\\zipxi\\rust_pixel\\apps\\petview\\assets\\2.pix"
+
+2026-02-23 14:27:38 INFO rust_pixel::render::image::pix w..40 h..25 l..255
+
+2026-02-23 14:27:38 INFO rust_pixel::game Begin run...
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_wgpu_adapter [DEBUG resumed] called
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_wgpu_adapter [DEBUG resumed] creating window and resources...
+
+2026-02-23 14:27:38 INFO rust_pixel::render::adapter::winit_wgpu_adapter Creating WGPU window and resources...
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance InstanceFlags::VALIDATION requested, but unable to find layer: VK_LAYER_KHRONOS_validation
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	No valid vk_loader_settings.json file found, no loader settings will be active
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Searching for implicit layer manifest files
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   In following locations:
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	      C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   Found the following files:
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	      C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x64.json
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	      C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x86.json
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Checking for Layer Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\ImplicitLayers
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: opening device PCI\VEN_8086&DEV_46A8&SUBSYS_00631414&REV_0C\3&11583659&0&10
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: Opening child device 2 - DISPLAY\INT3480\4&26FD09B2&0&UID144512
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: Opening child device 3 - DISPLAY\LGD0719\4&26FD09B2&0&UID8388688
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: found no registry files
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Located json file "C:\Program Files (x86)\Steam\SteamOverlayVulkanLayer64.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\ImplicitLayers"
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Located json file "C:\Program Files (x86)\Steam\SteamFossilizeVulkanLayer64.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\ImplicitLayers"
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found manifest file C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x64.json (file version 1.0.1)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	loader_add_layer_properties: Can not find 'layer' object in manifest JSON file C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x64.json.  Skipping this file.
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found manifest file C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x86.json (file version 1.0.1)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	loader_add_layer_properties: Can not find 'layer' object in manifest JSON file C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x86.json.  Skipping this file.
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found manifest file C:\Program Files (x86)\Steam\SteamOverlayVulkanLayer64.json (file version 1.0.0)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found manifest file C:\Program Files (x86)\Steam\SteamFossilizeVulkanLayer64.json (file version 1.0.0)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Checking for Layer Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\ExplicitLayers
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: opening device PCI\VEN_8086&DEV_46A8&SUBSYS_00631414&REV_0C\3&11583659&0&10
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanExplicitLayers"
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: Opening child device 2 - DISPLAY\INT3480\4&26FD09B2&0&UID144512
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: Opening child device 3 - DISPLAY\LGD0719\4&26FD09B2&0&UID8388688
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_get_device_registry_files: found no registry files
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found no registry files in HKEY_CURRENT_USER\SOFTWARE\Khronos\Vulkan\ExplicitLayers
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Searching for driver manifest files
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   In following locations:
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	      C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   Found the following files:
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	      C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x64.json
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	      C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x86.json
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	windows_add_json_entry: Located json file "C:\WINDOWS\System32\DriverStore\FileRepository\iigd_dch.inf_amd64_9711ec5d8e932518\igvk64.json" from PnP registry: E
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found ICD manifest file C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x64.json, version 1.0.1
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found ICD manifest file C:\Program Files\WindowsApps\Microsoft.D3DMappingLayers_1.2506.2.0_x64__8wekyb3d8bbwe\dzn_icd.x86.json, version 1.0.1
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	loader_parse_icd_manifest: Driver library architecture doesn't match the current running architecture, skipping this driver
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	Found ICD manifest file C:\WINDOWS\System32\DriverStore\FileRepository\iigd_dch.inf_amd64_9711ec5d8e932518\igvk64.json, version 1.0.0
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	vkCreateInstance layer callstack setup to:
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   <Application>
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	     ||
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   <Loader>
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	     ||
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   <Drivers>
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:38 INFO wgpu_hal::vulkan::instance Enabling debug utils
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::adapter Adapter is not Vulkan compliant, hiding adapter: Microsoft Direct3D12 (Intel(R) Iris(R) Xe Graphics)
+
+2026-02-23 14:27:38 WARN wgpu_hal::vulkan::adapter Adapter is not Vulkan compliant, hiding adapter: Microsoft Direct3D12 (Microsoft Basic Render Driver)
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::winit_wgpu_adapter WGPU adapter found: AdapterInfo { name: "Intel(R) Iris(R) Xe Graphics", vendor: 32902, device: 18088, device_type: IntegratedGpu, driver: "Intel Corporation", driver_info: "101.6737", backend: Vulkan }
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	vkCreateDevice layer callstack setup to:
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   <Application>
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	     ||
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   <Loader>
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	     ||
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	   <Device>
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance GENERAL [Loader Message (0x0)]
+	       Using "Intel(R) Iris(R) Xe Graphics" with driver: "C:\WINDOWS\System32\DriverStore\FileRepository\iigd_dch.inf_amd64_9711ec5d8e932518\.\igvk64.dll"
+
+2026-02-23 14:27:39 INFO wgpu_hal::vulkan::instance 	objects: (type: INSTANCE, hndl: 0x18f11d5ddb0, name: ?)
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::winit_wgpu_adapter WGPU surface configured: 1332x798, format: Bgra8Unorm
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::winit_wgpu_adapter [DEBUG resumed] window created
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::winit_wgpu_adapter [DEBUG resumed] calling clear_screen_wgpu...
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::winit_wgpu_adapter [DEBUG resumed] clear_screen_wgpu done, setting cursor...
+
+2026-02-23 14:27:39 INFO rust_pixel::asset asset load:"c:\\Users\\zipxi\\rust_pixel\\apps\\petview\\assets\\31.pix"
+
+2026-02-23 14:27:39 INFO rust_pixel::render::image::pix w..40 h..25 l..255
+
+2026-02-23 14:27:39 INFO rust_pixel::asset asset load:"c:\\Users\\zipxi\\rust_pixel\\apps\\petview\\assets\\30.pix"
+
+2026-02-23 14:27:39 INFO rust_pixel::render::image::pix w..40 h..25 l..255
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #0, rbuf.len()=1000, rtidx=0
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #1, rbuf.len()=1000, rtidx=1
+
+2026-02-23 14:27:39 INFO petview::render_graphics tex_ready.........
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=1, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::graph [DEBUG render_logo] stage=1, logo_cells.len()=10800, spw=666, sph=399, srx=1.2, sry=1.2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #2, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=2, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::graph [DEBUG render_logo] stage=2, logo_cells.len()=10800, spw=666, sph=399, srx=1.2, sry=1.2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #3, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=3, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::graph [DEBUG render_logo] stage=3, logo_cells.len()=10800, spw=666, sph=399, srx=1.2, sry=1.2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #4, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=4, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::graph [DEBUG render_logo] stage=4, logo_cells.len()=10800, spw=666, sph=399, srx=1.2, sry=1.2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #5, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=5, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::graph [DEBUG render_logo] stage=5, logo_cells.len()=10800, spw=666, sph=399, srx=1.2, sry=1.2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #6, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=6, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #7, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=7, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #8, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=8, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter::wgpu::render_core [DEBUG rbuf2rt] call #9, rbuf.len()=10800, rtidx=2
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=9, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=10, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=11, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=12, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=13, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=14, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=15, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=16, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=17, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=18, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=19, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=20, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=21, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=22, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=23, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=24, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=25, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=26, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=27, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=28, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=29, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=30, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=31, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=32, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=33, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=34, LOGO_FRAME=45
+
+2026-02-23 14:27:39 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=35, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=36, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=37, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=38, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=39, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=40, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=41, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=42, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=43, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=44, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=45, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=10800
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=46, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=1540
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=47, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=1540
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=48, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=1540
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=49, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=1540
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] stage=50, LOGO_FRAME=45
+
+2026-02-23 14:27:40 INFO rust_pixel::render::adapter [DEBUG draw_all_graph] rbuf.len()=1540
+
