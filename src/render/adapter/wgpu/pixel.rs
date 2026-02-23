@@ -202,7 +202,6 @@ impl WgpuPixelRender {
                 rt_hidden[i],
             )?;
 
-            log::info!("[DEBUG init_render_textures] RT{} created, hidden={}", i, rt_hidden[i]);
             self.render_textures.push(render_texture);
         }
 
@@ -241,8 +240,6 @@ impl WgpuPixelRender {
 
         queue.submit(std::iter::once(encoder.finish()));
 
-        log::info!("[DEBUG init_render_textures] All RTs cleared (RT0,1,3=transparent, RT2=black)");
-
         Ok(())
     }
 
@@ -274,16 +271,7 @@ impl WgpuPixelRender {
     /// True if hidden, false if visible
     pub fn get_render_texture_hidden(&self, rtidx: usize) -> bool {
         if rtidx < self.render_textures.len() {
-            let hidden = self.render_textures[rtidx].is_hidden();
-            // DEBUG: Log RT3 hidden state queries
-            static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-            if rtidx == 3 {
-                let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count < 10 {
-                    log::info!("[DEBUG get_rt_hidden] RT3 query #{}, hidden={}", count, hidden);
-                }
-            }
-            hidden
+            self.render_textures[rtidx].is_hidden()
         } else {
             true // Default to hidden if index is out of bounds
         }
@@ -296,12 +284,7 @@ impl WgpuPixelRender {
     /// - `hidden`: New hidden state
     pub fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
         if rtidx < self.render_textures.len() {
-            let old_hidden = self.render_textures[rtidx].is_hidden();
             self.render_textures[rtidx].set_hidden(hidden);
-            // DEBUG: Log RT3 hidden state changes
-            if rtidx == 3 && old_hidden != hidden {
-                log::info!("[DEBUG set_rt_hidden] RT3 hidden changed: {} -> {}", old_hidden, hidden);
-            }
         }
     }
 
@@ -988,13 +971,6 @@ impl WgpuPixelRender {
             }
             Some(rtidx) => {
                 // Render to render texture
-                // DEBUG: Log draw call details
-                static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-                let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count < 10 {
-                    log::info!("[DEBUG render_to_texture] call #{}, rtidx={}, instance_count={}", count, rtidx, self.instance_count);
-                }
-
                 let render_pass_result = self.begin_render_to_texture(encoder, rtidx);
                 if let Ok(mut render_pass) = render_pass_result {
                     render_pass.draw_indexed(0..6, 0, 0..self.instance_count);

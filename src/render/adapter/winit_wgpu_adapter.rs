@@ -117,18 +117,13 @@ pub struct WinitWgpuAppHandler {
 
 impl ApplicationHandler for WinitWgpuAppHandler {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        log::info!("[DEBUG resumed] called");
         if let Some(adapter) = unsafe { self.adapter_ref.as_mut() } {
             if adapter.window.is_none() {
-                log::info!("[DEBUG resumed] creating window and resources...");
                 adapter.create_wgpu_window_and_resources(event_loop);
-                log::info!("[DEBUG resumed] window created");
             }
 
             if !adapter.cursor_set {
-                log::info!("[DEBUG resumed] calling clear_screen_wgpu...");
                 adapter.clear_screen_wgpu();
-                log::info!("[DEBUG resumed] clear_screen_wgpu done, setting cursor...");
                 adapter.set_mouse_cursor();
                 adapter.cursor_set = true;
             }
@@ -589,12 +584,8 @@ impl WinitWgpuAdapter {
         // This avoids the white flash from uninitialized GPU memory on Windows Vulkan
         if let Some(window) = &self.window {
             window.set_visible(true);
-            if cleared {
-                log::info!("[DEBUG clear_screen_wgpu] window now visible after clear");
-            } else {
-                log::warn!("[DEBUG clear_screen_wgpu] window shown but clear failed!");
-            }
         }
+        let _ = cleared; // suppress unused warning
     }
 
     fn set_mouse_cursor(&mut self) {
@@ -679,18 +670,9 @@ impl WinitWgpuAdapter {
 
         // Only render RT2 (main content) to screen
         // RT3 is only used during transitions and is handled separately by blend_rts
-        // Do NOT include RT3 here - its hidden state has a bug on Windows where
-        // get_render_texture_hidden(3) incorrectly returns false even when initialized as true
         let composites = vec![
             RtComposite::fullscreen(2).transform(rt2_transform),
         ];
-
-        // DEBUG: Log that we're using the fixed version with only RT2
-        static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count < 20 {
-            log::info!("[DEBUG draw_rts_to_screen] FIXED: composites.len()={} (RT2 only)", composites.len());
-        }
 
         self.present_wgpu(&composites)
     }

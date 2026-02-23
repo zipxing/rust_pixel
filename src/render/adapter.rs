@@ -417,11 +417,6 @@ pub trait Adapter {
         layers: &mut Vec<Layer>,
         stage: u32,
     ) {
-        // DEBUG: Log stage and frame info
-        if stage <= 50 {
-            log::info!("[DEBUG draw_all_graph] stage={}, LOGO_FRAME={}", stage, crate::LOGO_FRAME);
-        }
-
         // Pass 1: Convert game data (buffer + layers) to GPU-ready format
         let rbuf = generate_render_buffer(
             current_buffer,
@@ -430,11 +425,6 @@ pub trait Adapter {
             stage,
             self.get_base(),
         );
-
-        // DEBUG: Log rbuf size
-        if stage <= 50 {
-            log::info!("[DEBUG draw_all_graph] rbuf.len()={}", rbuf.len());
-        }
 
         // Pass 2: Render to RT2 or buffer based on mode
         if self.get_base().gr.rflag {
