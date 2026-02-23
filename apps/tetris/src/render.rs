@@ -408,7 +408,7 @@ impl TetrisRender {
             let attack_stg = timer_stage(&format!("attack{}", n));
             if attack_stg != 0 {
                 let pct = 1.0 - timer_percent(&format!("attack{}", n));
-                let ay = GRID0_Y + ZONG;
+                let ay = GRID0_Y + ZONG - 12 - n as u16;
 
                 // Flight path endpoints (x coordinates)
                 let (start_x, end_x) = if n == 0 {
