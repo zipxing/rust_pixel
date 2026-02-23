@@ -240,6 +240,14 @@ impl WgpuSymbolRenderer {
     ///   is preserved.
     /// - `ratio_x`/`ratio_y` are applied to keep DPI scaling parity with GL.
     pub fn generate_instances_from_render_cells(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
+        // DEBUG: Log input
+        static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let call_count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if call_count < 10 {
+            log::info!("[DEBUG generate_instances] call #{}, render_cells.len()={}, symbols.len()={}, ratio=({},{})",
+                call_count, render_cells.len(), self.symbols.len(), ratio_x, ratio_y);
+        }
+
         // Modifier bit flags (matching Modifier enum in style.rs)
         // 样式修饰符位标志（与 style.rs 中的 Modifier 枚举匹配）
         const MOD_BOLD: u16 = 0x0001;
@@ -249,11 +257,11 @@ impl WgpuSymbolRenderer {
         const MOD_REVERSED: u16 = 0x0040;
         const MOD_HIDDEN: u16 = 0x0080;
         const MOD_CROSSED_OUT: u16 = 0x0100;
-        
+
         // ITALIC slant factor: tan(12°) ≈ 0.21
         // ITALIC 倾斜因子：tan(12°) ≈ 0.21
         const ITALIC_SKEW: f32 = 0.21;
-        
+
         self.instance_buffer.clear();
         self.instance_count = 0;
         
@@ -408,8 +416,14 @@ impl WgpuSymbolRenderer {
                 self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
             }
         }
+
+        // DEBUG: Log output instance count
+        if call_count < 10 {
+            log::info!("[DEBUG generate_instances] call #{}, instance_count={}, instance_buffer.len()={}",
+                call_count, self.instance_count, self.instance_buffer.len());
+        }
     }
-    
+
     /// Determine if a symbol should use MSDF rendering based on its linear index.
     /// TUI and CJK regions use MSDF; Sprite and Emoji use bitmap.
     #[inline]
