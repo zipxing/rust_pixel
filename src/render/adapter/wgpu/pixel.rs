@@ -206,20 +206,28 @@ impl WgpuPixelRender {
             self.render_textures.push(render_texture);
         }
 
-        // Immediately clear all render textures to black to avoid garbage on Windows
-        // This prevents the "white patch" issue where uninitialized GPU memory shows up
+        // Immediately clear all render textures to avoid garbage on Windows Vulkan
+        // RT0, RT1, RT3: Clear to TRANSPARENT (alpha=0) so they won't cover content if accidentally rendered
+        // RT2: Clear to BLACK (the main content area)
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("RT Init Clear Encoder"),
         });
 
         for (i, rt) in self.render_textures.iter().enumerate() {
+            // RT2 (main buffer) clears to black, others clear to transparent
+            let clear_color = if i == 2 {
+                wgpu::Color::BLACK
+            } else {
+                wgpu::Color::TRANSPARENT  // alpha=0, won't cover anything if rendered
+            };
+
             let _clear_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&format!("RT{} Init Clear Pass", i)),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: rt.get_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: wgpu::LoadOp::Clear(clear_color),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
@@ -232,6 +240,8 @@ impl WgpuPixelRender {
         }
 
         queue.submit(std::iter::once(encoder.finish()));
+
+        log::info!("[DEBUG init_render_textures] All RTs cleared (RT0,1,3=transparent, RT2=black)");
 
         Ok(())
     }
@@ -286,7 +296,12 @@ impl WgpuPixelRender {
     /// - `hidden`: New hidden state
     pub fn set_render_texture_hidden(&mut self, rtidx: usize, hidden: bool) {
         if rtidx < self.render_textures.len() {
+            let old_hidden = self.render_textures[rtidx].is_hidden();
             self.render_textures[rtidx].set_hidden(hidden);
+            // DEBUG: Log RT3 hidden state changes
+            if rtidx == 3 && old_hidden != hidden {
+                log::info!("[DEBUG set_rt_hidden] RT3 hidden changed: {} -> {}", old_hidden, hidden);
+            }
         }
     }
 

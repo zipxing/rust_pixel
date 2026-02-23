@@ -50,8 +50,9 @@ impl Render for MdptRender {
         sprite.set_hidden(true);
         self.scene.add_sprite(sprite, IMAGE_TAG);
 
-        // Enable RT3 for GPU transition effects
-        context.adapter.set_rt_visible(3, true);
+        // NOTE: RT3 visibility is managed dynamically in draw_normal() and draw_gpu_transition()
+        // Do NOT set RT3 visible here - on Windows Vulkan, uninitialized GPU memory causes white patches
+        // RT3 will be set visible only when GPU transition is active
 
         // Enable CAS (Contrast Adaptive Sharpening) for crisp text on high-DPI
         // context.adapter.set_sharpness(0.4);

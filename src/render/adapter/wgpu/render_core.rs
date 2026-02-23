@@ -181,10 +181,10 @@ impl WgpuRenderCore {
     /// - `surface_view`: The surface texture view to render to
     /// - `composites`: Array of RtComposite items to render in order
     pub fn present(&mut self, surface_view: &wgpu::TextureView, composites: &[RtComposite]) {
-        // DEBUG: Log present call
+        // DEBUG: Log present call (first 20 calls to capture logo phase)
         static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count < 10 {
+        if count < 20 {
             log::info!("[DEBUG present] call #{}, composites.len()={}", count, composites.len());
             for (i, c) in composites.iter().enumerate() {
                 let hidden = self.pixel_renderer.get_render_texture_hidden(c.rt);

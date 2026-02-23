@@ -672,8 +672,8 @@ impl WinitWgpuAdapter {
         // DEBUG: Log that we're using the fixed version with only RT2
         static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count < 5 {
-            log::info!("[DEBUG draw_rts_to_screen] FIXED VERSION: composites.len()={} (should be 1, RT2 only)", composites.len());
+        if count < 20 {
+            log::info!("[DEBUG draw_rts_to_screen] FIXED: composites.len()={} (RT2 only)", composites.len());
         }
 
         self.present_wgpu(&composites)
