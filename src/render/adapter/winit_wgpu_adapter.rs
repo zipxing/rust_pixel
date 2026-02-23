@@ -438,12 +438,15 @@ impl WinitWgpuAdapter {
             None
         };
 
+        // Start window hidden to avoid white flash from uninitialized GPU memory
+        // Window will be shown after first clear_screen_wgpu() call
         let window_attributes = winit::window::Window::default_attributes()
             .with_title(&params.title)
             .with_inner_size(window_size)
             .with_decorations(true)
             .with_resizable(true)
-            .with_fullscreen(fullscreen.clone());
+            .with_fullscreen(fullscreen.clone())
+            .with_visible(false);
 
         let window = Arc::new(
             event_loop
@@ -547,6 +550,7 @@ impl WinitWgpuAdapter {
     }
 
     fn clear_screen_wgpu(&mut self) {
+        let mut cleared = false;
         if let (Some(surface), Some(core)) = (&self.wgpu_surface, &self.render_core) {
             if let Ok(output) = surface.get_current_texture() {
                 let view = output
@@ -577,6 +581,18 @@ impl WinitWgpuAdapter {
 
                 core.queue.submit(std::iter::once(encoder.finish()));
                 output.present();
+                cleared = true;
+            }
+        }
+
+        // Show the window after clear (or even if clear failed, to avoid permanently hidden window)
+        // This avoids the white flash from uninitialized GPU memory on Windows Vulkan
+        if let Some(window) = &self.window {
+            window.set_visible(true);
+            if cleared {
+                log::info!("[DEBUG clear_screen_wgpu] window now visible after clear");
+            } else {
+                log::warn!("[DEBUG clear_screen_wgpu] window shown but clear failed!");
             }
         }
     }
