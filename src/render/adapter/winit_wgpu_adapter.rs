@@ -625,11 +625,6 @@ impl WinitWgpuAdapter {
 
     /// Present render textures to screen with letterboxing support
     fn draw_render_textures_to_screen_wgpu(&mut self) -> Result<(), String> {
-        use crate::util::ARect;
-
-        let rx = self.base.gr.ratio_x;
-        let ry = self.base.gr.ratio_y;
-
         let (cw, ch) = if let Some(core) = &self.render_core {
             core.canvas_size()
         } else {
@@ -666,28 +661,19 @@ impl WinitWgpuAdapter {
         let mut rt2_transform = UnifiedTransform::new();
         rt2_transform.scale(scale_x, scale_y);
 
-        let pw = (cw as f32 / rx) as u32;
-        let ph = (ch as f32 / ry) as u32;
-
-        // Build composites list - only include RT3 if it's not hidden
-        // This fixes the Windows startup issue where RT3 might contain garbage
-        // and its hidden state isn't being properly respected
-        let mut composites = vec![
-            RtComposite::fullscreen(2).transform(rt2_transform.clone()),
+        // Only render RT2 (main content) to screen
+        // RT3 is only used during transitions and is handled separately by blend_rts
+        // Do NOT include RT3 here - its hidden state has a bug on Windows where
+        // get_render_texture_hidden(3) incorrectly returns false even when initialized as true
+        let composites = vec![
+            RtComposite::fullscreen(2).transform(rt2_transform),
         ];
 
-        // Check RT3 hidden state before adding it to composites
-        let rt3_hidden = if let Some(core) = &self.render_core {
-            core.pixel_renderer.get_render_texture_hidden(3)
-        } else {
-            true
-        };
-
-        if !rt3_hidden {
-            composites.push(
-                RtComposite::with_viewport(3, ARect { x: 0, y: 0, w: pw, h: ph })
-                    .transform(rt2_transform),
-            );
+        // DEBUG: Log that we're using the fixed version with only RT2
+        static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count < 5 {
+            log::info!("[DEBUG draw_rts_to_screen] FIXED VERSION: composites.len()={} (should be 1, RT2 only)", composites.len());
         }
 
         self.present_wgpu(&composites)
