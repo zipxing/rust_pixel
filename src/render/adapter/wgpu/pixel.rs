@@ -176,7 +176,14 @@ impl WgpuPixelRender {
     /// - 1: transition texture 2 (hidden by default)
     /// - 2: main buffer (visible by default)
     /// - 3: transition buffer (visible by default)
-    pub fn init_render_textures(&mut self, device: &wgpu::Device) -> Result<(), String> {
+    ///
+    /// On Windows, uninitialized GPU memory may contain garbage (white patches),
+    /// so we explicitly clear all render textures to black after creation.
+    pub fn init_render_textures(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> Result<(), String> {
         // Clear existing render textures
         self.render_textures.clear();
 
@@ -196,9 +203,34 @@ impl WgpuPixelRender {
             )?;
 
             self.render_textures.push(render_texture);
-
-            // Render texture created successfully (debug output removed for performance)
         }
+
+        // Immediately clear all render textures to black to avoid garbage on Windows
+        // This prevents the "white patch" issue where uninitialized GPU memory shows up
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("RT Init Clear Encoder"),
+        });
+
+        for (i, rt) in self.render_textures.iter().enumerate() {
+            let _clear_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("RT{} Init Clear Pass", i)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: rt.get_view(),
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            // RenderPass drops here, ending the pass
+        }
+
+        queue.submit(std::iter::once(encoder.finish()));
 
         Ok(())
     }

@@ -335,7 +335,7 @@ impl WgpuRenderCoreBuilder {
         pixel_renderer.create_buffer(&device);
         pixel_renderer.create_bind_group(&device);
 
-        pixel_renderer.init_render_textures(&device)?;
+        pixel_renderer.init_render_textures(&device, &queue)?;
 
         pixel_renderer.init_general2d_renderer(&device);
         pixel_renderer.init_transition_renderer(&device);
