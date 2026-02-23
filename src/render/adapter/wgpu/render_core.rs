@@ -86,6 +86,13 @@ impl WgpuRenderCore {
     /// - `rtidx`: Target render texture index (0-3)
     /// - `debug`: Enable debug mode (red background for debugging)
     pub fn rbuf2rt(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool) {
+        // DEBUG: Log rbuf2rt call (static counter to limit logging)
+        static DEBUG_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let count = DEBUG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count < 10 {
+            log::info!("[DEBUG rbuf2rt] call #{}, rbuf.len()={}, rtidx={}", count, rbuf.len(), rtidx);
+        }
+
         // Bind target render texture
         self.pixel_renderer.bind_target(rtidx);
 

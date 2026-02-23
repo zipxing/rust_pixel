@@ -1903,6 +1903,13 @@ where
     F: FnMut(&(u8, u8, u8, u8), ARect, usize, usize),
 {
     let logo_cells = get_logo_cells();
+
+    // DEBUG: Log logo rendering info (only first few frames)
+    if stage <= 5 {
+        log::info!("[DEBUG render_logo] stage={}, logo_cells.len()={}, spw={}, sph={}, srx={}, sry={}",
+            stage, logo_cells.len(), spw, sph, srx, sry);
+    }
+
     let rx = srx * 1.0;
     let ry = sry * 1.0;
     let scale = PIXEL_LOGO_SCALE;

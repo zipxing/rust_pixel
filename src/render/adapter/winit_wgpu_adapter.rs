@@ -117,13 +117,18 @@ pub struct WinitWgpuAppHandler {
 
 impl ApplicationHandler for WinitWgpuAppHandler {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        log::info!("[DEBUG resumed] called");
         if let Some(adapter) = unsafe { self.adapter_ref.as_mut() } {
             if adapter.window.is_none() {
+                log::info!("[DEBUG resumed] creating window and resources...");
                 adapter.create_wgpu_window_and_resources(event_loop);
+                log::info!("[DEBUG resumed] window created");
             }
 
             if !adapter.cursor_set {
+                log::info!("[DEBUG resumed] calling clear_screen_wgpu...");
                 adapter.clear_screen_wgpu();
+                log::info!("[DEBUG resumed] clear_screen_wgpu done, setting cursor...");
                 adapter.set_mouse_cursor();
                 adapter.cursor_set = true;
             }
