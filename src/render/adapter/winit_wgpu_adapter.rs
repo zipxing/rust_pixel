@@ -669,11 +669,26 @@ impl WinitWgpuAdapter {
         let pw = (cw as f32 / rx) as u32;
         let ph = (ch as f32 / ry) as u32;
 
-        let composites = vec![
+        // Build composites list - only include RT3 if it's not hidden
+        // This fixes the Windows startup issue where RT3 might contain garbage
+        // and its hidden state isn't being properly respected
+        let mut composites = vec![
             RtComposite::fullscreen(2).transform(rt2_transform.clone()),
-            RtComposite::with_viewport(3, ARect { x: 0, y: 0, w: pw, h: ph })
-                .transform(rt2_transform),
         ];
+
+        // Check RT3 hidden state before adding it to composites
+        let rt3_hidden = if let Some(core) = &self.render_core {
+            core.pixel_renderer.get_render_texture_hidden(3)
+        } else {
+            true
+        };
+
+        if !rt3_hidden {
+            composites.push(
+                RtComposite::with_viewport(3, ARect { x: 0, y: 0, w: pw, h: ph })
+                    .transform(rt2_transform),
+            );
+        }
 
         self.present_wgpu(&composites)
     }
