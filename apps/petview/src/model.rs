@@ -11,8 +11,10 @@ use rust_pixel::{
     render::effect::{GpuTransition, GpuBlendEffect},
 };
 
-pub const PETW: u16 = 50;
-pub const PETH: u16 = 30;
+// Gallery mode: larger screen to accommodate frame border
+// Image: 40x25, Frame border: 4 chars each side, Info bar: 2 lines
+pub const PETW: u16 = 52;  // 40 + 6*2 (left/right border)
+pub const PETH: u16 = 32;  // 25 + 4 (top) + 3 (bottom with info)
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]

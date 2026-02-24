@@ -36,7 +36,7 @@ use rust_pixel::{
         effect::{GpuTransition, GpuBlendEffect},
         scene::Scene,
         sprite::Sprite,
-        style::Color,
+        style::{Color, Style},
     },
     util::{ARect, Rect},
     LOGO_FRAME,
@@ -44,6 +44,19 @@ use rust_pixel::{
 
 const PIXW: u16 = 40;
 const PIXH: u16 = 25;
+
+// Frame border dimensions
+const FRAME_LEFT: u16 = 6;   // Left border width
+const FRAME_TOP: u16 = 3;    // Top border height
+const FRAME_RIGHT: u16 = 6;  // Right border width
+const FRAME_BOTTOM: u16 = 4; // Bottom border height (includes info bar)
+
+// Frame colors
+const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);  // Dark gray
+const INFO_COLOR: Color = Color::Rgba(200, 200, 200, 255);       // Light gray for info text
+
+// Footer scale: PETSCII chars are 16px (same as sprite chars)
+const FOOTER_SCALE: f32 = 0.66;
 
 /// Apply CPU-based buffer distortion effects
 ///
@@ -112,6 +125,10 @@ impl PetviewRender {
     pub fn new() -> Self {
         let mut scene = Scene::new();
 
+        // Gallery frame border (full screen, rendered first as background)
+        let frame = Sprite::new(0, 0, PETW, PETH);
+        scene.add_sprite(frame, "frame");
+
         // p1, p2: source images (hidden, used for RT0/RT1)
         let mut p1 = Sprite::new(0, 0, PIXW, PIXH);
         p1.set_hidden(true);
@@ -131,16 +148,18 @@ impl PetviewRender {
         p4.set_hidden(true);
         scene.add_sprite(p4, "petimg4");
 
-        // Message sprite
+        // Message sprite (hidden - replaced by info bar in frame)
         let mut p5 = Sprite::new(0, 0, PIXW, 1u16);
-        p5.set_color_str(
-            1,
-            0,
-            "RustPixel - x.com/PETSCIIWORLD",
-            Color::Rgba(0, 205, 0, 255),
-            Color::Reset,
-        );
+        p5.set_hidden(true);
         scene.add_sprite(p5, "pet-msg");
+
+        // Footer sprite for TUI text (positioned in do_init)
+        // Using separate sprite allows precise pixel positioning of TUI characters
+        // Size is 1/FOOTER_SCALE times screen size because scaling shrinks it to fit
+        let footer_w = (PETW as f32 / FOOTER_SCALE) as u16;
+        let footer_h = (4.0 / FOOTER_SCALE) as u16;  // 3 lines + margin
+        let footer = Sprite::new(0, 0, footer_w, footer_h);
+        scene.add_sprite(footer, "footer");
 
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
@@ -149,6 +168,75 @@ impl PetviewRender {
             scene,
             init: false,
         }
+    }
+
+    /// Draw the gallery frame border with gold styling
+    fn draw_frame(&mut self, img_cur: usize, img_count: usize) {
+        let frame = self.scene.get_sprite("frame");
+        let buf = &mut frame.content;
+        buf.reset();
+
+        // PETSCII box drawing characters
+        // Block 0: square corners and lines (109-125)
+        // Block 1: rounded corners (73,74,75,85)
+        let corner_block = 1u8;  // Rounded corners are in Block 1
+        let corner_tl = 85u8;    // ╭ top-left corner (rounded)
+        let corner_tr = 73u8;    // ╮ top-right corner (rounded)
+        let corner_bl = 74u8;    // ╰ bottom-left corner (rounded)
+        let corner_br = 75u8;    // ╯ bottom-right corner (rounded)
+        let line_block = 0u8;    // Lines are in Block 0
+        let horiz = 64u8;        // ─ horizontal line
+        let vert = 93u8;         // │ vertical line
+        let fill = 102u8;        // filled block for border area
+
+        // Draw outer frame background (dark)
+        for y in 0..PETH {
+            for x in 0..PETW {
+                // Check if in border area
+                let in_image_area = x >= FRAME_LEFT && x < PETW - FRAME_RIGHT
+                    && y >= FRAME_TOP && y < PETH - FRAME_BOTTOM;
+
+                if !in_image_area {
+                    buf.set_graph_sym(x, y, 0, fill, Color::Rgba(20, 20, 25, 255));
+                }
+            }
+        }
+
+        // Draw gold frame border around image area
+        let left = FRAME_LEFT - 1;
+        let right = PETW - FRAME_RIGHT;
+        let top = FRAME_TOP - 1;
+        let bottom = PETH - FRAME_BOTTOM;
+
+        // Top border line
+        buf.set_graph_sym(left, top, corner_block, corner_tl, FRAME_COLOR);
+        for x in (left + 1)..right {
+            buf.set_graph_sym(x, top, line_block, horiz, FRAME_COLOR);
+        }
+        buf.set_graph_sym(right, top, corner_block, corner_tr, FRAME_COLOR);
+
+        // Bottom border line
+        buf.set_graph_sym(left, bottom, corner_block, corner_bl, FRAME_COLOR);
+        for x in (left + 1)..right {
+            buf.set_graph_sym(x, bottom, line_block, horiz, FRAME_COLOR);
+        }
+        buf.set_graph_sym(right, bottom, corner_block, corner_br, FRAME_COLOR);
+
+        // Left and right vertical lines
+        for y in (top + 1)..bottom {
+            buf.set_graph_sym(left, y, line_block, vert, FRAME_COLOR);
+            buf.set_graph_sym(right, y, line_block, vert, FRAME_COLOR);
+        }
+
+        // Note: Inner shadow removed - it was overlapping with the image area
+        // The outer gold border provides sufficient framing effect
+
+        // Draw title above the frame
+        let title = "PETSCII ARTS";
+        let title_x = (PETW as usize - title.len()) / 2;
+        buf.set_color_str(title_x as u16, top - 1, title, INFO_COLOR, Color::Reset);
+
+        // Note: Footer is rendered to a separate sprite with TUI characters in draw() method
     }
 
     fn do_init(&mut self, ctx: &mut Context) {
@@ -161,23 +249,25 @@ impl PetviewRender {
         let sym_w = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
         let sym_h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
 
+        // Position p3 and p4 inside the frame border
+        let img_x = (FRAME_LEFT as f32 * sym_w / rx) as u16;
+        let img_y = (FRAME_TOP as f32 * sym_h / ry) as u16;
+
         let p3 = self.scene.get_sprite("petimg3");
-        p3.set_pos(
-            (6.0 * sym_w / rx) as u16,
-            (2.5 * sym_h / ry) as u16,
-        );
+        p3.set_pos(img_x, img_y);
 
         let p4 = self.scene.get_sprite("petimg4");
-        p4.set_pos(
-            (6.0 * sym_w / rx) as u16,
-            (2.5 * sym_h / ry) as u16,
-        );
+        p4.set_pos(img_x, img_y);
 
-        let pmsg = self.scene.get_sprite("pet-msg");
-        pmsg.set_pos(
-            (10.0 * sym_w / rx) as u16,
-            (28.5 * sym_h / rx) as u16,
-        );
+        // Position footer sprite below the frame border
+        // Footer uses TUI characters (32px height), so we need pixel-level positioning
+        let footer_y_sprite = PETH - FRAME_BOTTOM + 1;  // Sprite coordinate Y=29
+        let footer_y_px = (footer_y_sprite as f32 * sym_h / ry) as u16;
+        let footer = self.scene.get_sprite("footer");
+        footer.set_pos(0, footer_y_px + 6);
+        // Set scale to make TUI chars (32px) appear as sprite char height (16px)
+        footer.set_scale_x(FOOTER_SCALE);
+        footer.set_scale_y(FOOTER_SCALE);
 
         self.init = true;
     }
@@ -188,7 +278,7 @@ impl Render for PetviewRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
-            .init(PETW, PETH, 1.2, 1.2, "petview".to_string());
+            .init(PETW, PETH, 1.0, 1.0, "PETSCII Gallery".to_string());
         self.scene.init(ctx);
 
         let p1 = self.scene.get_sprite("petimg1");
@@ -274,8 +364,33 @@ impl Render for PetviewRender {
         }
     }
 
-    fn draw(&mut self, ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {
+    fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         self.do_init(ctx);
+
+        // Draw gallery frame border with current image info
+        self.draw_frame(model.img_cur, model.img_count);
+
+        // Draw footer using PETSCII characters in a dedicated sprite
+        // PETSCII chars are 16px (same as sprite chars), so scaling is more flexible
+        {
+            let footer = self.scene.get_sprite("footer");
+            let buf = &mut footer.content;
+            buf.reset();
+            let line2 = "Tile-first. Retro-ready. Write Once, Run Anywhere-2D Engine...";
+            let line1 = "Powered by rust_pixel";
+            let line3 = "https://github.com/zipxing/rust_pixel";
+            // Dimmer color for footer (less prominent than title)
+            let footer_color = Color::Rgba(50, 90, 50, 255);
+            // Internal coordinate space is 1/FOOTER_SCALE times screen space
+            // To center: x = (internal_w - text_len) / 2
+            let internal_w = (PETW as f32 / FOOTER_SCALE) as usize;
+            let x1 = ((internal_w - line1.len()) / 2) as u16;
+            let x2 = ((internal_w - line2.len()) / 2) as u16;
+            let x3 = ((internal_w - line3.len()) / 2) as u16;
+            buf.set_color_str(x1, 0, line1, footer_color, Color::Reset);
+            buf.set_color_str(x2, 1, line2, footer_color, Color::Reset);
+            buf.set_color_str(x3, 2, line3, footer_color, Color::Reset);
+        }
 
         // Step 1: Render scene content to RT2 (without present)
         self.scene.draw_to_rt(ctx).unwrap();
@@ -295,12 +410,13 @@ impl Render for PetviewRender {
                 ctx.adapter.present(&[RtComposite::fullscreen(2)]);
             }
             PetviewState::Normal | PetviewState::TransGl => {
-                // Use ctx.centered_rt() helper for simplified viewport creation
-                // This automatically handles: sym_w/h, ratio_x/y, canvas size, centering
-                // Note: Must compute before present() call due to borrow checker
-                // Chain syntax: ctx.centered_rt().x(0) sets viewport x to 0
-                // let rt3 = ctx.centered_rt(3, PIXW, PIXH).x(0);
-                let rt3 = ctx.centered_rt(3, PIXW, PIXH).scale_uniform(1.0);
+                // Position RT3 at the frame's image area
+                // centered_rt centers a 40×25 area on a 52×32 canvas:
+                // - Horizontal: (52-40)/2 = 6 cells = FRAME_LEFT ✓ (already correct)
+                // - Vertical: (32-25)/2 = 3.5 cells, but FRAME_TOP = 3 (need -0.5 cell offset)
+                let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap_or(&16.0) as i32;
+                let dy = -sym_h / 2;  // shift up by 0.5 cell
+                let rt3 = ctx.centered_rt(3, PIXW, PIXH).offset(0, dy);
                 ctx.adapter.present(&[RtComposite::fullscreen(2), rt3]);
             }
         }
