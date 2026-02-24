@@ -1682,7 +1682,7 @@ where
             &s.content,
             rx,
             ry,
-            false,      // No TUI remapping; TUI height auto-detected from block index
+            s.use_tui,  // Per-sprite TUI mode; when true, remap ASCII to TUI chars
             s.alpha,
             s.scale_x,
             s.scale_y,

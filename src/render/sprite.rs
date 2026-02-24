@@ -177,6 +177,7 @@ pub struct Sprite {
     pub alpha: u8,
     pub scale_x: f32,  // X-axis scaling factor: 1.0 = normal, 0.5 = half width
     pub scale_y: f32,  // Y-axis scaling factor: 1.0 = normal, 2.0 = double height
+    pub use_tui: bool,  // Render text as TUI chars (16×32) instead of Sprite chars (16×16)
     asset_request: Option<(AssetType, String, usize, u16, u16)>,
     render_weight: i32,
 }
@@ -216,6 +217,7 @@ impl Sprite {
             alpha: 255,
             scale_x: 1.0,  // Default: normal scaling
             scale_y: 1.0,  // Default: normal scaling
+            use_tui: false, // Default: Sprite chars (16×16)
             asset_request: None,
             render_weight: 1,
         }
@@ -239,6 +241,11 @@ impl Sprite {
     pub fn set_scale(&mut self, scale: f32) {
         self.scale_x = scale;
         self.scale_y = scale;
+    }
+
+    /// Enable TUI character rendering (16×32) instead of Sprite chars (16×16)
+    pub fn set_use_tui(&mut self, use_tui: bool) {
+        self.use_tui = use_tui;
     }
 
     /// Create a half-width sprite (convenience method)
