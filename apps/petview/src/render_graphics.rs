@@ -54,9 +54,9 @@ const FRAME_BOTTOM: u16 = 4; // Bottom border height (includes info bar)
 // Frame colors
 const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);  // Dark gray
 const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
-const BACK_COLOR: Color = Color::Rgba(15, 15, 15, 155);
+const BACK_COLOR: Color = Color::Rgba(5, 5, 5, 1);
 const FOOT_COLOR: Color = Color::Rgba(80, 80, 80, 255);
-const INFO_COLOR: Color = Color::Rgba(100, 100, 100, 255);       // Light gray for info text
+// const INFO_COLOR: Color = Color::Rgba(100, 100, 100, 255);       // Light gray for info text
 
 // Matrix rain: PETSCII graphic chars (block 1) for digital rain effect
 const RAIN_BLOCK: u8 = 1;
@@ -67,9 +67,10 @@ const RAIN_CHARS: [u8; 20] = [
     73, 74, 75, 67, 87,  // corner-TR corner-BL corner-BR hbar-B checker
 ];
 
-// Title/Footer scale for PETSCII chars (16×16px)
+// Sprite scale factors for PETSCII chars (16×16px)
 const TITLE_SCALE: f32 = 1.0;
 const FOOTER_SCALE: f32 = 0.62;
+const FRAME_SCALE: f32 = 0.5;  // Frame sprite scale: 0.5 → 2x buffer → denser rain
 
 /// Apply CPU-based buffer distortion effects
 ///
@@ -139,7 +140,10 @@ impl PetviewRender {
         let mut scene = Scene::new();
 
         // Gallery frame border (full screen, rendered first as background)
-        let frame = Sprite::new(0, 0, PETW, PETH);
+        // Buffer is 2x size, sprite scale 0.5 → denser Matrix rain
+        let frame_w = (PETW as f32 / FRAME_SCALE) as u16;
+        let frame_h = (PETH as f32 / FRAME_SCALE) as u16;
+        let frame = Sprite::new(0, 0, frame_w, frame_h);
         scene.add_sprite(frame, "frame");
 
         // p1, p2: source images (hidden, used for RT0/RT1)
@@ -206,12 +210,19 @@ impl PetviewRender {
         let vert = 93u8;         // │ vertical line
         let fill = 102u8;        // filled block for border area
 
-        // Draw outer frame background (dark) + Matrix rain
+        // Internal dimensions (2x due to FRAME_SCALE=0.5)
+        let iw = (PETW as f32 / FRAME_SCALE) as u16;
+        let ih = (PETH as f32 / FRAME_SCALE) as u16;
+        let fl = (FRAME_LEFT as f32 / FRAME_SCALE) as u16;
+        let ft = (FRAME_TOP as f32 / FRAME_SCALE) as u16;
+        let fr = (FRAME_RIGHT as f32 / FRAME_SCALE) as u16;
+        let fb = (FRAME_BOTTOM as f32 / FRAME_SCALE) as u16;
+
         // First pass: fill all non-image cells with dark background
-        for y in 0..PETH {
-            for x in 0..PETW {
-                let in_image_area = x >= FRAME_LEFT && x < PETW - FRAME_RIGHT
-                    && y >= FRAME_TOP && y < PETH - FRAME_BOTTOM;
+        for y in 0..ih {
+            for x in 0..iw {
+                let in_image_area = x >= fl && x < iw - fr
+                    && y >= ft && y < ih - fb;
                 if !in_image_area {
                     buf.set_graph_sym(x, y, 0, fill, BACK_COLOR);
                 }
@@ -220,28 +231,28 @@ impl PetviewRender {
 
         // Second pass: Matrix digital rain columns
         let rain_len = RAIN_CHARS.len();
-        for x in 0..PETW {
+        for x in 0..iw {
             let xh = x as usize;
             // Deterministic per-column parameters from hash
             let speed = 0.15 + (((xh.wrapping_mul(73).wrapping_add(17)) % 31) as f32 / 31.0) * 0.30;
             let trail = 8 + ((xh.wrapping_mul(37).wrapping_add(7)) % 11) as i32; // 8..18
             let gap = 8 + ((xh.wrapping_mul(53).wrapping_add(23)) % 8) as i32;   // 8..15
             let offset = ((xh.wrapping_mul(97).wrapping_add(41)) % 200) as f32;
-            let cycle_len = PETH as i32 + trail + gap;
+            let cycle_len = ih as i32 + trail + gap;
 
             let y_head_f = (stage as f32 * speed + offset) % (cycle_len as f32);
             let y_head = y_head_f as i32;
 
             for dy in 0..trail {
                 let y = y_head - dy;
-                if y < 0 || y >= PETH as i32 {
+                if y < 0 || y >= ih as i32 {
                     continue;
                 }
                 let yu = y as u16;
 
                 // Skip cells inside the image area
-                let in_image_area = x >= FRAME_LEFT && x < PETW - FRAME_RIGHT
-                    && yu >= FRAME_TOP && yu < PETH - FRAME_BOTTOM;
+                let in_image_area = x >= fl && x < iw - fr
+                    && yu >= ft && yu < ih - fb;
                 if in_image_area {
                     continue;
                 }
@@ -257,11 +268,10 @@ impl PetviewRender {
 
                 if dy == 0 {
                     // Head: bright white-green with GLOW
-                    let near_frame = x >= FRAME_LEFT - 2 && x <= PETW - FRAME_RIGHT
-                        && yu >= FRAME_TOP - 2 && yu <= PETH - FRAME_BOTTOM;
-                    let head_color = Color::Rgba(180, 255, 190, 255);
+                    let near_frame = x >= fl - 4 && x <= iw - fr + 1
+                        && yu >= ft - 4 && yu <= ih - fb + 1;
+                    let head_color = Color::Rgba(100, 180, 120, 255);
                     if near_frame {
-                        // Near frame: render without GLOW to avoid halo overlapping
                         buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, head_color);
                     } else {
                         buf.set_str_tex(
@@ -273,23 +283,23 @@ impl PetviewRender {
                         );
                     }
                 } else if dy <= 2 {
-                    // Near-head: bright green
-                    let g = (230.0 - t * 50.0) as u8;
-                    buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 30, 255));
+                    // Near-head: medium green
+                    let g = (140.0 - t * 30.0) as u8;
+                    buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 15, 255));
                 } else {
-                    // Trail body: fading green
+                    // Trail body: fading dark green
                     let brightness = 1.0 - t;
-                    let g = (25.0 + brightness * 155.0) as u8;
+                    let g = (15.0 + brightness * 95.0) as u8;
                     buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 0, 255));
                 }
             }
         }
 
         // Draw gold frame border around image area
-        let left = FRAME_LEFT - 1;
-        let right = PETW - FRAME_RIGHT;
-        let top = FRAME_TOP - 1;
-        let bottom = PETH - FRAME_BOTTOM;
+        let left = fl - 1;
+        let right = iw - fr;
+        let top = ft - 1;
+        let bottom = ih - fb;
 
         // Top border line
         buf.set_graph_sym(left, top, corner_block, corner_tl, FRAME_COLOR);
@@ -311,9 +321,6 @@ impl PetviewRender {
             buf.set_graph_sym(right, y, line_block, vert, FRAME_COLOR);
         }
 
-        // Note: Inner shadow removed - it was overlapping with the image area
-        // The outer gold border provides sufficient framing effect
-
         // Title and footer are rendered as separate sprites in draw() method
     }
 
@@ -326,6 +333,11 @@ impl PetviewRender {
         let ry = ctx.adapter.get_base().gr.ratio_y;
         let sym_w = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
         let sym_h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
+
+        // Set frame sprite scale (0.5 → 2x buffer density for Matrix rain)
+        let frame = self.scene.get_sprite("frame");
+        frame.set_scale_x(FRAME_SCALE);
+        frame.set_scale_y(FRAME_SCALE);
 
         // Position p3 and p4 inside the frame border
         let img_x = (FRAME_LEFT as f32 * sym_w / rx) as u16;
@@ -454,16 +466,16 @@ impl Render for PetviewRender {
         // Draw gallery frame border with current image info
         self.draw_frame(model.img_cur, model.img_count, ctx.stage);
 
-        // Draw title
-        {
-            let title = self.scene.get_sprite("title");
-            let buf = &mut title.content;
-            buf.reset();
-            let text = "PETSCII ARTS RETRO C64";
-            let internal_w = (PETW as f32 / TITLE_SCALE) as usize;
-            let tx = ((internal_w - text.len()) / 2) as u16;
-            buf.set_color_str(tx, 0, text, INFO_COLOR, Color::Reset);
-        }
+        // // Draw title
+        // {
+        //     let title = self.scene.get_sprite("title");
+        //     let buf = &mut title.content;
+        //     buf.reset();
+        //     let text = "PETSCII ARTS RETRO C64";
+        //     let internal_w = (PETW as f32 / TITLE_SCALE) as usize;
+        //     let tx = ((internal_w - text.len()) / 2) as u16;
+        //     buf.set_color_str(tx, 0, text, INFO_COLOR, Color::Reset);
+        // }
 
         // Draw footer
         {
@@ -471,7 +483,7 @@ impl Render for PetviewRender {
             let buf = &mut footer.content;
             buf.reset();
             let line2 = "♦ Tile-first. Retro-ready. Write Once, Run Anywhere-2D Engine...";
-            let line1 = "";
+            let line1 = "PETSCII ARTS RETRO C64";
             let line3 = "https://github.com/zipxing/rust_pixel";
             // Dimmer color for footer (less prominent than title)
             let footer_color = FOOT_COLOR;
