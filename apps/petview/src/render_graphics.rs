@@ -36,7 +36,7 @@ use rust_pixel::{
         effect::{GpuTransition, GpuBlendEffect},
         scene::Scene,
         sprite::Sprite,
-        style::{Color, Style},
+        style::{Color, Modifier, Style},
     },
     util::{ARect, Rect},
     LOGO_FRAME,
@@ -212,8 +212,12 @@ impl PetviewRender {
                     && y >= FRAME_TOP && y < PETH - FRAME_BOTTOM;
 
                 if !in_image_area {
+                    // Also exclude cells adjacent to the frame border (1-cell margin)
+                    // to prevent glow from overlapping the gold frame lines
+                    let near_frame = x >= FRAME_LEFT - 2 && x <= PETW - FRAME_RIGHT
+                        && y >= FRAME_TOP - 2 && y <= PETH - FRAME_BOTTOM;
                     let hash = (x as usize).wrapping_mul(7).wrapping_add((y as usize).wrapping_mul(13)) % 41;
-                    if hash < 3 {
+                    if hash < 3 && !near_frame {
                         let ci = (x as usize * 3 + y as usize * 11) % DECO_CHARS.len();
                         deco_positions.push((x, y, ci));
                     }
@@ -236,8 +240,13 @@ impl PetviewRender {
                 let idx = (cycle as usize).wrapping_mul(17).wrapping_add(slot as usize * 53) % count;
                 let (gx, gy, ci) = deco_positions[idx];
                 let c = (50.0 + brightness * 150.0) as u8;
-                let glow = Color::Rgba(c, c.saturating_sub(10), (c as u16 + 15).min(255) as u8, 255);
-                buf.set_graph_sym(gx, gy, DECO_BLOCK, DECO_CHARS[ci], glow);
+                let glow_color = Color::Rgba(c, c.saturating_sub(10), (c as u16 + 15).min(255) as u8, 255);
+                buf.set_str_tex(
+                    gx, gy,
+                    &cellsym(DECO_CHARS[ci]),
+                    Style::default().fg(glow_color).bg(Color::Reset).add_modifier(Modifier::GLOW),
+                    DECO_BLOCK,
+                );
             }
         }
 

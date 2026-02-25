@@ -218,6 +218,8 @@ struct VertexOutput {
     @location(1) colorj: vec4<f32>,
     @location(2) v_bold: f32,
     @location(3) v_msdf: f32,
+    @location(4) v_glow: f32,
+    @location(5) v_local_pos: vec2<f32>,
 }
 
 // Transform uniform (matches OpenGL layout)
@@ -238,10 +240,15 @@ fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
     output.v_bold = select(0.0, 1.0, instance.a1.x < 0.0);
     // Extract MSDF flag from origin_y sign (negative = MSDF)
     output.v_msdf = select(0.0, 1.0, instance.a1.y < 0.0);
+    // Extract glow flag from uv_width sign (negative = glow)
+    output.v_glow = select(0.0, 1.0, instance.a2.x < 0.0);
     let origin = abs(instance.a1.xy);
 
-    // Calculate UV coordinates: uv = a1.zw + position * a2.xy
-    output.uv = instance.a1.zw + vertex_input.position * instance.a2.xy;
+    // Pass local quad position [0,1]×[0,1] for glow radial falloff
+    output.v_local_pos = vertex_input.position;
+
+    // Calculate UV coordinates: uv = a1.zw + position * abs(a2.xy)
+    output.uv = instance.a1.zw + vertex_input.position * abs(instance.a2.xy);
 
     // Apply the same transformation chain as OpenGL:
     // transformed = (((vertex - origin) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0
@@ -290,6 +297,8 @@ struct VertexOutput {
     @location(1) colorj: vec4<f32>,
     @location(2) v_bold: f32,
     @location(3) v_msdf: f32,
+    @location(4) v_glow: f32,
+    @location(5) v_local_pos: vec2<f32>,
 }
 
 fn median3(r: f32, g: f32, b: f32) -> f32 {
@@ -304,6 +313,19 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let d = median3(texColor.r, texColor.g, texColor.b);
     let w_msdf = max(fwidth(d), 0.03);
     let edge_alpha = fwidth(texColor.a);
+
+    // === GLOW path: radial Gaussian halo ===
+    // Uses radial distance from quad center for smooth circular falloff.
+    // No texture sampling needed — the character detail comes from the
+    // normal foreground instance rendered on top.
+    if (input.v_glow > 0.5) {
+        let local = input.v_local_pos;
+        let center = vec2<f32>(0.5, 0.5);
+        let dist = length((local - center) * 2.0);  // normalized: 0 at center, 1 at edge
+        // Gaussian-like falloff: soft circular glow
+        let falloff = exp(-dist * dist * 3.0);
+        return vec4<f32>(input.colorj.rgb, input.colorj.a * falloff);
+    }
 
     if (input.v_msdf > 0.5) {
         // === MSDF path ===

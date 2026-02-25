@@ -35,6 +35,8 @@ bitflags! {
         /// Rendering hint: keep slot width fixed even when scale_x >= 1.0.
         /// Character scales visually but doesn't expand its grid slot.
         const FIXED_SLOT        = 0b0010_0000_0000;
+        /// GPU glow halo effect: renders an enlarged soft-edge instance behind the character.
+        const GLOW              = 0b0100_0000_0000;
     }
 }
 

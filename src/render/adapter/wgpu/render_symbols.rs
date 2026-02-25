@@ -249,6 +249,7 @@ impl WgpuSymbolRenderer {
         const MOD_REVERSED: u16 = 0x0040;
         const MOD_HIDDEN: u16 = 0x0080;
         const MOD_CROSSED_OUT: u16 = 0x0100;
+        const MOD_GLOW: u16 = 0x0400;
 
         // ITALIC slant factor: tan(12°) ≈ 0.21
         // ITALIC 倾斜因子：tan(12°) ≈ 0.21
@@ -327,6 +328,38 @@ impl WgpuSymbolRenderer {
             }
 
             let is_bold = modifier & MOD_BOLD != 0;
+            let is_glow = modifier & MOD_GLOW != 0;
+
+            // GLOW halo instance (drawn BEFORE foreground so it renders behind)
+            // Uses the same transform as foreground, then enlarges+centers in instance data
+            if is_glow {
+                let glow_color = [fg_color.0, fg_color.1, fg_color.2, fg_color.3 * 0.4];
+                let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
+                // Build exact same transform as foreground (will be built below too)
+                let mut glow_transform = self.transform_stack;
+                glow_transform.translate(
+                    r.x + r.cx - r.w as f32,
+                    r.y + r.cy - r.h as f32,
+                );
+                if r.angle != 0.0 {
+                    glow_transform.rotate(r.angle);
+                }
+                glow_transform.translate(
+                    -r.cx + r.w as f32,
+                    -r.cy + r.h as f32,
+                );
+                if modifier & MOD_ITALIC != 0 {
+                    glow_transform.skew_x(ITALIC_SKEW);
+                }
+                let frame = &self.symbols[r.texsym];
+                let frame_width = frame.width / ratio_x;
+                let frame_height = frame.height / ratio_y;
+                let base_sx = cell_width / frame_width / ratio_x;
+                let base_sy = cell_height / frame_height / ratio_y;
+                glow_transform.scale(base_sx, base_sy);
+                // Emit enlarged+centered glow instance (centering handled inside)
+                self.draw_symbol_instance_with_glow(r.texsym, &glow_transform, glow_color, is_bold, use_msdf, 2.5);
+            }
 
             // Foreground rendering
             let mut transform = self.transform_stack;
@@ -341,13 +374,13 @@ impl WgpuSymbolRenderer {
                 -r.cx + r.w as f32,
                 -r.cy + r.h as f32,
             );
-            
+
             // Apply ITALIC effect: horizontal skew transformation
             // ITALIC 效果：水平倾斜变换
             if modifier & MOD_ITALIC != 0 {
                 transform.skew_x(ITALIC_SKEW);
             }
-            
+
             // Apply scaling based on RenderCell dimensions vs actual frame size.
             // This preserves per-sprite scaling beyond DPI ratio adjustments.
             // IMPORTANT: Use frame dimensions (not PIXEL_SYM_WIDTH/HEIGHT) because
@@ -355,12 +388,12 @@ impl WgpuSymbolRenderer {
             let frame = &self.symbols[r.texsym];
             let frame_width = frame.width / ratio_x;
             let frame_height = frame.height / ratio_y;
-            
+
             let scale_x = cell_width / frame_width / ratio_x;
             let scale_y = cell_height / frame_height / ratio_y;
-            
+
             transform.scale(scale_x, scale_y);
-            
+
             // Draw foreground symbol with modified color
             let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
             self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], is_bold, use_msdf);
@@ -472,6 +505,67 @@ impl WgpuSymbolRenderer {
         self.instance_count += 1;
     }
     
+    /// Add a glow halo symbol instance with centered enlargement.
+    ///
+    /// Takes the same transform as the normal foreground instance (including scale),
+    /// then enlarges by `glow_scale` while keeping the center aligned.
+    /// Center-preserving formula: M' = gs*M, t' = t - (gs-1)*M*(0.5, 0.5)
+    /// Glow flag encoded in a2.x sign (negative = glow) for the fragment shader.
+    fn draw_symbol_instance_with_glow(
+        &mut self, sym: usize, transform: &UnifiedTransform,
+        color: [f32; 4], is_bold: bool, use_msdf: bool, glow_scale: f32,
+    ) {
+        if self.instance_count >= self.max_instances { return; }
+        if sym >= self.symbols.len() { return; }
+
+        let frame = &self.symbols[sym];
+        let origin_x = if is_bold { -frame.origin_x } else { frame.origin_x };
+        let origin_y = if use_msdf { -frame.origin_y } else { frame.origin_y };
+
+        let gs = glow_scale;
+        // Matrix entries (already multiplied by frame size)
+        let mat_00_fw = transform.m00 * frame.width;
+        let mat_10_fw = transform.m10 * frame.width;
+        let mat_01_fh = transform.m01 * frame.height;
+        let mat_11_fh = transform.m11 * frame.height;
+
+        // Center-preserving enlargement:
+        // Quad center in local space = (0.5 - origin) where origin = (1.0, 1.0)
+        // So center = (-0.5, -0.5)
+        // Formula: t' = t - (gs-1) * M * center
+        let ox = frame.origin_x.abs();
+        let oy = frame.origin_y.abs();
+        let cx = 0.5 - ox;  // -0.5 when origin is 1.0
+        let cy = 0.5 - oy;
+        let center_x = mat_00_fw * cx + mat_01_fh * cy;
+        let center_y = mat_10_fw * cx + mat_11_fh * cy;
+        let tx = transform.m20 - (gs - 1.0) * center_x;
+        let ty = transform.m21 - (gs - 1.0) * center_y;
+
+        // Encode glow flag in uv_width sign: negative = glow
+        let uv_width = -frame.uv_width;
+
+        let instance = WgpuSymbolInstance {
+            a1: [origin_x, origin_y, frame.uv_left, frame.uv_top],
+            a2: [
+                uv_width,
+                frame.uv_height,
+                mat_00_fw * gs,
+                mat_10_fw * gs,
+            ],
+            a3: [
+                mat_01_fh * gs,
+                mat_11_fh * gs,
+                tx,
+                ty,
+            ],
+            color,
+        };
+
+        self.instance_buffer.push(instance);
+        self.instance_count += 1;
+    }
+
     /// Get base quad vertices (equivalent to OpenGL quad vertices)
     pub fn get_base_quad_vertices() -> &'static [WgpuQuadVertex] {
         // Base quad vertices in unit coordinates (matches OpenGL TRIANGLE_FAN order)

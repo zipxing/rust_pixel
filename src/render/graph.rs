@@ -1665,8 +1665,8 @@ pub fn render_buffer_to_cells<F>(
 /// - `f`: Callback function to process each sprite pixel
 pub fn render_layers<F>(layers: &mut Layer, rx: f32, ry: f32, mut f: F)
 where
-    // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point)
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32),
+    // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point, modifier)
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32, u16),
 {
     // Sort by render_weight
     layers.update_render_index();
@@ -1687,9 +1687,8 @@ where
             s.scale_x,
             s.scale_y,
             s.angle,
-            |fc, bc, s2, texidx, symidx, angle, ccp, _modifier| {
-                // Forward to original callback (ignore modifier for backward compatibility)
-                f(fc, bc, s2, texidx, symidx, angle, ccp);
+            |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
+                f(fc, bc, s2, texidx, symidx, angle, ccp, modifier);
             },
         );
     }
@@ -2138,9 +2137,8 @@ pub fn generate_render_buffer(
         // Note: All layers are now uniform (is_pixel removed), render all non-hidden layers
         for item in ps {
             if !item.is_hidden {
-                render_layers(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp| {
-                    // Pixel sprites currently don't use modifier (0)
-                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, 0);
+                render_layers(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
+                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, modifier);
                 });
             }
         }
