@@ -54,12 +54,12 @@ const FRAME_BOTTOM: u16 = 4; // Bottom border height (includes info bar)
 // Frame colors
 const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);  // Dark gray
 const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
-const BACK_COLOR: Color = Color::Rgba(5, 5, 5, 155);
+const BACK_COLOR: Color = Color::Rgba(35, 35, 35, 255);
 const FOOT_COLOR: Color = Color::Rgba(80, 90, 80, 255);
 const INFO_COLOR: Color = Color::Rgba(200, 200, 200, 255);       // Light gray for info text
 
 // Footer scale: TUI chars are 16×32px
-const FOOTER_SCALE: f32 = 0.4;
+const FOOTER_SCALE: f32 = 0.6;
 
 /// Apply CPU-based buffer distortion effects
 ///
@@ -161,8 +161,8 @@ impl PetviewRender {
         // Size is 1/FOOTER_SCALE times screen size because scaling shrinks it to fit
         let footer_w = (PETW as f32 / FOOTER_SCALE) as u16;
         let footer_h = (4.0 / FOOTER_SCALE) as u16;  // 3 lines + margin
-        let mut footer = Sprite::new(0, 0, footer_w, footer_h);
-        footer.set_use_tui(true);
+        let footer = Sprite::new(0, 0, footer_w, footer_h);
+        // footer.set_use_tui(true);
         scene.add_sprite(footer, "footer");
 
         timer_register("PetView.Timer", 0.1, "pet_timer");
@@ -268,7 +268,7 @@ impl PetviewRender {
         let footer_y_sprite = PETH - FRAME_BOTTOM + 1;  // Sprite coordinate Y=29
         let footer_y_px = (footer_y_sprite as f32 * sym_h / ry) as u16;
         let footer = self.scene.get_sprite("footer");
-        footer.set_pos(0, footer_y_px - 10);
+        footer.set_pos(0, footer_y_px + 6);
         // Set scale to make TUI chars (32px) appear as sprite char height (16px)
         footer.set_scale_x(FOOTER_SCALE);
         footer.set_scale_y(FOOTER_SCALE);
