@@ -54,9 +54,15 @@ const FRAME_BOTTOM: u16 = 4; // Bottom border height (includes info bar)
 // Frame colors
 const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);  // Dark gray
 const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
-const BACK_COLOR: Color = Color::Rgba(35, 35, 35, 255);
+const BACK_COLOR: Color = Color::Rgba(15, 15, 15, 155);
 const FOOT_COLOR: Color = Color::Rgba(80, 80, 80, 255);
 const INFO_COLOR: Color = Color::Rgba(100, 100, 100, 255);       // Light gray for info text
+
+// C64 PETSCII graphic chars (block 1, indices 65-90 = upper/graphics charset)
+// 65=♠, 66=vbar, 69=arc-UL, 70=arc-UR, 76=slash, 77=backslash
+// 78=quarter, 79=3quarter, 81=●, 83=♥, 84=hbar-top, 86=pi, 88=+cross, 90=♣
+const DECO_BLOCK: u8 = 1;
+const DECO_CHARS: [u8; 14] = [65, 81, 83, 90, 88, 66, 78, 69, 70, 76, 77, 79, 84, 86];
 
 // Title/Footer scale for PETSCII chars (16×16px)
 const TITLE_SCALE: f32 = 1.0;
@@ -179,7 +185,7 @@ impl PetviewRender {
     }
 
     /// Draw the gallery frame border with gold styling
-    fn draw_frame(&mut self, img_cur: usize, img_count: usize) {
+    fn draw_frame(&mut self, img_cur: usize, img_count: usize, stage: u32) {
         let frame = self.scene.get_sprite("frame");
         let buf = &mut frame.content;
         buf.reset();
@@ -198,15 +204,40 @@ impl PetviewRender {
         let fill = 102u8;        // filled block for border area
 
         // Draw outer frame background (dark)
+        // Collect candidate decoration positions (but don't draw them)
+        let mut deco_positions: Vec<(u16, u16, usize)> = Vec::new();
         for y in 0..PETH {
             for x in 0..PETW {
-                // Check if in border area
                 let in_image_area = x >= FRAME_LEFT && x < PETW - FRAME_RIGHT
                     && y >= FRAME_TOP && y < PETH - FRAME_BOTTOM;
 
                 if !in_image_area {
+                    let hash = (x as usize).wrapping_mul(7).wrapping_add((y as usize).wrapping_mul(13)) % 41;
+                    if hash < 3 {
+                        let ci = (x as usize * 3 + y as usize * 11) % DECO_CHARS.len();
+                        deco_positions.push((x, y, ci));
+                    }
                     buf.set_graph_sym(x, y, 0, fill, BACK_COLOR);
                 }
+            }
+        }
+
+        // Pick 5 existing decoration cells and apply fade-in/fade-out glow
+        if !deco_positions.is_empty() {
+            let count = deco_positions.len();
+            let period = 90u32;
+            for slot in 0..5u32 {
+                let offset = slot * 31;
+                let cycle = stage.wrapping_add(offset) / period;
+                let phase = stage.wrapping_add(offset) % period;
+                let t = phase as f32 / period as f32;
+                let brightness = if t < 0.5 { t * 2.0 } else { (1.0 - t) * 2.0 };
+
+                let idx = (cycle as usize).wrapping_mul(17).wrapping_add(slot as usize * 53) % count;
+                let (gx, gy, ci) = deco_positions[idx];
+                let c = (50.0 + brightness * 150.0) as u8;
+                let glow = Color::Rgba(c, c.saturating_sub(10), (c as u16 + 15).min(255) as u8, 255);
+                buf.set_graph_sym(gx, gy, DECO_BLOCK, DECO_CHARS[ci], glow);
             }
         }
 
@@ -377,7 +408,7 @@ impl Render for PetviewRender {
         self.do_init(ctx);
 
         // Draw gallery frame border with current image info
-        self.draw_frame(model.img_cur, model.img_count);
+        self.draw_frame(model.img_cur, model.img_count, ctx.stage);
 
         // Draw title
         {
