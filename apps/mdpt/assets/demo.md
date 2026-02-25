@@ -15,7 +15,7 @@ A Markdown Presentation Tool built with RustPixel
 
 白日依山尽 黄河入海流
 
-Press Space or Right arrow to advance
+Press Space or Right arrow to advance ⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿
 
 不依赖终端软件，窗口里直接跑 😀😃🍀
 

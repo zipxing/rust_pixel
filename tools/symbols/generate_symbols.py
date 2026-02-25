@@ -163,12 +163,12 @@ class TextureConfig:
 
 
 # 字体名称（Quartz 系统字体名，用于位图渲染 fallback）
-TUI_FONT_NAME = "DroidSansMono Nerd Font"
+TUI_FONT_NAME = "DejaVuSansMono Nerd Font"
 EMOJI_FONT_NAME = "Apple Color Emoji"
 CJK_FONT_NAME = "PingFang SC"
 
 # msdfgen 字体文件路径
-MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DroidSansMNerdFontMono-Regular.otf")
+MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/NerdFonts/DejaVu Sans Mono Nerd Font Complete.ttf")
 MSDFGEN_BRAILLE_FONT = "/System/Library/Fonts/Apple Braille.ttf"
 MSDFGEN_CJK_FONT = None  # 运行时从 PingFang.ttc 提取
 
@@ -741,8 +741,12 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
 
         if use_msdf and i < len(tui_chars):
             char = tui_chars[i]
-            # 1. 尝试 msdfgen（真正 MSDF），tui_sdf 模式跳过此步
-            if not tui_sdf:
+            cp = ord(char)
+            is_braille = (0x2800 <= cp <= 0x28FF)
+            # 1. 尝试 msdfgen（真正 MSDF）
+            # - tui_sdf 模式跳过此步
+            # - 盲文字符跳过 MSDF，直接用 SDF（盲文是简单点阵，MSDF 会产生伪影）
+            if not tui_sdf and not is_braille:
                 font_path = find_tui_font_for_char(char)
                 # 根据字符类型选择参数：图形字符满填充，文本字符带 padding
                 params = font_params_graphic if is_graphic_char(char) else font_params_text
@@ -755,6 +759,15 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
                     )
                     if symbol:
                         msdf_count += 1
+                    else:
+                        # msdfgen 渲染失败
+                        print(f"    MSDF渲染失败: {i} '{char}' U+{cp:04X}")
+                elif font_path:
+                    # 字体找到但参数不在 params 中
+                    print(f"    字体参数缺失: {i} '{char}' U+{cp:04X} font={font_path}")
+                else:
+                    # 字符不在任何字体 cmap 中
+                    print(f"    字体未找到: {i} '{char}' U+{cp:04X}")
 
             # 2. Quartz bitmap → SDF (tui_sdf 模式直接走这里)
             if symbol is None and HAS_QUARTZ:
@@ -1016,6 +1029,7 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
         tui_symbols += char
 
     # 构建 Sprite extras（特殊字符映射）
+    # 格式: "字符": [block, idx] 其中 block 0-159，idx 0-255
     sprite_extras = {
         "▇": [0, 209],
         "▒": [0, 94],
@@ -1028,7 +1042,8 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
         "└": [0, 109],
         "╰": [0, 74],
         "┘": [0, 125],
-        "╯": [0, 75]
+        "╯": [0, 75],
+        "_": [2, 30]   # 下划线在 block 2 的第 30 个位置
     }
 
     # 构建 Sprite symbols（C64 字符集）

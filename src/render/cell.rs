@@ -168,6 +168,16 @@ impl Cell {
             return (32, 0, self.fg, self.bg, self.modifier);
         }
 
+        // Check sprite extras for non-zero block (e.g., underscore in block 2)
+        // This allows characters to be mapped to different sprite blocks via symbol_map.json
+        if self.tex == 0 {
+            if let Some((block, idx)) = get_symbol_map().sprite_idx(&self.symbol) {
+                if block != 0 {
+                    return (idx, block, self.fg, self.bg, self.modifier);
+                }
+            }
+        }
+
         (symidx(&self.symbol), self.tex, self.fg, self.bg, self.modifier)
     }
 
