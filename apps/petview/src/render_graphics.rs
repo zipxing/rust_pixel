@@ -55,11 +55,12 @@ const FRAME_BOTTOM: u16 = 4; // Bottom border height (includes info bar)
 const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);  // Dark gray
 const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
 const BACK_COLOR: Color = Color::Rgba(35, 35, 35, 255);
-const FOOT_COLOR: Color = Color::Rgba(80, 90, 80, 255);
-const INFO_COLOR: Color = Color::Rgba(200, 200, 200, 255);       // Light gray for info text
+const FOOT_COLOR: Color = Color::Rgba(80, 80, 80, 255);
+const INFO_COLOR: Color = Color::Rgba(100, 100, 100, 255);       // Light gray for info text
 
-// Footer scale: TUI chars are 16×32px
-const FOOTER_SCALE: f32 = 0.6;
+// Title/Footer scale for PETSCII chars (16×16px)
+const TITLE_SCALE: f32 = 1.0;
+const FOOTER_SCALE: f32 = 0.62;
 
 /// Apply CPU-based buffer distortion effects
 ///
@@ -156,13 +157,16 @@ impl PetviewRender {
         p5.set_hidden(true);
         scene.add_sprite(p5, "pet-msg");
 
-        // Footer sprite for TUI text (positioned in do_init)
-        // Using separate sprite allows precise pixel positioning of TUI characters
-        // Size is 1/FOOTER_SCALE times screen size because scaling shrinks it to fit
+        // Title sprite (positioned in do_init)
+        let title_w = (PETW as f32 / TITLE_SCALE) as u16;
+        let title_h = (1.0 / TITLE_SCALE) as u16 + 1;
+        let title = Sprite::new(0, 0, title_w, title_h);
+        scene.add_sprite(title, "title");
+
+        // Footer sprite (positioned in do_init)
         let footer_w = (PETW as f32 / FOOTER_SCALE) as u16;
-        let footer_h = (4.0 / FOOTER_SCALE) as u16;  // 3 lines + margin
+        let footer_h = (4.0 / FOOTER_SCALE) as u16;
         let footer = Sprite::new(0, 0, footer_w, footer_h);
-        // footer.set_use_tui(true);
         scene.add_sprite(footer, "footer");
 
         timer_register("PetView.Timer", 0.1, "pet_timer");
@@ -235,12 +239,7 @@ impl PetviewRender {
         // Note: Inner shadow removed - it was overlapping with the image area
         // The outer gold border provides sufficient framing effect
 
-        // Draw title above the frame
-        let title = "PETSCII ARTS";
-        let title_x = (PETW as usize - title.len()) / 2;
-        buf.set_color_str(title_x as u16, top - 1, title, INFO_COLOR, Color::Reset);
-
-        // Note: Footer is rendered to a separate sprite with TUI characters in draw() method
+        // Title and footer are rendered as separate sprites in draw() method
     }
 
     fn do_init(&mut self, ctx: &mut Context) {
@@ -263,13 +262,19 @@ impl PetviewRender {
         let p4 = self.scene.get_sprite("petimg4");
         p4.set_pos(img_x, img_y);
 
+        // Position title sprite above the frame border
+        let title_y_sprite = FRAME_TOP - 2;  // one row above frame top border
+        let title_y_px = (title_y_sprite as f32 * sym_h / ry) as u16;
+        let title = self.scene.get_sprite("title");
+        title.set_pos(0, title_y_px - 12);
+        title.set_scale_x(TITLE_SCALE);
+        title.set_scale_y(TITLE_SCALE);
+
         // Position footer sprite below the frame border
-        // Footer uses TUI characters (32px height), so we need pixel-level positioning
-        let footer_y_sprite = PETH - FRAME_BOTTOM + 1;  // Sprite coordinate Y=29
+        let footer_y_sprite = PETH - FRAME_BOTTOM + 1;
         let footer_y_px = (footer_y_sprite as f32 * sym_h / ry) as u16;
         let footer = self.scene.get_sprite("footer");
         footer.set_pos(0, footer_y_px + 6);
-        // Set scale to make TUI chars (32px) appear as sprite char height (16px)
         footer.set_scale_x(FOOTER_SCALE);
         footer.set_scale_y(FOOTER_SCALE);
 
@@ -282,7 +287,7 @@ impl Render for PetviewRender {
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
-            .init(PETW, PETH, 1.0, 1.0, "PETSCII Gallery".to_string());
+            .init(PETW, PETH, 2.0, 2.0, "PETSCII Gallery".to_string());
         self.scene.init(ctx);
 
         let p1 = self.scene.get_sprite("petimg1");
@@ -374,8 +379,18 @@ impl Render for PetviewRender {
         // Draw gallery frame border with current image info
         self.draw_frame(model.img_cur, model.img_count);
 
-        // Draw footer using PETSCII characters in a dedicated sprite
-        // PETSCII chars are 16px (same as sprite chars), so scaling is more flexible
+        // Draw title
+        {
+            let title = self.scene.get_sprite("title");
+            let buf = &mut title.content;
+            buf.reset();
+            let text = "PETSCII ARTS RETRO C64";
+            let internal_w = (PETW as f32 / TITLE_SCALE) as usize;
+            let tx = ((internal_w - text.len()) / 2) as u16;
+            buf.set_color_str(tx, 0, text, INFO_COLOR, Color::Reset);
+        }
+
+        // Draw footer
         {
             let footer = self.scene.get_sprite("footer");
             let buf = &mut footer.content;
