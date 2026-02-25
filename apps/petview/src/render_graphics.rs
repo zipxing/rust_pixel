@@ -58,11 +58,14 @@ const BACK_COLOR: Color = Color::Rgba(15, 15, 15, 155);
 const FOOT_COLOR: Color = Color::Rgba(80, 80, 80, 255);
 const INFO_COLOR: Color = Color::Rgba(100, 100, 100, 255);       // Light gray for info text
 
-// C64 PETSCII graphic chars (block 1, indices 65-90 = upper/graphics charset)
-// 65=♠, 66=vbar, 69=arc-UL, 70=arc-UR, 76=slash, 77=backslash
-// 78=quarter, 79=3quarter, 81=●, 83=♥, 84=hbar-top, 86=pi, 88=+cross, 90=♣
-const DECO_BLOCK: u8 = 1;
-const DECO_CHARS: [u8; 14] = [65, 81, 83, 90, 88, 66, 78, 69, 70, 76, 77, 79, 84, 86];
+// Matrix rain: PETSCII graphic chars (block 1) for digital rain effect
+const RAIN_BLOCK: u8 = 1;
+const RAIN_CHARS: [u8; 20] = [
+    65, 81, 83, 90, 88,  // ♠ ● ♥ ♣ +cross
+    66, 78, 69, 70, 76,  // vbar quarter arc-UL arc-UR slash
+    77, 79, 84, 86, 85,  // backslash 3quarter hbar-top pi corner-TL
+    73, 74, 75, 67, 87,  // corner-TR corner-BL corner-BR hbar-B checker
+];
 
 // Title/Footer scale for PETSCII chars (16×16px)
 const TITLE_SCALE: f32 = 1.0;
@@ -203,50 +206,82 @@ impl PetviewRender {
         let vert = 93u8;         // │ vertical line
         let fill = 102u8;        // filled block for border area
 
-        // Draw outer frame background (dark)
-        // Collect candidate decoration positions (but don't draw them)
-        let mut deco_positions: Vec<(u16, u16, usize)> = Vec::new();
+        // Draw outer frame background (dark) + Matrix rain
+        // First pass: fill all non-image cells with dark background
         for y in 0..PETH {
             for x in 0..PETW {
                 let in_image_area = x >= FRAME_LEFT && x < PETW - FRAME_RIGHT
                     && y >= FRAME_TOP && y < PETH - FRAME_BOTTOM;
-
                 if !in_image_area {
-                    // Also exclude cells adjacent to the frame border (1-cell margin)
-                    // to prevent glow from overlapping the gold frame lines
-                    let near_frame = x >= FRAME_LEFT - 2 && x <= PETW - FRAME_RIGHT
-                        && y >= FRAME_TOP - 2 && y <= PETH - FRAME_BOTTOM;
-                    let hash = (x as usize).wrapping_mul(7).wrapping_add((y as usize).wrapping_mul(13)) % 41;
-                    if hash < 3 && !near_frame {
-                        let ci = (x as usize * 3 + y as usize * 11) % DECO_CHARS.len();
-                        deco_positions.push((x, y, ci));
-                    }
                     buf.set_graph_sym(x, y, 0, fill, BACK_COLOR);
                 }
             }
         }
 
-        // Pick 5 existing decoration cells and apply fade-in/fade-out glow
-        if !deco_positions.is_empty() {
-            let count = deco_positions.len();
-            let period = 90u32;
-            for slot in 0..5u32 {
-                let offset = slot * 31;
-                let cycle = stage.wrapping_add(offset) / period;
-                let phase = stage.wrapping_add(offset) % period;
-                let t = phase as f32 / period as f32;
-                let brightness = if t < 0.5 { t * 2.0 } else { (1.0 - t) * 2.0 };
+        // Second pass: Matrix digital rain columns
+        let rain_len = RAIN_CHARS.len();
+        for x in 0..PETW {
+            let xh = x as usize;
+            // Deterministic per-column parameters from hash
+            let speed = 0.15 + (((xh.wrapping_mul(73).wrapping_add(17)) % 31) as f32 / 31.0) * 0.30;
+            let trail = 8 + ((xh.wrapping_mul(37).wrapping_add(7)) % 11) as i32; // 8..18
+            let gap = 8 + ((xh.wrapping_mul(53).wrapping_add(23)) % 8) as i32;   // 8..15
+            let offset = ((xh.wrapping_mul(97).wrapping_add(41)) % 200) as f32;
+            let cycle_len = PETH as i32 + trail + gap;
 
-                let idx = (cycle as usize).wrapping_mul(17).wrapping_add(slot as usize * 53) % count;
-                let (gx, gy, ci) = deco_positions[idx];
-                let c = (50.0 + brightness * 150.0) as u8;
-                let glow_color = Color::Rgba(c, c.saturating_sub(10), (c as u16 + 15).min(255) as u8, 255);
-                buf.set_str_tex(
-                    gx, gy,
-                    &cellsym(DECO_CHARS[ci]),
-                    Style::default().fg(glow_color).bg(Color::Reset).add_modifier(Modifier::GLOW),
-                    DECO_BLOCK,
-                );
+            let y_head_f = (stage as f32 * speed + offset) % (cycle_len as f32);
+            let y_head = y_head_f as i32;
+
+            for dy in 0..trail {
+                let y = y_head - dy;
+                if y < 0 || y >= PETH as i32 {
+                    continue;
+                }
+                let yu = y as u16;
+
+                // Skip cells inside the image area
+                let in_image_area = x >= FRAME_LEFT && x < PETW - FRAME_RIGHT
+                    && yu >= FRAME_TOP && yu < PETH - FRAME_BOTTOM;
+                if in_image_area {
+                    continue;
+                }
+
+                // Character: changes every 6 frames, varies by position
+                let char_seed = xh.wrapping_mul(31)
+                    .wrapping_add((y_head - dy) as usize * 17)
+                    .wrapping_add((stage as usize) / 6);
+                let ci = char_seed % rain_len;
+                let sym = RAIN_CHARS[ci];
+
+                let t = dy as f32 / trail as f32; // 0.0 at head, ~1.0 at tail
+
+                if dy == 0 {
+                    // Head: bright white-green with GLOW
+                    let near_frame = x >= FRAME_LEFT - 2 && x <= PETW - FRAME_RIGHT
+                        && yu >= FRAME_TOP - 2 && yu <= PETH - FRAME_BOTTOM;
+                    let head_color = Color::Rgba(180, 255, 190, 255);
+                    if near_frame {
+                        // Near frame: render without GLOW to avoid halo overlapping
+                        buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, head_color);
+                    } else {
+                        buf.set_str_tex(
+                            x, yu,
+                            &cellsym(sym),
+                            Style::default().fg(head_color).bg(Color::Reset)
+                                .add_modifier(Modifier::GLOW),
+                            RAIN_BLOCK,
+                        );
+                    }
+                } else if dy <= 2 {
+                    // Near-head: bright green
+                    let g = (230.0 - t * 50.0) as u8;
+                    buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 30, 255));
+                } else {
+                    // Trail body: fading green
+                    let brightness = 1.0 - t;
+                    let g = (25.0 + brightness * 155.0) as u8;
+                    buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 0, 255));
+                }
             }
         }
 
