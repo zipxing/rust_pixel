@@ -11,10 +11,12 @@ use rust_pixel::{
     render::effect::{GpuTransition, GpuBlendEffect},
 };
 
-// Gallery mode: larger screen to accommodate frame border
-// Image: 40x25, Frame border: 4 chars each side, Info bar: 2 lines
+// Gallery mode: 2x2 grid (4 images per screen), each scaled 0.5
+// Single image: 40x25 @ scale 0.5 = 20x12.5, Grid: 40x25 total
+// Frame border: 6 chars each side
 pub const PETW: u16 = 52;  // 40 + 6*2 (left/right border)
 pub const PETH: u16 = 32;  // 25 + 4 (top) + 3 (bottom with info)
+pub const IMAGES_PER_SCREEN: usize = 4;  // 2x2 grid
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
@@ -34,6 +36,9 @@ pub struct PetviewModel {
     /// GPU混合特效 (使用新的GpuBlendEffect类型)
     pub gpu_effect: GpuBlendEffect,
     pub tex_ready: bool,
+    /// True after transition completes, until new images are loaded
+    /// During this time, continue showing "next" sprites to avoid jump-back
+    pub show_next_as_cur: bool,
 }
 
 impl PetviewModel {
@@ -43,10 +48,11 @@ impl PetviewModel {
             normal_stage: 0,
             transbuf_stage: 0,
             img_cur: 0,
-            img_next: 1,
+            img_next: IMAGES_PER_SCREEN,  // Next group starts at index 4
             img_count: 2099,
             gpu_effect: GpuBlendEffect::default(),
             tex_ready: false,
+            show_next_as_cur: false,
         }
     }
 }
@@ -98,8 +104,13 @@ impl Model for PetviewModel {
                 if self.gpu_effect.progress >= 1.0 {
                     ctx.state = PetviewState::Normal as u8;
                     self.normal_stage = 0;
-                    self.img_cur = (self.img_cur + 1) % self.img_count;
-                    self.img_next = (self.img_cur + 1) % self.img_count;
+                    // Each screen shows 4 images, advance by 4
+                    self.img_cur = (self.img_cur + IMAGES_PER_SCREEN) % self.img_count;
+                    self.img_next = (self.img_cur + IMAGES_PER_SCREEN) % self.img_count;
+                    // Keep showing "next" sprites until new images loaded
+                    self.show_next_as_cur = true;
+                    // Trigger reload of images for next cycle
+                    self.tex_ready = false;
                 }
             }
         }

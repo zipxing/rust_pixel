@@ -16,7 +16,7 @@
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use crate::model::{PetviewModel, PetviewState, PETH, PETW};
+use crate::model::{PetviewModel, PetviewState, PETH, PETW, IMAGES_PER_SCREEN};
 use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -42,18 +42,31 @@ use rust_pixel::{
     LOGO_FRAME,
 };
 
-const PIXW: u16 = 40;
-const PIXH: u16 = 25;
+// Single image dimensions
+const IMG_W: u16 = 40;
+const IMG_H: u16 = 25;
 
-// Frame border dimensions
-const FRAME_LEFT: u16 = 6;   // Left border width
-const FRAME_TOP: u16 = 3;    // Top border height
-const FRAME_RIGHT: u16 = 6;  // Right border width
-const FRAME_BOTTOM: u16 = 4; // Bottom border height (includes info bar)
+// 2x2 grid layout - each image scaled 0.5, total display = 40x25 (same as original single image)
+const GRID_COLS: usize = 2;
+
+// Each cell in the 2x2 grid (after 0.5 scale)
+const CELL_W: u16 = (IMG_W as f32 * 0.5) as u16;  // 20
+const CELL_H: u16 = (IMG_H as f32 * 0.5) as u16;  // 12 (actually 12.5, but using 12)
+
+// Display dimensions (same as original single image area)
+const PIXW: u16 = 40;
+
+// Sprite scale factor for GPU scaling
+const IMG_SCALE: f32 = 0.5;
+
+// Frame border dimensions (original 52x32 canvas)
+const FRAME_LEFT: u16 = 6;    // Left border width
+const FRAME_TOP: u16 = 3;     // Top border height
+const FRAME_RIGHT: u16 = 6;   // Right border width
+const FRAME_BOTTOM: u16 = 4;  // Bottom border height (includes info bar)
 
 // Frame colors
 const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);  // Dark gray
-const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
 const BACK_COLOR: Color = Color::Rgba(5, 5, 5, 1);
 const FOOT_COLOR: Color = Color::Rgba(80, 80, 80, 255);
 // const INFO_COLOR: Color = Color::Rgba(100, 100, 100, 255);       // Light gray for info text
@@ -98,48 +111,101 @@ const RAIN_TRAIL_G_RANGE: f32 = 90.0;   // Green range (total = min + brightness
 // GLOW effect zone (cells from frame edge where GLOW is disabled)
 const RAIN_GLOW_MARGIN: u16 = 4;
 
-/// Apply CPU-based buffer distortion effects
+/// Load a single image into a sprite
+/// Returns true if loaded successfully
+fn load_single_image(
+    sprite: &mut Sprite,
+    ctx: &mut Context,
+    img_idx: usize,
+    _img_count: usize,
+) -> bool {
+    // img_idx 0,1,2,3 → files 1.pix, 2.pix, 3.pix, 4.pix
+    let filename = format!("{}.pix", img_idx + 1);
+
+    // Build full path like asset2sprite! macro does
+    let full_path = format!(
+        "{}{}assets{}{}",
+        rust_pixel::get_game_config().project_path,
+        std::path::MAIN_SEPARATOR,
+        std::path::MAIN_SEPARATOR,
+        filename
+    );
+
+    // Trigger loading if not already loaded
+    ctx.asset_manager.load(AssetType::ImgPix, &full_path);
+
+    // Copy image content to sprite
+    if let Some(asset) = ctx.asset_manager.get(&full_path) {
+        let base = asset.get_base();
+        if !base.parsed_buffers.is_empty() {
+            let pix_buf = &base.parsed_buffers[0];
+            let copy_len = pix_buf.content.len().min(sprite.content.content.len());
+            sprite.content.content[..copy_len].clone_from_slice(&pix_buf.content[..copy_len]);
+            return true;
+        }
+    }
+    false
+}
+
+// Random color for noise effect
+const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
+
+/// Apply CPU-based buffer distortion effects for 4-image grid
 ///
-/// Effects are applied independently from the original source buffer (not chained),
-/// so the wave distortion produces a clean, clearly visible wave pattern.
-fn process_buffer_transition(
+/// TransBuf效果：对当前图片(cur)应用CPU扭曲特效，让它"溶解/崩坏"
+/// 然后TransGl接手，从cur过渡到next
+///
+/// cur_original: TransBuf开始时保存的原始cur内容，每帧从这里读取避免特效累积
+fn process_buffer_transition_grid(
     scene: &mut Scene,
+    cur_original: &[Buffer],
     ctx: &mut Context,
     transbuf_stage: usize,
 ) {
-    let p4 = scene.get_sprite("petimg4");
     let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-
     let params = EffectParams::new(0.5 - time, ctx.stage as usize)
         .with_seed(ctx.rand.rand());
 
-    let mut tbuf = p4.content.clone();
+    // 对cur sprites应用CPU特效（从保存的原始内容读取）
+    for i in 0..IMAGES_PER_SCREEN {
+        if i >= cur_original.len() {
+            continue;
+        }
+        let src_content = &cur_original[i];
+        let mut tbuf = src_content.clone();
 
-    // Apply effects independently from source (not chained through EffectChain).
-    // Each distortion reads from p4.content, so wave overwrites ripple and
-    // produces a clean, visible wave pattern.
-    let ripple = RippleEffect::new(0.05, 10.0);
-    ripple.apply(&p4.content, &mut tbuf, &params);
+        // Apply ripple effect
+        let ripple = RippleEffect::new(0.05, 10.0);
+        ripple.apply(src_content, &mut tbuf, &params);
 
-    let wave = WaveEffect::new(0.03, 15.0);
-    wave.apply(&p4.content, &mut tbuf, &params);
+        // Apply wave effect
+        let wave = WaveEffect::new(0.03, 15.0);
+        wave.apply(src_content, &mut tbuf, &params);
 
-    // Add noise: a few random cells per frame
-    let clen = tbuf.content.len();
-    for _ in 0..transbuf_stage / 2 {
-        let idx = ctx.rand.rand() as usize % clen;
-        let sym = (ctx.rand.rand() % 255) as u8;
-        tbuf.content[idx]
-            .set_symbol(&cellsym(sym))
-            .set_fg(RAND_COLOR);
+        // Add noise: a few random cells per frame
+        let clen = tbuf.content.len();
+        for _ in 0..transbuf_stage / 2 {
+            let idx = ctx.rand.rand() as usize % clen;
+            let sym = (ctx.rand.rand() % 255) as u8;
+            tbuf.content[idx]
+                .set_symbol(&cellsym(sym))
+                .set_fg(RAND_COLOR);
+        }
+
+        // 更新cur sprite显示扭曲内容
+        let cur = scene.get_sprite(&format!("img_cur_{}", i));
+        cur.content = tbuf;
+        cur.set_alpha(255);
+        cur.set_hidden(false);
     }
 
-    // Update p3 sprite with distorted content
-    let p3 = scene.get_sprite("petimg3");
-    p3.content = tbuf;
-    p3.set_alpha(((0.5 + transbuf_stage as f32 / 120.0) * 255.0) as u8);
-    p3.set_hidden(false);
+    // next sprites保持隐藏
+    for i in 0..IMAGES_PER_SCREEN {
+        let next = scene.get_sprite(&format!("img_next_{}", i));
+        next.set_hidden(true);
+    }
 }
+
 
 /// PetView Render - Demonstrates custom rendering with RT primitives
 ///
@@ -159,6 +225,8 @@ fn process_buffer_transition(
 pub struct PetviewRender {
     pub scene: Scene,
     pub init: bool,
+    /// 保存TransBuf开始时的原始cur内容，避免特效累积
+    pub cur_original: Vec<Buffer>,
 }
 
 impl PetviewRender {
@@ -172,24 +240,19 @@ impl PetviewRender {
         let frame = Sprite::new(0, 0, frame_w, frame_h);
         scene.add_sprite(frame, "frame");
 
-        // p1, p2: source images (hidden, used for RT0/RT1)
-        let mut p1 = Sprite::new(0, 0, PIXW, PIXH);
-        p1.set_hidden(true);
-        scene.add_sprite(p1, "petimg1");
+        // 4 current image sprites for 2x2 grid display (each 40x25, scaled 0.5)
+        for i in 0..IMAGES_PER_SCREEN {
+            let mut sprite = Sprite::new(0, 0, IMG_W, IMG_H);
+            sprite.set_hidden(true);
+            scene.add_sprite(sprite, &format!("img_cur_{}", i));
+        }
 
-        let mut p2 = Sprite::new(0, 0, PIXW, PIXH);
-        p2.set_hidden(true);
-        scene.add_sprite(p2, "petimg2");
-
-        // p3: transition display sprite (visible during TransBuf)
-        let mut p3 = Sprite::new(0, 0, PIXW, PIXH);
-        p3.set_hidden(true);
-        scene.add_sprite(p3, "petimg3");
-
-        // p4: source for CPU distortion (hidden)
-        let mut p4 = Sprite::new(0, 0, PIXW, PIXH);
-        p4.set_hidden(true);
-        scene.add_sprite(p4, "petimg4");
+        // 4 next image sprites for transition (each 40x25, scaled 0.5)
+        for i in 0..IMAGES_PER_SCREEN {
+            let mut sprite = Sprite::new(0, 0, IMG_W, IMG_H);
+            sprite.set_hidden(true);
+            scene.add_sprite(sprite, &format!("img_next_{}", i));
+        }
 
         // Message sprite (hidden - replaced by info bar in frame)
         let mut p5 = Sprite::new(0, 0, PIXW, 1u16);
@@ -214,6 +277,7 @@ impl PetviewRender {
         Self {
             scene,
             init: false,
+            cur_original: Vec::new(),
         }
     }
 
@@ -365,15 +429,29 @@ impl PetviewRender {
         frame.set_scale_x(FRAME_SCALE);
         frame.set_scale_y(FRAME_SCALE);
 
-        // Position p3 and p4 inside the frame border
-        let img_x = (FRAME_LEFT as f32 * sym_w / rx) as u16;
-        let img_y = (FRAME_TOP as f32 * sym_h / ry) as u16;
+        // Frame border position in pixels
+        let frame_x = (FRAME_LEFT as f32 * sym_w / rx) as u16;
+        let frame_y = (FRAME_TOP as f32 * sym_h / ry) as u16;
 
-        let p3 = self.scene.get_sprite("petimg3");
-        p3.set_pos(img_x, img_y);
+        // Position 4 current and 4 next image sprites in 2x2 grid
+        // Each sprite is 40x25, scaled 0.5 → displays as 20x12.5
+        for i in 0..IMAGES_PER_SCREEN {
+            let col = (i % GRID_COLS) as u16;
+            let row = (i / GRID_COLS) as u16;
+            // Cell position within image area (in pixels after scale)
+            let cell_x = frame_x + (col * CELL_W as u16 * sym_w as u16 / rx as u16);
+            let cell_y = frame_y + (row * CELL_H as u16 * sym_h as u16 / ry as u16);
 
-        let p4 = self.scene.get_sprite("petimg4");
-        p4.set_pos(img_x, img_y);
+            let cur_sprite = self.scene.get_sprite(&format!("img_cur_{}", i));
+            cur_sprite.set_pos(cell_x, cell_y);
+            cur_sprite.set_scale_x(IMG_SCALE);
+            cur_sprite.set_scale_y(IMG_SCALE);
+
+            let next_sprite = self.scene.get_sprite(&format!("img_next_{}", i));
+            next_sprite.set_pos(cell_x, cell_y);
+            next_sprite.set_scale_x(IMG_SCALE);
+            next_sprite.set_scale_y(IMG_SCALE);
+        }
 
         // Position title sprite above the frame border
         let title_y_sprite = FRAME_TOP - 2;  // one row above frame top border
@@ -399,86 +477,198 @@ impl Render for PetviewRender {
     type Model = PetviewModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
+        // Canvas is original 52x32 - 4 images each scaled 0.5 fit in same 40x25 area
         ctx.adapter
             .init(PETW, PETH, 2.0, 2.0, "PETSCII Gallery".to_string());
         self.scene.init(ctx);
-
-        let p1 = self.scene.get_sprite("petimg1");
-        asset2sprite!(p1, ctx, "1.pix");
-
-        let p2 = self.scene.get_sprite("petimg2");
-        asset2sprite!(p2, ctx, "2.pix");
+        // Images are loaded dynamically in handle_timer
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {}
 
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
+        // Load images into sprites
         if !model.tex_ready {
-            // Only enable RT3 after logo animation finishes
-            // On Windows Vulkan, showing RT3 with garbage content causes white patches
+            if model.show_next_as_cur {
+                // 过渡刚完成！"next" sprites 包含刚过渡到的图片
+                // 复制 next→cur，然后清除标记
+                info!("COPY: next→cur (transition just completed, img_cur={}, img_next={})",
+                      model.img_cur, model.img_next);
+                for i in 0..IMAGES_PER_SCREEN {
+                    let next_content = {
+                        let next = self.scene.get_sprite(&format!("img_next_{}", i));
+                        next.content.content.clone()
+                    };
+                    let cur = self.scene.get_sprite(&format!("img_cur_{}", i));
+                    cur.content.content.clone_from(&next_content);
+                }
+                // 清除标记，下一帧进入正常加载流程
+                model.show_next_as_cur = false;
+                // tex_ready 保持 false，下一帧会加载新的 next sprites
+            } else {
+                // 正常加载流程
+                let mut all_loaded = true;
+
+                let cur_files: Vec<usize> = (0..IMAGES_PER_SCREEN)
+                    .map(|i| (model.img_cur + i) % model.img_count + 1)
+                    .collect();
+                let next_files: Vec<usize> = (0..IMAGES_PER_SCREEN)
+                    .map(|i| (model.img_next + i) % model.img_count + 1)
+                    .collect();
+                info!("LOADING: cur={:?}, next={:?}, img_cur={}, img_next={}",
+                      cur_files, next_files, model.img_cur, model.img_next);
+
+                // 加载 cur sprites
+                for i in 0..IMAGES_PER_SCREEN {
+                    let img_idx = (model.img_cur + i) % model.img_count;
+                    let sprite = self.scene.get_sprite(&format!("img_cur_{}", i));
+                    if !load_single_image(sprite, ctx, img_idx, model.img_count) {
+                        all_loaded = false;
+                    }
+                }
+
+                // 加载 next sprites
+                for i in 0..IMAGES_PER_SCREEN {
+                    let img_idx = (model.img_next + i) % model.img_count;
+                    let sprite = self.scene.get_sprite(&format!("img_next_{}", i));
+                    if !load_single_image(sprite, ctx, img_idx, model.img_count) {
+                        all_loaded = false;
+                    }
+                }
+
+                if all_loaded {
+                    model.tex_ready = true;
+                    info!("LOADED OK: cur={:?}, next={:?}", cur_files, next_files);
+                }
+            }
+        }
+
+        if event_check("PetView.Timer", "pet_timer") {
+            // 使用 RT 系统做过渡：
+            // RT0 = cur sprites (4张图片) - 只在Normal状态更新
+            // RT1 = next sprites (4张图片) - 只在Normal状态更新
+            // RT3 = 混合结果
+            // RT2 = frame 背景
+
+            // 只有在 logo 动画后才启用 RT3
             if ctx.stage > LOGO_FRAME {
                 ctx.adapter.set_rt_visible(3, true);
             }
 
-            // Load all 4 sprites at once
-            self.scene.with_sprites(&["petimg1", "petimg2", "petimg3", "petimg4"], |sprites| {
-                let l1 = asset2sprite!(sprites[0], ctx, &format!("{}.pix", model.img_count - model.img_cur));
-                let l2 = asset2sprite!(sprites[1], ctx, &format!("{}.pix", model.img_count - model.img_next));
+            let sym_w = *PIXEL_SYM_WIDTH.get().unwrap_or(&16.0);
+            let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap_or(&16.0);
+            let rx = ctx.adapter.get_base().gr.ratio_x;
+            let ry = ctx.adapter.get_base().gr.ratio_y;
+            let cell_px_w = (CELL_W as f32 * sym_w / rx) as u16;
+            let cell_px_h = (CELL_H as f32 * sym_h / ry) as u16;
 
-                if l1 {
-                    ctx.adapter.buf2rt(&sprites[0].content, 0);
-                }
-                if l2 {
-                    ctx.adapter.buf2rt(&sprites[1].content, 1);
-                }
-
-                // Load distortion sources
-                asset2sprite!(sprites[2], ctx, &format!("{}.pix", model.img_count - model.img_next));
-                sprites[2].set_hidden(true);
-
-                asset2sprite!(sprites[3], ctx, &format!("{}.pix", model.img_count - model.img_next));
-                sprites[3].set_hidden(true);
-
-                if l1 && l2 {
-                    model.tex_ready = true;
-                    info!("tex_ready.........");
-                }
-            });
-        }
-
-        if event_check("PetView.Timer", "pet_timer") {
-            match PetviewState::from_usize(ctx.state as usize).unwrap() {
+            let state = PetviewState::from_usize(ctx.state as usize).unwrap();
+            match state {
                 PetviewState::Normal => {
-                    // Ensure RT3 is visible for this mode
-                    ctx.adapter.set_rt_visible(3, true);
-                    // RT primitive: copy RT1 to RT3
-                    ctx.adapter.copy_rt(1, 3);
-                    let p3 = self.scene.get_sprite("petimg3");
-                    p3.set_hidden(true);
+                    info!("STATE: Normal, img_cur={}, img_next={}", model.img_cur, model.img_next);
+
+                    // Normal状态清空cur_original，以便下次TransBuf重新保存
+                    self.cur_original.clear();
+
+                    // 隐藏所有图片sprites，通过RT3显示
+                    for i in 0..IMAGES_PER_SCREEN {
+                        let cur = self.scene.get_sprite(&format!("img_cur_{}", i));
+                        cur.set_hidden(true);
+                        let next = self.scene.get_sprite(&format!("img_next_{}", i));
+                        next.set_hidden(true);
+                    }
+
+                    // 只在Normal状态渲染RT0/RT1（保持干净内容）
+                    // 渲染 cur sprites 到 RT0
+                    {
+                        let mut rbuf: Vec<RenderCell> = vec![];
+                        for i in 0..IMAGES_PER_SCREEN {
+                            let col = (i % GRID_COLS) as u16;
+                            let row = (i / GRID_COLS) as u16;
+                            let px_x = col * cell_px_w;
+                            let px_y = row * cell_px_h;
+
+                            let sprite = self.scene.get_sprite(&format!("img_cur_{}", i));
+                            let scale_x = sprite.scale_x;
+                            let scale_y = sprite.scale_y;
+                            let alpha = sprite.alpha;
+
+                            let mut buf_clone = sprite.content.clone();
+                            buf_clone.area.x = px_x;
+                            buf_clone.area.y = px_y;
+
+                            ctx.adapter.buf2rbuf(&buf_clone, &mut rbuf, false, alpha, scale_x, scale_y, 0.0);
+                        }
+                        ctx.adapter.rbuf2rt(&rbuf, 0, false);
+                    }
+
+                    // 渲染 next sprites 到 RT1
+                    {
+                        let mut rbuf: Vec<RenderCell> = vec![];
+                        for i in 0..IMAGES_PER_SCREEN {
+                            let col = (i % GRID_COLS) as u16;
+                            let row = (i / GRID_COLS) as u16;
+                            let px_x = col * cell_px_w;
+                            let px_y = row * cell_px_h;
+
+                            let sprite = self.scene.get_sprite(&format!("img_next_{}", i));
+                            let scale_x = sprite.scale_x;
+                            let scale_y = sprite.scale_y;
+                            let alpha = sprite.alpha;
+
+                            let mut buf_clone = sprite.content.clone();
+                            buf_clone.area.x = px_x;
+                            buf_clone.area.y = px_y;
+
+                            ctx.adapter.buf2rbuf(&buf_clone, &mut rbuf, false, alpha, scale_x, scale_y, 0.0);
+                        }
+                        ctx.adapter.rbuf2rt(&rbuf, 1, false);
+                    }
+
+                    // Normal: 显示 RT0 (cur sprites)
+                    ctx.adapter.copy_rt(0, 3);
                 }
                 PetviewState::TransBuf => {
-                    // Hide RT3, use CPU distortion via p3 sprite
+                    info!("STATE: TransBuf, stage={}, cur→next: {}→{}",
+                          model.transbuf_stage, model.img_cur, model.img_next);
+                    // TransBuf: 隐藏 RT3，使用 CPU distortion 特效（直接显示sprite）
                     ctx.adapter.set_rt_visible(3, false);
 
-                    // Apply CPU distortion effect
-                    process_buffer_transition(
+                    // TransBuf开始时保存原始cur内容（只保存一次）
+                    if self.cur_original.is_empty() {
+                        for i in 0..IMAGES_PER_SCREEN {
+                            let cur = self.scene.get_sprite(&format!("img_cur_{}", i));
+                            self.cur_original.push(cur.content.clone());
+                        }
+                    }
+
+                    // 应用 CPU distortion 特效到cur sprites（从保存的原始内容读取）
+                    process_buffer_transition_grid(
                         &mut self.scene,
+                        &self.cur_original,
                         ctx,
                         model.transbuf_stage as usize,
                     );
                 }
                 PetviewState::TransGl => {
-                    // Ensure RT3 is visible for this mode
-                    ctx.adapter.set_rt_visible(3, true);
-                    // RT primitive: GPU shader blend RT0 + RT1 → RT3
-                    // 使用新的GpuBlendEffect获取特效类型和进度
+                    info!("STATE: TransGl, progress={:.2}, cur→next: {}→{}",
+                          model.gpu_effect.progress, model.img_cur, model.img_next);
+
+                    // 隐藏所有sprites，通过RT3显示
+                    for i in 0..IMAGES_PER_SCREEN {
+                        let cur = self.scene.get_sprite(&format!("img_cur_{}", i));
+                        cur.set_hidden(true);
+                        let next = self.scene.get_sprite(&format!("img_next_{}", i));
+                        next.set_hidden(true);
+                    }
+
+                    // TransGl: GPU shader 混合 (从 RT0/cur 到 RT1/next)
+                    // RT0/RT1 在Normal状态已渲染好，保持干净内容
                     ctx.adapter.blend_rts(
                         0, 1, 3,
                         model.gpu_effect.effect_type(),
                         model.gpu_effect.progress,
                     );
-                    let p3 = self.scene.get_sprite("petimg3");
-                    p3.set_hidden(true);
                 }
             }
 
@@ -492,17 +682,6 @@ impl Render for PetviewRender {
         // Draw gallery frame border with current image info
         self.draw_frame(model.img_cur, model.img_count, ctx.stage);
 
-        // // Draw title
-        // {
-        //     let title = self.scene.get_sprite("title");
-        //     let buf = &mut title.content;
-        //     buf.reset();
-        //     let text = "PETSCII ARTS RETRO C64";
-        //     let internal_w = (PETW as f32 / TITLE_SCALE) as usize;
-        //     let tx = ((internal_w - text.len()) / 2) as u16;
-        //     buf.set_color_str(tx, 0, text, INFO_COLOR, Color::Reset);
-        // }
-
         // Draw footer
         {
             let footer = self.scene.get_sprite("footer");
@@ -511,10 +690,7 @@ impl Render for PetviewRender {
             let line1 = "PETSCII ARTS RETRO C64";
             let line2 = "https://github.com/zipxing/rust_pixel";
             let line3 = "";
-            // Dimmer color for footer (less prominent than title)
             let footer_color = FOOT_COLOR;
-            // Internal coordinate space is 1/FOOTER_SCALE times screen space
-            // To center: x = (internal_w - text_len) / 2
             let internal_w = (PETW as f32 / FOOTER_SCALE) as usize;
             let x1 = ((internal_w - line1.len()) / 2) as u16;
             let x2 = ((internal_w - line2.len()) / 2) as u16;
@@ -524,33 +700,29 @@ impl Render for PetviewRender {
             buf.set_color_str(x3, 2, line3, footer_color, Color::Reset);
         }
 
-        // Step 1: Render scene content to RT2 (without present)
+        // 渲染 frame + footer 到 RT2 (图片 sprites 已隐藏)
         self.scene.draw_to_rt(ctx).unwrap();
 
-        // During logo animation, only render RT2 (skip RT3 which may contain garbage)
-        // On Windows Vulkan, uninitialized GPU memory can show as white patches
+        // Logo 动画期间只显示 RT2
         if ctx.stage <= LOGO_FRAME {
             ctx.adapter.present(&[RtComposite::fullscreen(2)]);
             return;
         }
 
-        // Step 2: Custom present based on state
-        let state = PetviewState::from_usize(ctx.state as usize).unwrap();
-        match state {
-            PetviewState::TransBuf => {
-                // TransBuf: RT3 hidden, only show RT2
-                ctx.adapter.present(&[RtComposite::fullscreen(2)]);
-            }
-            PetviewState::Normal | PetviewState::TransGl => {
-                // Position RT3 at the frame's image area
-                // centered_rt centers a 40×25 area on a 52×32 canvas:
-                // - Horizontal: (52-40)/2 = 6 cells = FRAME_LEFT ✓ (already correct)
-                // - Vertical: (32-25)/2 = 3.5 cells, but FRAME_TOP = 3 (need -0.5 cell offset)
-                let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap_or(&16.0) as i32;
-                let dy = -sym_h / 2;  // shift up by 0.5 cell
-                let rt3 = ctx.centered_rt(3, PIXW, PIXH).offset(0, dy);
-                ctx.adapter.present(&[RtComposite::fullscreen(2), rt3]);
-            }
-        }
+        // RT3 显示在图片区域 (FRAME_LEFT, FRAME_TOP 位置)
+        let sym_w = *PIXEL_SYM_WIDTH.get().unwrap_or(&16.0);
+        let sym_h = *PIXEL_SYM_HEIGHT.get().unwrap_or(&16.0);
+        let rx = ctx.adapter.get_base().gr.ratio_x;
+        let ry = ctx.adapter.get_base().gr.ratio_y;
+
+        // viewport 位置：图片区域左上角
+        let vp_x = (FRAME_LEFT as f32 * sym_w / rx) as i32;
+        let vp_y = (FRAME_TOP as f32 * sym_h / ry) as i32;
+        // viewport 大小：40x25 单元格
+        let vp_w = (PIXW as f32 * sym_w / rx) as u32;
+        let vp_h = (IMG_H as f32 * sym_h / ry) as u32;
+
+        let rt3 = RtComposite::with_viewport(3, ARect { x: vp_x, y: vp_y, w: vp_w, h: vp_h });
+        ctx.adapter.present(&[RtComposite::fullscreen(2), rt3]);
     }
 }
