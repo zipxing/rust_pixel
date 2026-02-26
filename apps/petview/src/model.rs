@@ -44,7 +44,7 @@ impl PetviewModel {
             transbuf_stage: 0,
             img_cur: 0,
             img_next: 1,
-            img_count: 31,
+            img_count: 2099,
             gpu_effect: GpuBlendEffect::default(),
             tex_ready: false,
         }

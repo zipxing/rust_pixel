@@ -72,6 +72,32 @@ const TITLE_SCALE: f32 = 1.0;
 const FOOTER_SCALE: f32 = 0.62;
 const FRAME_SCALE: f32 = 0.5;  // Frame sprite scale: 0.5 → 2x buffer → denser rain
 
+// Matrix rain animation parameters
+const RAIN_SPEED_BASE: f32 = 0.15;      // Base falling speed
+const RAIN_SPEED_VARIANCE: f32 = 0.30;  // Speed variance (total speed = base + rand * variance)
+const RAIN_TRAIL_MIN: i32 = 8;          // Minimum trail length
+const RAIN_TRAIL_VARIANCE: i32 = 11;    // Trail length variance
+const RAIN_GAP_MIN: i32 = 8;            // Minimum gap between trails
+const RAIN_GAP_VARIANCE: i32 = 8;       // Gap variance
+const RAIN_CHAR_CHANGE_FRAMES: usize = 6;  // Character changes every N frames
+
+// Matrix rain colors - HEAD (brightest, with GLOW effect)
+const RAIN_HEAD_R: u8 = 80;
+const RAIN_HEAD_G: u8 = 140;
+const RAIN_HEAD_B: u8 = 90;
+
+// Matrix rain colors - NEAR HEAD (bright green, fading)
+const RAIN_NEAR_G_BASE: f32 = 120.0;     // Base green value for near-head
+const RAIN_NEAR_G_FADE: f32 = 60.0;     // Fade amount for near-head
+const RAIN_NEAR_B: u8 = 8;              // Blue tint for near-head
+
+// Matrix rain colors - TRAIL (fading dark green)
+const RAIN_TRAIL_G_MIN: f32 = 48.0;      // Minimum green (at tail end)
+const RAIN_TRAIL_G_RANGE: f32 = 90.0;   // Green range (total = min + brightness * range)
+
+// GLOW effect zone (cells from frame edge where GLOW is disabled)
+const RAIN_GLOW_MARGIN: u16 = 4;
+
 /// Apply CPU-based buffer distortion effects
 ///
 /// Effects are applied independently from the original source buffer (not chained),
@@ -234,9 +260,9 @@ impl PetviewRender {
         for x in 0..iw {
             let xh = x as usize;
             // Deterministic per-column parameters from hash
-            let speed = 0.15 + (((xh.wrapping_mul(73).wrapping_add(17)) % 31) as f32 / 31.0) * 0.30;
-            let trail = 8 + ((xh.wrapping_mul(37).wrapping_add(7)) % 11) as i32; // 8..18
-            let gap = 8 + ((xh.wrapping_mul(53).wrapping_add(23)) % 8) as i32;   // 8..15
+            let speed = RAIN_SPEED_BASE + (((xh.wrapping_mul(73).wrapping_add(17)) % 31) as f32 / 31.0) * RAIN_SPEED_VARIANCE;
+            let trail = RAIN_TRAIL_MIN + ((xh.wrapping_mul(37).wrapping_add(7)) % RAIN_TRAIL_VARIANCE as usize) as i32;
+            let gap = RAIN_GAP_MIN + ((xh.wrapping_mul(53).wrapping_add(23)) % RAIN_GAP_VARIANCE as usize) as i32;
             let offset = ((xh.wrapping_mul(97).wrapping_add(41)) % 200) as f32;
             let cycle_len = ih as i32 + trail + gap;
 
@@ -257,20 +283,20 @@ impl PetviewRender {
                     continue;
                 }
 
-                // Character: changes every 6 frames, varies by position
+                // Character: changes every N frames, varies by position
                 let char_seed = xh.wrapping_mul(31)
                     .wrapping_add((y_head - dy) as usize * 17)
-                    .wrapping_add((stage as usize) / 6);
+                    .wrapping_add((stage as usize) / RAIN_CHAR_CHANGE_FRAMES);
                 let ci = char_seed % rain_len;
                 let sym = RAIN_CHARS[ci];
 
                 let t = dy as f32 / trail as f32; // 0.0 at head, ~1.0 at tail
 
                 if dy == 0 {
-                    // Head: bright white-green with GLOW
-                    let near_frame = x >= fl - 4 && x <= iw - fr + 1
-                        && yu >= ft - 4 && yu <= ih - fb + 1;
-                    let head_color = Color::Rgba(100, 180, 120, 255);
+                    // Head: brightest with GLOW effect (disabled near frame)
+                    let near_frame = x >= fl - RAIN_GLOW_MARGIN && x <= iw - fr + 1
+                        && yu >= ft - RAIN_GLOW_MARGIN && yu <= ih - fb + 1;
+                    let head_color = Color::Rgba(RAIN_HEAD_R, RAIN_HEAD_G, RAIN_HEAD_B, 255);
                     if near_frame {
                         buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, head_color);
                     } else {
@@ -283,13 +309,13 @@ impl PetviewRender {
                         );
                     }
                 } else if dy <= 2 {
-                    // Near-head: medium green
-                    let g = (140.0 - t * 30.0) as u8;
-                    buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 15, 255));
+                    // Near-head: bright green, slight fade
+                    let g = (RAIN_NEAR_G_BASE - t * RAIN_NEAR_G_FADE) as u8;
+                    buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, RAIN_NEAR_B, 255));
                 } else {
                     // Trail body: fading dark green
                     let brightness = 1.0 - t;
-                    let g = (15.0 + brightness * 95.0) as u8;
+                    let g = (RAIN_TRAIL_G_MIN + brightness * RAIN_TRAIL_G_RANGE) as u8;
                     buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, Color::Rgba(0, g, 0, 255));
                 }
             }
@@ -482,9 +508,9 @@ impl Render for PetviewRender {
             let footer = self.scene.get_sprite("footer");
             let buf = &mut footer.content;
             buf.reset();
-            let line2 = "♦ Tile-first. Retro-ready. Write Once, Run Anywhere-2D Engine...";
             let line1 = "PETSCII ARTS RETRO C64";
-            let line3 = "https://github.com/zipxing/rust_pixel";
+            let line2 = "https://github.com/zipxing/rust_pixel";
+            let line3 = "";
             // Dimmer color for footer (less prominent than title)
             let footer_color = FOOT_COLOR;
             // Internal coordinate space is 1/FOOTER_SCALE times screen space
