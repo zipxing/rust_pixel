@@ -33,12 +33,11 @@
 //! └────────────────────────────────────────────────────────────┘
 //!
 //! # Usage
-//! ```rust
-//! let symbol_map = SymbolMap::default();
-//! match symbol_map.lookup("😀") {
-//!     SymbolIndex::Emoji(block, idx) => { /* render emoji */ }
-//!     _ => { /* fallback */ }
-//! }
+//! ```rust,ignore
+//! let map = get_symbol_map();
+//! if let Some((block, idx)) = map.emoji_idx("😀") { /* render emoji */ }
+//! if let Some((block, idx)) = map.tui_idx("A") { /* render TUI char */ }
+//! if let Some((block, idx)) = map.cjk_idx("中") { /* render CJK */ }
 //! ```
 
 use super::cell::cellsym_block;
@@ -141,21 +140,6 @@ pub fn get_symbol_map() -> &'static SymbolMap {
             SymbolMap::empty()
         }
     })
-}
-
-/// Symbol index result from lookup
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SymbolIndex {
-    /// Sprite region: (block, index) - Block 0-159
-    Sprite(u8, u8),
-    /// TUI region: (block, index) - Block 160-169
-    Tui(u8, u8),
-    /// Emoji region: (block, index) - Block 170-175
-    Emoji(u8, u8),
-    /// CJK region: (block, index) - Block 176-239
-    Cjk(u8, u8),
-    /// Symbol not found in any region
-    NotFound,
 }
 
 /// Unified symbol mapping table
@@ -370,58 +354,6 @@ impl SymbolMap {
         self.cjk.insert(ch, (pixel_x, pixel_y));
     }
 
-    /// Unified lookup interface
-    /// Priority: Emoji > TUI > Sprite > CJK
-    pub fn lookup(&self, symbol: &str) -> SymbolIndex {
-        // Check Emoji first (typically multi-byte)
-        if let Some((block, idx)) = self.emoji.get(symbol) {
-            return SymbolIndex::Emoji(*block, *idx);
-        }
-
-        // Check TUI
-        if let Some((block, idx)) = self.tui.get(symbol) {
-            return SymbolIndex::Tui(*block, *idx);
-        }
-
-        // Check Sprite
-        if let Some((block, idx)) = self.sprite.get(symbol) {
-            return SymbolIndex::Sprite(*block, *idx);
-        }
-
-        // Check CJK (returns block and index)
-        if let Some((block, idx)) = self.cjk_idx(symbol) {
-            return SymbolIndex::Cjk(block, idx);
-        }
-
-        SymbolIndex::NotFound
-    }
-
-    /// Lookup with region hint for better performance
-    /// Use this when you know which region to check
-    pub fn lookup_in_region(&self, symbol: &str, region: SymbolRegion) -> SymbolIndex {
-        match region {
-            SymbolRegion::Sprite => self
-                .sprite
-                .get(symbol)
-                .map(|(b, i)| SymbolIndex::Sprite(*b, *i))
-                .unwrap_or(SymbolIndex::NotFound),
-            SymbolRegion::Tui => self
-                .tui
-                .get(symbol)
-                .map(|(b, i)| SymbolIndex::Tui(*b, *i))
-                .unwrap_or(SymbolIndex::NotFound),
-            SymbolRegion::Emoji => self
-                .emoji
-                .get(symbol)
-                .map(|(b, i)| SymbolIndex::Emoji(*b, *i))
-                .unwrap_or(SymbolIndex::NotFound),
-            SymbolRegion::Cjk => self
-                .cjk_idx(symbol)
-                .map(|(b, i)| SymbolIndex::Cjk(b, i))
-                .unwrap_or(SymbolIndex::NotFound),
-        }
-    }
-
     /// Get statistics about loaded symbols
     pub fn stats(&self) -> SymbolMapStats {
         SymbolMapStats {
@@ -437,15 +369,6 @@ impl Default for SymbolMap {
     fn default() -> Self {
         Self::default_map()
     }
-}
-
-/// Symbol region hint for optimized lookup
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SymbolRegion {
-    Sprite,
-    Tui,
-    Emoji,
-    Cjk,
 }
 
 /// Statistics about loaded symbol mappings
@@ -936,69 +859,43 @@ mod tests {
     fn test_sprite_lookup() {
         let map = SymbolMap::default();
         // '@' is the first character in sprite symbols
-        // Use sprite_idx directly since '@' also exists in TUI
         assert_eq!(map.sprite_idx("@"), Some((0, 0)));
         // 'a' is the second
         assert_eq!(map.sprite_idx("a"), Some((0, 1)));
-        // Test lookup_in_region for explicit region query
-        assert!(matches!(
-            map.lookup_in_region("@", SymbolRegion::Sprite),
-            SymbolIndex::Sprite(0, 0)
-        ));
     }
 
     #[test]
     fn test_tui_lookup() {
         let map = SymbolMap::default();
         // Space is first in TUI
-        if let SymbolIndex::Tui(block, idx) = map.lookup(" ") {
-            assert_eq!(block, 160);
-            assert_eq!(idx, 0);
-        } else {
-            panic!("Space should be in TUI region");
-        }
+        assert_eq!(map.tui_idx(" "), Some((160, 0)));
     }
 
     #[test]
     fn test_emoji_lookup() {
         let map = SymbolMap::default();
-        if let SymbolIndex::Emoji(block, idx) = map.lookup("😀") {
-            assert_eq!(block, 170);
-            assert_eq!(idx, 0);
-        } else {
-            panic!("😀 should be in Emoji region");
-        }
+        assert_eq!(map.emoji_idx("😀"), Some((170, 0)));
     }
 
     #[test]
     fn test_not_found() {
         let map = SymbolMap::default();
         // Use a rare character not in the 3500 common CJK set
-        assert!(matches!(map.lookup("㊀"), SymbolIndex::NotFound));
+        assert_eq!(map.cjk_idx("㊀"), None);
     }
 
     #[test]
     fn test_cjk_lookup() {
         let map = SymbolMap::default();
         // "一" is the first CJK character at grid position (0, 0)
-        // New design: block 176, idx 0
-        if let SymbolIndex::Cjk(block, idx) = map.lookup("一") {
-            assert_eq!(block, 176);
-            assert_eq!(idx, 0);
-        } else {
-            panic!("一 should be in CJK region");
-        }
+        // block 176, idx 0
+        assert_eq!(map.cjk_idx("一"), Some((176, 0)));
 
         // "中" is at grid position (26, 0)
         // block_col = 26/8 = 3, block_row = 0/8 = 0, block = 0*16+3 = 3
         // in_block_col = 26%8 = 2, in_block_row = 0%8 = 0, idx = 0*8+2 = 2
         // Result: block 176+3=179, idx 2
-        if let SymbolIndex::Cjk(block, idx) = map.lookup("中") {
-            assert_eq!(block, 179);
-            assert_eq!(idx, 2);
-        } else {
-            panic!("中 should be in CJK region");
-        }
+        assert_eq!(map.cjk_idx("中"), Some((179, 2)));
 
         // Test direct cjk_coords (still returns pixel coordinates)
         assert_eq!(map.cjk_coords('一'), Some((0, 3072)));

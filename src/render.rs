@@ -57,5 +57,5 @@ pub use effect::{
 pub use scene::Scene;
 pub use sprite::Layer;
 pub use style::{Color, Style};
-pub use symbol_map::{ascii_to_petscii, SymbolIndex, SymbolMap, SymbolMapStats, SymbolRegion};
+pub use symbol_map::{ascii_to_petscii, SymbolMap, SymbolMapStats};
 

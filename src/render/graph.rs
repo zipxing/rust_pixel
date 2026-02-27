@@ -74,7 +74,7 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, cell::tui_symidx, sprite::Layer, style::{Color, Modifier}, symbol_map::calc_linear_index, AdapterBase},
+    render::{buffer::Buffer, sprite::Layer, style::{Color, Modifier}, symbol_map::{calc_linear_index, get_symbol_map}, AdapterBase},
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -1542,7 +1542,7 @@ pub fn render_buffer_to_cells<F>(
 
         // TUI mode: remap Sprite region symbols to TUI region
         if use_tui && sh.1 < 160 {
-            if let Some((block, idx)) = tui_symidx(&cell.symbol) {
+            if let Some((block, idx)) = get_symbol_map().tui_idx(&cell.symbol) {
                 sh.1 = block;
                 sh.0 = idx;
             } else {

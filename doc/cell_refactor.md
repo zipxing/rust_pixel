@@ -240,10 +240,10 @@ buf.set_petscii_str(0, 0, "HELLO WORLD", Color::White, Color::Reset);
 - [x] 6.7 `set_stringn()` 移除 width 参数（注释保留），调用方从未实际使用
 - [x] 6.8 `set_stringn()` 移除返回值 `(u16, u16)`，无调用方使用
 
-### 阶段 7：清理（待完成）
+### 阶段 7：清理 ✅
 
-- [ ] 7.1 移除 symidx() 函数
-- [ ] 7.2 简化 symbol_map 相关代码
+- [x] 7.1 移除 tui_symidx() 包装函数，graph.rs 直接调用 get_symbol_map().tui_idx()
+- [x] 7.2 移除未使用的 SymbolIndex、SymbolRegion 枚举及 lookup/lookup_in_region 方法，更新测试和导出
 - [x] 7.3 更新文档：Buffer API 总览、Glyph 缓存机制、已移除 API 说明
 
 ---

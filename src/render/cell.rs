@@ -1,18 +1,16 @@
 // RustPixel
 // copyright zipxing@hotmail.com 2022～2025
 
-//! Cell is the basic unit for rendering in RustPixel.
-//! Each cell stores a character/symbol, foreground color, background color,
-//! and texture information for graphics mode.
-
-//! Cell is the basic rendering data structure in RustPixel, represents a char
-//! Cell stores some key data such as symbol, tex(graph mode only), fg, bg.
-//! Many Cells form a buffer to manage rendering.
+//! Cell is the basic rendering unit in RustPixel.
+//! Each cell stores a symbol string, foreground/background colors, modifier flags,
+//! and a cached Glyph (block, idx, width, height) for graphics mode.
 //!
-//! A buffer comprises a cell vector with width * height elements
+//! The symbol string fully determines rendering: PUA-encoded for Sprite mode,
+//! standard Unicode for TUI mode. Glyph is cached on set_symbol() and read
+//! directly during rendering via get_cell_info().
 //!
-//! Symbol mappings are now loaded from JSON configuration (symbol_map.json)
-//! via the SymbolMap module for easier maintenance and customization.
+//! Many Cells form a Buffer to manage rendering.
+//! Symbol mappings are loaded from symbol_map.json via the SymbolMap module.
 
 use crate::render::style::{Color, Modifier, Style};
 use crate::render::symbol_map::get_symbol_map;
@@ -20,12 +18,6 @@ use serde::{Deserialize, Serialize};
 
 fn default_scale() -> f32 {
     1.0
-}
-
-/// Get TUI symbol index and block
-/// Returns (block, index) for TUI region (Block 160-169)
-pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
-    get_symbol_map().tui_idx(symbol)
 }
 
 /// Cell rendering information: (symbol_index, block_index, fg_color, bg_color, modifier)
@@ -112,16 +104,13 @@ impl Default for Glyph {
 
 /// PUA (Private Use Area) encoding for Sprite symbols.
 ///
-/// Range: U+E000 ~ U+E3FF (1024 characters, 4 blocks × 256 symbols)
-/// - Block 0: U+E000-U+E0FF (basic PETSCII)
-/// - Block 1: U+E100-U+E1FF (extended PETSCII)
+/// Uses Supplementary PUA-A (U+F0000-U+F9FFF) to support all 160 sprite blocks:
 /// - Block 0: U+F0000-U+F00FF
 /// - Block 1: U+F0100-U+F01FF
 /// - ...
 /// - Block 159: U+F9F00-U+F9FFF
 ///
 /// Encoding: codepoint = 0xF0000 + block * 256 + idx
-/// Uses Supplementary PUA-A (U+F0000-U+FFFFF) to support all 160 sprite blocks.
 pub const PUA_BASE: u32 = 0xF0000;
 pub const PUA_END: u32 = 0xF9FFF;  // 160 blocks × 256 = 40960
 pub const PUA_BLOCK_SIZE: u32 = 256;
