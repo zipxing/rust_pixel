@@ -11,7 +11,7 @@
 use crate::{
     asset::{Asset, AssetBase},
     render::buffer::Buffer,
-    render::cell::cellsym,
+    render::cell::cellsym_block,
     render::image::find_vaild_area,
     render::style::{Color, Style},
     util::Rect,
@@ -36,7 +36,7 @@ impl Asset for PixAsset {
     fn parse(&mut self) {
         self.base.parsed_buffers.clear();
         let size = Rect::new(0, 0, 0, 0);
-        let mut sp = Buffer::empty(size);
+        let mut sp = Buffer::empty_sprite(size);  // Pix is graphics mode asset
 
         let reader = BufReader::new(&self.base.raw_data[..]);
         let re = Regex::new(r"width=(\d+),height=(\d+),texture=(\d+)").unwrap();
@@ -77,14 +77,13 @@ impl Asset for PixAsset {
                     for cap in rel0.captures_iter(&l) {
                         let idx = cap[1].parse::<u8>().unwrap();
                         let fgc = cap[2].parse::<u8>().unwrap();
-                        sp.set_str_tex(
+                        sp.set_str(
                             col,
                             lineidx - 1,
-                            cellsym(idx),
+                            cellsym_block(texid, idx),
                             Style::default()
                                 .fg(Color::Indexed(fgc))
                                 .bg(Color::Reset),
-                            texid,
                         );
                         col += 1;
                     }
@@ -94,14 +93,13 @@ impl Asset for PixAsset {
                         let fgc = cap[2].parse::<u8>().unwrap();
                         let tex = cap[3].parse::<u8>().unwrap();
                         let bgc = cap[4].parse::<u8>().unwrap();
-                        sp.set_str_tex(
+                        sp.set_str(
                             col,
                             lineidx - 1,
-                            cellsym(idx),
+                            cellsym_block(tex, idx),
                             Style::default()
                                 .fg(Color::Indexed(fgc))
                                 .bg(Color::Indexed(bgc)),
-                            tex,
                         );
                         col += 1;
                     }
@@ -109,14 +107,13 @@ impl Asset for PixAsset {
                     for cap in rel1.captures_iter(&l) {
                         let idx = cap[1].parse::<u8>().unwrap();
                         let fgc = cap[2].parse::<u8>().unwrap();
-                        let bgc = cap[3].parse::<u8>().unwrap();
-                        sp.set_str_tex(
+                        let tex = cap[3].parse::<u8>().unwrap();
+                        sp.set_str(
                             col,
                             lineidx - 1,
-                            cellsym(idx),
+                            cellsym_block(tex, idx),
                             Style::default()
                                 .fg(Color::Indexed(fgc)),
-                            bgc,
                         );
                         col += 1;
                     }

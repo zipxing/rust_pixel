@@ -42,19 +42,182 @@ pub fn tui_symidx(symbol: &str) -> Option<(u8, u8)> {
 /// - modifier: Text modifiers (bold, italic, etc.)
 pub type CellInfo = (u8, u8, Color, Color, Modifier);
 
-/// returns a cellsym string by index
-/// 256 unicode chars mark the index of a symbol in a SDL texture
+/// Glyph rendering information with size metadata.
+///
+/// This struct directly expresses character rendering info without needing
+/// block range checks. The width and height are in multiples of base cell size:
+/// - PIXEL_SYM_WIDTH (16 pixels) for width
+/// - PIXEL_SYM_HEIGHT (16 pixels) for height
+///
+/// Size conventions:
+/// - Sprite (block 0-159): 1x1 (16x16 pixels)
+/// - TUI (block 160-169): 1x2 (16x32 pixels)
+/// - Emoji (block 170-175): 2x2 (32x32 pixels)
+/// - CJK (block 176-239): 2x2 (32x32 pixels)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Glyph {
+    /// Texture block index (0-255)
+    pub block: u8,
+    /// Symbol index within the block (0-255)
+    pub idx: u8,
+    /// Width in multiples of PIXEL_SYM_WIDTH (1 or 2)
+    pub width: u8,
+    /// Height in multiples of PIXEL_SYM_HEIGHT (1 or 2)
+    pub height: u8,
+}
+
+impl Glyph {
+    /// Create a new Glyph with explicit dimensions.
+    pub fn new(block: u8, idx: u8, width: u8, height: u8) -> Self {
+        Self { block, idx, width, height }
+    }
+
+    /// Create a Sprite glyph (1x1, 16x16 pixels).
+    pub fn sprite(block: u8, idx: u8) -> Self {
+        Self { block, idx, width: 1, height: 1 }
+    }
+
+    /// Create a TUI glyph (1x2, 16x32 pixels).
+    pub fn tui(block: u8, idx: u8) -> Self {
+        Self { block, idx, width: 1, height: 2 }
+    }
+
+    /// Create an Emoji glyph (2x2, 32x32 pixels).
+    pub fn emoji(block: u8, idx: u8) -> Self {
+        Self { block, idx, width: 2, height: 2 }
+    }
+
+    /// Create a CJK glyph (2x2, 32x32 pixels).
+    pub fn cjk(block: u8, idx: u8) -> Self {
+        Self { block, idx, width: 2, height: 2 }
+    }
+
+    /// Check if this is a double-height glyph.
+    pub fn is_double_height(&self) -> bool {
+        self.height == 2
+    }
+
+    /// Check if this is a double-width glyph.
+    pub fn is_double_width(&self) -> bool {
+        self.width == 2
+    }
+}
+
+/// PUA (Private Use Area) encoding for Sprite symbols.
+///
+/// Range: U+E000 ~ U+E3FF (1024 characters, 4 blocks × 256 symbols)
+/// - Block 0: U+E000-U+E0FF (basic PETSCII)
+/// - Block 1: U+E100-U+E1FF (extended PETSCII)
+/// - Block 2: U+E200-U+E2FF
+/// - Block 3: U+E300-U+E3FF
+///
+/// Encoding: codepoint = 0xE000 + block * 256 + idx
+pub const PUA_BASE: u32 = 0xE000;
+pub const PUA_END: u32 = 0xE3FF;
+pub const PUA_BLOCK_SIZE: u32 = 256;
+
+/// Encode block and index to PUA character string.
+///
+/// # Arguments
+/// * `block` - Block index (0-3)
+/// * `idx` - Symbol index within block (0-255)
+///
+/// # Returns
+/// A String containing a single PUA character.
+pub fn cellsym_block(block: u8, idx: u8) -> String {
+    debug_assert!(block < 4, "block must be 0-3, got {}", block);
+    let codepoint = PUA_BASE + (block as u32) * PUA_BLOCK_SIZE + idx as u32;
+    char::from_u32(codepoint).unwrap().to_string()
+}
+
+/// Convenience function for block 0 (backward compatible).
+///
+/// Returns a cellsym string by index in block 0.
 /// unicode: 0xE000 ~ 0xE0FF (Private Use Area)
-/// maps to a 3 byte UTF8: 11101110 100000xx 10xxxxxx
-/// an 8-bits index gets from the UTF8 code is used to mark the offset in its texture
 ///
 /// Using Private Use Area ensures no conflict with standard Unicode characters,
 /// allowing applications to display mathematical symbols (∀∃∈∞≈≤≥⊕⊗) or other
 /// special characters in TUI mode without interference.
 pub fn cellsym(idx: u8) -> String {
-    // U+E000 + idx
-    let codepoint = 0xE000u32 + idx as u32;
-    char::from_u32(codepoint).unwrap().to_string()
+    cellsym_block(0, idx)
+}
+
+/// Decode a PUA character to (block, idx).
+///
+/// # Arguments
+/// * `ch` - A character to decode
+///
+/// # Returns
+/// Some((block, idx)) if the character is in PUA range (U+E000-U+E3FF),
+/// None otherwise.
+pub fn decode_pua(ch: char) -> Option<(u8, u8)> {
+    let cp = ch as u32;
+    if cp >= PUA_BASE && cp <= PUA_END {
+        let offset = cp - PUA_BASE;
+        let block = (offset / PUA_BLOCK_SIZE) as u8;
+        let idx = (offset % PUA_BLOCK_SIZE) as u8;
+        Some((block, idx))
+    } else {
+        None
+    }
+}
+
+/// Check if a character is in PUA Sprite range.
+pub fn is_pua_sprite(ch: char) -> bool {
+    let cp = ch as u32;
+    cp >= PUA_BASE && cp <= PUA_END
+}
+
+/// TUI character type for rendering mode detection.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TuiCharType {
+    /// ASCII and standard TUI characters (Box Drawing, Block Elements, Braille, NerdFont)
+    TuiChar,
+    /// Pre-rendered Emoji
+    Emoji,
+    /// CJK characters
+    CJK,
+}
+
+/// Check if a codepoint is a TUI character (ASCII, Box Drawing, Block Elements, Braille, NerdFont).
+pub fn is_tui_char(cp: u32) -> bool {
+    (0x0020..=0x007E).contains(&cp) ||    // ASCII printable
+    (0x2500..=0x257F).contains(&cp) ||    // Box Drawing
+    (0x2580..=0x259F).contains(&cp) ||    // Block Elements
+    (0x2800..=0x28FF).contains(&cp) ||    // Braille Patterns
+    cp >= 0xE000                           // Private Use / NerdFont / Powerline (but not our PUA)
+        && !(PUA_BASE..=PUA_END).contains(&cp)
+}
+
+/// Check if a codepoint is CJK.
+pub fn is_cjk(cp: u32) -> bool {
+    (0x4E00..=0x9FFF).contains(&cp) ||    // CJK Unified Ideographs
+    (0x3400..=0x4DBF).contains(&cp) ||    // CJK Unified Ideographs Extension A
+    (0x20000..=0x2A6DF).contains(&cp) ||  // CJK Unified Ideographs Extension B
+    (0x2A700..=0x2B73F).contains(&cp) ||  // CJK Unified Ideographs Extension C
+    (0x2B740..=0x2B81F).contains(&cp) ||  // CJK Unified Ideographs Extension D
+    (0x3000..=0x303F).contains(&cp) ||    // CJK Symbols and Punctuation
+    (0xFF00..=0xFFEF).contains(&cp)       // Halfwidth and Fullwidth Forms
+}
+
+/// Detect TUI character type from a symbol string.
+///
+/// Returns the character type for TUI mode rendering.
+pub fn detect_tui_char_type(symbol: &str) -> TuiCharType {
+    // Check Emoji first (may be multi-codepoint)
+    if is_prerendered_emoji(symbol) {
+        return TuiCharType::Emoji;
+    }
+
+    // Check first codepoint
+    if let Some(ch) = symbol.chars().next() {
+        let cp = ch as u32;
+        if is_cjk(cp) {
+            return TuiCharType::CJK;
+        }
+    }
+
+    TuiCharType::TuiChar
 }
 
 /// Check if a symbol is a pre-rendered Emoji
@@ -73,43 +236,17 @@ pub fn emoji_texidx(symbol: &str) -> Option<(u8, u8)> {
     get_symbol_map().emoji_idx(symbol)
 }
 
-/// get index idx from a symbol string
-/// return idx, if it is a unicode char in Private Use Area (U+E000~U+E0FF)
-/// otherwise get index from Sprite symbol map
-fn symidx(symbol: &String) -> u8 {
-    let sbts = symbol.as_bytes();
-    // Private Use Area: U+E000~U+E0FF
-    // UTF-8: 11101110 100000xx 10xxxxxx (0xEE 0x80~0x83 0x80~0xBF)
-    if sbts.len() == 3 && sbts[0] == 0xEE && (sbts[1] >> 2 == 0x20) {
-        let idx = ((sbts[1] & 3) << 6) + (sbts[2] & 0x3f);
-        return idx;
-    }
-    // search in sprite symbol map for common ASCII chars
-    if let Some((_, idx)) = get_symbol_map().sprite_idx(symbol) {
-        return idx;
-    }
-    0u8
-}
-
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cell {
+    /// Symbol string determining the character to render.
+    ///
+    /// In Sprite mode: PUA encoded (U+E000-U+E3FF), block and idx derived from codepoint.
+    /// In TUI mode: Standard Unicode (ASCII, Box Drawing, Emoji, CJK), mapped via symbol_map.
     pub symbol: String,
     pub fg: Color,
     pub bg: Color,
     pub modifier: Modifier,
-    /// Texture block index (0-255) in the 4096x4096 unified texture.
-    ///
-    /// Block ranges:
-    /// - 0-159: Sprite region
-    /// - 160-169: TUI region
-    /// - 170-175: Emoji region
-    /// - 176-239: CJK region
-    /// - 240-255: Reserved
-    ///
-    /// For special characters (Emoji, TUI, CJK), this value is overridden
-    /// by `get_cell_info()` based on symbol_map lookups.
-    pub tex: u8,
     /// Per-cell X scale factor (1.0 = no scaling).
     /// Combined with sprite-level scale in graphics mode rendering.
     /// When different from 1.0, triggers cumulative width layout.
@@ -135,50 +272,61 @@ impl Cell {
     /// - symbol_index: Index within the block (0-255)
     /// - block_index: Texture block index (0-255) in the unified 4096x4096 texture
     ///
-    /// # Block Index Resolution
-    ///
-    /// The block_index is determined by priority:
-    /// 1. **Emoji** (170-175): Checked first via symbol_map
-    /// 2. **CJK** (176-239): Checked second via symbol_map
-    /// 3. **Sprite** (0-159): Uses self.tex field as fallback
-    ///
-    /// # Special Cases
-    ///
-    /// - Space character in Sprite texture (tex=0): Returns index 32 instead of symbol_map's 33
-    ///   to maintain compatibility with texture layout
+    /// Block is determined solely from symbol:
+    /// - PUA (U+E000-U+E3FF): Sprite blocks 0-3
+    /// - Emoji: Emoji blocks 170-175
+    /// - CJK: CJK blocks 176-239
+    /// - TUI chars: TUI blocks 160-169
     ///
     /// # See Also
     ///
+    /// - `get_glyph()` for the full Glyph with size info
     /// - `render::symbol_map` for block layout and character mappings
-    /// - `CellInfo` type for return value structure
     pub fn get_cell_info(&self) -> CellInfo {
-        // For Sprite texture (tex=0), handle space character specially
-        // Sprite symbol map maps space to index 33, but in Sprite texture it should be 32
-        if self.tex == 0 && self.symbol == " " {
-            return (32, 0, self.fg, self.bg, self.modifier);
-        }
+        let glyph = self.get_glyph();
+        (glyph.idx, glyph.block, self.fg, self.bg, self.modifier)
+    }
 
-        // Check for Emoji first
-        if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
-            return (idx, block, self.fg, self.bg, self.modifier);
-        }
-
-        // Check for CJK characters (returns block 176-207, idx 0-127)
-        if let Some((block, idx)) = get_symbol_map().cjk_idx(&self.symbol) {
-            return (idx, block, self.fg, self.bg, self.modifier);
-        }
-
-        // Check sprite extras for non-zero block (e.g., underscore in block 2)
-        // This allows characters to be mapped to different sprite blocks via symbol_map.json
-        if self.tex == 0 {
-            if let Some((block, idx)) = get_symbol_map().sprite_idx(&self.symbol) {
-                if block != 0 {
-                    return (idx, block, self.fg, self.bg, self.modifier);
-                }
+    /// Get glyph rendering information based solely on symbol.
+    ///
+    /// This is the unified method that determines Glyph from symbol alone:
+    /// 1. PUA (U+E000-U+E3FF) → Sprite (1x1)
+    /// 2. Emoji → Emoji (2x2) from symbol_map
+    /// 3. CJK → CJK (2x2) from symbol_map
+    /// 4. TUI char → TUI (1x2) from symbol_map
+    ///
+    /// Returns Glyph with block, idx, width, and height.
+    pub fn get_glyph(&self) -> Glyph {
+        // 1. Check PUA (Sprite symbols) - 1x1
+        if let Some(ch) = self.symbol.chars().next() {
+            if let Some((block, idx)) = decode_pua(ch) {
+                return Glyph::sprite(block, idx);
             }
         }
 
-        (symidx(&self.symbol), self.tex, self.fg, self.bg, self.modifier)
+        // 2. Check Emoji - 2x2
+        if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
+            return Glyph::emoji(block, idx);
+        }
+
+        // 3. Check CJK - 2x2
+        if let Some((block, idx)) = get_symbol_map().cjk_idx(&self.symbol) {
+            return Glyph::cjk(block, idx);
+        }
+
+        // 4. Check TUI (includes ASCII, Box Drawing, Braille, etc.) - 1x2
+        if let Some((block, idx)) = get_symbol_map().tui_idx(&self.symbol) {
+            return Glyph::tui(block, idx);
+        }
+
+        // Fallback: space character (Sprite 1x1)
+        Glyph::sprite(0, 32)
+    }
+
+    /// Get glyph info as (block, idx) tuple for backward compatibility.
+    pub fn get_glyph_info(&self) -> (u8, u8) {
+        let glyph = self.get_glyph();
+        (glyph.block, glyph.idx)
     }
 
     pub fn set_char(&mut self, ch: char) -> &mut Cell {
@@ -187,21 +335,24 @@ impl Cell {
         self
     }
 
-    /// Set the texture block index for this cell.
+    /// Set the texture block for this cell (Sprite mode only).
+    ///
+    /// This updates the symbol to PUA encoding with the given block.
+    /// The symbol index is preserved from the current symbol.
     ///
     /// # Arguments
     ///
-    /// * `tex` - Block index (0-255) in the unified texture:
-    ///   - 0-159: Sprite blocks
-    ///   - 160-169: TUI blocks (typically auto-assigned by symbol_map)
-    ///   - 170-175: Emoji blocks (typically auto-assigned by symbol_map)
-    ///   - 176-239: CJK blocks (typically auto-assigned by symbol_map)
-    ///   - 240-255: Reserved
+    /// * `block` - Block index (0-3 for Sprite region)
     ///
-    /// Note: For special characters (Emoji, TUI, CJK), `get_cell_info()` may
-    /// override this value based on symbol_map lookups.
-    pub fn set_texture(&mut self, tex: u8) -> &mut Cell {
-        self.tex = tex;
+    /// # Note
+    ///
+    /// This method is primarily for Sprite mode. For TUI/Emoji/CJK,
+    /// the block is determined automatically from the symbol.
+    pub fn set_texture(&mut self, block: u8) -> &mut Cell {
+        // Get current idx from glyph
+        let glyph = self.get_glyph();
+        // Set symbol to PUA with new block
+        self.symbol = cellsym_block(block, glyph.idx);
         self
     }
 
@@ -260,16 +411,27 @@ impl Cell {
     /// Reset cell to blank state (space character).
     ///
     /// Sets:
-    /// - symbol: " " (space)
+    /// - symbol: " " (space, TUI mode) or PUA space (Sprite mode)
     /// - colors: Reset
-    /// - tex: 0 (Sprite block 0)
     /// - modifier: empty
+    /// - scale: 1.0
     pub fn reset(&mut self) {
         self.symbol.clear();
         self.symbol.push(' ');
         self.fg = Color::Reset;
         self.bg = Color::Reset;
-        self.tex = 0; // Block 0 (Sprite region)
+        self.modifier = Modifier::empty();
+        self.scale_x = 1.0;
+        self.scale_y = 1.0;
+    }
+
+    /// Reset cell to blank state for Sprite mode.
+    ///
+    /// Uses PUA space character (block 0, idx 32).
+    pub fn reset_sprite(&mut self) {
+        self.symbol = cellsym(32);  // PUA space
+        self.fg = Color::Reset;
+        self.bg = Color::Reset;
         self.modifier = Modifier::empty();
         self.scale_x = 1.0;
         self.scale_y = 1.0;
@@ -278,14 +440,22 @@ impl Cell {
     /// Check if this cell represents a blank space in graphics mode.
     ///
     /// A cell is considered blank if:
-    /// - Symbol is space (" " or cellsym(32))
-    /// - Block is 0 or 1 (Sprite region)
+    /// - Symbol is space (" " or PUA space in block 0-1)
     /// - Background is Reset (transparent)
     #[cfg(graphics_mode)]
     pub fn is_blank(&self) -> bool {
-        (self.symbol == " " || self.symbol == cellsym(32))
-            && (self.tex == 0 || self.tex == 1)
-            && self.bg == Color::Reset
+        let is_space = self.symbol == " " || {
+            if let Some(ch) = self.symbol.chars().next() {
+                if let Some((block, idx)) = decode_pua(ch) {
+                    idx == 32 && block <= 1
+                } else {
+                    false
+                }
+            } else {
+                true // empty symbol is blank
+            }
+        };
+        is_space && self.bg == Color::Reset
     }
 
     #[cfg(not(graphics_mode))]
@@ -301,7 +471,6 @@ impl Default for Cell {
             fg: Color::Reset,
             bg: Color::Reset,
             modifier: Modifier::empty(),
-            tex: 0,
             scale_x: 1.0,
             scale_y: 1.0,
         }

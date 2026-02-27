@@ -208,9 +208,10 @@ impl DerefMut for Sprite {
 }
 
 impl Sprite {
+    /// Create a new Sprite with Sprite mode buffer (PUA encoding).
     pub fn new(x: u16, y: u16, width: u16, height: u16) -> Self {
         let area = Rect::new(x, y, width, height);
-        let buffer = Buffer::empty(area);
+        let buffer = Buffer::empty_sprite(area);  // Sprite mode by default
         Self {
             content: buffer,
             angle: 0.0,
@@ -218,6 +219,22 @@ impl Sprite {
             scale_x: 1.0,  // Default: normal scaling
             scale_y: 1.0,  // Default: normal scaling
             use_tui: false, // Default: Sprite chars (16×16)
+            asset_request: None,
+            render_weight: 1,
+        }
+    }
+
+    /// Create a new Sprite with TUI mode buffer (Unicode).
+    pub fn new_tui(x: u16, y: u16, width: u16, height: u16) -> Self {
+        let area = Rect::new(x, y, width, height);
+        let buffer = Buffer::empty(area);  // TUI mode
+        Self {
+            content: buffer,
+            angle: 0.0,
+            alpha: 255,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            use_tui: true,  // TUI chars (16×32)
             asset_request: None,
             render_weight: 1,
         }

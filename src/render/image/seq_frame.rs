@@ -11,7 +11,7 @@
 use crate::{
     asset::{Asset, AssetBase, AssetState},
     render::buffer::Buffer,
-    render::cell::cellsym,
+    render::cell::{cellsym_block},
     render::image::esc::escstr_to_buffer,
     render::style::{Color, Style},
     util::Rect,
@@ -93,7 +93,12 @@ impl Asset for SeqFrameAsset {
         self.base.parsed_buffers.clear();
         for frame_idx in 0..self.base.frame_count {
             let size = Rect::new(0, 0, self.width, self.height);
-            let mut sp = Buffer::empty(size);
+            // TUI mode for ESC (257) and UTF8 (256), Sprite mode for others
+            let mut sp = if self.texture_id >= 256 {
+                Buffer::empty(size)
+            } else {
+                Buffer::empty_sprite(size)
+            };
             let start = self.frame_offset[frame_idx] as usize;
             let flen = self.frame_len[frame_idx] as usize;
             let mut decoder = GzDecoder::new(&self.frame_data[start..start + flen]);
@@ -154,19 +159,19 @@ impl Asset for SeqFrameAsset {
                 decoder.read_to_end(&mut decompressed_data).unwrap();
                 let cell_len: usize = if self.texture_id == 255 { 3 } else { 2 };
                 for i in 0..decompressed_data.len() as u16 / cell_len as u16 {
-                    let bgc: u8 = if self.texture_id == 255 {
+                    let tex: u8 = if self.texture_id == 255 {
                         decompressed_data[i as usize * cell_len + 2]
                     } else {
                         self.texture_id as u8
                     };
-                    sp.set_str_tex(
+                    let idx = decompressed_data[i as usize * cell_len];
+                    sp.set_str(
                         i % self.width,
                         i / self.width,
-                        cellsym(decompressed_data[i as usize * cell_len]),
+                        cellsym_block(tex, idx),
                         Style::default()
                             .fg(Color::Indexed(decompressed_data[i as usize * cell_len + 1]))
                             .bg(Color::Reset),
-                        bgc
                     );
                 }
             }

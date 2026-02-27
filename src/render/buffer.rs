@@ -50,8 +50,9 @@
 //!
 #[allow(unused_imports)]
 use crate::{
-    render::cell::{cellsym, is_prerendered_emoji, Cell},
+    render::cell::{cellsym, cellsym_block, is_prerendered_emoji, Cell},
     render::style::{Color, Style},
+    render::symbol_map::ascii_to_petscii,
     util::{Rect, PointU16},
     util::shape::{circle, line, prepare_line},
 };
@@ -89,25 +90,78 @@ pub enum BorderType {
     Thick,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+/// Buffer mode: TUI uses standard Unicode, Sprite uses PUA encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub enum BufferMode {
+    /// TUI mode: symbols are standard Unicode (ASCII, Box Drawing, Emoji, CJK)
+    #[default]
+    Tui,
+    /// Sprite mode: symbols must be PUA encoded (U+E000-U+E3FF)
+    Sprite,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Buffer {
     pub area: Rect,
     pub content: Vec<Cell>,
+    /// Buffer rendering mode.
+    /// - Tui: symbols are standard Unicode, rendered with TUI texture
+    /// - Sprite: symbols are PUA encoded, rendered with Sprite texture
+    #[serde(default)]
+    pub mode: BufferMode,
+}
+
+impl Default for Buffer {
+    fn default() -> Self {
+        Buffer {
+            area: Rect::default(),
+            content: Vec::new(),
+            mode: BufferMode::Tui,
+        }
+    }
 }
 
 impl Buffer {
+    /// Create an empty buffer in TUI mode (default).
     pub fn empty(area: Rect) -> Buffer {
         let cell: Cell = Default::default();
         Buffer::filled(area, &cell)
     }
 
+    /// Create an empty buffer in Sprite mode.
+    pub fn empty_sprite(area: Rect) -> Buffer {
+        let cell: Cell = Default::default();
+        Buffer::filled_with_mode(area, &cell, BufferMode::Sprite)
+    }
+
+    /// Create a filled buffer in TUI mode (default).
     pub fn filled(area: Rect, cell: &Cell) -> Buffer {
+        Buffer::filled_with_mode(area, cell, BufferMode::Tui)
+    }
+
+    /// Create a filled buffer with specified mode.
+    pub fn filled_with_mode(area: Rect, cell: &Cell, mode: BufferMode) -> Buffer {
         let size = area.area() as usize;
         let mut content = Vec::with_capacity(size);
         for _ in 0..size {
             content.push(cell.clone());
         }
-        Buffer { area, content }
+        Buffer { area, content, mode }
+    }
+
+    /// Check if this buffer is in TUI mode.
+    pub fn is_tui(&self) -> bool {
+        self.mode == BufferMode::Tui
+    }
+
+    /// Check if this buffer is in Sprite mode.
+    pub fn is_sprite(&self) -> bool {
+        self.mode == BufferMode::Sprite
+    }
+
+    /// Set the buffer mode.
+    pub fn set_mode(&mut self, mode: BufferMode) {
+        self.mode = mode;
     }
 
     pub fn with_lines<S>(lines: Vec<S>) -> Buffer
@@ -136,48 +190,52 @@ impl Buffer {
         &self.content
     }
 
-    /// Convert buffer to RGBA image data for OpenGL shader texture.
-    ///
-    /// Each cell is encoded as 4 bytes:
-    /// - Byte 0: symbol_index (0-255, index within block)
-    /// - Byte 1: block_index (0-255, texture block)
-    /// - Byte 2: foreground color
-    /// - Byte 3: background color
-    ///
-    /// Used by graphics adapters to pass buffer data to GPU shaders.
-    pub fn get_rgba_image(&self) -> Vec<u8> {
-        let mut dat = vec![];
-        for c in &self.content {
-            // Get (symbol_index, block_index, fg, bg, modifier)
-            let ci = c.get_cell_info();
-            dat.push(ci.0); // symbol_index
-            dat.push(ci.1); // block_index
-            dat.push(u8::from(ci.2)); // fg
-            dat.push(u8::from(ci.3)); // bg
-        }
-        dat
-    }
+    ///// Convert buffer to RGBA image data for OpenGL shader texture.
+    /////
+    ///// Each cell is encoded as 4 bytes:
+    ///// - Byte 0: symbol_index (0-255, index within block)
+    ///// - Byte 1: block_index (0-255, texture block)
+    ///// - Byte 2: foreground color
+    ///// - Byte 3: background color
+    /////
+    ///// Used by graphics adapters to pass buffer data to GPU shaders.
+    //pub fn get_rgba_image(&self) -> Vec<u8> {
+    //    let mut dat = vec![];
+    //    for c in &self.content {
+    //        // Get (symbol_index, block_index, fg, bg, modifier)
+    //        let ci = c.get_cell_info();
+    //        dat.push(ci.0); // symbol_index
+    //        dat.push(ci.1); // block_index
+    //        dat.push(u8::from(ci.2)); // fg
+    //        dat.push(u8::from(ci.3)); // bg
+    //    }
+    //    dat
+    //}
 
-    /// Convert RGBA image data back to buffer (from OpenGL shader output).
-    ///
-    /// Each cell is decoded from 4 bytes:
-    /// - Byte 0: symbol_index → cellsym(index)
-    /// - Byte 1: block_index → set_texture(block)
-    /// - Byte 2: foreground color
-    /// - Byte 3: background color
-    pub fn set_rgba_image(&mut self, dat: &[u8], w: u16, h: u16) {
-        let mut idx = 0;
-        for i in 0..h {
-            for j in 0..w {
-                self.content[(i * w + j) as usize]
-                    .set_symbol(&cellsym(dat[idx]))
-                    .set_texture(dat[idx + 1]) // block_index
-                    .set_fg(Color::Indexed(dat[idx + 2]))
-                    .set_bg(Color::Indexed(dat[idx + 3]));
-                idx += 4;
-            }
-        }
-    }
+    ///// Convert RGBA image data back to buffer (from OpenGL shader output).
+    /////
+    ///// Each cell is decoded from 4 bytes:
+    ///// - Byte 0: symbol_index
+    ///// - Byte 1: block_index
+    ///// - Byte 2: foreground color
+    ///// - Byte 3: background color
+    /////
+    ///// Symbol is set using PUA encoding: cellsym_block(block, idx)
+    //pub fn set_rgba_image(&mut self, dat: &[u8], w: u16, h: u16) {
+    //    use crate::render::cell::cellsym_block;
+    //    let mut idx = 0;
+    //    for i in 0..h {
+    //        for j in 0..w {
+    //            let sym_idx = dat[idx];
+    //            let block = dat[idx + 1];
+    //            self.content[(i * w + j) as usize]
+    //                .set_symbol(&cellsym_block(block, sym_idx))
+    //                .set_fg(Color::Indexed(dat[idx + 2]))
+    //                .set_bg(Color::Indexed(dat[idx + 3]));
+    //            idx += 4;
+    //        }
+    //    }
+    //}
 
     pub fn area(&self) -> &Rect {
         &self.area
@@ -229,31 +287,10 @@ impl Buffer {
         self.set_str(0, 0, string, Style::default());
     }
 
-    /// Set string at relative position with specific texture block.
+    /// Set string at relative position (relative to buffer's area).
     ///
-    /// Coordinates are relative to buffer's area (easier for sprite content).
-    ///
-    /// # Arguments
-    ///
-    /// * `x`, `y` - Relative coordinates (offset by self.area.x/y)
-    /// * `string` - Text to render
-    /// * `style` - Text style (colors, modifiers)
-    /// * `tex` - Texture block index (0-255), see module docs for block ranges
-    pub fn set_str_tex<S>(&mut self, x: u16, y: u16, string: S, style: Style, tex: u8)
-    where
-        S: AsRef<str>,
-    {
-        self.set_stringn(
-            x + self.area.x,
-            y + self.area.y,
-            string,
-            usize::MAX,
-            style,
-            tex,
-        );
-    }
-
-    //relative pos in game sprite, easier to set content
+    /// For graphics mode (Sprite buffer), pass PUA-encoded symbols via cellsym/cellsym_block.
+    /// For TUI mode, pass standard Unicode strings.
     pub fn set_str<S>(&mut self, x: u16, y: u16, string: S, style: Style)
     where
         S: AsRef<str>,
@@ -264,57 +301,33 @@ impl Buffer {
             string,
             usize::MAX,
             style,
-            0,
         );
     }
 
-    /// Set string at absolute position with specific texture block.
-    ///
-    /// Coordinates are absolute (global screen coordinates).
-    ///
-    /// # Arguments
-    ///
-    /// * `x`, `y` - Absolute coordinates (no offset)
-    /// * `string` - Text to render
-    /// * `style` - Text style (colors, modifiers)
-    /// * `tex` - Texture block index (0-255), see module docs for block ranges
-    pub fn set_string_tex<S>(&mut self, x: u16, y: u16, string: S, style: Style, tex: u8)
-    where
-        S: AsRef<str>,
-    {
-        self.set_stringn(x, y, string, usize::MAX, style, tex);
-    }
-
-    //absolute pos
+    /// Set string at absolute position (global screen coordinates).
     pub fn set_string<S>(&mut self, x: u16, y: u16, string: S, style: Style)
     where
         S: AsRef<str>,
     {
-        self.set_stringn(x, y, string, usize::MAX, style, 0);
+        self.set_stringn(x, y, string, usize::MAX, style);
     }
 
-    /// Core method to set string with width limit and block index.
+    /// Core method to set string content.
     ///
-    /// Used internally by `set_str`, `set_string`, `set_str_tex`, and `set_string_tex`.
+    /// Simply sets the symbol and style for each character. No tex/block conversion.
+    /// For graphics mode, caller should use cellsym_block(block, idx) to construct
+    /// the correct PUA-encoded symbol.
     ///
     /// # Arguments
     ///
     /// * `x`, `y` - Absolute coordinates
-    /// * `string` - Text to render
+    /// * `string` - Text to render (Unicode or PUA-encoded)
     /// * `width` - Maximum width in characters (usize::MAX for no limit)
     /// * `style` - Text style (colors, modifiers)
-    /// * `tex` - Texture block index (0-255):
-    ///   - For normal text: typically 0 (Sprite block 0)
-    ///   - For special symbols: use appropriate block index
-    ///   - For Emoji/TUI/CJK: block is auto-determined by `get_cell_info()`
     ///
     /// # Returns
     ///
     /// Final (x, y) position after rendering the string.
-    ///
-    /// # Note
-    ///
-    /// Coordinates are converted to buffer-local indices via `index_of(x, y)`.
     pub fn set_stringn<S>(
         &mut self,
         x: u16,
@@ -322,11 +335,16 @@ impl Buffer {
         string: S,
         width: usize,
         style: Style,
-        tex: u8,
     ) -> (u16, u16)
     where
         S: AsRef<str>,
     {
+        // Bounds check: skip if starting position is outside buffer
+        if x < self.area.left() || x >= self.area.right()
+            || y < self.area.top() || y >= self.area.bottom() {
+            return (x, y);
+        }
+
         let mut index = self.index_of(x, y);
         let mut x_offset = x as usize;
         let graphemes = UnicodeSegmentation::graphemes(string.as_ref(), true);
@@ -343,14 +361,13 @@ impl Buffer {
             }
 
             // Handle Emoji (which might be single width in unicode-width but we want double width for rendering)
-            // OR handle actual double width characters.
-            // Our Emoji are pre-rendered as 16x16 (2x1 grid cells).
-            // We check if it's a pre-rendered Emoji.
             let is_emoji = is_prerendered_emoji(s);
-            
+
+            // 直接设置 symbol，不做任何转换
+            // - TUI模式：传入 Unicode
+            // - Sprite模式：调用方应传入 PUA 编码的 symbol (通过 cellsym_block)
             self.content[index].set_symbol(s);
             self.content[index].set_style(style);
-            self.content[index].set_texture(tex);
 
             // If it's an Emoji, it occupies 2 cells visually (16px width).
             // Even if `unicode-width` says it's width 1 (some emojis are), we force it to take 2 cells
@@ -434,6 +451,22 @@ impl Buffer {
         self.set_str(x, y, string, Style::default().fg(fg).bg(bg));
     }
 
+    /// Set PETSCII-style string at (x,y) with fg/bg color.
+    ///
+    /// Converts ASCII characters to PETSCII symbols by looking up sprite extras.
+    /// Use this for rendering text with retro C64-style font in graphics mode.
+    ///
+    /// # Example
+    /// ```ignore
+    /// buf.set_petscii_str(0, 0, "HELLO WORLD", Color::White, Color::Reset);
+    /// ```
+    pub fn set_petscii_str<S>(&mut self, x: u16, y: u16, string: S, fg: Color, bg: Color)
+    where
+        S: AsRef<str>,
+    {
+        self.set_str(x, y, ascii_to_petscii(string.as_ref()), Style::default().fg(fg).bg(bg));
+    }
+
     /// Set string content at (0,0) with default style.
     pub fn set_default_str<S>(&mut self, string: S)
     where
@@ -444,12 +477,11 @@ impl Buffer {
 
     /// Set graphic mode symbol (texture:texture_id, index:sym) at (x,y) with fg color.
     pub fn set_graph_sym(&mut self, x: u16, y: u16, texture_id: u8, sym: u8, fg: Color) {
-        self.set_str_tex(
+        self.set_str(
             x,
             y,
-            cellsym(sym),
+            cellsym_block(texture_id, sym),
             Style::default().fg(fg).bg(Color::Reset),
-            texture_id,
         );
     }
 
@@ -498,14 +530,13 @@ impl Buffer {
             let sym = syms[p.2 as usize];
             if let Some(s) = sym {
                 if x < self.area.width && y < self.area.height {
-                    self.set_str_tex(
+                    self.set_str(
                         x,
                         y,
-                        cellsym(s),
+                        cellsym_block(bg_color, s),
                         Style::default()
                             .fg(Color::Indexed(fg_color))
                             .bg(Color::Reset),
-                        bg_color,
                     );
                 }
             }
@@ -513,6 +544,33 @@ impl Buffer {
     }
 
     // ========== Border drawing ==========
+
+    /// Set a border symbol at the given position.
+    /// x, y are relative coordinates (0-based within buffer).
+    /// In Sprite mode: looks up sprite_extras for (block, idx)
+    /// In TUI mode: uses the Unicode character directly (block determined by symbol_map)
+    fn set_border_sym(&mut self, x: u16, y: u16, sym: &str, style: Style) {
+        use crate::render::symbol_map::get_symbol_map;
+        use crate::render::cell::cellsym_block;
+
+        if self.mode == BufferMode::Sprite {
+            // Sprite mode: look up in sprite_extras to get (block, idx)
+            // Convert relative coordinates to absolute by adding area offset
+            if let Some((block, idx)) = get_symbol_map().sprite_idx(sym) {
+                let abs_x = x + self.area.x;
+                let abs_y = y + self.area.y;
+                let index = self.index_of(abs_x, abs_y);
+                if index < self.content.len() {
+                    self.content[index].set_symbol(&cellsym_block(block, idx));
+                    self.content[index].set_style(style);
+                }
+            }
+        } else {
+            // TUI mode: use Unicode directly, symbol_map will resolve block
+            // set_str already handles relative→absolute conversion
+            self.set_str(x, y, sym, style);
+        }
+    }
 
     pub fn set_border(&mut self, borders: Borders, border_type: BorderType, style: Style) {
         let lineidx: [usize; 11] = match border_type {
@@ -523,55 +581,52 @@ impl Buffer {
         };
         if borders.intersects(Borders::LEFT) {
             for y in 0..self.area.height {
-                self.set_str_tex(0, y, SYMBOL_LINE[lineidx[0]], style, 1);
+                self.set_border_sym(0, y, SYMBOL_LINE[lineidx[0]], style);
             }
         }
         if borders.intersects(Borders::TOP) {
             for x in 0..self.area.width {
-                self.set_str_tex(x, 0, SYMBOL_LINE[lineidx[1]], style, 1);
+                self.set_border_sym(x, 0, SYMBOL_LINE[lineidx[1]], style);
             }
         }
         if borders.intersects(Borders::RIGHT) {
             let x = self.area.width - 1;
             for y in 0..self.area.height {
-                self.set_str_tex(x, y, SYMBOL_LINE[lineidx[0]], style, 1);
+                self.set_border_sym(x, y, SYMBOL_LINE[lineidx[0]], style);
             }
         }
         if borders.intersects(Borders::BOTTOM) {
             let y = self.area.height - 1;
             for x in 0..self.area.width {
-                self.set_str_tex(x, y, SYMBOL_LINE[lineidx[1]], style, 1);
+                self.set_border_sym(x, y, SYMBOL_LINE[lineidx[1]], style);
             }
         }
         if borders.contains(Borders::RIGHT | Borders::BOTTOM) {
-            self.set_str_tex(
+            self.set_border_sym(
                 self.area.width - 1,
                 self.area.height - 1,
                 SYMBOL_LINE[lineidx[4]],
                 style,
-                1,
             );
         }
         if borders.contains(Borders::RIGHT | Borders::TOP) {
-            self.set_str_tex(
+            self.set_border_sym(
                 self.area.width - 1,
                 0,
                 SYMBOL_LINE[lineidx[2]],
                 style,
-                1,
             );
         }
         if borders.contains(Borders::LEFT | Borders::BOTTOM) {
-            self.set_str_tex(
+            self.set_border_sym(
                 0,
                 self.area.height - 1,
                 SYMBOL_LINE[lineidx[5]],
                 style,
-                1,
             );
         }
         if borders.contains(Borders::LEFT | Borders::TOP) {
-            self.set_str_tex(0, 0, SYMBOL_LINE[lineidx[3]], style, 1);
+            self.set_border_sym(0, 0, SYMBOL_LINE[lineidx[3]], style);
         }
     }
 

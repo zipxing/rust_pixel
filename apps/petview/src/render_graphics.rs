@@ -20,7 +20,7 @@ use rust_pixel::{
     render::{
         adapter::{Adapter, RenderCell, RtComposite, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
         buffer::{Buffer, Borders, BorderType},
-        cell::cellsym,
+        cell::{cellsym, cellsym_block},
         effect::{BufferEffect, EffectParams, RippleEffect, WaveEffect},
         effect::{GpuBlendEffect, GpuTransition},
         scene::Scene,
@@ -372,14 +372,13 @@ impl PetviewRender {
                     if near_frame {
                         buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, RAIN_HEAD_COLOR);
                     } else {
-                        buf.set_str_tex(
+                        buf.set_str(
                             x,
                             yu,
-                            &cellsym(sym),
+                            cellsym_block(RAIN_BLOCK, sym),
                             Style::default()
                                 .fg(RAIN_HEAD_COLOR)
                                 .add_modifier(Modifier::GLOW),
-                            RAIN_BLOCK,
                         );
                     }
                 } else if dy <= 2 {
@@ -411,8 +410,8 @@ impl PetviewRender {
         let x1 = ((w - FOOTER_LINE1.len()) / 2) as u16;
         let x2 = ((w - FOOTER_LINE2.len()) / 2) as u16;
 
-        buf.set_color_str(x1, 0, FOOTER_LINE1, FOOT_COLOR, Color::Reset);
-        buf.set_color_str(x2, 1, FOOTER_LINE2, FOOT_COLOR, Color::Reset);
+        buf.set_petscii_str(x1, 0, FOOTER_LINE1, FOOT_COLOR, Color::Reset);
+        buf.set_petscii_str(x2, 1, FOOTER_LINE2, FOOT_COLOR, Color::Reset);
     }
 
     fn do_init(&mut self, ctx: &mut Context) {

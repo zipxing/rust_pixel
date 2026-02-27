@@ -10,7 +10,7 @@ use rust_pixel::{
     event::{event_check, event_register, timer_fire, timer_register},
     game::Render,
     render::{
-        cell::cellsym,
+        cell::{cellsym, cellsym_block},
         scene::Scene,
         sprite::{BorderType, Borders, Sprite},
         style::{Color, Style},
@@ -682,12 +682,11 @@ impl TeditRender {
         for i in 0..SYMH as usize - 2 {
             for j in 0..SYMW as usize {
                 let sidx = SYMBOL_SDL_LOW[i * SYMW as usize + j];
-                cl.content.set_str_tex(
+                cl.content.set_str(
                     1 + j as u16,
                     i as u16 + 1,
-                    cellsym(sidx as u8),
+                    cellsym_block(0, sidx as u8),
                     Style::default().fg(Color::White).bg(Color::Indexed(0)),
-                    0,
                 );
             }
         }
@@ -853,12 +852,11 @@ impl TeditRender {
                         ((i * (SYMW - 2) as usize + j - 1) as u8, Color::White)
                     }
                 };
-                sb.content.set_str_tex(
+                sb.content.set_str(
                     1 + j as u16,
                     i as u16 + 1,
-                    cellsym(sidx as u8),
+                    cellsym_block(d.sym_tab_idx, sidx as u8),
                     Style::default().fg(fc).bg(Color::Reset),
-                    d.sym_tab_idx,
                 );
             }
         }
@@ -878,13 +876,12 @@ impl TeditRender {
                     format!("symbol {}             ", idx),
                     Style::default().fg(MSG_COLOR).bg(Color::Indexed(0)),
                 );
-                // Use set_str_tex to display symbol with correct texture block
-                m1.content.set_str_tex(
+                // Use cellsym_block to display symbol with correct texture block
+                m1.content.set_str(
                     17,
                     0,
-                    format!("{}", cellsym(idx as u8)),
+                    cellsym_block(d.sym_tab_idx, idx as u8),
                     Style::default().fg(MSG_COLOR).bg(Color::Reset),
-                    d.sym_tab_idx,  // texture block index
                 );
             }
             TeditPen::FORE(idx) | TeditPen::BACK(idx) => {

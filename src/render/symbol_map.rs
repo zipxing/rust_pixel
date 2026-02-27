@@ -41,6 +41,7 @@
 //! }
 //! ```
 
+use super::cell::cellsym_block;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -460,6 +461,35 @@ impl SymbolMapStats {
     pub fn total(&self) -> usize {
         self.sprite_count + self.tui_count + self.emoji_count + self.cjk_count
     }
+}
+
+// ============================================================================
+// ASCII to PETSCII Conversion
+// ============================================================================
+
+/// Convert ASCII string to PETSCII PUA string.
+///
+/// Looks up each character in the sprite region's extras mapping.
+/// If found, converts to PUA encoding; otherwise uses block 0 with ASCII code.
+///
+/// # Example
+/// ```ignore
+/// let petscii = ascii_to_petscii("HELLO");
+/// buf.set_str(0, 0, petscii, style);  // Renders as PETSCII characters
+/// ```
+pub fn ascii_to_petscii(s: &str) -> String {
+    let map = get_symbol_map();
+    s.chars()
+        .map(|ch| {
+            // Look up in sprite extras mapping
+            if let Some((block, idx)) = map.sprite_idx(&ch.to_string()) {
+                cellsym_block(block, idx)
+            } else {
+                // Fallback: use block 0 with ASCII code as index
+                cellsym_block(0, ch as u8)
+            }
+        })
+        .collect()
 }
 
 // ============================================================================

@@ -1334,6 +1334,7 @@ pub fn push_render_buffer(
 
 /// Position calculation helper for rendering (no scaling)
 /// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
+/// glyph_height: Height multiplier from Glyph (1 for Sprite, 2 for TUI/Emoji/CJK)
 pub fn render_helper(
     cell_w: u16,
     r: PointF32,
@@ -1341,8 +1342,9 @@ pub fn render_helper(
     sh: &(u8, u8, Color, Color),
     p: PointU16,
     use_tui: bool,
+    glyph_height: u8,
 ) -> (ARect, usize, usize) {
-    render_helper_with_scale(cell_w, r, i, sh, p, use_tui, 1.0, 1.0, 1.0, None)
+    render_helper_with_scale(cell_w, r, i, sh, p, use_tui, 1.0, 1.0, 1.0, None, glyph_height)
 }
 
 /// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
@@ -1353,6 +1355,7 @@ pub fn render_helper(
 /// - `sprite_scale_y`: Sprite-level Y scale, used for row height and vertical centering
 /// - `cumulative_x`: Pre-computed cumulative X position in pixel space (before adding p.x).
 ///   When Some, uses cumulative layout; when None, uses grid-based layout.
+/// - `glyph_height`: Glyph height in multiples of PIXEL_SYM_HEIGHT (1 for Sprite, 2 for TUI/Emoji/CJK)
 ///
 /// Returns: (dest_rect, texture_id, symbol_id)
 pub fn render_helper_with_scale(
@@ -1361,24 +1364,18 @@ pub fn render_helper_with_scale(
     i: usize,
     sh: &(u8, u8, Color, Color),
     p: PointU16,
-    use_tui: bool,        // Global TUI mode flag; TUI height also auto-detected from block index
+    _use_tui: bool,       // Deprecated: height now determined by glyph_height parameter
     scale_x: f32,         // Combined (sprite * cell) scaling along X
     scale_y: f32,         // Combined (sprite * cell) scaling along Y
     sprite_scale_y: f32,  // Sprite-level Y scale for row height calculation
     cumulative_x: Option<f32>, // Pre-computed cumulative X pixel position
+    glyph_height: u8,     // Glyph height multiplier (1 or 2)
 ) -> (ARect, usize, usize) {
     let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32; // 16 pixels
-    // Height depends on character type:
-    // - Sprite (block 0-159): 16 pixels
-    // - TUI (block 160-169): 32 pixels (double height)
-    // Auto-detect from block index so sprites with TUI-region cells
-    // get correct height without needing manual scale_y=2.0 workaround.
-    let cell_is_tui = use_tui || (sh.1 >= 160 && sh.1 < 170);
-    let h = if cell_is_tui {
-        (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") * 2.0) as i32 // TUI: 32 pixels
-    } else {
-        *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32 // Sprite: 16 pixels
-    };
+    // Height is determined by glyph_height from Glyph struct:
+    // - Sprite: glyph_height=1 → 16 pixels
+    // - TUI/Emoji/CJK: glyph_height=2 → 32 pixels
+    let h = (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32) * glyph_height as i32;
 
     let dsty = i as u16 / cell_w;
 
@@ -1500,10 +1497,10 @@ pub fn render_buffer_to_cells<F>(
         let cell_sx = scale_x * cell.scale_x;
         let cell_sy = scale_y * cell.scale_y;
 
-        // Extract CellInfo: symidx, texidx, fg, bg, modifier
-        let cell_info = cell.get_cell_info();
-        let mut sh = (cell_info.0, cell_info.1, cell_info.2, cell_info.3);
-        let modifier = cell_info.4.bits();
+        // Get glyph with size info (block, idx, width, height)
+        let glyph = cell.get_glyph();
+        let mut sh = (glyph.idx, glyph.block, cell.fg, cell.bg);
+        let modifier = cell.modifier.bits();
 
         // TUI mode: remap Sprite region symbols to TUI region
         if use_tui && sh.1 < 160 {
@@ -1535,6 +1532,7 @@ pub fn render_buffer_to_cells<F>(
         let x_center_offset = (slot_w - rendered_w) / 2.0;
 
         // Calculate destination rectangle with combined scaling and centered X
+        // Use glyph.height directly instead of block range detection
         let (mut s2, texidx, symidx) = render_helper_with_scale(
             pw,
             PointF32 { x: rx, y: ry },
@@ -1546,13 +1544,14 @@ pub fn render_buffer_to_cells<F>(
             cell_sy,
             scale_y,
             Some(cumulative_x + x_center_offset),
+            glyph.height,
         );
 
         // Grid advance: fixed slot width (per-cell scale doesn't shift neighbors)
         let mut grid_advance = slot_w;
 
-        // TUI mode: handle Emoji double-width
-        if use_tui && texidx >= 170 {
+        // Handle double-width glyphs (Emoji, CJK)
+        if glyph.is_double_width() {
             s2.w *= 2;
             grid_advance = slot_w * 2.0;
             if (i + 1) % pw as usize != 0 {
@@ -1840,7 +1839,8 @@ where
                 n * (cell_w as usize + 2) + m,
                 rsh,
                 PointU16 { x: 0, y: 0 },
-                false, // Border uses Sprite characters (8×8)
+                false, // Deprecated, kept for API compatibility
+                1,     // glyph_height: Sprite (1x1)
             );
             let fc = rsh.2.get_rgba();
             let bc = None;
@@ -1928,6 +1928,7 @@ where
             let (sym, fg, tex, _bg) = logo_cells[sci];
 
             // Use render_helper_with_scale for proper scaling
+            // Logo uses Sprite characters (16×16), so glyph_height = 1
             let (mut s2, texidx, symidx) = render_helper_with_scale(
                 PIXEL_LOGO_WIDTH as u16,
                 PointF32 { x: rx, y: ry },
@@ -1942,11 +1943,12 @@ where
                     x: base_x,
                     y: base_y,
                 },
-                false, // Logo uses Sprite characters (16×16)
+                false, // Deprecated, kept for API compatibility
                 scale, // scale_x
                 scale, // scale_y
                 scale, // sprite_scale_y
                 None,  // cumulative_x (use grid-based layout)
+                1,     // glyph_height: Sprite (1x1)
             );
 
             let fc = Color::Indexed(fg).get_rgba();

@@ -34,8 +34,12 @@ pub mod symbols;
 
 // re-export
 pub use adapter::{Adapter, AdapterBase};
-pub use buffer::{Buffer, Borders, BorderType, SYMBOL_LINE};
-pub use cell::Cell;
+pub use buffer::{Buffer, BufferMode, Borders, BorderType, SYMBOL_LINE};
+pub use cell::{
+    Cell, Glyph, cellsym, cellsym_block, decode_pua, is_pua_sprite,
+    TuiCharType, detect_tui_char_type, is_tui_char, is_cjk,
+    PUA_BASE, PUA_END, PUA_BLOCK_SIZE,
+};
 #[cfg(graphics_mode)]
 pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_border, render_logo,
@@ -53,5 +57,5 @@ pub use effect::{
 pub use scene::Scene;
 pub use sprite::Layer;
 pub use style::{Color, Style};
-pub use symbol_map::{SymbolIndex, SymbolMap, SymbolMapStats, SymbolRegion};
+pub use symbol_map::{ascii_to_petscii, SymbolIndex, SymbolMap, SymbolMapStats, SymbolRegion};
 
