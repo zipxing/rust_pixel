@@ -76,8 +76,85 @@ Scene
 
 Each Layer holds Sprites. Each Sprite holds a Buffer of Cells:
 ```
-Cell { symbol, fg, bg, modifier, tex }
+Cell { symbol, fg, bg, modifier, scale_x, scale_y, glyph (cached) }
 ```
+
+### Cell and Glyph
+
+`Cell` is the fundamental rendering unit. The `symbol` string fully determines what gets rendered — no separate texture field.
+
+```rust
+pub struct Cell {
+    pub symbol: String,    // Fully determines rendering
+    pub fg: Color,
+    pub bg: Color,
+    pub modifier: Modifier,
+    pub scale_x: f32,
+    pub scale_y: f32,
+    // glyph: Glyph (cached, computed on set_symbol)
+}
+```
+
+`Glyph` describes how to find and render a symbol in the texture atlas:
+```rust
+pub struct Glyph {
+    pub block: u8,   // Texture block index
+    pub idx: u8,     // Symbol index within block
+    pub width: u8,   // Width multiplier (1 or 2)
+    pub height: u8,  // Height multiplier (1 or 2)
+}
+```
+
+Glyph sizes (in PIXEL_SYM_WIDTH/HEIGHT units):
+- **Sprite**: width=1, height=1 → 16×16 pixels
+- **TUI**: width=1, height=2 → 16×32 pixels
+- **Emoji**: width=2, height=2 → 32×32 pixels
+- **CJK**: width=2, height=2 → 32×32 pixels
+
+**Glyph caching**: `set_symbol()` automatically calls `compute_glyph()`, caching (block, idx, width, height) in the Cell. Rendering reads the cached glyph directly via `get_cell_info()` — no symbol string parsing at render time.
+
+Lookup order: PUA Sprite (1×1) → Emoji (2×2) → CJK (2×2) → TUI (1×2) → fallback (space)
+
+### Buffer
+
+```rust
+pub enum BufferMode {
+    Tui,     // Standard Unicode (ASCII, Box, Braille, Emoji, CJK)
+    Sprite,  // PUA-encoded sprite symbols
+}
+
+pub struct Buffer {
+    pub mode: BufferMode,
+    pub content: Vec<Cell>,
+    pub area: Rect,
+}
+```
+
+- **Tui mode**: symbol is standard Unicode
+- **Sprite mode**: symbol is PUA-encoded, constructed via `cellsym_block(block, idx)`
+- Rendering is mode-independent: fully determined by the cached glyph
+
+### Symbol → Glyph Mapping (Two-Layer System)
+
+The engine has two numbering systems: **Unicode codepoints** (stored in `cell.symbol`) and **atlas block indices** (in `Glyph`). `compute_glyph()` maps between them:
+
+```
+cell.symbol (Unicode)              Glyph (atlas block + idx)
+───────────────────────            ──────────────────────────
+PUA U+F0000 + block*256 + idx  →   Block 0-159,   idx   (decode PUA)
+Real Emoji characters           →   Block 170-175, idx   (symbol_map lookup)
+Real CJK characters             →   Block 176-239, idx   (symbol_map lookup)
+Real ASCII/Box/Braille chars    →   Block 160-169, idx   (symbol_map lookup)
+```
+
+**Sprite PUA encoding**: Sprite symbols have no standard Unicode codepoint, so they use **Supplementary Private Use Area-A** (Plane 15) as artificial encoding:
+```
+Range: U+F0000 ~ U+F9FFF (40960 codepoints)
+Encoding: 0xF0000 + block * 256 + idx
+Blocks: 160 blocks × 256 symbols each
+```
+
+**No Unicode conflict**: Sprite PUA uses Plane 15 (U+F0000-U+F9FFF), completely separate from standard characters (Plane 0), Emoji (Plane 0+1), and CJK extensions (Plane 2). `compute_glyph()` can unambiguously determine type by codepoint range.
 
 ## GPU Rendering Pipeline (4-Stage)
 
@@ -404,8 +481,8 @@ src/
 │   │       ├── render_symbols.rs      # Instanced glyph shader
 │   │       ├── render_transition.rs   # Transition effects
 │   │       └── render_general2d.rs    # Final composition
-│   ├── buffer.rs              # Cell buffer with diff tracking
-│   ├── cell.rs                # Cell: char + colors + texture
+│   ├── buffer.rs              # Cell buffer (BufferMode, diff tracking, set_str API)
+│   ├── cell.rs                # Cell + Glyph (PUA encoding, glyph caching)
 │   ├── scene.rs               # Scene container
 │   ├── sprite/                # Sprite + Layer
 │   ├── graph.rs               # Graphics data structures

@@ -115,24 +115,27 @@ impl Default for Glyph {
 /// Range: U+E000 ~ U+E3FF (1024 characters, 4 blocks × 256 symbols)
 /// - Block 0: U+E000-U+E0FF (basic PETSCII)
 /// - Block 1: U+E100-U+E1FF (extended PETSCII)
-/// - Block 2: U+E200-U+E2FF
-/// - Block 3: U+E300-U+E3FF
+/// - Block 0: U+F0000-U+F00FF
+/// - Block 1: U+F0100-U+F01FF
+/// - ...
+/// - Block 159: U+F9F00-U+F9FFF
 ///
-/// Encoding: codepoint = 0xE000 + block * 256 + idx
-pub const PUA_BASE: u32 = 0xE000;
-pub const PUA_END: u32 = 0xE3FF;
+/// Encoding: codepoint = 0xF0000 + block * 256 + idx
+/// Uses Supplementary PUA-A (U+F0000-U+FFFFF) to support all 160 sprite blocks.
+pub const PUA_BASE: u32 = 0xF0000;
+pub const PUA_END: u32 = 0xF9FFF;  // 160 blocks × 256 = 40960
 pub const PUA_BLOCK_SIZE: u32 = 256;
 
 /// Encode block and index to PUA character string.
 ///
 /// # Arguments
-/// * `block` - Block index (0-3)
+/// * `block` - Block index (0-159 for sprite region)
 /// * `idx` - Symbol index within block (0-255)
 ///
 /// # Returns
-/// A String containing a single PUA character.
+/// A String containing a single Supplementary PUA-A character.
 pub fn cellsym_block(block: u8, idx: u8) -> String {
-    debug_assert!(block < 4, "block must be 0-3, got {}", block);
+    debug_assert!((block as u32) < 160, "block must be 0-159, got {}", block);
     let codepoint = PUA_BASE + (block as u32) * PUA_BLOCK_SIZE + idx as u32;
     char::from_u32(codepoint).unwrap().to_string()
 }
@@ -140,22 +143,21 @@ pub fn cellsym_block(block: u8, idx: u8) -> String {
 /// Convenience function for block 0 (backward compatible).
 ///
 /// Returns a cellsym string by index in block 0.
-/// unicode: 0xE000 ~ 0xE0FF (Private Use Area)
+/// unicode: U+F0000 ~ U+F00FF (Supplementary Private Use Area-A)
 ///
-/// Using Private Use Area ensures no conflict with standard Unicode characters,
-/// allowing applications to display mathematical symbols (∀∃∈∞≈≤≥⊕⊗) or other
-/// special characters in TUI mode without interference.
+/// Using Supplementary PUA-A ensures no conflict with standard Unicode characters,
+/// including BMP PUA (U+E000-U+F8FF) used by NerdFont/Powerline.
 pub fn cellsym(idx: u8) -> String {
     cellsym_block(0, idx)
 }
 
-/// Decode a PUA character to (block, idx).
+/// Decode a Supplementary PUA-A character to (block, idx).
 ///
 /// # Arguments
 /// * `ch` - A character to decode
 ///
 /// # Returns
-/// Some((block, idx)) if the character is in PUA range (U+E000-U+E3FF),
+/// Some((block, idx)) if the character is in PUA range (U+F0000-U+F9FFF),
 /// None otherwise.
 pub fn decode_pua(ch: char) -> Option<(u8, u8)> {
     let cp = ch as u32;
@@ -192,8 +194,7 @@ pub fn is_tui_char(cp: u32) -> bool {
     (0x2500..=0x257F).contains(&cp) ||    // Box Drawing
     (0x2580..=0x259F).contains(&cp) ||    // Block Elements
     (0x2800..=0x28FF).contains(&cp) ||    // Braille Patterns
-    cp >= 0xE000                           // Private Use / NerdFont / Powerline (but not our PUA)
-        && !(PUA_BASE..=PUA_END).contains(&cp)
+    (0xE000..=0xF8FF).contains(&cp)          // BMP PUA: NerdFont / Powerline (our PUA is in Supplementary PUA-A)
 }
 
 /// Check if a codepoint is CJK.
@@ -248,7 +249,7 @@ pub fn emoji_texidx(symbol: &str) -> Option<(u8, u8)> {
 pub struct Cell {
     /// Symbol string determining the character to render.
     ///
-    /// In Sprite mode: PUA encoded (U+E000-U+E3FF), block and idx derived from codepoint.
+    /// In Sprite mode: PUA encoded (U+F0000-U+F9FFF), block and idx derived from codepoint.
     /// In TUI mode: Standard Unicode (ASCII, Box Drawing, Emoji, CJK), mapped via symbol_map.
     pub symbol: String,
     pub fg: Color,
@@ -319,7 +320,7 @@ impl Cell {
     /// - block_index: Texture block index (0-255) in the unified 4096x4096 texture
     ///
     /// Block is determined solely from symbol:
-    /// - PUA (U+E000-U+E3FF): Sprite blocks 0-3
+    /// - PUA (U+F0000-U+F9FFF): Sprite blocks 0-159
     /// - Emoji: Emoji blocks 170-175
     /// - CJK: CJK blocks 176-239
     /// - TUI chars: TUI blocks 160-169
