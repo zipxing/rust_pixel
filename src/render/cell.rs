@@ -152,6 +152,12 @@ impl Cell {
     /// - `render::symbol_map` for block layout and character mappings
     /// - `CellInfo` type for return value structure
     pub fn get_cell_info(&self) -> CellInfo {
+        // For Sprite texture (tex=0), handle space character specially
+        // Sprite symbol map maps space to index 33, but in Sprite texture it should be 32
+        if self.tex == 0 && self.symbol == " " {
+            return (32, 0, self.fg, self.bg, self.modifier);
+        }
+
         // Check for Emoji first
         if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
             return (idx, block, self.fg, self.bg, self.modifier);
@@ -160,12 +166,6 @@ impl Cell {
         // Check for CJK characters (returns block 176-207, idx 0-127)
         if let Some((block, idx)) = get_symbol_map().cjk_idx(&self.symbol) {
             return (idx, block, self.fg, self.bg, self.modifier);
-        }
-
-        // For Sprite texture (tex=0), handle space character specially
-        // Sprite symbol map maps space to index 33, but in Sprite texture it should be 32
-        if self.tex == 0 && self.symbol == " " {
-            return (32, 0, self.fg, self.bg, self.modifier);
         }
 
         // Check sprite extras for non-zero block (e.g., underscore in block 2)

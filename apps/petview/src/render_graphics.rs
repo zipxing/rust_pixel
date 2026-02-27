@@ -7,7 +7,7 @@
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use crate::model::{PetviewModel, PetviewState, PETH, PETW, IMAGES_PER_SCREEN};
+use crate::model::{PetviewModel, PetviewState, IMAGES_PER_SCREEN, PETH, PETW};
 use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -19,10 +19,10 @@ use rust_pixel::{
     game::{Model, Render},
     render::{
         adapter::{Adapter, RenderCell, RtComposite, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH},
-        buffer::Buffer,
+        buffer::{Buffer, Borders, BorderType},
         cell::cellsym,
         effect::{BufferEffect, EffectParams, RippleEffect, WaveEffect},
-        effect::{GpuTransition, GpuBlendEffect},
+        effect::{GpuBlendEffect, GpuTransition},
         scene::Scene,
         sprite::Sprite,
         style::{Color, Modifier, Style},
@@ -37,11 +37,9 @@ use rust_pixel::{
 const IMG_W: u16 = 40;
 const IMG_H: u16 = 25;
 const GRID_COLS: usize = 2;
-const CELL_W: u16 = (IMG_W as f32 * 0.5) as u16;  // 20
-const CELL_H: u16 = (IMG_H as f32 * 0.5) as u16;  // 12
 const PIXW: u16 = 40;
 const IMG_SCALE: f32 = 0.5;
-const YADJ: u16 = 6;  // 图片区域整体下移像素数
+const YADJ: u16 = 0; // 图片区域整体下移像素数
 
 // ============================================================================
 // Frame Border Constants
@@ -62,8 +60,7 @@ const FOOT_COLOR: Color = Color::Rgba(120, 120, 120, 255);
 // ============================================================================
 const RAIN_BLOCK: u8 = 1;
 const RAIN_CHARS: [u8; 20] = [
-    65, 81, 83, 90, 88, 66, 78, 69, 70, 76,
-    77, 79, 84, 86, 85, 73, 74, 75, 67, 87,
+    65, 81, 83, 90, 88, 66, 78, 69, 70, 76, 77, 79, 84, 86, 85, 73, 74, 75, 67, 87,
 ];
 const RAIN_SPEED_BASE: f32 = 0.15;
 const RAIN_SPEED_VARIANCE: f32 = 0.30;
@@ -83,7 +80,7 @@ const RAIN_GLOW_MARGIN: u16 = 4;
 // ============================================================================
 // TransBuf Effect Constants
 // ============================================================================
-const TRANSBUF_NOISE_RATE: usize = 2;  // noise count = stage / NOISE_RATE
+const TRANSBUF_NOISE_RATE: usize = 2; // noise count = stage / NOISE_RATE
 const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
 
 // ============================================================================
@@ -119,8 +116,8 @@ impl PixelMetrics {
             sym_h,
             rx,
             ry,
-            cell_px_w: (CELL_W as f32 * sym_w / rx) as u16,
-            cell_px_h: (CELL_H as f32 * sym_h / ry) as u16,
+            cell_px_w: (IMG_W as f32 * 0.5 * sym_w / rx) as u16,
+            cell_px_h: (IMG_H  as f32 * 0.5 * sym_h / ry) as u16,
             frame_x: (FRAME_LEFT as f32 * sym_w / rx) as u16,
             frame_y: (FRAME_TOP as f32 * sym_h / ry) as u16 + YADJ,
         }
@@ -129,7 +126,7 @@ impl PixelMetrics {
     fn viewport(&self) -> ARect {
         ARect {
             x: self.frame_x as i32,
-            y: self.frame_y as i32,  // frame_y already includes YADJ
+            y: self.frame_y as i32, // frame_y already includes YADJ
             w: (PIXW as f32 * self.sym_w / self.rx) as u32,
             h: (IMG_H as f32 * self.sym_h / self.ry) as u32,
         }
@@ -186,8 +183,13 @@ fn render_grid_to_rt(
         buf_clone.area.y = px_y;
 
         ctx.adapter.buf2rbuf(
-            &buf_clone, &mut rbuf, false,
-            sprite.alpha, sprite.scale_x, sprite.scale_y, 0.0
+            &buf_clone,
+            &mut rbuf,
+            false,
+            sprite.alpha,
+            sprite.scale_x,
+            sprite.scale_y,
+            0.0,
         );
     }
     ctx.adapter.rbuf2rt(&rbuf, rt_index, false);
@@ -197,7 +199,9 @@ fn render_grid_to_rt(
 fn hide_all_sprites(scene: &mut Scene) {
     for i in 0..IMAGES_PER_SCREEN {
         scene.get_sprite(&format!("img_cur_{}", i)).set_hidden(true);
-        scene.get_sprite(&format!("img_next_{}", i)).set_hidden(true);
+        scene
+            .get_sprite(&format!("img_next_{}", i))
+            .set_hidden(true);
     }
 }
 
@@ -209,8 +213,7 @@ fn process_buffer_transition_grid(
     transbuf_stage: usize,
 ) {
     let time = (ctx.rand.rand() % 300) as f32 / 100.0;
-    let params = EffectParams::new(0.5 - time, ctx.stage as usize)
-        .with_seed(ctx.rand.rand());
+    let params = EffectParams::new(0.5 - time, ctx.stage as usize).with_seed(ctx.rand.rand());
 
     for i in 0..IMAGES_PER_SCREEN {
         if i >= cur_original.len() {
@@ -228,7 +231,9 @@ fn process_buffer_transition_grid(
         for _ in 0..transbuf_stage / TRANSBUF_NOISE_RATE {
             let idx = ctx.rand.rand() as usize % clen;
             let sym = (ctx.rand.rand() % 255) as u8;
-            tbuf.content[idx].set_symbol(&cellsym(sym)).set_fg(RAND_COLOR);
+            tbuf.content[idx]
+                .set_symbol(&cellsym(sym))
+                .set_fg(RAND_COLOR);
         }
 
         let cur = scene.get_sprite(&format!("img_cur_{}", i));
@@ -239,7 +244,9 @@ fn process_buffer_transition_grid(
 
     // Keep next sprites hidden
     for i in 0..IMAGES_PER_SCREEN {
-        scene.get_sprite(&format!("img_next_{}", i)).set_hidden(true);
+        scene
+            .get_sprite(&format!("img_next_{}", i))
+            .set_hidden(true);
     }
 }
 
@@ -280,6 +287,11 @@ impl PetviewRender {
         let footer_h = (4.0 / FOOTER_SCALE) as u16;
         scene.add_sprite(Sprite::new(0, 0, footer_w, footer_h), "footer");
 
+        // Border sprite (size = image area + 2 for border lines)
+        let border_w = (PIXW as f32 / FRAME_SCALE) as u16 + 2;
+        let border_h = (IMG_H as f32 / FRAME_SCALE) as u16 + 2;
+        scene.add_sprite(Sprite::new(0, 0, border_w, border_h), "border");
+
         timer_register("PetView.Timer", 0.1, "pet_timer");
         timer_fire("PetView.Timer", 1);
 
@@ -298,12 +310,6 @@ impl PetviewRender {
         buf.reset();
 
         // PETSCII characters
-        let corner_tl = 85u8;
-        let corner_tr = 73u8;
-        let corner_bl = 74u8;
-        let corner_br = 75u8;
-        let horiz = 64u8;
-        let vert = 93u8;
         let fill = 102u8;
 
         // Internal dimensions (2x due to FRAME_SCALE=0.5)
@@ -328,36 +334,53 @@ impl PetviewRender {
         let rain_len = RAIN_CHARS.len();
         for x in 0..iw {
             let xh = x as usize;
-            let speed = RAIN_SPEED_BASE + (((xh.wrapping_mul(73).wrapping_add(17)) % 31) as f32 / 31.0) * RAIN_SPEED_VARIANCE;
-            let trail = RAIN_TRAIL_MIN + ((xh.wrapping_mul(37).wrapping_add(7)) % RAIN_TRAIL_VARIANCE as usize) as i32;
-            let gap = RAIN_GAP_MIN + ((xh.wrapping_mul(53).wrapping_add(23)) % RAIN_GAP_VARIANCE as usize) as i32;
+            let speed = RAIN_SPEED_BASE
+                + (((xh.wrapping_mul(73).wrapping_add(17)) % 31) as f32 / 31.0)
+                    * RAIN_SPEED_VARIANCE;
+            let trail = RAIN_TRAIL_MIN
+                + ((xh.wrapping_mul(37).wrapping_add(7)) % RAIN_TRAIL_VARIANCE as usize) as i32;
+            let gap = RAIN_GAP_MIN
+                + ((xh.wrapping_mul(53).wrapping_add(23)) % RAIN_GAP_VARIANCE as usize) as i32;
             let offset = ((xh.wrapping_mul(97).wrapping_add(41)) % 200) as f32;
             let cycle_len = ih as i32 + trail + gap;
             let y_head = ((stage as f32 * speed + offset) % (cycle_len as f32)) as i32;
 
             for dy in 0..trail {
                 let y = y_head - dy;
-                if y < 0 || y >= ih as i32 { continue; }
+                if y < 0 || y >= ih as i32 {
+                    continue;
+                }
                 let yu = y as u16;
 
                 let in_image = x >= fl && x < iw - fr && yu >= ft && yu < ih - fb;
-                if in_image { continue; }
+                if in_image {
+                    continue;
+                }
 
-                let char_seed = xh.wrapping_mul(31)
+                let char_seed = xh
+                    .wrapping_mul(31)
                     .wrapping_add((y_head - dy) as usize * 17)
                     .wrapping_add((stage as usize) / RAIN_CHAR_CHANGE_FRAMES);
                 let sym = RAIN_CHARS[char_seed % rain_len];
                 let t = dy as f32 / trail as f32;
 
                 if dy == 0 {
-                    let near_frame = x >= fl - RAIN_GLOW_MARGIN && x <= iw - fr + 1
-                        && yu >= ft - RAIN_GLOW_MARGIN && yu <= ih - fb + 1;
+                    let near_frame = x >= fl - RAIN_GLOW_MARGIN
+                        && x <= iw - fr + 1
+                        && yu >= ft - RAIN_GLOW_MARGIN
+                        && yu <= ih - fb + 1;
                     if near_frame {
                         buf.set_graph_sym(x, yu, RAIN_BLOCK, sym, RAIN_HEAD_COLOR);
                     } else {
-                        buf.set_str_tex(x, yu, &cellsym(sym),
-                            Style::default().fg(RAIN_HEAD_COLOR).add_modifier(Modifier::GLOW),
-                            RAIN_BLOCK);
+                        buf.set_str_tex(
+                            x,
+                            yu,
+                            &cellsym(sym),
+                            Style::default()
+                                .fg(RAIN_HEAD_COLOR)
+                                .add_modifier(Modifier::GLOW),
+                            RAIN_BLOCK,
+                        );
                     }
                 } else if dy <= 2 {
                     let g = (RAIN_NEAR_G_BASE - t * RAIN_NEAR_G_FADE) as u8;
@@ -369,25 +392,14 @@ impl PetviewRender {
             }
         }
 
-        // Draw frame border
-        let left = fl - 1;
-        let right = iw - fr;
-        let top = ft - 1;
-        let bottom = ih - fb;
-
-        buf.set_graph_sym(left, top, 1, corner_tl, FRAME_COLOR);
-        buf.set_graph_sym(right, top, 1, corner_tr, FRAME_COLOR);
-        buf.set_graph_sym(left, bottom, 1, corner_bl, FRAME_COLOR);
-        buf.set_graph_sym(right, bottom, 1, corner_br, FRAME_COLOR);
-
-        for x in (left + 1)..right {
-            buf.set_graph_sym(x, top, 0, horiz, FRAME_COLOR);
-            buf.set_graph_sym(x, bottom, 0, horiz, FRAME_COLOR);
-        }
-        for y in (top + 1)..bottom {
-            buf.set_graph_sym(left, y, 0, vert, FRAME_COLOR);
-            buf.set_graph_sym(right, y, 0, vert, FRAME_COLOR);
-        }
+        // Draw border using set_border
+        let border = self.scene.get_sprite("border");
+        border.content.reset();
+        border.content.set_border(
+            Borders::ALL,
+            BorderType::Rounded,
+            Style::default().fg(FRAME_COLOR),
+        );
     }
 
     fn draw_footer(&mut self) {
@@ -404,7 +416,9 @@ impl PetviewRender {
     }
 
     fn do_init(&mut self, ctx: &mut Context) {
-        if self.init { return; }
+        if self.init {
+            return;
+        }
 
         self.metrics = PixelMetrics::compute(ctx);
         let m = &self.metrics;
@@ -436,6 +450,14 @@ impl PetviewRender {
         footer.set_scale_x(FOOTER_SCALE);
         footer.set_scale_y(FOOTER_SCALE);
 
+        // Position border sprite (half cell offset due to FRAME_SCALE=0.5)
+        let border_x = m.frame_x - (0.5 * m.sym_w / m.rx) as u16;
+        let border_y = m.frame_y - (0.5 * m.sym_h / m.ry) as u16;
+        let border = self.scene.get_sprite("border");
+        border.set_pos(border_x, border_y);
+        border.set_scale_x(FRAME_SCALE);
+        border.set_scale_y(FRAME_SCALE);
+
         self.init = true;
     }
 }
@@ -444,7 +466,8 @@ impl Render for PetviewRender {
     type Model = PetviewModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
-        ctx.adapter.init(PETW, PETH, 2.0, 2.0, "PETSCII Gallery".to_string());
+        ctx.adapter
+            .init(PETW, PETH, 2.0, 2.0, "PETSCII Gallery".to_string());
         self.scene.init(ctx);
     }
 
@@ -456,10 +479,17 @@ impl Render for PetviewRender {
             if model.show_next_as_cur {
                 // Copy next → cur after transition completes
                 for i in 0..IMAGES_PER_SCREEN {
-                    let next_content = self.scene.get_sprite(&format!("img_next_{}", i))
-                        .content.content.clone();
-                    self.scene.get_sprite(&format!("img_cur_{}", i))
-                        .content.content.clone_from(&next_content);
+                    let next_content = self
+                        .scene
+                        .get_sprite(&format!("img_next_{}", i))
+                        .content
+                        .content
+                        .clone();
+                    self.scene
+                        .get_sprite(&format!("img_cur_{}", i))
+                        .content
+                        .content
+                        .clone_from(&next_content);
                 }
                 model.show_next_as_cur = false;
             } else {
@@ -469,15 +499,21 @@ impl Render for PetviewRender {
                 for i in 0..IMAGES_PER_SCREEN {
                     let real_idx = model.get_image_index(model.img_cur + i);
                     let sprite = self.scene.get_sprite(&format!("img_cur_{}", i));
-                    if !load_single_image(sprite, ctx, real_idx) { all_loaded = false; }
+                    if !load_single_image(sprite, ctx, real_idx) {
+                        all_loaded = false;
+                    }
                 }
                 for i in 0..IMAGES_PER_SCREEN {
                     let real_idx = model.get_image_index(model.img_next + i);
                     let sprite = self.scene.get_sprite(&format!("img_next_{}", i));
-                    if !load_single_image(sprite, ctx, real_idx) { all_loaded = false; }
+                    if !load_single_image(sprite, ctx, real_idx) {
+                        all_loaded = false;
+                    }
                 }
 
-                if all_loaded { model.tex_ready = true; }
+                if all_loaded {
+                    model.tex_ready = true;
+                }
             }
         }
 
@@ -510,16 +546,20 @@ impl Render for PetviewRender {
                     }
 
                     process_buffer_transition_grid(
-                        &mut self.scene, &self.cur_original, ctx,
-                        model.transbuf_stage as usize
+                        &mut self.scene,
+                        &self.cur_original,
+                        ctx,
+                        model.transbuf_stage as usize,
                     );
                 }
                 PetviewState::TransGl => {
                     hide_all_sprites(&mut self.scene);
                     ctx.adapter.blend_rts(
-                        0, 1, 3,
+                        0,
+                        1,
+                        3,
                         model.gpu_effect.effect_type(),
-                        model.gpu_effect.progress
+                        model.gpu_effect.progress,
                     );
                 }
             }
