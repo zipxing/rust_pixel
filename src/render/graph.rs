@@ -1472,6 +1472,44 @@ pub fn render_buffer_to_cells<F>(
 
     // Base cell width in pixel space (before any scaling)
     let base_cell_w = w / rx;
+    // Base cell height in pixel space (before any scaling)
+    let base_cell_h = h / ry;
+
+    // Pre-calculate row widths for accurate rotation center calculation.
+    // This accounts for double-width glyphs (Emoji, CJK) which occupy 2 cells.
+    let mut row_pixel_widths: Vec<f32> = vec![0.0; ph as usize];
+    {
+        let mut skip = false;
+        for (i, cell) in buf.content.iter().enumerate() {
+            if skip {
+                skip = false;
+                continue;
+            }
+            let row = i / pw as usize;
+            let glyph = cell.get_glyph();
+            
+            // Calculate slot width considering per-cell scale
+            let has_fixed_slot = cell.modifier.contains(Modifier::FIXED_SLOT);
+            let cell_sx = scale_x * cell.scale_x;
+            let effective_slot_scale = if has_fixed_slot {
+                scale_x
+            } else if cell.scale_x >= 1.0 {
+                cell_sx
+            } else {
+                scale_x
+            };
+            let slot_w = base_cell_w * effective_slot_scale;
+            
+            if glyph.is_double_width() {
+                row_pixel_widths[row] += slot_w * 2.0;
+                if (i + 1) % pw as usize != 0 {
+                    skip = true;
+                }
+            } else {
+                row_pixel_widths[row] += slot_w;
+            }
+        }
+    }
 
     // Track cumulative X position per row for per-cell scale support
     let mut cumulative_x: f32 = 0.0;
@@ -1578,14 +1616,28 @@ pub fn render_buffer_to_cells<F>(
         // Accumulate by fixed grid slot width
         cumulative_x += grid_advance;
 
-        // Calculate rotation center point (uses sprite-level scale, not per-cell)
-        let x = i % pw as usize;
-        let y = i / pw as usize;
-        let original_offset_x = (pw as f32 / 2.0 - x as f32) * w / rx;
-        let original_offset_y = (ph as f32 / 2.0 - y as f32) * h / ry;
+        // Calculate rotation center point using actual pixel positions.
+        // This correctly handles mixed half-width and full-width characters.
+        // 
+        // For rotation, we need the offset from each cell's center to the buffer's center.
+        // - cell_center_x: center of current cell in pixel space (after accumulation)
+        // - row_center_x: center of the row (half of row's total pixel width)
+        // - The offset is: row_center - cell_center (positive = cell is left of center)
+        let row = i / pw as usize;
+        let row_center_x = row_pixel_widths[row] / 2.0;
+        // Cell center is at (cumulative_x - grid_advance/2) since we already accumulated
+        let cell_center_x = cumulative_x - grid_advance / 2.0;
+        let offset_x = row_center_x - cell_center_x;
+        
+        // Y offset: use row index since all cells in a row have the same height
+        let row_h = base_cell_h * scale_y;
+        let buffer_center_y = ph as f32 * row_h / 2.0;
+        let cell_center_y = row as f32 * row_h + row_h / 2.0;
+        let offset_y = buffer_center_y - cell_center_y;
+        
         let ccp = PointI32 {
-            x: (original_offset_x * scale_x) as i32,
-            y: (original_offset_y * scale_y) as i32,
+            x: (offset_x * scale_x) as i32,
+            y: offset_y as i32,
         };
 
         // Apply alpha to colors
