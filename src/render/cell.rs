@@ -103,6 +103,13 @@ impl Glyph {
     }
 }
 
+impl Default for Glyph {
+    fn default() -> Self {
+        // Default: space character in Sprite mode (block 0, idx 32)
+        Glyph::sprite(0, 32)
+    }
+}
+
 /// PUA (Private Use Area) encoding for Sprite symbols.
 ///
 /// Range: U+E000 ~ U+E3FF (1024 characters, 4 blocks × 256 symbols)
@@ -257,46 +264,28 @@ pub struct Cell {
     /// Cells are vertically centered within the row when scale differs.
     #[serde(default = "default_scale")]
     pub scale_y: f32,
+    /// Cached glyph info (graphics mode only).
+    /// Computed from symbol when set, returned directly by get_glyph().
+    #[cfg(graphics_mode)]
+    #[serde(skip)]
+    glyph: Glyph,
 }
 
 impl Cell {
     pub fn set_symbol(&mut self, symbol: &str) -> &mut Cell {
         self.symbol.clear();
         self.symbol.push_str(symbol);
+        #[cfg(graphics_mode)]
+        {
+            self.glyph = self.compute_glyph();
+        }
         self
     }
 
-    /// Get cell rendering information for graphics mode.
-    ///
-    /// Returns (symbol_index, block_index, fg, bg, modifier) where:
-    /// - symbol_index: Index within the block (0-255)
-    /// - block_index: Texture block index (0-255) in the unified 4096x4096 texture
-    ///
-    /// Block is determined solely from symbol:
-    /// - PUA (U+E000-U+E3FF): Sprite blocks 0-3
-    /// - Emoji: Emoji blocks 170-175
-    /// - CJK: CJK blocks 176-239
-    /// - TUI chars: TUI blocks 160-169
-    ///
-    /// # See Also
-    ///
-    /// - `get_glyph()` for the full Glyph with size info
-    /// - `render::symbol_map` for block layout and character mappings
-    pub fn get_cell_info(&self) -> CellInfo {
-        let glyph = self.get_glyph();
-        (glyph.idx, glyph.block, self.fg, self.bg, self.modifier)
-    }
-
-    /// Get glyph rendering information based solely on symbol.
-    ///
-    /// This is the unified method that determines Glyph from symbol alone:
-    /// 1. PUA (U+E000-U+E3FF) → Sprite (1x1)
-    /// 2. Emoji → Emoji (2x2) from symbol_map
-    /// 3. CJK → CJK (2x2) from symbol_map
-    /// 4. TUI char → TUI (1x2) from symbol_map
-    ///
-    /// Returns Glyph with block, idx, width, and height.
-    pub fn get_glyph(&self) -> Glyph {
+    /// Compute glyph from symbol (graphics mode only).
+    /// Called internally when symbol changes.
+    #[cfg(graphics_mode)]
+    fn compute_glyph(&self) -> Glyph {
         // 1. Check PUA (Sprite symbols) - 1x1
         if let Some(ch) = self.symbol.chars().next() {
             if let Some((block, idx)) = decode_pua(ch) {
@@ -323,19 +312,77 @@ impl Cell {
         Glyph::sprite(0, 32)
     }
 
-    /// Get glyph info as (block, idx) tuple for backward compatibility.
+    /// Get cell rendering information for graphics mode.
+    ///
+    /// Returns (symbol_index, block_index, fg, bg, modifier) where:
+    /// - symbol_index: Index within the block (0-255)
+    /// - block_index: Texture block index (0-255) in the unified 4096x4096 texture
+    ///
+    /// Block is determined solely from symbol:
+    /// - PUA (U+E000-U+E3FF): Sprite blocks 0-3
+    /// - Emoji: Emoji blocks 170-175
+    /// - CJK: CJK blocks 176-239
+    /// - TUI chars: TUI blocks 160-169
+    ///
+    /// # See Also
+    ///
+    /// - `get_glyph()` for the full Glyph with size info
+    /// - `render::symbol_map` for block layout and character mappings
+    #[cfg(graphics_mode)]
+    pub fn get_cell_info(&self) -> CellInfo {
+        let glyph = self.glyph;
+        (glyph.idx, glyph.block, self.fg, self.bg, self.modifier)
+    }
+
+    /// Get glyph rendering information (graphics mode only).
+    ///
+    /// Returns the cached glyph computed when symbol was set.
+    /// This is O(1) and avoids repeated HashMap lookups during rendering.
+    ///
+    /// Returns Glyph with block, idx, width, and height.
+    #[cfg(graphics_mode)]
+    pub fn get_glyph(&self) -> Glyph {
+        self.glyph
+    }
+
+    /// Get glyph info as (block, idx) tuple (graphics mode only).
+    #[cfg(graphics_mode)]
     pub fn get_glyph_info(&self) -> (u8, u8) {
-        let glyph = self.get_glyph();
-        (glyph.block, glyph.idx)
+        (self.glyph.block, self.glyph.idx)
+    }
+
+    /// Get cell rendering information (non-graphics mode fallback).
+    /// Computes glyph on the fly. Only used for serialization.
+    #[cfg(not(graphics_mode))]
+    pub fn get_cell_info(&self) -> CellInfo {
+        // Compute glyph on the fly for non-graphics mode
+        let (block, idx) = self.compute_glyph_fallback();
+        (idx, block, self.fg, self.bg, self.modifier)
+    }
+
+    /// Compute glyph without symbol_map (non-graphics mode fallback).
+    /// Only handles PUA decoding, returns default for other symbols.
+    #[cfg(not(graphics_mode))]
+    fn compute_glyph_fallback(&self) -> (u8, u8) {
+        if let Some(ch) = self.symbol.chars().next() {
+            if let Some((block, idx)) = decode_pua(ch) {
+                return (block, idx);
+            }
+        }
+        (0, 32)  // Default: space
     }
 
     pub fn set_char(&mut self, ch: char) -> &mut Cell {
         self.symbol.clear();
         self.symbol.push(ch);
+        #[cfg(graphics_mode)]
+        {
+            self.glyph = self.compute_glyph();
+        }
         self
     }
 
-    /// Set the texture block for this cell (Sprite mode only).
+    /// Set the texture block for this cell (Sprite mode only, graphics mode only).
     ///
     /// This updates the symbol to PUA encoding with the given block.
     /// The symbol index is preserved from the current symbol.
@@ -348,11 +395,14 @@ impl Cell {
     ///
     /// This method is primarily for Sprite mode. For TUI/Emoji/CJK,
     /// the block is determined automatically from the symbol.
+    #[cfg(graphics_mode)]
     pub fn set_texture(&mut self, block: u8) -> &mut Cell {
-        // Get current idx from glyph
-        let glyph = self.get_glyph();
+        // Get current idx from cached glyph
+        let idx = self.glyph.idx;
         // Set symbol to PUA with new block
-        self.symbol = cellsym_block(block, glyph.idx);
+        self.symbol = cellsym_block(block, idx);
+        // Update cached glyph
+        self.glyph = Glyph::sprite(block, idx);
         self
     }
 
@@ -423,6 +473,10 @@ impl Cell {
         self.modifier = Modifier::empty();
         self.scale_x = 1.0;
         self.scale_y = 1.0;
+        #[cfg(graphics_mode)]
+        {
+            self.glyph = self.compute_glyph();
+        }
     }
 
     /// Reset cell to blank state for Sprite mode.
@@ -435,6 +489,10 @@ impl Cell {
         self.modifier = Modifier::empty();
         self.scale_x = 1.0;
         self.scale_y = 1.0;
+        #[cfg(graphics_mode)]
+        {
+            self.glyph = Glyph::sprite(0, 32);
+        }
     }
 
     /// Check if this cell represents a blank space in graphics mode.
@@ -465,6 +523,20 @@ impl Cell {
 }
 
 impl Default for Cell {
+    #[cfg(graphics_mode)]
+    fn default() -> Cell {
+        Cell {
+            symbol: " ".into(),
+            fg: Color::Reset,
+            bg: Color::Reset,
+            modifier: Modifier::empty(),
+            scale_x: 1.0,
+            scale_y: 1.0,
+            glyph: Glyph::default(),
+        }
+    }
+
+    #[cfg(not(graphics_mode))]
     fn default() -> Cell {
         Cell {
             symbol: " ".into(),
