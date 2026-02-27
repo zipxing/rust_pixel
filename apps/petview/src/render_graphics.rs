@@ -414,11 +414,15 @@ impl PetviewRender {
         buf.set_petscii_str(x2, 1, FOOTER_LINE2, FOOT_COLOR, Color::Reset);
     }
 
-    fn do_init(&mut self, ctx: &mut Context) {
-        if self.init {
-            return;
-        }
+    /// Check if adapter ratios changed (e.g. window maximized/restored)
+    fn ratios_changed(&self, ctx: &mut Context) -> bool {
+        let rx = ctx.adapter.get_base().gr.ratio_x;
+        let ry = ctx.adapter.get_base().gr.ratio_y;
+        (self.metrics.rx - rx).abs() > 0.001 || (self.metrics.ry - ry).abs() > 0.001
+    }
 
+    /// Compute metrics and position all sprites. Called on init and ratio changes.
+    fn update_layout(&mut self, ctx: &mut Context) {
         self.metrics = PixelMetrics::compute(ctx);
         let m = &self.metrics;
 
@@ -456,7 +460,18 @@ impl PetviewRender {
         border.set_pos(border_x, border_y);
         border.set_scale_x(FRAME_SCALE);
         border.set_scale_y(FRAME_SCALE);
+    }
 
+    fn do_init(&mut self, ctx: &mut Context) {
+        if self.init {
+            // Re-layout if ratios changed (window maximized/restored)
+            if self.ratios_changed(ctx) {
+                self.update_layout(ctx);
+            }
+            return;
+        }
+
+        self.update_layout(ctx);
         self.init = true;
     }
 }
