@@ -62,7 +62,7 @@ pub use init::wasm_init_pixel_assets;
 pub use init::{get_wasm_app_data, set_wasm_app_data};
 
 /// Target frames per second for the main game loop. Keep this moderate to conserve CPU.
-pub const GAME_FRAME: u32 = 60;
+pub const GAME_FRAME: u32 = 48;
 
 #[cfg(not(graphics_mode))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;

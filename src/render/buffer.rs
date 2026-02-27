@@ -299,7 +299,6 @@ impl Buffer {
             x + self.area.x,
             y + self.area.y,
             string,
-            usize::MAX,
             style,
         );
     }
@@ -309,7 +308,7 @@ impl Buffer {
     where
         S: AsRef<str>,
     {
-        self.set_stringn(x, y, string, usize::MAX, style);
+        self.set_stringn(x, y, string, style);
     }
 
     /// Core method to set string content.
@@ -333,34 +332,32 @@ impl Buffer {
         x: u16,
         y: u16,
         string: S,
-        width: usize,
+        // width: usize,  // legacy tui-rs param, callers always pass usize::MAX, never effective
         style: Style,
-    ) -> (u16, u16)
+    )
     where
         S: AsRef<str>,
     {
         // Bounds check: skip if starting position is outside buffer
         if x < self.area.left() || x >= self.area.right()
             || y < self.area.top() || y >= self.area.bottom() {
-            return (x, y);
+            return;
         }
 
         let mut index = self.index_of(x, y);
         let mut x_offset = x as usize;
         let graphemes = UnicodeSegmentation::graphemes(string.as_ref(), true);
-        let max_offset = min(self.area.right() as usize, width.saturating_add(x as usize));
+        let max_offset = self.area.right() as usize;
+        // let max_offset = min(self.area.right() as usize, width.saturating_add(x as usize));
         for s in graphemes {
             let width = s.width();
             if width == 0 {
                 continue;
             }
-            // `x_offset + width > max_offset` could be integer overflow on 32-bit machines if we
-            // change dimenstions to usize or u32 and someone resizes the terminal to 1x2^32.
             if width > max_offset.saturating_sub(x_offset) {
                 break;
             }
 
-            // Handle Emoji (which might be single width in unicode-width but we want double width for rendering)
             let is_emoji = is_prerendered_emoji(s);
 
             // 直接设置 symbol，不做任何转换
@@ -369,29 +366,20 @@ impl Buffer {
             self.content[index].set_symbol(s);
             self.content[index].set_style(style);
 
-            // If it's an Emoji, it occupies 2 cells visually (16px width).
-            // Even if `unicode-width` says it's width 1 (some emojis are), we force it to take 2 cells
-            // if it is in our pre-rendered map.
-            // However, `unicode-width` usually reports 2 for emojis.
-            // The critical part is clearing the *next* cell so it doesn't overlap.
-            
-            // Reset following cells if multi-width (they would be hidden by the grapheme),
-            // For Emoji, we ensure it clears at least one extra cell if it's width 1 but we treat as 2?
-            // Actually, let's stick to `width` from unicode-width for now, assuming it's correct (usually 2 for Emoji).
-            // BUT, if `is_emoji` is true, we might want to enforce width=2 behavior for our grid.
-            
+            // emoji 强制占2格，CJK等宽字符由 unicode-width 正确返回2
             let effective_width = if is_emoji { 2 } else { width };
 
+            // 多宽字符后续 cell 清空
             for i in index + 1..index + effective_width {
                 if i < self.content.len() {
                     self.content[i].reset();
                 }
             }
-            
+
             index += effective_width;
             x_offset += effective_width;
         }
-        (x_offset as u16, y)
+        // return (x_offset as u16, y)  // legacy: no caller uses the return value
     }
 
     pub fn set_style(&mut self, area: Rect, style: Style) {

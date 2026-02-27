@@ -120,6 +120,7 @@ base = ["log4rs"]
 opt-level = 's'
 codegen-units = 1
 lto = true # FullLTO - the most aggressive LTO version
+# debug = true # temporary: enable debug symbols for profiling
 
 [workspace]
 members = [

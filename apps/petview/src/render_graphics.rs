@@ -119,7 +119,7 @@ impl PixelMetrics {
             cell_px_w: (IMG_W as f32 * 0.5 * sym_w / rx) as u16,
             cell_px_h: (IMG_H  as f32 * 0.5 * sym_h / ry) as u16,
             frame_x: (FRAME_LEFT as f32 * sym_w / rx) as u16,
-            frame_y: (FRAME_TOP as f32 * sym_h / ry) as u16 + YADJ,
+            frame_y: (FRAME_TOP as f32 * sym_h / ry) as u16 - YADJ,
         }
     }
 
