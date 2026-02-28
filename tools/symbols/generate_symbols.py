@@ -164,11 +164,14 @@ class TextureConfig:
 
 # 字体名称（Quartz 系统字体名，用于位图渲染 fallback）
 TUI_FONT_NAME = "DejaVuSansMono Nerd Font"
+# TUI_FONT_NAME = "DroidSansMono Nerd Font"
 EMOJI_FONT_NAME = "Apple Color Emoji"
 CJK_FONT_NAME = "PingFang SC"
 
 # msdfgen 字体文件路径
-MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/NerdFonts/DejaVu Sans Mono Nerd Font Complete.ttf")
+# MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/NerdFonts/DejaVu Sans Mono Nerd Font Complete.ttf")
+MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DejaVuSansMNerdFont-Regular.ttf")
+# MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DroidSansMNerdFontMono-Regular.otf")
 MSDFGEN_BRAILLE_FONT = "/System/Library/Fonts/Apple Braille.ttf"
 MSDFGEN_CJK_FONT = None  # 运行时从 PingFang.ttc 提取
 
@@ -1031,18 +1034,18 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
     # 构建 Sprite extras（特殊字符映射）
     # 格式: "字符": [block, idx] 其中 block 0-159，idx 0-255
     sprite_extras = {
-        "▇": [0, 209],
-        "▒": [0, 94],
-        "∙": [0, 122],
-        "│": [0, 93],
-        "┐": [0, 110],
-        "╮": [0, 73],
-        "┌": [0, 112],
-        "╭": [0, 85],
-        "└": [0, 109],
-        "╰": [0, 74],
-        "┘": [0, 125],
-        "╯": [0, 75],
+        "▇": [1, 209],
+        "▒": [1, 94],
+        "∙": [1, 122],
+        "│": [1, 93],
+        "┐": [1, 110],
+        "╮": [1, 73],
+        "┌": [1, 112],
+        "╭": [1, 85],
+        "└": [1, 109],
+        "╰": [1, 74],
+        "┘": [1, 125],
+        "╯": [1, 75],
         "_": [2, 30]   # 下划线在 block 2 的第 30 个位置
     }
 
