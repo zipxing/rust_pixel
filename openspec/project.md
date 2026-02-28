@@ -1,22 +1,31 @@
 # Project Context
 
 ## Purpose
-RustPixel 是一个面向 2D 的游戏引擎与快速原型工具集，同时内置一套简单实用的字符/像素 UI 框架。它支持文本模式与图形模式两类渲染路径，可编译为桌面二进制、FFI 动态库，以及 WebAssembly 在浏览器中运行。项目目标：
-- 提供统一的 Model/Render/Game 架构与渲染适配层，覆盖 Terminal、SDL/OpenGL、Winit/Glow、Winit/WGPU 与 WebGL。
-- 提供可复用的 UI 组件、布局与主题系统，快速构建编辑器、浏览器类工具与游戏内 UI。
-- 提供围绕字符画/PETSCII 的资产处理与开发工具，降低入门门槛与工程化成本。
+RustPixel 是一个 **Tile-first, Retro-ready** 的 2D 游戏引擎，核心理念：
 
-参考：`README.md`、`README_UI_FRAMEWORK.md`、`doc/principle.md`、`rust_pixel_tech_lecture.md`。
+1. **Everything is Tiles** — Scene > Layer > Sprite > Buffer > Cell 统一渲染抽象，单纹理单 draw call 高性能渲染
+2. **Write Once, Run Anywhere** — 同一套代码可运行于 Terminal、Desktop (WGPU)、Web (WebGL2/WebGPU)
+3. **TUI in GPU Windows** — 在原生 GPU 窗口中渲染完整 TUI，无需终端模拟器
+
+**杀手级应用 MDPT**：Markdown-first 演示工具，在原生窗口中渲染字符 UI，支持 GPU shader 转场、代码高亮、图表、CJK 文本等。
+
+**内置 BASIC 解释器**：pixel_basic 提供经典 BASIC 语法，快速原型与入门学习。
+
+参考：`README.md`、`doc/architecture.md`、`doc/faq.md`。
 
 ## Tech Stack
-- Language & Build: Rust 1.71+，Cargo workspace
-- Render Backends:
-  - Text: crossterm（终端渲染，ASCII/Unicode）
-  - Graphics: SDL2 + Glow（OpenGL）、Winit + Glow、Winit + WGPU（Vulkan/Metal/DX12 抽象）
-  - Web: WASM + WebGL；`wasm-bindgen`/`web-sys`
-- Assets & Tools: 自研 `.pix`/`.txt(ESC)`/`.ssf` 资源格式与工具链（`tools/*`）；FFmpeg 用于 GIF → SSF 转换
-- CLI: `cargo-pixel`（创建/运行/打包/资源处理一体化）
-- Docs & Demos: `apps/*` 多示例，`README_UI_FRAMEWORK.md` UI 教程
+- **Language & Build**: Rust 1.71+，Cargo workspace
+- **Render Backends**（两套后端，统一 Adapter trait）:
+  - `CrosstermAdapter`：终端模式（ASCII/Unicode/Box/Braille/Emoji/CJK）
+  - `WinitWgpuAdapter`：桌面 GPU 模式（Vulkan/Metal/DX12）
+  - `WgpuWebAdapter`：Web 模式（WebGL2/WebGPU，通过 wasm32 target 自动启用）
+- **Feature Flags**:
+  - `term`：终端模式（crossterm）
+  - `wgpu`：桌面 GPU 模式（wgpu + winit）
+  - `web`：Web 模式（自动检测 wasm32，使用 wgpu）
+- **Assets & Tools**: `.pix`（PETSCII 图片）、`.ssf`（序列帧动画）、`.esc`（终端转义序列）；FFmpeg 用于 GIF → SSF 转换
+- **CLI**: `cargo-pixel`（创建/运行/打包/资源处理一体化）
+- **Demos**: `apps/*`（mdpt、tetris、snake、tower、petview、poker、palette、basic_snake 等）
 
 ## Project Conventions
 
@@ -27,16 +36,31 @@ RustPixel 是一个面向 2D 的游戏引擎与快速原型工具集，同时内
 - 条件编译集中在模块边界，避免在业务逻辑散布复杂 `#[cfg]`
 
 ### Architecture Patterns
-- Game Loop 三层：`Model`（状态/逻辑）、`Render`（渲染）、`Game`（调度）
-- Adapter 模式：统一 `Adapter` trait，按 Feature/平台选择 `CrosstermAdapter`、`SdlAdapter`、`WinitGlowAdapter`、`WinitWgpuAdapter`、`WebAdapter`
-- UI 框架：`Widget` 接口 + 布局（线性/网格/自由）+ 主题系统（暗/亮/终端主题与状态样式）
-- 资产系统：`AssetManager` 统一加载/解析/缓存 `.pix`/`.esc`/`.ssf`，桌面直读文件，Web 端异步拉取
-- 渲染优化：双缓冲 diff 更新；图形模式使用实例化渲染、纹理图集、过渡与通用 2D 着色器；WGPU 管线可选
+- **Game Loop 三层**：`Model`（状态/逻辑）、`Render`（渲染）、`Game`（调度）
+- **Adapter 模式**：统一 `Adapter` trait，按 Feature/平台选择 `CrosstermAdapter`、`WinitWgpuAdapter`、`WgpuWebAdapter`
+- **渲染层级**：Scene > Layer (render_weight 排序) > Sprite > Buffer > Cell
+- **Cell/Glyph 系统**：
+  - Cell: symbol + fg + bg + modifier + scale
+  - Glyph: block + idx + width + height（缓存在 Cell 中，避免渲染时字符串解析）
+  - PUA 编码：Sprite 使用 U+F0000~U+F9FFF（160 blocks × 256 symbols）
+- **GPU 4-Stage Pipeline**：
+  1. Data → RenderBuffer（Buffer + Layers → Vec\<RenderCell\>）
+  2. RenderBuffer → RenderTexture
+  3. RT Operations（过渡效果混合）
+  4. RT → Screen（final composition）
+- **统一纹理图集**（4096×4096 或 8192×8192）：
+  - Block 0-159: Sprite glyphs（PETSCII/ASCII/custom）
+  - Block 160-169: TUI characters
+  - Block 170-175: Emoji
+  - Block 176-239: CJK characters
+  - 单纹理绑定，单 draw call，零纹理切换
+- **UI 框架**：Widget trait + Layout (Free/VBox/HBox) + UIPage（多页面 + 转场）
+- **资产系统**：AssetManager 统一加载 `.pix`/`.esc`/`.ssf`；桌面同步读取，Web 异步 fetch
 
 ### Testing Strategy
-- 示例驱动：以 `apps/*` 作为端到端案例与回归；`test/` 目录用于图形/算法验证
-- 最小烟雾测试：通过 `cargo pixel r <app> <backend>` 跑一帧或短时运行验证后端矩阵
-- 特性矩阵：在本地按需验证 `term/sdl/winit/wgpu/web` 组合；Web 用本地静态服务预览
+- 示例驱动：以 `apps/*` 作为端到端案例与回归
+- 烟雾测试：`cargo pixel r <app> <mode>`（mode: t/wg/w）验证后端矩阵
+- 特性矩阵：本地验证 `term/wgpu/web` 组合；Web 用 localhost:8080 预览
 - 算法/纯逻辑模块可添加单测；渲染路径以可视回归为主
 
 ### Git Workflow
@@ -45,25 +69,67 @@ RustPixel 是一个面向 2D 的游戏引擎与快速原型工具集，同时内
 - 变更提案：较大功能/架构/性能改动优先以 `openspec/changes/*` 提案评审，`openspec validate --strict` 校验后实施
 
 ## Domain Context
-- 典型场景：2D 像素风格游戏、终端工具、字符画浏览器/编辑器、教学/演示
-- 资源生态：PETSCII/ASCII 字符集、`assets/pix/*` 图集、`.ssf` 序列帧动画
-- 工具链：
+- **典型场景**：2D 像素风格游戏、Markdown 演示工具、终端工具、字符画浏览器/编辑器、教学/演示
+- **资源生态**：PETSCII/ASCII 字符集、`.pix` 图片、`.ssf` 序列帧动画、`.esc` 终端转义序列
+- **工具链**：
+  - `cargo-pixel`：一键创建/运行/打包（`cargo pixel r <app> <mode> [-r]`）
   - `palette`：颜色生成/分析/转换（终端 UI）
   - `edit`：字符/像素编辑器（终端/图形）
-  - `petii`：普通图片 → PETSCII 转换
-  - `ssf`：GIF → SSF 动画转换与预览
-  - `cargo-pixel`：一键创建/运行/打包
-- Demo：`apps/snake`、`apps/tetris`、`apps/tower`、`apps/poker`（含 FFI/WASM）、`apps/palette`、`apps/ui_demo`
+  - `petii`：普通图片 → PETSCII 转换（`cargo pixel p`）
+  - `ssf`：GIF → SSF 动画转换与预览（`cargo pixel cg`）
+- **Demo Apps**：
+  - `mdpt`：Markdown 演示工具（GPU 转场、代码高亮、图表）
+  - `tetris`：双人俄罗斯方块（AI 对战）
+  - `snake`：PETSCII 动画贪吃蛇
+  - `tower`：塔防游戏
+  - `petview`：PETSCII 画廊（2000+ 作品，Matrix rain，屏保模式）
+  - `poker`/`gin_rummy`：扑克算法（含 FFI/WASM）
+  - `basic_snake`：BASIC 语言写的贪吃蛇
+  - `palette`：颜色工具
 
 ## Important Constraints
-- 跨平台：macOS/Linux/Windows(WSL)/Web；依赖矩阵尽量最小化（按需启用后端）
-- 双渲染模式并存：文本/图形；保持 API 统一与可切换性
-- 兼容性：新增能力尽量增量化，避免破坏现有公共 API（OpenSpec 约束）
-- 性能目标：在参考设备上 60 FPS；长列表/大量 Cell 使用增量/实例化策略
-- 工程约束：不在主工程引入重量级框架；优先“薄抽象 + 简单实现”
+- **跨平台**：macOS/Linux/Windows(WSL+Native)/Web；按需启用后端 feature
+- **双渲染模式**：终端（crossterm）与图形（wgpu）；保持 Adapter trait 统一
+- **统一纹理架构**：单 4096×4096（或 8192×8192）纹理，256 blocks，单 draw call
+- **兼容性**：新增能力增量化，避免破坏公共 API
+- **性能目标**：60 FPS；实例化渲染 + 双缓冲 diff
+- **MSDF/SDF 字体**：高 DPI 下使用距离场渲染保持文字清晰
 
 ## External Dependencies
-- 渲染与平台：`crossterm`、`sdl2`/`sdl2_image`/`sdl2_gfx`、`winit`、`glow`、`wgpu`、`wasm-bindgen`/`web-sys`
-- 媒体与工具：`ffmpeg`（GIF→SSF 工具链）、`image`
-- CLI：`clap`（`cargo-pixel` 内部）、`cfg_aliases`（统一 Feature 别名，经由 `build_support.rs`）
+- **渲染与平台**：
+  - 终端：`crossterm`
+  - GPU：`wgpu`、`winit`
+  - Web：`wasm-bindgen`、`web-sys`
+- **媒体与工具**：`ffmpeg`（GIF→SSF 工具链）、`image`
+- **CLI**：`clap`（`cargo-pixel` 内部）、`cfg_aliases`（Feature 别名）
+- **BASIC 解释器**：`pixel_basic`（内置，无外部依赖）
 
+## Running Commands
+```bash
+cargo pixel r <app> t      # Terminal mode
+cargo pixel r <app> wg     # WGPU desktop mode
+cargo pixel r <app> w      # Web mode (localhost:8080)
+cargo pixel r <app> wg -r  # Release build
+cargo pixel c <name>       # Create new app in apps/
+cargo pixel c <name> ..    # Create standalone project
+```
+
+## Source Layout
+```
+src/
+├── game.rs                    # Game loop, Model/Render traits
+├── context.rs                 # Shared runtime state
+├── macros.rs                  # app! macro
+├── render/
+│   ├── adapter.rs             # Adapter trait
+│   ├── adapter/               # CrosstermAdapter, WinitWgpuAdapter, WgpuWebAdapter
+│   ├── buffer.rs              # Cell buffer
+│   ├── cell.rs                # Cell + Glyph (PUA encoding)
+│   ├── scene.rs               # Scene container
+│   └── sprite/                # Sprite + Layer
+├── ui/                        # Widget framework
+├── asset.rs                   # Asset loading
+└── util/                      # Rect, math, particle system
+apps/                          # Demo applications
+pixel_basic/                   # BASIC interpreter
+```
