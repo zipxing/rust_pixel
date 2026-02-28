@@ -1,0 +1,5 @@
+ffmpeg -ss 4 -i ~/Desktop/petview2.mov -vf \
+"setpts=0.33*PTS,fps=6,scale=800:-1:flags=lanczos,split[s0][s1];\
+[s0]palettegen=max_colors=128:stats_mode=diff[p];\
+[s1][p]paletteuse=dither=bayer:bayer_scale=2" \
+-loop 0 output.gif
