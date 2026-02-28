@@ -698,6 +698,25 @@ impl WinitWgpuAdapter {
     }
 }
 
+/// Manual Drop implementation to ensure correct destruction order on Wayland/Vulkan.
+///
+/// The wgpu::Surface holds a Vulkan swapchain that references the Wayland display
+/// connection (via the Window). If the Window is dropped before the Surface, the
+/// Surface destructor tries to use a dead Wayland connection → SEGFAULT.
+///
+/// Required drop order: render_core → surface → instance → window → event_loop
+impl Drop for WinitWgpuAdapter {
+    fn drop(&mut self) {
+        // Drop GPU resources before the surface they depend on
+        self.render_core.take();
+        self.wgpu_surface_config.take();
+        // Drop surface before instance and window
+        self.wgpu_surface.take();
+        self.wgpu_instance.take();
+        // Window and event_loop dropped last (via normal struct drop for remaining fields)
+    }
+}
+
 impl Adapter for WinitWgpuAdapter {
     fn init(&mut self, w: u16, h: u16, rx: f32, ry: f32, title: String) {
         info!("Initializing WinitWgpu adapter with WGPU backend...");
