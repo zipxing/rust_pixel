@@ -1,49 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-统一的符号纹理生成工具
+符号纹理生成工具（SDF 模式）
+
+使用 macOS Quartz/CoreText 渲染字符，转换为 SDF（Signed Distance Field）纹理。
+适用于 RustPixel 引擎的 GPU 渲染模式。
 
 输入:
-  - c64*.png: Sprite 源图像
+  - c64*.png: Sprite 源图像（PETSCII 字符集）
   - tui.txt: TUI 字符和 Emoji 定义
+  - 3500C.txt: CJK 常用汉字（可选）
 
 输出:
   - symbols.png: 4096x4096 或 8192x8192 纹理图
   - symbol_map.json: 符号映射配置
 
-支持两种纹理尺寸:
-  - 4096x4096 (默认): 16×16px 基础符号
-  - 8192x8192 (--size 8192): 32×32px 基础符号，更高清晰度
+用法:
+  python3 generate_symbols.py                    # 默认 8192x8192
+  python3 generate_symbols.py --size 4096        # 4096x4096
+  python3 generate_symbols.py --save-bitmap      # 保存渲染前的位图（调试用）
 
-纹理布局（Block-Based，网格数量不变，像素尺寸按比例缩放）：
-┌────────────────────────────────────────────────────────────┐
-│ Sprite 区域                                                │
-│ - 10 rows × 16 blocks/row = 160 blocks                     │
-│ - 每 block: 256×256 grid (16×16 chars)                     │
-│ - Block 0-159: 40,960 sprites                              │
-├────────────────────────────────────────────────────────────┤
-│ TUI + Emoji 区域                                           │
-│                                                            │
-│ TUI 区域:                                                  │
-│ - 10 blocks (Block 160-169)                                │
-│ - 每 block: 16×16 chars (1:2 宽高比)                       │
-│ - 2560 TUI 字符                                            │
-│                                                            │
-│ Emoji 区域:                                                │
-│ - 6 blocks (Block 170-175)                                 │
-│ - 每 block: 8×16 emojis (2x 宽高)                          │
-│ - 768 Emoji                                                │
-├────────────────────────────────────────────────────────────┤
-│ CJK 区域                                                   │
-│ - 128×32 grid (2x 宽高)                                    │
-│ - 4096 CJK 字符                                            │
-└────────────────────────────────────────────────────────────┘
-
-线性索引 (与纹理尺寸无关):
-  - Sprite: [0, 40959] = 160 blocks × 256
-  - TUI:    [40960, 43519] = 10 blocks × 256
-  - Emoji:  [43520, 44287] = 6 blocks × 128
-  - CJK:    [44288, 48383] = 128 cols × 32 rows
+纹理布局:
+  Sprite: Block 0-159 (40,960 个, 16×16px 或 32×32px)
+  TUI:    Block 160-169 (2,560 个, 16×32px 或 32×64px)
+  Emoji:  Block 170-175 (768 个, 32×32px 或 64×64px, 位图模式)
+  CJK:    128×32 grid (4,096 个, 32×32px 或 64×64px)
 """
 
 import os
@@ -78,10 +59,6 @@ CJK_TXT = os.path.join(SCRIPT_DIR, "3500C.txt")
 OUTPUT_PNG = os.path.join(SCRIPT_DIR, "symbols.png")
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "symbol_map.json")
 
-# 缓存目录（可选，用于调试）
-TUI_CACHE_DIR = os.path.join(SCRIPT_DIR, "tui_chars")
-EMOJI_CACHE_DIR = os.path.join(SCRIPT_DIR, "tui_emojis")
-TUI_FIX_DIR = os.path.join(SCRIPT_DIR, "tui_fix")
 
 # ------------------------------------------
 # 纹理尺寸配置类
@@ -162,27 +139,16 @@ class TextureConfig:
         return f"TextureConfig(size={self.size}, scale={self.scale})"
 
 
-# 字体名称（Quartz 系统字体名，用于位图渲染 fallback）
-TUI_FONT_NAME = "DejaVuSansMono Nerd Font"
-# TUI_FONT_NAME = "DroidSansMono Nerd Font"
+# 字体配置
 EMOJI_FONT_NAME = "Apple Color Emoji"
 CJK_FONT_NAME = "PingFang SC"
 
-# msdfgen 字体文件路径
-# MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/NerdFonts/DejaVu Sans Mono Nerd Font Complete.ttf")
-# MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DejaVuSansMNerdFont-Regular.ttf")
-MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DroidSansMNerdFontMono-Regular.otf")
-MSDFGEN_BRAILLE_FONT = "/System/Library/Fonts/Apple Braille.ttf"
-MSDFGEN_CJK_FONT = None  # 运行时从 PingFang.ttc 提取
-
-# msdfgen 可执行文件路径
-MSDFGEN_BIN = "/tmp/msdfgen"
+# TUI 字体文件路径（用于 SDF 渲染）
+# TUI_FONT_PATH = os.path.expanduser("~/Library/Fonts/DejaVuSansMNerdFont-Regular.ttf")
+TUI_FONT_PATH = os.path.expanduser("~/Library/Fonts/DroidSansMNerdFontMono-Regular.otf")
 
 # 全局配置实例（在 main() 中初始化）
 cfg = None
-
-# 全局：字体的 cmap 缓存（用于 fallback 查找）
-_font_cmaps = {}
 # ------------------------------------------
 
 
@@ -314,158 +280,6 @@ def bitmap_to_sdf(bitmap_img, spread=6):
     return Image.fromarray(result, 'RGBA')
 
 
-def _try_extract_from_ttc(font_display_name, ct_name, ttc_match, out_filename):
-    """
-    从 .ttc 提取字体并验证 msdfgen 可用
-
-    Args:
-        font_display_name: 显示名称（日志用）
-        ct_name: CoreText 查询名
-        ttc_match: 在 TTC 中匹配的字体名
-        out_filename: 输出 .ttf 文件名
-
-    Returns:
-        str: 提取的 .ttf 路径，或 None
-    """
-    import subprocess
-    out_path = os.path.join(SCRIPT_DIR, out_filename)
-
-    # 已存在则验证 msdfgen 能加载
-    if os.path.exists(out_path):
-        result = subprocess.run(
-            [MSDFGEN_BIN, 'msdf', '-font', out_path, '65',
-             '-size', '16', '16', '-autoframe', '-o', '/tmp/_msdfgen_test.png'],
-            capture_output=True, timeout=5
-        )
-        if result.returncode == 0:
-            print(f"  CJK 字体: {font_display_name} (已缓存)")
-            return out_path
-
-    try:
-        import CoreText as CT
-        font = CT.CTFontCreateWithName(ct_name, 24, None)
-        url = CT.CTFontCopyAttribute(font, CT.kCTFontURLAttribute)
-        if not url:
-            return None
-
-        ttc_path = str(url.path())
-        if not ttc_path.endswith('.ttc'):
-            return ttc_path
-
-        from fontTools.ttLib import TTCollection
-        tc = TTCollection(ttc_path)
-        for i, f in enumerate(tc):
-            name = f['name'].getDebugName(4)
-            if name and ttc_match in name and 'glyf' in f:
-                f.save(out_path)
-                result = subprocess.run(
-                    [MSDFGEN_BIN, 'msdf', '-font', out_path, '65',
-                     '-size', '16', '16', '-autoframe', '-o', '/tmp/_msdfgen_test.png'],
-                    capture_output=True, timeout=5
-                )
-                if result.returncode == 0:
-                    print(f"  CJK 字体: {font_display_name} (从 .ttc 提取)")
-                    return out_path
-    except Exception:
-        pass
-
-    return None
-
-
-def find_cjk_msdf_font():
-    """
-    查找可用于 msdfgen 的 CJK 字体文件。
-
-    msdfgen 不能加载 .ttc，需要独立的 .ttf/.otf。
-    优先级：
-    1. 兰亭黑 SC Demibold（黑体风格，高质量）
-    2. Heiti SC Medium（黑体，系统自带）
-    3. Arial Unicode.ttf（独立 .ttf，msdfgen 直接可用）
-
-    Returns:
-        str: 字体文件路径，或 None
-    """
-    # 1. 兰亭黑 SC Extralight
-    result = _try_extract_from_ttc(
-        "Lantinghei SC Extralight", "Lantinghei SC",
-        "Lantinghei SC Extralight", "LantingheiSC-Extralight.ttf"
-    )
-    if result:
-        return result
-
-    # 2. Heiti SC Medium
-    result = _try_extract_from_ttc(
-        "Heiti SC Medium", "Heiti SC",
-        "Heiti SC Medium", "HeitiSC-Medium.ttf"
-    )
-    if result:
-        return result
-
-    # 3. Arial Unicode - 独立 .ttf，msdfgen 直接支持
-    arial_unicode = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
-    if os.path.exists(arial_unicode):
-        print(f"  CJK 字体: Arial Unicode.ttf")
-        return arial_unicode
-
-    return None
-
-
-def load_font_cmap(font_path):
-    """加载字体的 cmap（字符映射表），带缓存"""
-    if font_path in _font_cmaps:
-        return _font_cmaps[font_path]
-
-    try:
-        from fontTools.ttLib import TTFont
-        font = TTFont(font_path)
-        cmap = font.getBestCmap() or {}
-        _font_cmaps[font_path] = cmap
-        return cmap
-    except Exception:
-        _font_cmaps[font_path] = {}
-        return {}
-
-
-def get_font_metrics(font_path):
-    """
-    读取字体的度量信息，用于 msdfgen 的一致 scale/translate
-
-    使用 max(sTypo, usWin) 度量来确保所有字形（特别是 CJK）
-    都能完整放入目标区域。sTypoAscender/Descender 有时不够大。
-
-    Returns:
-        dict: {upm, ascent, descent, advance_em, total_em}
-    """
-    from fontTools.ttLib import TTFont
-    font = TTFont(font_path)
-    upm = font['head'].unitsPerEm
-    os2 = font['OS/2']
-
-    # 取 sTypo 和 usWin 中更大的范围，确保 CJK 等大字形不被裁切
-    ascent = max(os2.sTypoAscender, os2.usWinAscent)
-    descent = min(os2.sTypoDescender, -os2.usWinDescent)  # descent 为负值
-
-    # 取等宽字体的 advance（用 'A' 或第一个可用字符）
-    cmap = font.getBestCmap()
-    hmtx = font['hmtx']
-    advance = upm  # default
-    for cp in [0x41, 0x61, 0x30]:  # 'A', 'a', '0'
-        gid = cmap.get(cp)
-        if gid:
-            advance = hmtx[gid][0]
-            break
-
-    total_em = (ascent - descent) / upm
-    return {
-        'upm': upm,
-        'ascent': ascent,
-        'descent': descent,
-        'advance': advance,
-        'advance_em': advance / upm,
-        'total_em': total_em,
-    }
-
-
 def is_graphic_char(ch):
     """
     判断字符是否为图形字符（需要填满格子以正确拼接）
@@ -481,105 +295,7 @@ def is_graphic_char(ch):
     )
 
 
-def compute_msdf_params(font_path, target_w, target_h, padding=1.0):
-    """
-    计算 msdfgen 的 -emnormalize -scale -translate 参数，
-    使所有字符保持一致的尺寸和位置。
-
-    Args:
-        font_path: 字体文件路径
-        target_w, target_h: 输出尺寸
-        padding: 填充系数 (0~1)，1.0=满填充，0.95=留5%空白
-
-    Returns:
-        (scale, tx, ty)
-    """
-    m = get_font_metrics(font_path)
-    scale = target_h * padding / m['total_em']
-    ty = -m['descent'] / m['upm']
-    tx = (target_w / scale - m['advance_em']) / 2
-    return scale, tx, ty
-
-
-def render_char_msdfgen(char, width, height, font_path, pxrange=4,
-                        scale=None, tx=None, ty=None):
-    """
-    使用 msdfgen 生成单个字符的 MSDF 图像
-
-    Args:
-        char: 字符
-        width, height: 输出尺寸
-        font_path: .ttf/.otf 字体文件路径
-        pxrange: 距离场像素范围
-        scale, tx, ty: 一致的缩放和平移参数（None 则用 -autoframe）
-
-    Returns:
-        PIL.Image: RGBA 图像，或 None
-    """
-    import subprocess
-    import tempfile
-
-    codepoint = ord(char)
-
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-        tmp_path = tmp.name
-
-    try:
-        cmd = [
-            MSDFGEN_BIN, 'msdf',
-            '-font', font_path, str(codepoint),
-            '-size', str(width), str(height),
-            '-pxrange', str(pxrange),
-            '-o', tmp_path,
-        ]
-
-        if scale is not None and tx is not None and ty is not None:
-            cmd += ['-emnormalize', '-scale', f'{scale:.6f}',
-                    '-translate', f'{tx:.6f}', f'{ty:.6f}']
-        else:
-            cmd += ['-autoframe']
-
-        result = subprocess.run(cmd, capture_output=True, timeout=10)
-        if result.returncode != 0:
-            return None
-
-        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-            img = Image.open(tmp_path).convert("RGBA")
-            img = img.copy()
-            return img
-
-    except Exception:
-        pass
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-    return None
-
-
-def find_tui_font_for_char(char):
-    """
-    为 TUI 字符找到合适的 msdfgen 字体文件
-
-    fallback 链: DroidSansMNerdFont → Apple Braille → None (使用 bitmap-to-SDF)
-    """
-    cp = ord(char)
-
-    # 1. DroidSansMNerdFont
-    cmap = load_font_cmap(MSDFGEN_TUI_FONT)
-    if cp in cmap:
-        return MSDFGEN_TUI_FONT
-
-    # 2. Apple Braille (U+2800-U+28FF)
-    if MSDFGEN_BRAILLE_FONT and os.path.exists(MSDFGEN_BRAILLE_FONT):
-        cmap = load_font_cmap(MSDFGEN_BRAILLE_FONT)
-        if cp in cmap:
-            return MSDFGEN_BRAILLE_FONT
-
-    return None
-
-
-# ========== CoreText 辅助函数（从 dgpt.py 移植）==========
+# ========== CoreText 辅助函数 ==========
 
 def cfurl_from_path(path):
     """创建 CFURL"""
@@ -845,46 +561,27 @@ def load_c64_block(source_path):
     return symbols
 
 
-def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4, tui_sdf=False, text_padding=0.92, save_bitmap=False):
+def render_tui_chars(tui_chars, pxrange=4, text_padding=0.92, save_bitmap=False):
     """
-    渲染 TUI 字符
+    渲染 TUI 字符（使用 Quartz bitmap → SDF）
 
     Args:
         tui_chars: TUI 字符列表
-        use_cache: 是否使用缓存目录中的图像
-        use_msdf: 是否使用 MSDF 渲染
-        msdf_pxrange: MSDF 距离场像素范围
+        pxrange: SDF 距离场像素范围
+        text_padding: 文本字符缩放系数（图形字符始终为 1.0）
+        save_bitmap: 是否保存渲染前的位图（用于调试）
 
     Returns:
         list of PIL.Image: TUI 字符图像
     """
+    if not HAS_QUARTZ:
+        print("错误: SDF 渲染需要 Quartz（仅 macOS）")
+        return []
+
     symbols = []
     total = cfg.TUI_BLOCKS_COUNT * cfg.TUI_CHARS_PER_BLOCK  # 2560
-    msdf_count = 0
-    sdf_fallback_count = 0
 
-    # 预计算各字体的 msdfgen 参数：文本字符(带 padding) 和 图形字符(满填充)
-    font_params_text = {}     # 文本字符用，带 padding
-    font_params_graphic = {}  # 图形字符用，满填充
-    if use_msdf:
-        for fpath in [MSDFGEN_TUI_FONT, MSDFGEN_BRAILLE_FONT]:
-            if fpath and os.path.exists(fpath):
-                try:
-                    s, tx, ty = compute_msdf_params(
-                        fpath, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
-                        padding=text_padding
-                    )
-                    font_params_text[fpath] = (s, tx, ty)
-                    s2, tx2, ty2 = compute_msdf_params(
-                        fpath, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
-                        padding=1.0
-                    )
-                    font_params_graphic[fpath] = (s2, tx2, ty2)
-                except Exception as e:
-                    print(f"    警告: 计算字体参数失败 {fpath}: {e}")
-
-    # SDF fallback 的超采样倍率
-    # 2x 足够获得良好的 SDF 质量，4x 可获得更高精度但渲染更慢
+    # 超采样倍率（2x 足够获得良好的 SDF 质量）
     sdf_scale = 2
 
     # 创建位图缓存目录
@@ -896,90 +593,39 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
     for i in range(total):
         symbol = None
 
-        if use_msdf and i < len(tui_chars):
+        if i < len(tui_chars):
             char = tui_chars[i]
             cp = ord(char)
-            is_braille = (0x2800 <= cp <= 0x28FF)
-            # 1. 尝试 msdfgen（真正 MSDF）
-            # - tui_sdf 模式跳过此步
-            # - 盲文字符跳过 MSDF，直接用 SDF（盲文是简单点阵，MSDF 会产生伪影）
-            if not tui_sdf and not is_braille:
-                font_path = find_tui_font_for_char(char)
-                # 根据字符类型选择参数：图形字符满填充，文本字符带 padding
-                params = font_params_graphic if is_graphic_char(char) else font_params_text
-                if font_path and font_path in params:
-                    s, tx, ty = params[font_path]
-                    symbol = render_char_msdfgen(
-                        char, cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT,
-                        font_path, pxrange=msdf_pxrange,
-                        scale=s, tx=tx, ty=ty
-                    )
-                    if symbol:
-                        msdf_count += 1
-                    else:
-                        # msdfgen 渲染失败
-                        print(f"    MSDF渲染失败: {i} '{char}' U+{cp:04X}")
-                elif font_path:
-                    # 字体找到但参数不在 params 中
-                    print(f"    字体参数缺失: {i} '{char}' U+{cp:04X} font={font_path}")
-                else:
-                    # 字符不在任何字体 cmap 中
-                    print(f"    字体未找到: {i} '{char}' U+{cp:04X}")
 
-            # 2. Quartz bitmap → SDF (tui_sdf 模式直接走这里)
-            if symbol is None and HAS_QUARTZ:
-                render_w = cfg.TUI_RENDER_WIDTH * sdf_scale
-                render_h = cfg.TUI_RENDER_HEIGHT * sdf_scale
-                font_size = cfg.TUI_FONT_SIZE * sdf_scale
-                # 图形字符需要填满格子
-                fill_cell = is_graphic_char(char)
-                rendered = render_char_quartz(char, render_w, render_h, TUI_FONT_NAME, font_size,
-                                              fill_cell=fill_cell, text_padding=text_padding,
-                                              font_path=MSDFGEN_TUI_FONT)
-                if rendered:
-                    # 保存位图到缓存目录
-                    if save_bitmap:
-                        safe_char = char if char.isprintable() and char not in '/\\:*?"<>|' else f"U{cp:04X}"
-                        bitmap_path = os.path.join(bitmap_cache_dir, f"{i:04d}_{safe_char}.png")
-                        rendered.save(bitmap_path)
+            # 渲染字符
+            render_w = cfg.TUI_RENDER_WIDTH * sdf_scale
+            render_h = cfg.TUI_RENDER_HEIGHT * sdf_scale
 
-                    sdf_img = bitmap_to_sdf(rendered, spread=msdf_pxrange * sdf_scale)
-                    symbol = sdf_img.resize(
-                        (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), Image.LANCZOS
-                    )
-                    sdf_fallback_count += 1
+            # 图形字符需要填满格子
+            fill_cell = is_graphic_char(char)
+            rendered = render_char_quartz(
+                char, render_w, render_h,
+                font_name=None, font_size=None,
+                fill_cell=fill_cell, text_padding=text_padding,
+                font_path=TUI_FONT_PATH
+            )
 
-        elif not use_msdf:
-            # 位图模式：修复目录 → 缓存 → Quartz
-            if os.path.exists(TUI_FIX_DIR):
-                files = [f for f in os.listdir(TUI_FIX_DIR) if f.startswith(f"{i:04d}_")]
-                if files:
-                    symbol = Image.open(os.path.join(TUI_FIX_DIR, files[0])).convert("RGBA")
+            if rendered:
+                # 保存位图到缓存目录
+                if save_bitmap:
+                    safe_char = char if char.isprintable() and char not in '/\\:*?"<>|' else f"U{cp:04X}"
+                    bitmap_path = os.path.join(bitmap_cache_dir, f"{i:04d}_{safe_char}.png")
+                    rendered.save(bitmap_path)
 
-            if symbol is None and use_cache and os.path.exists(TUI_CACHE_DIR):
-                files = [f for f in os.listdir(TUI_CACHE_DIR) if f.startswith(f"{i:04d}_")]
-                if files:
-                    symbol = Image.open(os.path.join(TUI_CACHE_DIR, files[0])).convert("RGBA")
-
-            if symbol is None and i < len(tui_chars) and HAS_QUARTZ:
-                char = tui_chars[i]
-                # 图形字符需要填满格子
-                fill_cell = is_graphic_char(char)
-                rendered = render_char_quartz(
-                    char, cfg.TUI_RENDER_WIDTH, cfg.TUI_RENDER_HEIGHT,
-                    TUI_FONT_NAME, cfg.TUI_FONT_SIZE,
-                    fill_cell=fill_cell, text_padding=text_padding,
-                    font_path=MSDFGEN_TUI_FONT
+                # 转换为 SDF
+                sdf_img = bitmap_to_sdf(rendered, spread=pxrange * sdf_scale)
+                symbol = sdf_img.resize(
+                    (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), Image.LANCZOS
                 )
-                if rendered:
-                    symbol = rendered
 
-        # 空白填充
+        # 空白填充（SDF 模式使用黑色背景）
         if symbol is None:
-            if use_msdf:
-                symbol = Image.new("RGBA", (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), (0, 0, 0, 255))
-            else:
-                symbol = Image.new("RGBA", (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), (0, 0, 0, 0))
+            symbol = Image.new("RGBA", (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), (0, 0, 0, 255))
 
         if symbol.size != (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT):
             symbol = symbol.resize((cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), Image.LANCZOS)
@@ -989,38 +635,30 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
         if (i + 1) % 256 == 0:
             print(f"    渲染 TUI: {i + 1}/{total}")
 
-    if use_msdf:
-        print(f"    MSDF: {msdf_count}, SDF fallback: {sdf_fallback_count}")
-
     return symbols
 
 
-def render_emojis(emojis, use_cache=False):
+def render_emojis(emojis):
     """
-    渲染 Emoji
+    渲染 Emoji（位图模式，彩色 Emoji 不适合 SDF）
 
     Args:
         emojis: Emoji 列表
-        use_cache: 是否使用缓存目录中的图像
 
     Returns:
         list of PIL.Image: Emoji 图像
     """
+    if not HAS_QUARTZ:
+        print("警告: Quartz 不可用，无法渲染 Emoji")
+        return []
+
     symbols = []
     total = cfg.EMOJI_BLOCKS_COUNT * cfg.EMOJI_CHARS_PER_BLOCK  # 768
 
     for i in range(total):
         symbol = None
 
-        # 如果使用缓存，从缓存目录加载
-        if use_cache and os.path.exists(EMOJI_CACHE_DIR):
-            files = [f for f in os.listdir(EMOJI_CACHE_DIR) if f.startswith(f"{i:04d}_")]
-            if files:
-                img_path = os.path.join(EMOJI_CACHE_DIR, files[0])
-                symbol = Image.open(img_path).convert("RGBA")
-
-        # 如果有 Emoji 定义，直接渲染
-        if symbol is None and i < len(emojis) and HAS_QUARTZ:
+        if i < len(emojis):
             emoji = emojis[i]
             rendered = render_char_quartz(
                 emoji, cfg.EMOJI_RENDER_SIZE, cfg.EMOJI_RENDER_SIZE,
@@ -1029,7 +667,7 @@ def render_emojis(emojis, use_cache=False):
             if rendered:
                 symbol = rendered
 
-        # 如果都没有，创建空白
+        # 如果没有，创建空白
         if symbol is None:
             symbol = Image.new("RGBA", (cfg.EMOJI_CHAR_SIZE, cfg.EMOJI_CHAR_SIZE), (0, 0, 0, 0))
 
@@ -1070,91 +708,53 @@ def parse_cjk_txt(filepath):
     return cjk_chars
 
 
-def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4, text_padding=0.92):
+def render_cjk_chars(cjk_chars, pxrange=4, text_padding=0.92):
     """
-    渲染 CJK 汉字
+    渲染 CJK 汉字（使用 Quartz bitmap → SDF）
 
     Args:
         cjk_chars: 汉字列表
-        use_cache: 是否使用缓存目录中的图像
-        use_msdf: 是否使用 MSDF 渲染
-        msdf_pxrange: MSDF 距离场像素范围
+        pxrange: SDF 距离场像素范围
+        text_padding: 文本字符缩放系数
 
     Returns:
         list of PIL.Image: CJK 汉字图像
     """
+    if not HAS_QUARTZ:
+        print("错误: SDF 渲染需要 Quartz（仅 macOS）")
+        return []
+
     symbols = []
     total = cfg.CJK_GRID_COLS * cfg.CJK_GRID_ROWS  # 4096
-    cjk_cache_dir = os.path.join(SCRIPT_DIR, "cjk_chars")
-    msdf_count = 0
-    sdf_fallback_count = 0
 
-    # 预计算 CJK 字体的 msdfgen 参数
-    cjk_font_params = None
-    if use_msdf and MSDFGEN_CJK_FONT and os.path.exists(MSDFGEN_CJK_FONT):
-        try:
-            s, tx, ty = compute_msdf_params(
-                MSDFGEN_CJK_FONT, cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE,
-                padding=text_padding
-            )
-            cjk_font_params = (s, tx, ty)
-        except Exception as e:
-            print(f"    警告: 计算 CJK 字体参数失败: {e}")
-
-    # SDF fallback 的超采样倍率（与 TUI 保持一致）
+    # 超采样倍率
     sdf_scale = 2
 
     for i in range(total):
         symbol = None
 
-        if use_msdf and i < len(cjk_chars):
+        if i < len(cjk_chars):
             char = cjk_chars[i]
 
-            # 1. 尝试 msdfgen（真正 MSDF）
-            if cjk_font_params and MSDFGEN_CJK_FONT:
-                s, tx, ty = cjk_font_params
-                symbol = render_char_msdfgen(
-                    char, cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE,
-                    MSDFGEN_CJK_FONT, pxrange=msdf_pxrange,
-                    scale=s, tx=tx, ty=ty
+            # 渲染字符
+            render_size = cfg.CJK_RENDER_SIZE * sdf_scale
+            font_size = cfg.CJK_FONT_SIZE * sdf_scale
+            rendered = render_char_quartz(
+                char, render_size, render_size,
+                CJK_FONT_NAME, font_size,
+                text_padding=text_padding
+            )
+
+            if rendered:
+                # 转换为 SDF
+                sdf_img = bitmap_to_sdf(rendered, spread=pxrange * sdf_scale)
+                symbol = sdf_img.resize(
+                    (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), Image.LANCZOS
                 )
-                if symbol:
-                    msdf_count += 1
 
-            # 2. Fallback: Quartz bitmap → SDF
-            if symbol is None and HAS_QUARTZ:
-                render_size = cfg.CJK_RENDER_SIZE * sdf_scale
-                font_size = cfg.CJK_FONT_SIZE * sdf_scale
-                rendered = render_char_quartz(char, render_size, render_size, CJK_FONT_NAME, font_size,
-                                              text_padding=text_padding)
-                if rendered:
-                    sdf_img = bitmap_to_sdf(rendered, spread=msdf_pxrange * sdf_scale)
-                    symbol = sdf_img.resize(
-                        (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), Image.LANCZOS
-                    )
-                    sdf_fallback_count += 1
-
-        elif not use_msdf:
-            if use_cache and os.path.exists(cjk_cache_dir):
-                files = [f for f in os.listdir(cjk_cache_dir) if f.startswith(f"{i:04d}_")]
-                if files:
-                    symbol = Image.open(os.path.join(cjk_cache_dir, files[0])).convert("RGBA")
-
-            if symbol is None and i < len(cjk_chars) and HAS_QUARTZ:
-                char = cjk_chars[i]
-                rendered = render_char_quartz(
-                    char, cfg.CJK_RENDER_SIZE, cfg.CJK_RENDER_SIZE,
-                    CJK_FONT_NAME, cfg.CJK_FONT_SIZE, text_padding=text_padding
-                )
-                if rendered:
-                    symbol = rendered
-
-        # 空白填充
+        # 空白填充（SDF 模式使用黑色背景）
         if symbol is None:
-            if use_msdf:
-                symbol = Image.new("RGBA", (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), (0, 0, 0, 255))
-            else:
-                symbol = Image.new("RGBA", (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), (0, 0, 0, 0))
+            symbol = Image.new("RGBA", (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), (0, 0, 0, 255))
 
         if symbol.size != (cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE):
             symbol = symbol.resize((cfg.CJK_CHAR_SIZE, cfg.CJK_CHAR_SIZE), Image.LANCZOS)
@@ -1163,9 +763,6 @@ def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
 
         if (i + 1) % 512 == 0:
             print(f"    渲染 CJK: {i + 1}/{total}")
-
-    if use_msdf:
-        print(f"    MSDF: {msdf_count}, SDF fallback: {sdf_fallback_count}")
 
     return symbols
 
@@ -1273,32 +870,27 @@ def build_symbol_map(tui_chars, emojis, cjk_chars=None):
 
 
 def main():
-    global cfg, MSDFGEN_BIN, MSDFGEN_CJK_FONT
+    global cfg
 
-    parser = argparse.ArgumentParser(description='生成 symbols.png 和 symbol_map.json')
-    parser.add_argument('--size', type=int, default=4096, choices=[4096, 8192],
-                        help='纹理尺寸: 4096 (默认) 或 8192')
-    parser.add_argument('--use-cache', action='store_true',
-                        help='使用缓存的字符图像而不是重新渲染')
+    parser = argparse.ArgumentParser(description='生成 symbols.png 和 symbol_map.json（SDF 模式）')
+    parser.add_argument('--size', type=int, default=8192, choices=[4096, 8192],
+                        help='纹理尺寸: 4096 或 8192 (默认)')
     parser.add_argument('--output-png', default=None,
-                        help=f'输出 PNG 文件路径 (默认: symbols.png 或 symbols_8192.png)')
+                        help='输出 PNG 文件路径 (默认: symbols.png 或 symbols_8192.png)')
     parser.add_argument('--output-json', default=None,
-                        help=f'输出 JSON 文件路径 (默认: symbol_map.json 或 symbol_map_8192.json)')
-    parser.add_argument('--sdf', action='store_true',
-                        help='TUI/CJK 使用纯 SDF 渲染（Quartz bitmap-to-SDF，无需 msdfgen）')
-    parser.add_argument('--msdf', action='store_true',
-                        help='TUI/CJK 使用 MSDF 渲染（msdfgen 生成，fallback 到 bitmap-to-SDF）')
-    parser.add_argument('--tui-sdf', action='store_true',
-                        help='TUI 强制使用 Quartz bitmap-to-SDF（保留 macOS 字体风格，需配合 --msdf）')
-    parser.add_argument('--msdf-pxrange', type=int, default=4,
-                        help='MSDF 距离场像素范围 (默认: 4)')
+                        help='输出 JSON 文件路径 (默认: symbol_map.json 或 symbol_map_8192.json)')
+    parser.add_argument('--pxrange', type=int, default=4,
+                        help='SDF 距离场像素范围 (默认: 4)')
     parser.add_argument('--text-padding', type=float, default=0.92,
-                        help='文本字符 MSDF 缩放系数 (0~1, 默认: 0.92, 图形字符始终为 1.0)')
-    parser.add_argument('--msdfgen', default=MSDFGEN_BIN,
-                        help=f'msdfgen 可执行文件路径 (默认: {MSDFGEN_BIN})')
+                        help='文本字符缩放系数 (0~1, 默认: 0.92, 图形字符始终为 1.0)')
     parser.add_argument('--save-bitmap', action='store_true',
                         help='保存 SDF 渲染前的位图到缓存目录（用于调试）')
     args = parser.parse_args()
+
+    # 检查 Quartz 是否可用
+    if not HAS_QUARTZ:
+        print("错误: SDF 渲染需要 Quartz（仅 macOS）")
+        sys.exit(1)
 
     # 初始化配置
     cfg = TextureConfig(args.size)
@@ -1316,58 +908,17 @@ def main():
         else:
             args.output_json = OUTPUT_JSON
 
-    # 设置 msdfgen 路径
-    MSDFGEN_BIN = args.msdfgen
-
-    # SDF 模式：纯 bitmap-to-SDF，无需 msdfgen
-    if args.sdf:
-        if not HAS_QUARTZ:
-            print("错误: SDF 模式需要 Quartz（仅 macOS）")
-            sys.exit(1)
-        print("\n准备 SDF 渲染...")
-        print(f"  TUI: {TUI_FONT_NAME} (Quartz bitmap-to-SDF)")
-        print(f"  CJK: {CJK_FONT_NAME} (Quartz bitmap-to-SDF)")
-        print(f"  pxrange: {args.msdf_pxrange}")
-
-    # MSDF 模式：检查 msdfgen 并提取 CJK 字体
-    elif args.msdf:
-        if not os.path.exists(MSDFGEN_BIN):
-            print(f"错误: msdfgen 不存在: {MSDFGEN_BIN}")
-            print("  安装: brew install msdfgen 或指定 --msdfgen 路径")
-            sys.exit(1)
-
-        print("\n准备 MSDF 字体...")
-        # TUI 字体
-        if os.path.exists(MSDFGEN_TUI_FONT):
-            cmap = load_font_cmap(MSDFGEN_TUI_FONT)
-            print(f"  TUI: {os.path.basename(MSDFGEN_TUI_FONT)} ({len(cmap)} glyphs)")
-        else:
-            print(f"  警告: TUI 字体不存在: {MSDFGEN_TUI_FONT}")
-
-        # Braille 字体
-        if os.path.exists(MSDFGEN_BRAILLE_FONT):
-            cmap = load_font_cmap(MSDFGEN_BRAILLE_FONT)
-            print(f"  Braille: {os.path.basename(MSDFGEN_BRAILLE_FONT)} ({len(cmap)} glyphs)")
-
-        # CJK: 使用 PingFang SC bitmap-to-SDF（效果最佳）
-        MSDFGEN_CJK_FONT = None
-        print(f"  CJK: {CJK_FONT_NAME} (Quartz bitmap-to-SDF)")
-
-        print(f"  msdfgen: {MSDFGEN_BIN}")
-        print(f"  pxrange: {args.msdf_pxrange}")
+    # 显示配置信息
+    print("\n准备 SDF 渲染...")
+    print(f"  TUI 字体: {os.path.basename(TUI_FONT_PATH)}")
+    print(f"  CJK 字体: {CJK_FONT_NAME}")
+    print(f"  pxrange: {args.pxrange}")
 
     print("\n" + "=" * 70)
     print(f"生成 {cfg.size}x{cfg.size} symbols.png 和 symbol_map.json")
     if cfg.scale > 1:
         print(f"  缩放因子: {cfg.scale}x (基础符号: {cfg.SPRITE_CHAR_SIZE}x{cfg.SPRITE_CHAR_SIZE}px)")
-    if args.sdf:
-        print(f"  模式: SDF (Quartz bitmap-to-SDF，无需 msdfgen)")
-    elif args.msdf and args.tui_sdf:
-        print(f"  模式: MSDF (TUI: Quartz bitmap-to-SDF, CJK: bitmap-to-SDF)")
-    elif args.msdf:
-        print(f"  模式: MSDF (msdfgen + bitmap-to-SDF fallback)")
-    else:
-        print(f"  模式: 位图 (bitmap)")
+    print(f"  模式: SDF (Quartz bitmap-to-SDF)")
     print("=" * 70)
 
     # 检查输入文件
@@ -1414,44 +965,27 @@ def main():
     print(f"  总共 {len(all_sprites)} 个 Sprite 符号")
 
     # ========== 渲染 TUI 字符 ==========
-    if args.sdf:
-        print(f"\n渲染 TUI 字符 (SDF, pxrange={args.msdf_pxrange})...")
-    elif args.msdf and args.tui_sdf:
-        print(f"\n渲染 TUI 字符 (Quartz bitmap-to-SDF, pxrange={args.msdf_pxrange})...")
-    elif args.msdf:
-        print(f"\n渲染 TUI 字符 (MSDF, pxrange={args.msdf_pxrange})...")
-    else:
-        print("\n渲染 TUI 字符...")
-    if not args.msdf and not args.sdf and not HAS_QUARTZ and not args.use_cache:
-        print("  警告: Quartz 不可用，强制使用缓存")
-        args.use_cache = True
-    # --sdf 模式：use_msdf=True + tui_sdf=True 触发纯 bitmap-to-SDF
-    use_msdf_mode = args.msdf or args.sdf
-    force_sdf = args.tui_sdf or args.sdf
-    tui_images = render_tui_chars(tui_chars, args.use_cache,
-                                   use_msdf=use_msdf_mode,
-                                   msdf_pxrange=args.msdf_pxrange,
-                                   tui_sdf=force_sdf,
-                                   text_padding=args.text_padding,
-                                   save_bitmap=args.save_bitmap)
+    print(f"\n渲染 TUI 字符 (SDF, pxrange={args.pxrange})...")
+    tui_images = render_tui_chars(
+        tui_chars,
+        pxrange=args.pxrange,
+        text_padding=args.text_padding,
+        save_bitmap=args.save_bitmap
+    )
     print(f"  生成 {len(tui_images)} 个 TUI 字符图像")
 
     # ========== 渲染 Emoji ==========
     print("\n渲染 Emoji (位图)...")
-    emoji_images = render_emojis(emojis, args.use_cache)
+    emoji_images = render_emojis(emojis)
     print(f"  生成 {len(emoji_images)} 个 Emoji 图像")
 
     # ========== 渲染 CJK 汉字 ==========
-    if args.sdf:
-        print(f"\n渲染 CJK 汉字 (SDF, pxrange={args.msdf_pxrange})...")
-    elif args.msdf:
-        print(f"\n渲染 CJK 汉字 (MSDF, pxrange={args.msdf_pxrange})...")
-    else:
-        print("\n渲染 CJK 汉字...")
-    cjk_images = render_cjk_chars(cjk_chars, args.use_cache,
-                                    use_msdf=use_msdf_mode,
-                                    msdf_pxrange=args.msdf_pxrange,
-                                    text_padding=args.text_padding)
+    print(f"\n渲染 CJK 汉字 (SDF, pxrange={args.pxrange})...")
+    cjk_images = render_cjk_chars(
+        cjk_chars,
+        pxrange=args.pxrange,
+        text_padding=args.text_padding
+    )
     print(f"  生成 {len(cjk_images)} 个 CJK 图像")
 
     # ========== 绘制 Sprite 区域 ==========
