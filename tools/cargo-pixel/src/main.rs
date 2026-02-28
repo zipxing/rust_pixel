@@ -174,9 +174,9 @@ fn create_dir_cmd(dir: &str) {
 /// Cross-platform file/directory copying
 fn copy_cmd(from: &str, to: &str, recursive: bool) {
     if recursive {
-        copy_dir_recursive(from, to).expect(&format!("Failed to copy {} to {}", from, to));
+        copy_dir_recursive(from, to).unwrap_or_else(|_| panic!("Failed to copy {} to {}", from, to));
     } else {
-        std::fs::copy(from, to).expect(&format!("Failed to copy file {} to {}", from, to));
+        std::fs::copy(from, to).unwrap_or_else(|_| panic!("Failed to copy file {} to {}", from, to));
     }
 }
 
@@ -272,11 +272,6 @@ fn capitalize(s: &str) -> String {
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
 }
-
-/// Displays usage information for the asset command
-
-
-
 
 /// Handle the asset subcommand by converting it to a run command
 /// cargo pixel asset input_folder output_folder -> cargo pixel r asset t -r input_folder output_folder

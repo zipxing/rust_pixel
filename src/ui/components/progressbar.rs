@@ -24,6 +24,12 @@ pub struct ProgressBar {
     empty_char: char,
 }
 
+impl Default for ProgressBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProgressBar {
     pub fn new() -> Self {
         let id = next_widget_id();

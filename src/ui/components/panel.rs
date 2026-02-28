@@ -39,6 +39,12 @@ pub struct Panel {
     vdividers: Vec<(u16, u16, u16)>,
 }
 
+impl Default for Panel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Panel {
     pub fn new() -> Self {
         Self {
@@ -529,7 +535,7 @@ impl Panel {
                 let on_bottom_border = y == bottom_y;
                 let on_hdivider = hdivider_set.contains(&(y - bounds.y));
                 let is_start = y == y_start;
-                let is_end = y == y_end;
+                let _is_end = y == y_end;
 
                 let sym = if on_top_border && has_border {
                     top_tee
@@ -546,10 +552,6 @@ impl Panel {
                     } else {
                         bottom_tee
                     }
-                } else if is_start && !on_top_border {
-                    v_char
-                } else if is_end && !on_bottom_border {
-                    v_char
                 } else {
                     v_char
                 };

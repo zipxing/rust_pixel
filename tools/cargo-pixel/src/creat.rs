@@ -117,7 +117,7 @@ pub fn pixel_creat(ctx: &PixelContext, args: &ArgMatches) {
         &loname,
     );
 
-    let new_path_buf = Path::new(&dir_name).join(&mod_name);
+    let new_path_buf = Path::new(&dir_name).join(mod_name);
     let mut new_path = new_path_buf.to_string_lossy().to_string();
     let mut count = 0;
     while Path::new(&new_path).exists() {

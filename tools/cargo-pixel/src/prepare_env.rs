@@ -81,18 +81,18 @@ fn decide_rust_pixel_location(current_dir: &std::path::Path) -> std::path::PathB
         let home_dir = dirs_next::home_dir().expect("Could not find home directory");
         let home_rust_pixel = home_dir.join("rust_pixel_work");
         println!("  Will use home directory for rust_pixel");
-        return home_rust_pixel;
+        home_rust_pixel
     } else {
         // Regular directory, check if writable
         if can_write_to_dir(current_dir) {
             println!("  Will create rust_pixel in current directory");
-            return current_dir.join("rust_pixel");
+            current_dir.join("rust_pixel")
         } else {
             // Current directory not writable, use home directory
             let home_dir = dirs_next::home_dir().expect("Could not find home directory");
             let home_rust_pixel = home_dir.join("rust_pixel_work");
             println!("  Current directory not writable, will use home directory");
-            return home_rust_pixel;
+            home_rust_pixel
         }
     }
 }

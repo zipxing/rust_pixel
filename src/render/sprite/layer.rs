@@ -179,7 +179,3 @@ impl Layer {
     }
 }
 
-// Type alias for backward compatibility
-#[deprecated(note = "Use Layer instead")]
-#[allow(dead_code)]
-pub type Sprites = Layer;

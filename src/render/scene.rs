@@ -317,7 +317,3 @@ impl Scene {
     }
 }
 
-// Type alias for backward compatibility
-#[deprecated(note = "Use Scene instead")]
-#[allow(dead_code)]
-pub type Panel = Scene;

@@ -27,7 +27,7 @@ pub fn to_error(error: Result<(), Error>) -> Result<(), String> {
 /// helping method to convert error msg
 #[cfg(not(any(graphics_backend, mobile, wasm)))]
 pub fn io_error(error: Result<(), Error>) -> std::io::Result<()> {
-    error.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    error.map_err(|e| std::io::Error::other(e.to_string()))
 }
 
 #[derive(Debug)]

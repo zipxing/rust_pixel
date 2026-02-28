@@ -171,7 +171,7 @@ impl AssetManager {
                 #[cfg(not(wasm))]
                 {
                     let fpstr = get_abs_path(loc);
-                    let fdata = std::fs::read(&fpstr.clone()).expect(&format!("read file {} error", fpstr.clone()));
+                    let fdata = std::fs::read(fpstr.clone()).unwrap_or_else(|_| panic!("read file {} error", fpstr.clone()));
                     info!("asset load:{:?}", fpstr);
                     self.set_data(loc, &fdata[..]);
                 }

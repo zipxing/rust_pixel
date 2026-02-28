@@ -27,6 +27,12 @@ pub struct Modal {
     on_close: Option<Box<dyn Fn() + 'static>>,
 }
 
+impl Default for Modal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Modal {
     pub fn new() -> Self {
         let id = next_widget_id();

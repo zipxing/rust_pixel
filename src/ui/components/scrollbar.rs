@@ -196,81 +196,78 @@ impl Widget for ScrollBar {
             return Ok(false);
         }
         
-        match event {
-            UIEvent::Input(InputEvent::Mouse(mouse_event)) => {
-                if self.hit_test(mouse_event.column, mouse_event.row) {
-                    match mouse_event.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            let bounds = self.bounds();
-                            
-                            match self.orientation {
-                                ScrollbarOrientation::Vertical => {
-                                    if mouse_event.row == bounds.y {
-                                        // Up arrow
-                                        self.scroll_up();
-                                    } else if mouse_event.row == bounds.y + bounds.height - 1 {
-                                        // Down arrow
-                                        self.scroll_down();
+        if let UIEvent::Input(InputEvent::Mouse(mouse_event)) = event {
+            if self.hit_test(mouse_event.column, mouse_event.row) {
+                match mouse_event.kind {
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        let bounds = self.bounds();
+                        
+                        match self.orientation {
+                            ScrollbarOrientation::Vertical => {
+                                if mouse_event.row == bounds.y {
+                                    // Up arrow
+                                    self.scroll_up();
+                                } else if mouse_event.row == bounds.y + bounds.height - 1 {
+                                    // Down arrow
+                                    self.scroll_down();
+                                } else {
+                                    // Track or thumb
+                                    let (thumb_pos, thumb_size) = self.get_thumb_bounds();
+                                    if mouse_event.row >= thumb_pos && mouse_event.row < thumb_pos + thumb_size {
+                                        // Start dragging thumb
+                                        self.dragging = true;
+                                        self.drag_offset = mouse_event.row - thumb_pos;
                                     } else {
-                                        // Track or thumb
-                                        let (thumb_pos, thumb_size) = self.get_thumb_bounds();
-                                        if mouse_event.row >= thumb_pos && mouse_event.row < thumb_pos + thumb_size {
-                                            // Start dragging thumb
-                                            self.dragging = true;
-                                            self.drag_offset = mouse_event.row - thumb_pos;
-                                        } else {
-                                            // Click on track
-                                            let new_value = self.position_to_value(mouse_event.row);
-                                            self.set_value(new_value);
-                                        }
-                                    }
-                                }
-                                ScrollbarOrientation::Horizontal => {
-                                    if mouse_event.column == bounds.x {
-                                        // Left arrow
-                                        self.scroll_up();
-                                    } else if mouse_event.column == bounds.x + bounds.width - 1 {
-                                        // Right arrow
-                                        self.scroll_down();
-                                    } else {
-                                        // Track or thumb
-                                        let (thumb_pos, thumb_size) = self.get_thumb_bounds();
-                                        if mouse_event.column >= thumb_pos && mouse_event.column < thumb_pos + thumb_size {
-                                            // Start dragging thumb
-                                            self.dragging = true;
-                                            self.drag_offset = mouse_event.column - thumb_pos;
-                                        } else {
-                                            // Click on track
-                                            let new_value = self.position_to_value(mouse_event.column);
-                                            self.set_value(new_value);
-                                        }
+                                        // Click on track
+                                        let new_value = self.position_to_value(mouse_event.row);
+                                        self.set_value(new_value);
                                     }
                                 }
                             }
+                            ScrollbarOrientation::Horizontal => {
+                                if mouse_event.column == bounds.x {
+                                    // Left arrow
+                                    self.scroll_up();
+                                } else if mouse_event.column == bounds.x + bounds.width - 1 {
+                                    // Right arrow
+                                    self.scroll_down();
+                                } else {
+                                    // Track or thumb
+                                    let (thumb_pos, thumb_size) = self.get_thumb_bounds();
+                                    if mouse_event.column >= thumb_pos && mouse_event.column < thumb_pos + thumb_size {
+                                        // Start dragging thumb
+                                        self.dragging = true;
+                                        self.drag_offset = mouse_event.column - thumb_pos;
+                                    } else {
+                                        // Click on track
+                                        let new_value = self.position_to_value(mouse_event.column);
+                                        self.set_value(new_value);
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(true);
+                    }
+                    MouseEventKind::Up(MouseButton::Left) => {
+                        if self.dragging {
+                            self.dragging = false;
                             return Ok(true);
                         }
-                        MouseEventKind::Up(MouseButton::Left) => {
-                            if self.dragging {
-                                self.dragging = false;
-                                return Ok(true);
-                            }
-                        }
-                        MouseEventKind::Drag(MouseButton::Left) => {
-                            if self.dragging {
-                                let drag_pos = match self.orientation {
-                                    ScrollbarOrientation::Vertical => mouse_event.row.saturating_sub(self.drag_offset),
-                                    ScrollbarOrientation::Horizontal => mouse_event.column.saturating_sub(self.drag_offset),
-                                };
-                                let new_value = self.position_to_value(drag_pos);
-                                self.set_value(new_value);
-                                return Ok(true);
-                            }
-                        }
-                        _ => {}
                     }
+                    MouseEventKind::Drag(MouseButton::Left) => {
+                        if self.dragging {
+                            let drag_pos = match self.orientation {
+                                ScrollbarOrientation::Vertical => mouse_event.row.saturating_sub(self.drag_offset),
+                                ScrollbarOrientation::Horizontal => mouse_event.column.saturating_sub(self.drag_offset),
+                            };
+                            let new_value = self.position_to_value(drag_pos);
+                            self.set_value(new_value);
+                            return Ok(true);
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
         }
         
         Ok(false)

@@ -15,6 +15,7 @@ pub struct Theme {
 
 /// Style for a specific component and its states
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct ComponentStyle {
     pub normal: Style,
     pub hovered: Style,
@@ -23,17 +24,6 @@ pub struct ComponentStyle {
     pub disabled: Style,
 }
 
-impl Default for ComponentStyle {
-    fn default() -> Self {
-        Self {
-            normal: Style::default(),
-            hovered: Style::default(),
-            focused: Style::default(),
-            pressed: Style::default(),
-            disabled: Style::default(),
-        }
-    }
-}
 
 impl ComponentStyle {
     pub fn new(base_style: Style) -> Self {

@@ -111,6 +111,7 @@ use crate::render::style::Color;
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(usize)]
+#[derive(Default)]
 pub enum GpuTransition {
     /// 方格渐变过渡 (Squares Grid)
     ///
@@ -118,6 +119,7 @@ pub enum GpuTransition {
     /// 方格大小随进度变化，产生像素化的过渡效果。
     ///
     /// 适合场景：复古风格场景切换、像素艺术游戏
+    #[default]
     Squares = 0,
 
     /// 心形展开过渡 (Heart Shape)
@@ -264,11 +266,6 @@ impl From<usize> for GpuTransition {
     }
 }
 
-impl Default for GpuTransition {
-    fn default() -> Self {
-        GpuTransition::Squares
-    }
-}
 
 /// GPU混合特效描述
 ///
@@ -1319,8 +1316,8 @@ impl BufferTransition for BlindsTransition {
         let progress = progress.clamp(0.0, 1.0);
 
         let (_total_size, slice_size) = match self.direction {
-            BlindsDirection::Horizontal => (height, (height + self.slices - 1) / self.slices),
-            BlindsDirection::Vertical => (width, (width + self.slices - 1) / self.slices),
+            BlindsDirection::Horizontal => (height, height.div_ceil(self.slices)),
+            BlindsDirection::Vertical => (width, width.div_ceil(self.slices)),
         };
 
         for y in 0..height {

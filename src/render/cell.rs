@@ -150,7 +150,7 @@ pub fn cellsym(idx: u8) -> String {
 /// None otherwise.
 pub fn decode_pua(ch: char) -> Option<(u8, u8)> {
     let cp = ch as u32;
-    if cp >= PUA_BASE && cp <= PUA_END {
+    if (PUA_BASE..=PUA_END).contains(&cp) {
         let offset = cp - PUA_BASE;
         let block = (offset / PUA_BLOCK_SIZE) as u8;
         let idx = (offset % PUA_BLOCK_SIZE) as u8;
@@ -163,7 +163,7 @@ pub fn decode_pua(ch: char) -> Option<(u8, u8)> {
 /// Check if a character is in PUA Sprite range.
 pub fn is_pua_sprite(ch: char) -> bool {
     let cp = ch as u32;
-    cp >= PUA_BASE && cp <= PUA_END
+    (PUA_BASE..=PUA_END).contains(&cp)
 }
 
 /// TUI character type for rendering mode detection.

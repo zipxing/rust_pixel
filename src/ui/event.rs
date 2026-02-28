@@ -96,21 +96,13 @@ pub trait EventHandler {
 }
 
 /// Event dispatcher for managing event flow
+#[derive(Default)]
 pub struct EventDispatcher {
     focused_widget: Option<WidgetId>,
     hovered_widget: Option<WidgetId>,
     event_queue: VecDeque<UIEvent>,
 }
 
-impl Default for EventDispatcher {
-    fn default() -> Self {
-        Self {
-            focused_widget: None,
-            hovered_widget: None,
-            event_queue: VecDeque::new(),
-        }
-    }
-}
 
 impl EventDispatcher {
     pub fn new() -> Self {

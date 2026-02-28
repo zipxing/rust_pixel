@@ -221,6 +221,7 @@ macro_rules! app_body {
 /// ```
 #[cfg(not(feature = "base"))]
 #[macro_export]
+#[allow(clippy::crate_in_macro_def)]
 macro_rules! app {
     // Unified render mode: single render.rs file
     ($name:ident, unified) => {

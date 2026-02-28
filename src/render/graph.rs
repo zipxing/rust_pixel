@@ -1618,25 +1618,23 @@ pub fn render_buffer_to_cells<F>(
 
         // Calculate rotation center point using actual pixel positions.
         // This correctly handles mixed half-width and full-width characters.
-        // 
-        // For rotation, we need the offset from each cell's center to the buffer's center.
-        // - cell_center_x: center of current cell in pixel space (after accumulation)
-        // - row_center_x: center of the row (half of row's total pixel width)
-        // - The offset is: row_center - cell_center (positive = cell is left of center)
+        //
+        // The WGPU transform chain expects ccp as the offset from the cell's
+        // LEFT/TOP edge to the sprite's rotation center (row/buffer center).
+        // Both row_pixel_widths and cumulative_x are already in scaled pixel
+        // space, so no additional scale multiplication is needed.
         let row = i / pw as usize;
         let row_center_x = row_pixel_widths[row] / 2.0;
-        // Cell center is at (cumulative_x - grid_advance/2) since we already accumulated
-        let cell_center_x = cumulative_x - grid_advance / 2.0;
-        let offset_x = row_center_x - cell_center_x;
-        
-        // Y offset: use row index since all cells in a row have the same height
+        let cell_left_x = cumulative_x - grid_advance;
+        let offset_x = row_center_x - cell_left_x;
+
         let row_h = base_cell_h * scale_y;
         let buffer_center_y = ph as f32 * row_h / 2.0;
-        let cell_center_y = row as f32 * row_h + row_h / 2.0;
-        let offset_y = buffer_center_y - cell_center_y;
-        
+        let cell_top_y = row as f32 * row_h;
+        let offset_y = buffer_center_y - cell_top_y;
+
         let ccp = PointI32 {
-            x: (offset_x * scale_x) as i32,
+            x: offset_x as i32,
             y: offset_y as i32,
         };
 
@@ -1820,85 +1818,6 @@ pub fn render_main_buffer<F>(
             f(fc, bc, s2, texidx, symidx, modifier);
         },
     );
-}
-
-/// Render window borders (DEPRECATED - Not used in current implementation)
-///
-/// **Note**: This function is kept for backward compatibility but is no longer used.
-/// RustPixel now uses OS native window decoration (title bar, border) instead of
-/// custom-drawn borders for better integration with the desktop environment.
-///
-/// ## Previous Border Layout (Historical Reference)
-/// ```text
-/// ┌───────────────────────────────────────────────────────┐
-/// │                      Window Border                    │
-/// │  ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐  │
-/// │  ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤  │
-/// │  ├─┤                 Game Content Area           ├─┤  │
-/// │  ├─┤                                             ├─┤  │
-/// │  ├─┤                     80 x 40                 ├─┤  │
-/// │  ├─┤                  Character Grid             ├─┤  │
-/// │  ├─┤                                             ├─┤  │
-/// │  ├─┤                                             ├─┤  │
-/// │  ├─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┼─┤  │
-/// │  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘  │
-/// └───────────────────────────────────────────────────────┘
-/// ```
-///
-/// The border consists of:
-/// - **Top/Bottom Edges**: Horizontal line characters
-/// - **Left/Right Edges**: Vertical line characters
-/// - **Corners**: Corner junction characters
-/// - **Consistent Styling**: Matches the game's visual theme
-///
-/// # Parameters
-/// - `cell_w`: Game area width in characters
-/// - `cell_h`: Game area height in characters
-/// - `rx`: Horizontal scaling ratio
-/// - `ry`: Vertical scaling ratio
-/// - `f`: Callback function to render each border character
-///
-/// # Deprecation Notice
-/// This function is no longer called in the rendering pipeline. Applications now
-/// use OS window decoration for better native integration.
-#[allow(dead_code)]
-pub fn render_border<F>(cell_w: u16, cell_h: u16, rx: f32, ry: f32, mut f: F)
-where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize),
-{
-    let sh_top = (102u8, 1u8, Color::Indexed(7), Color::Reset);
-    let sh_other = (24u8, 2u8, Color::Indexed(7), Color::Reset);
-    let sh_close = (214u8, 1u8, Color::Indexed(7), Color::Reset);
-
-    for n in 0..cell_h as usize + 2 {
-        for m in 0..cell_w as usize + 2 {
-            if n != 0 && n != cell_h as usize + 1 && m != 0 && m != cell_w as usize + 1 {
-                continue;
-            }
-            let rsh;
-            if n == 0 {
-                if m as u16 <= cell_w {
-                    rsh = &sh_top;
-                } else {
-                    rsh = &sh_close;
-                }
-            } else {
-                rsh = &sh_other;
-            }
-            let (s2, texidx, symidx) = render_helper(
-                cell_w + 2,
-                PointF32 { x: rx, y: ry },
-                n * (cell_w as usize + 2) + m,
-                rsh,
-                PointU16 { x: 0, y: 0 },
-                false, // Deprecated, kept for API compatibility
-                1,     // glyph_height: Sprite (1x1)
-            );
-            let fc = rsh.2.get_rgba();
-            let bc = None;
-            f(&fc, &bc, s2, texidx, symidx);
-        }
-    }
 }
 
 /// Render the RustPixel logo animation with dynamic effects

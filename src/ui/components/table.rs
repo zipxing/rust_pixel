@@ -102,6 +102,12 @@ pub struct Table {
     on_row_activated: Option<Box<dyn FnMut(usize) + Send>>,
 }
 
+impl Default for Table {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Table {
     pub fn new() -> Self {
         Self {
@@ -463,21 +469,18 @@ impl Widget for Table {
             }
             UIEvent::Input(InputEvent::Mouse(mouse_event)) => {
                 if self.hit_test(mouse_event.column, mouse_event.row) {
-                    match mouse_event.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            let bounds = self.bounds();
-                            let click_y = mouse_event.row.saturating_sub(bounds.y + self.header_offset());
-                            let (start, _) = self.visible_range();
-                            let row_idx = start + click_y as usize;
+                    if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
+                        let bounds = self.bounds();
+                        let click_y = mouse_event.row.saturating_sub(bounds.y + self.header_offset());
+                        let (start, _) = self.visible_range();
+                        let row_idx = start + click_y as usize;
 
-                            if row_idx < self.rows.len() && self.rows[row_idx].enabled {
-                                self.selected_index = Some(row_idx);
-                                self.mark_dirty();
-                                self.notify_selection_changed();
-                                return Ok(true);
-                            }
+                        if row_idx < self.rows.len() && self.rows[row_idx].enabled {
+                            self.selected_index = Some(row_idx);
+                            self.mark_dirty();
+                            self.notify_selection_changed();
+                            return Ok(true);
                         }
-                        _ => {}
                     }
                 }
             }

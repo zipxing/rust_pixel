@@ -1,8 +1,8 @@
-use pixel_basic::{GameBridge, NullGameContext};
+use pixel_basic::GameBridge;
 
 #[test]
 fn test_snake_game_lifecycle() {
-    let mut bridge = GameBridge::new(NullGameContext);
+    let mut bridge = GameBridge::new();
 
     // Minimal version of game.bas that reproduces the issue
     let program = r#"

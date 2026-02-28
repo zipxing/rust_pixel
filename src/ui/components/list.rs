@@ -62,6 +62,12 @@ pub struct List {
     on_selection_changed: Option<Box<dyn FnMut(Vec<usize>) + Send>>,
 }
 
+impl Default for List {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl List {
     pub fn new() -> Self {
         Self {
@@ -324,19 +330,16 @@ impl Widget for List {
             }
             UIEvent::Input(InputEvent::Mouse(mouse_event)) => {
                 if self.hit_test(mouse_event.column, mouse_event.row) {
-                    match mouse_event.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            let bounds = self.bounds();
-                            let clicked_row = mouse_event.row.saturating_sub(bounds.y) as usize;
-                            let (start, _) = self.visible_range();
-                            let item_index = start + clicked_row;
-                            
-                            if item_index < self.items.len() && self.items[item_index].enabled {
-                                self.select_item(item_index);
-                                return Ok(true);
-                            }
+                    if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
+                        let bounds = self.bounds();
+                        let clicked_row = mouse_event.row.saturating_sub(bounds.y) as usize;
+                        let (start, _) = self.visible_range();
+                        let item_index = start + clicked_row;
+                        
+                        if item_index < self.items.len() && self.items[item_index].enabled {
+                            self.select_item(item_index);
+                            return Ok(true);
                         }
-                        _ => {}
                     }
                 }
             }

@@ -1,8 +1,8 @@
-use pixel_basic::{GameBridge, NullGameContext};
+use pixel_basic::GameBridge;
 
 #[test]
 fn test_for_loop_with_plot() {
-    let mut bridge = GameBridge::new(NullGameContext);
+    let mut bridge = GameBridge::new();
 
     let program = r#"
 10 REM Test FOR loop with PLOT

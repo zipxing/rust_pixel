@@ -1,8 +1,8 @@
-use pixel_basic::{GameBridge, NullGameContext};
+use pixel_basic::GameBridge;
 
 #[test]
 fn test_reused_loop_variable() {
-    let mut bridge = GameBridge::new(NullGameContext);
+    let mut bridge = GameBridge::new();
 
     // Test if loop variable I can be reused across subroutines
     let program = r#"

@@ -104,7 +104,7 @@ impl UIPage {
 
     pub fn set_theme(&mut self, theme_name: &str) -> UIResult<()> {
         self.theme_manager.set_theme(theme_name)
-            .map_err(|e| UIError::ThemeError(e))?;
+            .map_err(UIError::ThemeError)?;
 
         // Emit theme changed event
         self.event_dispatcher.emit_event(AppEvent::ThemeChanged(theme_name.to_string()).into());

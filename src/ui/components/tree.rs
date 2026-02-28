@@ -66,6 +66,12 @@ pub struct Tree {
     on_node_expanded: Option<Box<dyn FnMut(NodeId, bool) + Send>>,
 }
 
+impl Default for Tree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tree {
     pub fn new() -> Self {
         Self {
@@ -363,18 +369,15 @@ impl Widget for Tree {
             }
             UIEvent::Input(InputEvent::Mouse(mouse_event)) => {
                 if self.hit_test(mouse_event.column, mouse_event.row) {
-                    match mouse_event.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            let bounds = self.bounds();
-                            let clicked_row = mouse_event.row.saturating_sub(bounds.y) as usize;
-                            let visible_nodes = self.get_visible_nodes();
-                            
-                            if let Some(&(node_id, _)) = visible_nodes.get(self.scroll_offset + clicked_row) {
-                                self.select_node(Some(node_id));
-                                return Ok(true);
-                            }
+                    if let MouseEventKind::Down(MouseButton::Left) = mouse_event.kind {
+                        let bounds = self.bounds();
+                        let clicked_row = mouse_event.row.saturating_sub(bounds.y) as usize;
+                        let visible_nodes = self.get_visible_nodes();
+                        
+                        if let Some(&(node_id, _)) = visible_nodes.get(self.scroll_offset + clicked_row) {
+                            self.select_node(Some(node_id));
+                            return Ok(true);
                         }
-                        _ => {}
                     }
                 }
             }

@@ -117,7 +117,7 @@ impl RandLCG {
     }
 
     pub fn rand(&mut self) -> u64 {
-        let ret = if self.count % 2 == 0 {
+        let ret = if self.count.is_multiple_of(2) {
             //MS LCG
             self.random_next = self.random_next.wrapping_mul(214013).wrapping_add(2531011);
             self.random_next &= 0x7FFFFFFF;

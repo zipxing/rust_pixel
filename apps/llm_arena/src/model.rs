@@ -499,9 +499,6 @@ impl World {
                     // 获取弹药系数（影响对敌方造成的伤害）
                     let ammo_factor = *army_ammo_factors.get(&army_id).unwrap_or(&1.0);
 
-                    // 计算我方对敌方造成的伤亡比例 (受弹药影响)
-                    let my_damage_rate = (my_power / (my_power + enemy_power + 1.0)) * 0.01 * ammo_factor;
-
                     // 计算敌方对我方造成的伤亡
                     let casualty_rate = (enemy_power / (my_power + enemy_power + 1.0)) * 0.01;
                     let casualties = (battle.participants[i].current_troops as f32 * casualty_rate) as u32;
@@ -746,31 +743,6 @@ impl World {
         }
     }
 
-    /// 生成世界状态快照用于调试和比较
-    pub fn snapshot(&self) -> String {
-        let mut s = format!("tick:{} ", self.tick);
-
-        // 阵营状态
-        for f in &self.factions {
-            s.push_str(&format!("f{}:{} ", f.id, if f.is_alive { "alive" } else { "dead" }));
-        }
-
-        // 军团状态（按ID排序确保确定性）
-        let mut armies: Vec<_> = self.armies.iter().collect();
-        armies.sort_by_key(|a| a.id);
-        for a in armies {
-            s.push_str(&format!(
-                "a{}:({:.2},{:.2},{}troops) ",
-                a.id, a.position.0, a.position.1, a.troops
-            ));
-        }
-
-        // 战斗数量
-        s.push_str(&format!("battles:{}", self.battles.len()));
-
-        s
-    }
-
 }
 
 /// Main game model - named LlmArenaModel for app! macro
@@ -779,7 +751,6 @@ pub struct LlmArenaModel {
     pub state: ArenaState,
     pub speed: u32,
     pub viewport: (f32, f32), // Camera position
-    pub selected_army: Option<u32>,
 }
 
 impl Default for LlmArenaModel {
@@ -796,7 +767,6 @@ impl LlmArenaModel {
             state: ArenaState::Init,
             speed: 1,
             viewport: (MAP_WIDTH as f32 / 2.0, MAP_HEIGHT as f32 / 2.0),
-            selected_army: None,
         }
     }
 }
@@ -1162,7 +1132,7 @@ mod tests {
 
         // 记录初始补给
         let initial_supply = world.armies[0].supplies;
-        let initial_troops = world.armies[0].troops;
+        let _initial_troops = world.armies[0].troops;
 
         // 运行100 tick，让补给消耗
         for _ in 0..100 {

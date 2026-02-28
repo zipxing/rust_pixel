@@ -60,6 +60,7 @@ pub struct LinearLayout {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[derive(Default)]
 pub struct Padding {
     pub left: u16,
     pub top: u16,
@@ -67,11 +68,6 @@ pub struct Padding {
     pub bottom: u16,
 }
 
-impl Default for Padding {
-    fn default() -> Self {
-        Self { left: 0, top: 0, right: 0, bottom: 0 }
-    }
-}
 
 impl Padding {
     pub fn all(value: u16) -> Self {

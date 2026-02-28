@@ -24,6 +24,12 @@ pub struct RadioGroup {
     on_change: Option<Box<dyn Fn(usize) + 'static>>,
 }
 
+impl Default for RadioGroup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RadioGroup {
     pub fn new() -> Self {
         let id = next_widget_id();

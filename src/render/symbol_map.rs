@@ -8,6 +8,8 @@
 //! - **TUI** (Block 160-169): 16x32 terminal UI characters, single color
 //! - **Emoji** (Block 170-175): 32x32 color emoji
 //! - **CJK** (Block 176-239): 32x32 Chinese characters, single color, 64 blocks (16 cols × 4 rows)
+//!
+//! ```text
 //! ┌────────────────────────────────────────────────────────────┐
 //! │ Sprite 区域（y=0-2559, 2560px 高）                         │
 //! │ - 10 rows × 16 blocks/row = 160 blocks                     │
@@ -31,6 +33,7 @@
 //! │ - 每 block: 256×256px (8×8 chars, 32×32px each)            │
 //! │ - 4096 CJK 字符                                            │
 //! └────────────────────────────────────────────────────────────┘
+//! ```
 //!
 //! # Usage
 //! ```rust,ignore
@@ -59,7 +62,8 @@ static GLOBAL_SYMBOL_MAP: OnceLock<SymbolMap> = OnceLock::new();
 pub fn init_symbol_map_from_json(json: &str) -> Result<(), String> {
     let map = SymbolMap::from_json(json)
         .map_err(|e| format!("Failed to parse symbol_map.json: {}", e))?;
-    GLOBAL_SYMBOL_MAP.set(map)
+    GLOBAL_SYMBOL_MAP
+        .set(map)
         .map_err(|_| "Symbol map already initialized".to_string())
 }
 
@@ -80,7 +84,8 @@ pub fn init_symbol_map_from_file() -> Result<(), String> {
     let map = SymbolMap::load(&symbol_map_path)
         .map_err(|e| format!("Failed to load symbol map from {}: {}", symbol_map_path, e))?;
 
-    GLOBAL_SYMBOL_MAP.set(map)
+    GLOBAL_SYMBOL_MAP
+        .set(map)
         .map_err(|_| "Symbol map already initialized".to_string())?;
 
     log::info!("Loaded symbol map from {}", symbol_map_path);
@@ -180,8 +185,7 @@ impl SymbolMap {
             std::path::MAIN_SEPARATOR,
             PIXEL_SYMBOL_MAP_FILE
         );
-        Self::load(&symbol_map_path)
-            .expect("Failed to load symbol_map.json from default path")
+        Self::load(&symbol_map_path).expect("Failed to load symbol_map.json from default path")
     }
 
     /// Create empty symbol map (for testing only)
@@ -422,10 +426,10 @@ pub fn ascii_to_petscii(s: &str) -> String {
 /// Texture layout constants for 4096x4096 symbol texture
 ///
 /// Linear symbol array layout:
-/// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
-/// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
-/// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
-/// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
+/// - `[0, 40959]`: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
+/// - `[40960, 43519]`: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
+/// - `[43520, 44287]`: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
+/// - `[44288, 48383]`: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
 pub mod layout {
     #[cfg(graphics_mode)]
     use crate::render::graph::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
@@ -771,8 +775,11 @@ impl Iterator for SymbolFrameIterator {
             let cjk_h = layout::cjk_height();
 
             SymbolFrame {
-                pixel_x: ((block_col * layout::CJK_CHARS_PER_BLOCK_COL as usize + sym_col) as u32) * cjk_w,
-                pixel_y: layout::cjk_y_start() + ((block_row * layout::CJK_CHARS_PER_BLOCK_ROW as usize + sym_row) as u32) * cjk_h,
+                pixel_x: ((block_col * layout::CJK_CHARS_PER_BLOCK_COL as usize + sym_col) as u32)
+                    * cjk_w,
+                pixel_y: layout::cjk_y_start()
+                    + ((block_row * layout::CJK_CHARS_PER_BLOCK_ROW as usize + sym_row) as u32)
+                        * cjk_h,
                 width: cjk_w,
                 height: cjk_h,
             }

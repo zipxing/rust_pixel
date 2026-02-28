@@ -97,7 +97,7 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
                 crate_path = ".".to_string();
             } else if ctx.cdir_state == PState::PixelRoot {
                 // root
-                let cpath = Path::new("apps").join(&mod_name);
+                let cpath = Path::new("apps").join(mod_name);
                 if cpath.exists() {
                     crate_path = cpath.to_string_lossy().to_string();
                 }
@@ -108,10 +108,10 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             env::set_var("RUSTFLAGS", r#"--cfg getrandom_backend="wasm_js""#);
 
             let mut wasm_cmd = Command::new("wasm-pack");
-            wasm_cmd.args(&["build", "--target", "web", &crate_path]);
+            wasm_cmd.args(["build", "--target", "web", &crate_path]);
             
             if !release.is_empty() {
-                wasm_cmd.arg(&release);
+                wasm_cmd.arg(release);
             }
             
             // Add other arguments

@@ -8,7 +8,7 @@ license = "MIT"
 
 [dependencies]
 # BASIC interpreter dependencies
-rand = "0.8"
+rand = "0.9"
 log = "0.4"
 
 # rust_pixel integration (for GameBridge, will be added later)

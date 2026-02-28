@@ -24,6 +24,12 @@ pub struct Tabs {
     tab_active_style: Style,
 }
 
+impl Default for Tabs {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tabs {
     pub fn new() -> Self {
         let id = next_widget_id();
@@ -164,22 +170,20 @@ impl Widget for Tabs {
 
     fn handle_event(&mut self, event: &UIEvent, _ctx: &mut Context) -> UIResult<bool> {
         // Process raw input to detect tab clicks; children handle their own events
-        if let UIEvent::Input(input) = event {
-            if let crate::event::Event::Mouse(mev) = input {
-                if let crate::event::MouseEventKind::Down(crate::event::MouseButton::Left) = mev.kind {
-                    let bar = self.tabbar_area();
-                    if mev.row == bar.y && mev.column >= bar.x && mev.column < bar.x + bar.width {
-                        // Hit test by scanning titles rendered positions
-                        let mut x = bar.x;
-                        for (i, title) in self.titles.iter().enumerate() {
-                            let display = if i == self.selected { format!("[{}]", title) } else { title.clone() };
-                            let w = display.len() as u16;
-                            if mev.column >= x && mev.column < x + w {
-                                self.set_selected(i);
-                                return Ok(true);
-                            }
-                            x = x.saturating_add(w + self.tab_spacing);
+        if let UIEvent::Input(crate::event::Event::Mouse(mev)) = event {
+            if let crate::event::MouseEventKind::Down(crate::event::MouseButton::Left) = mev.kind {
+                let bar = self.tabbar_area();
+                if mev.row == bar.y && mev.column >= bar.x && mev.column < bar.x + bar.width {
+                    // Hit test by scanning titles rendered positions
+                    let mut x = bar.x;
+                    for (i, title) in self.titles.iter().enumerate() {
+                        let display = if i == self.selected { format!("[{}]", title) } else { title.clone() };
+                        let w = display.len() as u16;
+                        if mev.column >= x && mev.column < x + w {
+                            self.set_selected(i);
+                            return Ok(true);
                         }
+                        x = x.saturating_add(w + self.tab_spacing);
                     }
                 }
             }

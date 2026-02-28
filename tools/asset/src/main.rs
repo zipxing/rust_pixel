@@ -66,12 +66,8 @@ mod config {
     pub const SYMBOLS_TEXTURE_PATH: &str = "assets/pix/symbols.png";
 
     /// Base symbol dimensions
-    pub const SYMBOL_WIDTH: u32 = 16;
     pub const SYMBOL_HEIGHT: u32 = 16;
 
-    /// Texture grid dimensions (256x256 grid of base symbols)
-    pub const GRID_COLS: u32 = 256;
-    pub const GRID_ROWS: u32 = 256;
 }
 
 /// Texture region layout constants (matching symbol_map.rs)
@@ -82,31 +78,10 @@ mod layout {
     pub const SPRITE_BLOCK_ROWS: u32 = 10;
     pub const SPRITE_BLOCK_COLS: u32 = 16;
     pub const SPRITE_BLOCKS: u32 = SPRITE_BLOCK_ROWS * SPRITE_BLOCK_COLS; // 160
-    pub const SPRITE_Y_START: u32 = 0;
     pub const SPRITE_Y_END: u32 = SPRITE_BLOCK_ROWS * 16 * SYMBOL_HEIGHT; // 2560
-    pub const SPRITE_SYMBOLS_PER_BLOCK: u32 = 256; // 16x16
 
     // Block dimensions
-    pub const BLOCK_WIDTH: u32 = 16 * SYMBOL_WIDTH;   // 256
     pub const BLOCK_HEIGHT: u32 = 16 * SYMBOL_HEIGHT; // 256
-
-    // TUI region: blocks 160-169 (y: 2560-3071, x: 0-2559)
-    pub const TUI_BLOCK_START: u32 = 160;
-    pub const TUI_BLOCKS: u32 = 10;
-    pub const TUI_Y_START: u32 = SPRITE_Y_END; // 2560
-    pub const TUI_X_END: u32 = TUI_BLOCKS * BLOCK_WIDTH; // 2560
-    pub const TUI_SYMBOL_HEIGHT: u32 = SYMBOL_HEIGHT * 2; // 32
-
-    // Emoji region: blocks 170-175 (y: 2560-3071, x: 2560-4095)
-    pub const EMOJI_BLOCK_START: u32 = 170;
-    pub const EMOJI_BLOCKS: u32 = 6;
-    pub const EMOJI_X_START: u32 = TUI_X_END; // 2560
-    pub const EMOJI_SYMBOL_SIZE: u32 = 32;
-
-    // CJK region: blocks 176-239 (y: 3072-4095)
-    pub const CJK_BLOCK_START: u32 = 176;
-    pub const CJK_Y_START: u32 = 3072;
-    pub const CJK_SYMBOL_SIZE: u32 = 32;
 
     /// Get packing region for sprite blocks (starting from a specific block)
     /// Returns (x, y, width, height) of available packing area
@@ -117,10 +92,6 @@ mod layout {
         (0, y_start, ATLAS_WIDTH, height)
     }
 
-    /// Get full sprite region for packing
-    pub fn full_sprite_region() -> (u32, u32, u32, u32) {
-        (0, SPRITE_Y_START, ATLAS_WIDTH, SPRITE_Y_END)
-    }
 }
 
 // ============================================================================
@@ -129,6 +100,7 @@ mod layout {
 
 /// Represents a region in the symbol map
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SymbolRegion {
     #[serde(rename = "type")]
     region_type: String,
@@ -191,11 +163,6 @@ impl BlockOccupancy {
             }
         }
         layout::SPRITE_BLOCKS // All occupied
-    }
-
-    /// Calculates how many symbols are needed to consider a block "occupied"
-    fn is_block_occupied(&self, block: u32) -> bool {
-        self.occupied_sprite_blocks.contains(&block)
     }
 
     /// Displays block usage summary
@@ -348,11 +315,6 @@ impl LinearPacker {
         (px, py)
     }
 
-    /// How many cells have been placed so far (for summary)
-    fn cells_placed(&self, start_block: u32) -> u32 {
-        (self.current_block - start_block) * 256 + self.current_sym
-    }
-
     /// How many blocks have been (partially) used
     fn blocks_used(&self, start_block: u32) -> u32 {
         if self.current_sym > 0 {
@@ -402,29 +364,6 @@ struct MaxRectsBin {
 }
 
 impl MaxRectsBin {
-    /// Creates a new bin with the specified dimensions and offset
-    ///
-    /// # Arguments
-    /// * `width` - Total width of the packing area
-    /// * `height` - Total height of the packing area
-    /// * `y_offset` - Y offset to apply to all packed rectangles
-    ///
-    /// # Returns
-    /// A new MaxRectsBin instance with a single free rectangle covering the entire area
-    fn new(width: u32, height: u32, y_offset: u32) -> Self {
-        let initial_rect = Rectangle {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        };
-        MaxRectsBin {
-            free_rects: vec![initial_rect],
-            used_rects: Vec::new(),
-            y_offset,
-        }
-    }
-
     /// Creates a new bin from region parameters
     fn from_region(region: (u32, u32, u32, u32)) -> Self {
         let (x, y, width, height) = region;
@@ -898,36 +837,6 @@ fn pack_images(images: Vec<(String, DynamicImage)>, bin: &mut MaxRectsBin, scale
     }
 
     image_rects
-}
-
-/// Creates the texture atlas with all packed images
-fn create_texture_atlas(image_rects: &[ImageRect], symbols_texture_path: &str) -> Result<RgbaImage, String> {
-    // Create the atlas canvas (4096x4096)
-    let mut atlas = RgbaImage::new(config::ATLAS_WIDTH, config::ATLAS_HEIGHT);
-
-    // Try to load the base symbols texture if it exists
-    if let Ok(base_texture) = image::open(symbols_texture_path) {
-        let (base_w, base_h) = base_texture.dimensions();
-        println!("Loaded base texture: {}x{}", base_w, base_h);
-
-        // Copy the base texture
-        if let Err(e) = atlas.copy_from(&base_texture, 0, 0) {
-            eprintln!("Warning: Failed to copy base texture: {}", e);
-        }
-    } else {
-        println!("Note: Base texture not found at '{}', creating blank atlas", symbols_texture_path);
-    }
-
-    // Copy all packed images to their positions
-    for image_rect in image_rects {
-        atlas.copy_from(
-            &image_rect.image,
-            image_rect.rect.x,
-            image_rect.rect.y
-        ).map_err(|e| format!("Failed to copy image '{}' to atlas: {}", image_rect.path, e))?;
-    }
-
-    Ok(atlas)
 }
 
 /// Generates .pix metadata files for each packed image

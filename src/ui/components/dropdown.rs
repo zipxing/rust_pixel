@@ -26,6 +26,12 @@ pub struct Dropdown {
     on_change: Option<Box<dyn Fn(usize) + 'static>>,
 }
 
+impl Default for Dropdown {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Dropdown {
     pub fn new() -> Self {
         let id = next_widget_id();

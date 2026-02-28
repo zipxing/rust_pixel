@@ -182,7 +182,6 @@ pub use crate::render::graph::{
     init_sym_height,
     init_sym_width,
     push_render_buffer,
-    render_border, // Deprecated: Kept for backward compatibility, use OS window decoration instead
     render_logo,
     Graph,
     RenderCell,
@@ -236,6 +235,12 @@ pub struct AdapterBase {
     /// Datas using by graph mode
     #[cfg(graphics_mode)]
     pub gr: Graph,
+}
+
+impl Default for AdapterBase {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AdapterBase {

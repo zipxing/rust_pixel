@@ -16,6 +16,7 @@ use crate::event::{Event as InputEvent, KeyCode, KeyModifiers};
 use unicode_width::UnicodeWidthStr;
 
 /// TextBox component for text input
+#[allow(clippy::type_complexity)]
 pub struct TextBox {
     base: BaseWidget,
     text: String,
@@ -26,6 +27,12 @@ pub struct TextBox {
     password_char: Option<char>,
     on_changed: Option<Box<dyn FnMut(&str) + Send>>,
     on_enter: Option<Box<dyn FnMut(&str) + Send>>,
+}
+
+impl Default for TextBox {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TextBox {
@@ -369,7 +376,7 @@ impl TextBox {
             self.placeholder.clone()
         } else if let Some(password_char) = self.password_char {
             // For password fields, show password characters
-            std::iter::repeat(password_char).take(self.text.chars().count()).collect()
+            std::iter::repeat_n(password_char, self.text.chars().count()).collect()
         } else {
             self.text.clone()
         };

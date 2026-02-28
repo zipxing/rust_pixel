@@ -1,8 +1,8 @@
-use pixel_basic::{GameBridge, NullGameContext};
+use pixel_basic::GameBridge;
 
 #[test]
 fn test_snake_array_initialization() {
-    let mut bridge = GameBridge::new(NullGameContext);
+    let mut bridge = GameBridge::new();
 
     // Simplified version of game.bas initialization
     let program = r#"

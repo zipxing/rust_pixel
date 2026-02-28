@@ -74,6 +74,12 @@ pub struct PresentList {
     markers: [String; 3],
 }
 
+impl Default for PresentList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PresentList {
     pub fn new() -> Self {
         Self {

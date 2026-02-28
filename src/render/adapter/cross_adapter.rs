@@ -42,6 +42,12 @@ pub struct CrosstermAdapter {
 }
 
 #[cfg(cross_backend)]
+impl Default for CrosstermAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CrosstermAdapter {
     pub fn new() -> Self {
         let stdout = io::stdout();

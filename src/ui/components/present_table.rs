@@ -30,6 +30,12 @@ pub struct PresentTable {
     cell_style: Style,
 }
 
+impl Default for PresentTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PresentTable {
     pub fn new() -> Self {
         Self {

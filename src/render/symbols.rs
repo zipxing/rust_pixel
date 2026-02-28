@@ -76,11 +76,11 @@ pub fn find_background_color(
                 + ((p[1] as u32) << 16)
                 + ((p[2] as u32) << 8)
                 + (p[3] as u32);
-            (*cc.entry(k).or_insert((j, i, 0))).2 += 1;
+            cc.entry(k).or_insert((j, i, 0)).2 += 1;
         }
     }
     let mut cv: Vec<_> = cc.iter().collect();
-    cv.sort_by(|b, a| (&a.1 .2).cmp(&b.1 .2));
+    cv.sort_by(|b, a| a.1 .2.cmp(&b.1 .2));
     let bx = cv[0].1 .0;
     let by = cv[0].1 .1;
     let bc = cv[0].0;
@@ -141,7 +141,7 @@ pub fn color_distance_rgb(e1: &RGB, e2: &RGB) -> f32 {
         a: l2.a,
         b: l2.b,
     };
-    *DeltaE::new(&lab1, &lab2, DE2000).value()
+    *DeltaE::new(lab1, lab2, DE2000).value()
 }
 
 pub fn luminance(e1: u32) -> f32 {
@@ -172,7 +172,7 @@ pub fn color_distance(e1: u32, e2: u32) -> f32 {
         a: l2.a,
         b: l2.b,
     };
-    *DeltaE::new(&lab1, &lab2, DE2000).value()
+    *DeltaE::new(lab1, lab2, DE2000).value()
 }
 
 
@@ -242,7 +242,7 @@ impl Symbol {
                 // fix simliar color to back
                 if cd < 1.0 {
                     // println!("cd={} c1={} c2={}", cd, *c.0, back_rgb);
-                    (*c).0 = &back_rgb;
+                    c.0 = &back_rgb;
                     include_back = true;
                 }
             }
@@ -277,41 +277,39 @@ impl Symbol {
                 // println!("ERROR!!! clen={} cv={:?}", clen, cv);
                 // println!("bcv={:?}", bcv);
             }
-        } else {
-            if clen == 1 {
-                ret = Some((*cv[0].0, *cv[0].0));
-                // println!("<F>{:?}", ret);
-            } else if clen == 2 {
-                let l1 = luminance(*cv[0].0);
-                let l2 = luminance(*cv[1].0);
-                if l2 > l1 {
-                    ret = Some((*cv[0].0, *cv[1].0));
-                } else {
-                    ret = Some((*cv[1].0, *cv[0].0));
-                }
-                // println!("<F1,F2>{:?}", ret);
+        } else if clen == 1 {
+            ret = Some((*cv[0].0, *cv[0].0));
+            // println!("<F>{:?}", ret);
+        } else if clen == 2 {
+            let l1 = luminance(*cv[0].0);
+            let l2 = luminance(*cv[1].0);
+            if l2 > l1 {
+                ret = Some((*cv[0].0, *cv[1].0));
             } else {
-                let mut ccv = vec![];
-                cv.sort();
-                // println!("ERROR2!!! clen={} cv={:?}", clen, cv);
-                let mut base = *cv[0].0;
-                ccv.push(cv[0]);
-                for i in 1..clen {
-                    let cd = color_distance(*cv[i].0, base);
-                    if cd > 1.0 {
-                        ccv.push(cv[i]);
-                    }
-                    base = *cv[i].0;
-                }
-                let l1 = luminance(*ccv[0].0);
-                let l2 = luminance(*ccv[1].0);
-                if l2 > l1 {
-                    ret = Some((*ccv[0].0, *ccv[1].0));
-                } else {
-                    ret = Some((*ccv[1].0, *ccv[0].0));
-                }
-                // println!("ccv = {:?}", ccv);
+                ret = Some((*cv[1].0, *cv[0].0));
             }
+            // println!("<F1,F2>{:?}", ret);
+        } else {
+            let mut ccv = vec![];
+            cv.sort();
+            // println!("ERROR2!!! clen={} cv={:?}", clen, cv);
+            let mut base = *cv[0].0;
+            ccv.push(cv[0]);
+            for item in &cv[1..] {
+                let cd = color_distance(*item.0, base);
+                if cd > 1.0 {
+                    ccv.push(*item);
+                }
+                base = *item.0;
+            }
+            let l1 = luminance(*ccv[0].0);
+            let l2 = luminance(*ccv[1].0);
+            if l2 > l1 {
+                ret = Some((*ccv[0].0, *ccv[1].0));
+            } else {
+                ret = Some((*ccv[1].0, *ccv[0].0));
+            }
+            // println!("ccv = {:?}", ccv);
         }
 
         for i in 0..self.height as usize {
@@ -383,9 +381,8 @@ pub fn binarize_block(pixels: &[Vec<RGB>], config: &BinarizationConfig) -> Binar
 
     // Calculate brightness values for all pixels
     let mut brightnesses = Vec::with_capacity(height * width);
-    for y in 0..height {
-        for x in 0..width {
-            let px = &pixels[y][x];
+    for row in pixels.iter().take(height) {
+        for px in row.iter().take(width) {
             let brightness =
                 (0.299 * px.r as f32 + 0.587 * px.g as f32 + 0.114 * px.b as f32) as u8;
             brightnesses.push(brightness);
@@ -571,16 +568,16 @@ pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) 
 pub fn extract_image_block_rect(img: &DynamicImage, x: u32, y: u32, block_width: u32, block_height: u32) -> Vec<Vec<RGB>> {
     let mut block = vec![vec![RGB { r: 0, g: 0, b: 0 }; block_width as usize]; block_height as usize];
 
-    for dy in 0..block_height as usize {
-        for dx in 0..block_width as usize {
+    for (dy, row) in block.iter_mut().enumerate().take(block_height as usize) {
+        for (dx, cell) in row.iter_mut().enumerate().take(block_width as usize) {
             let pixel_x = x * block_width + dx as u32;
             let pixel_y = y * block_height + dy as u32;
 
             if pixel_x < img.width() && pixel_y < img.height() {
                 let pixel = img.get_pixel(pixel_x, pixel_y);
-                block[dy][dx] = RGB {
+                *cell = RGB {
                     r: pixel[0],
-                    g: pixel[1], 
+                    g: pixel[1],
                     b: pixel[2],
                 };
             }
@@ -646,6 +643,7 @@ pub type BlockGrayImage = Vec<Vec<u8>>;
 /// The original 8x8 pattern is scaled to the target block dimensions.
 /// Bits are processed right-to-left to match C64 character orientation.
 #[cfg(not(wasm))]
+#[allow(clippy::needless_range_loop)]
 pub fn gen_charset_images(
     low_up: bool, 
     block_width: usize, 
@@ -721,13 +719,13 @@ pub fn get_grayscale_block_at(
 ) -> BlockGrayImage {
     let mut block = vec![vec![0u8; block_width as usize]; block_height as usize];
 
-    for i in 0..block_height as usize {
-        for j in 0..block_width as usize {
+    for (i, row) in block.iter_mut().enumerate().take(block_height as usize) {
+        for (j, cell) in row.iter_mut().enumerate().take(block_width as usize) {
             let pixel_x = x * block_width + j as u32;
             let pixel_y = y * block_height + i as u32;
 
             if pixel_x < image.width() && pixel_y < image.height() {
-                block[i][j] = image.get_pixel(pixel_x, pixel_y).0[0];
+                *cell = image.get_pixel(pixel_x, pixel_y).0[0];
             }
         }
     }
@@ -760,9 +758,8 @@ pub fn binarize_grayscale_block(
     let mut include_back = false;
 
     // Find min & max gray value and check for background color
-    for y in 0..block_height {
-        for x in 0..block_width {
-            let p = img[y][x];
+    for row in img.iter().take(block_height) {
+        for &p in row.iter().take(block_width) {
             if !include_back && p == back {
                 include_back = true;
             }
@@ -851,9 +848,9 @@ pub fn calc_eigenvector(img: &BlockGrayImage, block_width: usize, block_height: 
     let max_x = block_width - 1;
     let max_y = block_height - 1;
 
-    for y in 0..block_height {
-        for x in 0..block_width {
-            let p = img[y][x] as i32;
+    for (y, row) in img.iter().enumerate().take(block_height) {
+        for (x, &pixel) in row.iter().enumerate().take(block_width) {
+            let p = pixel as i32;
 
             // Quadrants
             if x < half_width && y < half_height {
@@ -1069,7 +1066,7 @@ pub fn get_petii_block_color(
             // fix simliar color to back
             if cd < 1.0 {
                 // println!("cd={} c1={} c2={}", cd, *c.0, back_rgb);
-                (*c).0 = &back_rgb;
+                c.0 = &back_rgb;
                 include_back = true;
             }
         }
@@ -1104,46 +1101,44 @@ pub fn get_petii_block_color(
             // println!("ERROR!!! clen={} cv={:?}", clen, cv);
             // println!("bcv={:?}", bcv);
         }
-    } else {
-        if clen == 1 {
-            ret = Some((*cv[0].0, *cv[0].0));
-            // println!("<F>{:?}", ret);
-        } else if clen == 2 {
-            let l1 = luminance(*cv[0].0);
-            let l2 = luminance(*cv[1].0);
-            if l2 > l1 {
-                ret = Some((*cv[0].0, *cv[1].0));
-            } else {
-                ret = Some((*cv[1].0, *cv[0].0));
-            }
-            // println!("<F1,F2>{:?}", ret);
+    } else if clen == 1 {
+        ret = Some((*cv[0].0, *cv[0].0));
+        // println!("<F>{:?}", ret);
+    } else if clen == 2 {
+        let l1 = luminance(*cv[0].0);
+        let l2 = luminance(*cv[1].0);
+        if l2 > l1 {
+            ret = Some((*cv[0].0, *cv[1].0));
         } else {
-            let mut ccv = vec![];
-            cv.sort();
-            // println!("ERROR2!!! clen={} cv={:?}", clen, cv);
-            let mut base = *cv[0].0;
-            ccv.push(cv[0]);
-            for i in 1..clen {
-                let cd = color_distance(*cv[i].0, base);
-                if cd > 1.0 {
-                    ccv.push(cv[i]);
-                }
-                base = *cv[i].0;
-            }
-            if ccv.len() >= 2 {
-                let l1 = luminance(*ccv[0].0);
-                let l2 = luminance(*ccv[1].0);
-                if l2 > l1 {
-                    ret = Some((*ccv[0].0, *ccv[1].0));
-                } else {
-                    ret = Some((*ccv[1].0, *ccv[0].0));
-                }
-            } else {
-                println!("ERROR2!!!");
-                ret = Some((0, 0));
-            }
-            // println!("ccv = {:?}", ccv);
+            ret = Some((*cv[1].0, *cv[0].0));
         }
+        // println!("<F1,F2>{:?}", ret);
+    } else {
+        let mut ccv = vec![];
+        cv.sort();
+        // println!("ERROR2!!! clen={} cv={:?}", clen, cv);
+        let mut base = *cv[0].0;
+        ccv.push(cv[0]);
+        for item in &cv[1..] {
+            let cd = color_distance(*item.0, base);
+            if cd > 1.0 {
+                ccv.push(*item);
+            }
+            base = *item.0;
+        }
+        if ccv.len() >= 2 {
+            let l1 = luminance(*ccv[0].0);
+            let l2 = luminance(*ccv[1].0);
+            if l2 > l1 {
+                ret = Some((*ccv[0].0, *ccv[1].0));
+            } else {
+                ret = Some((*ccv[1].0, *ccv[0].0));
+            }
+        } else {
+            println!("ERROR2!!!");
+            ret = Some((0, 0));
+        }
+        // println!("ccv = {:?}", ccv);
     }
 
     match ret {

@@ -422,7 +422,7 @@ impl Label {
             } else {
                 normal_style
             };
-            buffer.set_string(x, bounds.y, &ch.to_string(), style);
+            buffer.set_string(x, bounds.y, ch.to_string(), style);
             x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
         }
     }
@@ -441,7 +441,7 @@ impl Label {
             let scale_y = (1.0 + amplitude * phase.sin()).max(0.1);
             // Only scale Y for a gentle vertical wave effect
             let style = base_style.scale(1.0, scale_y);
-            buffer.set_string(x, bounds.y, &ch.to_string(), style);
+            buffer.set_string(x, bounds.y, ch.to_string(), style);
             x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
         }
     }
@@ -470,12 +470,12 @@ impl Label {
 
             if i < fully_revealed {
                 // Already revealed — normal size
-                buffer.set_string(x, bounds.y, &ch.to_string(), normal_style);
+                buffer.set_string(x, bounds.y, ch.to_string(), normal_style);
             } else if i == fully_revealed && fully_revealed < char_count {
                 // Currently appearing — scale from 0.1 to 1.0
                 let scale = 0.1 + 0.9 * sub_progress;
                 let style = base_style.scale_uniform(scale);
-                buffer.set_string(x, bounds.y, &ch.to_string(), style);
+                buffer.set_string(x, bounds.y, ch.to_string(), style);
             }
             // Unrevealed chars: leave buffer cell untouched (invisible)
             x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
@@ -506,7 +506,7 @@ impl Label {
             if x >= bounds.x + bounds.width || x >= buffer_area.x + buffer_area.width { break; }
 
             if i < revealed {
-                buffer.set_string(x, bounds.y, &ch.to_string(), normal_style);
+                buffer.set_string(x, bounds.y, ch.to_string(), normal_style);
             }
             // Unrevealed chars: leave buffer cell untouched
             x += UnicodeWidthChar::width(ch).unwrap_or(1) as u16;
@@ -517,7 +517,7 @@ impl Label {
             let cursor_x = start_x + self.text.chars().take(revealed).map(|c| UnicodeWidthChar::width(c).unwrap_or(1) as u16).sum::<u16>();
             if cursor_x < bounds.x + bounds.width && cursor_x < buffer_area.x + buffer_area.width {
                 // Blink: visible for 8 frames, invisible for 8 frames
-                if (self.frame / 8) % 2 == 0 {
+                if (self.frame / 8).is_multiple_of(2) {
                     buffer.set_string(cursor_x, bounds.y, "▌", base_style.scale_uniform(1.0));
                 }
             }

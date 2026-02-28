@@ -544,16 +544,16 @@ impl Executor {
                     self.eval_expr(&args[0])?.as_number()?
                 };
                 
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 
                 // 简化实现：所有情况都返回 [0, 1) 的随机数
                 // 如果需要随机整数，用户可以写 INT(RND(1)*N)+1
                 let result = if arg < 0.0 {
                     // 负数：暂时也返回随机数（标准BASIC会重新播种）
-                    rng.gen::<f64>()
+                    rng.random::<f64>()
                 } else {
                     // 0或正数：返回 [0, 1) 的随机数
-                    rng.gen::<f64>()
+                    rng.random::<f64>()
                 };
                 
                 Ok(Value::Number(result))
