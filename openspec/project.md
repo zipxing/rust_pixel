@@ -59,7 +59,7 @@ RustPixel 是一个 **Tile-first, Retro-ready** 的 2D 游戏引擎，核心理�
 
 ### Testing Strategy
 - 示例驱动：以 `apps/*` 作为端到端案例与回归
-- 烟雾测试：`cargo pixel r <app> <mode>`（mode: t/wg/w）验证后端矩阵
+- 烟雾测试：`cargo pixel r <app> <mode>`（mode: t/g/w）验证后端矩阵
 - 特性矩阵：本地验证 `term/wgpu/web` 组合；Web 用 localhost:8080 预览
 - 算法/纯逻辑模块可添加单测；渲染路径以可视回归为主
 
@@ -107,9 +107,9 @@ RustPixel 是一个 **Tile-first, Retro-ready** 的 2D 游戏引擎，核心理�
 ## Running Commands
 ```bash
 cargo pixel r <app> t      # Terminal mode
-cargo pixel r <app> wg     # WGPU desktop mode
+cargo pixel r <app> g      # WGPU desktop mode (wg also works)
 cargo pixel r <app> w      # Web mode (localhost:8080)
-cargo pixel r <app> wg -r  # Release build
+cargo pixel r <app> g -r   # Release build
 cargo pixel c <name>       # Create new app in apps/
 cargo pixel c <name> ..    # Create standalone project
 ```
