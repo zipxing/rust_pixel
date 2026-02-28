@@ -87,10 +87,16 @@ impl Scene {
     }
 
     pub fn init(&mut self, ctx: &mut Context) {
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[scene.init] getting adapter size...".into());
         let size = ctx.adapter.size();
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&format!("[scene.init] size={:?}, resizing buffers...", size).into());
         self.tui_buffers[0].resize(size);
         self.tui_buffers[1].resize(size);
         info!("scene init size...{:?}", size);
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[scene.init] done".into());
     }
 
     /// Get mutable reference to the current buffer (mainbuffer)

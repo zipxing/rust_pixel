@@ -8,8 +8,8 @@ use rust_pixel::{
     context::Context,
     game::Model,
     render::effect::{GpuTransition, GpuBlendEffect},
+    util::Rand,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
 
 // Gallery mode: 2x2 grid (4 images per screen), each scaled 0.5
 pub const PETW: u16 = 52;
@@ -54,29 +54,14 @@ impl PetviewModel {
         }
     }
 
-    /// 初始化并打乱索引数组（使用系统时间作为随机种子）
-    fn init_shuffled_indices(&mut self) {
-        // 使用系统时间作为随机种子
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos() as u64;
+    /// 初始化并打乱索引数组
+    fn init_shuffled_indices(&mut self, rand: &mut Rand) {
+        // 用当前时间做种子（WASM: js_sys::Date::now(), Native: SystemTime）
+        rand.srand_now();
 
-        // 简单的LCG随机数生成器
-        let mut rng_state = seed;
-        let mut next_rand = || -> usize {
-            rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
-            (rng_state >> 33) as usize
-        };
-
-        // 创建顺序索引数组
+        // 创建顺序索引数组并打乱
         let mut indices: Vec<usize> = (0..self.img_count).collect();
-
-        // Fisher-Yates shuffle
-        for i in (1..indices.len()).rev() {
-            let j = next_rand() % (i + 1);
-            indices.swap(i, j);
-        }
+        rand.shuffle(&mut indices);
 
         // 补齐为4的倍数（循环补充）
         let remainder = indices.len() % IMAGES_PER_SCREEN;
@@ -104,8 +89,7 @@ impl Model for PetviewModel {
     fn init(&mut self, ctx: &mut Context) {
         ctx.state = PetviewState::Normal as u8;
         self.normal_stage = 0;
-        // 初始化打乱的索引数组（使用系统时间种子）
-        self.init_shuffled_indices();
+        self.init_shuffled_indices(&mut ctx.rand);
     }
 
     fn handle_input(&mut self, ctx: &mut Context, _dt: f32) {

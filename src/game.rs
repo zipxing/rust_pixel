@@ -145,8 +145,14 @@ where
     /// init render and model
     pub fn init(&mut self) {
         info!("Init game...");
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[game.init] before model.init()".into());
         self.model.init(&mut self.context);
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[game.init] after model.init(), before render.init()".into());
         self.render.init(&mut self.context, &mut self.model);
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[game.init] after render.init() - done!".into());
     }
 }
 

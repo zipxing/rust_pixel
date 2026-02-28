@@ -480,9 +480,15 @@ impl Render for PetviewRender {
     type Model = PetviewModel;
 
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[petview render.init] before adapter.init()".into());
         ctx.adapter
             .init(PETW, PETH, 2.0, 2.0, "PETSCII Gallery".to_string());
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[petview render.init] after adapter.init(), before scene.init()".into());
         self.scene.init(ctx);
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&"[petview render.init] after scene.init() - done!".into());
     }
 
     fn handle_event(&mut self, _ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {}
