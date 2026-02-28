@@ -170,8 +170,8 @@ CJK_FONT_NAME = "PingFang SC"
 
 # msdfgen 字体文件路径
 # MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/NerdFonts/DejaVu Sans Mono Nerd Font Complete.ttf")
-MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DejaVuSansMNerdFont-Regular.ttf")
-# MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DroidSansMNerdFontMono-Regular.otf")
+# MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DejaVuSansMNerdFont-Regular.ttf")
+MSDFGEN_TUI_FONT = os.path.expanduser("~/Library/Fonts/DroidSansMNerdFontMono-Regular.otf")
 MSDFGEN_BRAILLE_FONT = "/System/Library/Fonts/Apple Braille.ttf"
 MSDFGEN_CJK_FONT = None  # 运行时从 PingFang.ttc 提取
 
@@ -579,14 +579,157 @@ def find_tui_font_for_char(char):
     return None
 
 
-def render_char_quartz(char, width, height, font_name, font_size):
+# ========== CoreText 辅助函数（从 dgpt.py 移植）==========
+
+def cfurl_from_path(path):
+    """创建 CFURL"""
+    b = path.encode("utf-8")
+    return Quartz.CFURLCreateFromFileSystemRepresentation(None, b, len(b), False)
+
+
+def ctfont_from_file(font_path, size, font_name=None):
+    """
+    从字体文件路径加载 CTFont
+
+    Args:
+        font_path: 字体文件路径（.ttf/.otf/.ttc）
+        size: 字体大小
+        font_name: 字体名称（用于 .ttc 文件选择或回退）
+    """
+    url = cfurl_from_path(font_path)
+    descs = CoreText.CTFontManagerCreateFontDescriptorsFromURL(url)
+
+    if descs and len(descs) > 0:
+        # 对于 .ttc 文件，尝试找到匹配的字体
+        if font_name and len(descs) > 1:
+            for desc in descs:
+                name = CoreText.CTFontDescriptorCopyAttribute(desc, CoreText.kCTFontDisplayNameAttribute)
+                if name and font_name in str(name):
+                    return CoreText.CTFontCreateWithFontDescriptor(desc, float(size), None)
+        # 默认使用第一个
+        return CoreText.CTFontCreateWithFontDescriptor(descs[0], float(size), None)
+
+    # 回退到名称加载
+    if font_name:
+        return CoreText.CTFontCreateWithName(font_name, float(size), None)
+
+    raise RuntimeError(f"Failed to create font from: {font_path}")
+
+
+def ct_line_for_char(ctfont, ch):
+    """创建单字符的 CTLine"""
+    attrs = {
+        CoreText.kCTFontAttributeName: ctfont,
+        CoreText.kCTForegroundColorFromContextAttributeName: True,
+    }
+    s = CoreText.CFAttributedStringCreate(None, ch, attrs)
+    return CoreText.CTLineCreateWithAttributedString(s)
+
+
+def ct_line_ink_bounds(line):
+    """获取字形的 ink bounds（实际绘制边界）"""
+    return CoreText.CTLineGetBoundsWithOptions(line, CoreText.kCTLineBoundsUseGlyphPathBounds)
+
+
+def solve_font_size_for_height(font_path, target_h, padding=0.92):
+    """二分法：找到 font_size 使 ascent+descent+leading ≈ target_h * padding"""
+    target = target_h * padding
+    lo, hi = 1.0, 512.0
+
+    for _ in range(32):
+        mid = (lo + hi) / 2.0
+        f = ctfont_from_file(font_path, mid)
+        h = float(CoreText.CTFontGetAscent(f) + CoreText.CTFontGetDescent(f) + CoreText.CTFontGetLeading(f))
+        if h < target:
+            lo = mid
+        else:
+            hi = mid
+
+    return (lo + hi) / 2.0
+
+
+def apply_width_constraint(font_path, size, cell_w, margin=0.98):
+    """检查最宽字符，如果超出宽度限制就缩小 font_size"""
+    f = ctfont_from_file(font_path, size)
+    worst = 0.0
+
+    # 等宽字体中最宽的字符
+    test_chars = "W@M#%&QG"
+    for ch in test_chars:
+        line = ct_line_for_char(f, ch)
+        r = ct_line_ink_bounds(line)
+        w = float(r.size.width)
+        if w > worst:
+            worst = w
+
+    limit = cell_w * margin
+    if worst <= limit:
+        return size
+
+    return size * (limit / worst)
+
+
+# 缓存已计算的 font_size（避免重复二分）
+_font_size_cache = {}
+
+
+def get_quartz_font_size(font_path, width, height, padding):
+    """获取适合目标尺寸的 font_size（带缓存）"""
+    cache_key = (font_path, width, height, padding)
+    if cache_key in _font_size_cache:
+        return _font_size_cache[cache_key]
+
+    # 1. 基于高度计算
+    size_h = solve_font_size_for_height(font_path, height, padding)
+    # 2. 宽度约束
+    size = apply_width_constraint(font_path, size_h, width)
+
+    _font_size_cache[cache_key] = size
+    return size
+
+
+def render_char_quartz(char, width, height, font_name, font_size, fill_cell=False, text_padding=0.92, font_path=None):
     """
     使用 macOS Quartz 渲染单个字符为 PIL Image
+
+    两种模式：
+    1. 有 font_path：使用 dgpt.py 的逻辑（二分法 + 宽度约束 + ink bounds 居中）
+    2. 无 font_path：使用旧逻辑（font_name + 简单居中）
+
+    Args:
+        char: 要渲染的字符
+        width, height: 输出尺寸
+        font_name: 字体名称（无 font_path 时使用）
+        font_size: 基础字体大小（无 font_path 时使用）
+        fill_cell: 是否填满格子
+        text_padding: 文本字符的缩放系数
+        font_path: 字体文件路径（如果提供，使用新逻辑）
 
     Returns:
         PIL.Image: RGBA 图像
     """
     import tempfile
+
+    # 计算实际 padding
+    padding = 1.0 if fill_cell else text_padding
+
+    # 根据是否有 font_path 选择不同的逻辑
+    if font_path and os.path.exists(font_path):
+        if fill_cell:
+            # 图形字符：只基于高度计算 font_size，不应用宽度约束
+            # 这样可以确保方块、制表符等尽可能大
+            actual_font_size = solve_font_size_for_height(font_path, height, padding)
+        else:
+            # 普通文本字符：二分法 + 宽度约束
+            actual_font_size = get_quartz_font_size(font_path, width, height, padding)
+        font = ctfont_from_file(font_path, actual_font_size)
+    else:
+        # 旧逻辑：使用传入的 font_size，用名称加载字体
+        actual_font_size = font_size * padding
+        font = CoreText.CTFontCreateWithName(font_name, actual_font_size, None)
+
+    ascent = float(CoreText.CTFontGetAscent(font))
+    descent = float(CoreText.CTFontGetDescent(font))
 
     # 创建位图上下文
     color_space = Quartz.CGColorSpaceCreateDeviceRGB()
@@ -609,29 +752,34 @@ def render_char_quartz(char, width, height, font_name, font_size):
     Quartz.CGContextSetTextDrawingMode(context, Quartz.kCGTextFill)
     Quartz.CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0)
 
-    # 创建字体
-    font = CoreText.CTFontCreateWithName(font_name, font_size, None)
-
-    # 创建属性字符串
-    attributes = {
-        CoreText.kCTFontAttributeName: font,
-        CoreText.kCTForegroundColorFromContextAttributeName: True
-    }
-    attr_string = CoreText.CFAttributedStringCreate(None, char, attributes)
-
     # 创建 CTLine
-    line = CoreText.CTLineCreateWithAttributedString(attr_string)
+    line = ct_line_for_char(font, char)
 
-    # 获取字体度量信息用于居中
-    ascent = CoreText.CTFontGetAscent(font)
-    descent = CoreText.CTFontGetDescent(font)
-    leading = CoreText.CTFontGetLeading(font)
-    bounds = CoreText.CTLineGetBoundsWithOptions(line, 0)
+    # 根据是否有 font_path 和 fill_cell 选择居中方式
+    if fill_cell:
+        # 图形字符（制表符、方块等）：使用 typographic bounds 居中
+        # 这些字符需要固定位置以便正确拼接
+        typo_width = CoreText.CTLineGetTypographicBounds(line, None, None, None)
+        if isinstance(typo_width, tuple):
+            typo_width = typo_width[0]
+        x = (width - typo_width) / 2.0
+    elif font_path and os.path.exists(font_path):
+        # 普通文本字符：使用 ink bounds 居中（视觉居中）
+        ink = ct_line_ink_bounds(line)
+        x = (width - float(ink.size.width)) / 2.0 - float(ink.origin.x)
+    else:
+        # 旧逻辑：使用 typographic bounds 居中
+        typo_width = CoreText.CTLineGetTypographicBounds(line, None, None, None)
+        if isinstance(typo_width, tuple):
+            typo_width = typo_width[0]
+        x = (width - typo_width) / 2.0
 
-    # 计算居中位置
-    x = (width - bounds.size.width) / 2.0
-    font_height = ascent + descent + leading
-    baseline_y = (height - font_height) / 2.0 + descent
+    # 垂直居中
+    baseline_y = (height - (ascent + descent)) / 2.0 + descent
+
+    # 像素对齐
+    x = round(x)
+    baseline_y = round(baseline_y)
 
     # 绘制文本
     Quartz.CGContextSetTextPosition(context, x, baseline_y)
@@ -658,7 +806,6 @@ def render_char_quartz(char, width, height, font_name, font_size):
 
         # 读取 PNG 并转换为 PIL Image
         img = Image.open(tmp_path).convert("RGBA")
-        # 复制一份以避免文件被删除后引用问题
         img = img.copy()
     finally:
         if os.path.exists(tmp_path):
@@ -698,7 +845,7 @@ def load_c64_block(source_path):
     return symbols
 
 
-def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4, tui_sdf=False, text_padding=0.92):
+def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4, tui_sdf=False, text_padding=0.92, save_bitmap=False):
     """
     渲染 TUI 字符
 
@@ -737,7 +884,14 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
                     print(f"    警告: 计算字体参数失败 {fpath}: {e}")
 
     # SDF fallback 的超采样倍率
-    sdf_scale = 4
+    # 2x 足够获得良好的 SDF 质量，4x 可获得更高精度但渲染更慢
+    sdf_scale = 2
+
+    # 创建位图缓存目录
+    bitmap_cache_dir = os.path.join(SCRIPT_DIR, "tui_bitmap_cache")
+    if save_bitmap:
+        os.makedirs(bitmap_cache_dir, exist_ok=True)
+        print(f"    位图缓存目录: {bitmap_cache_dir}")
 
     for i in range(total):
         symbol = None
@@ -777,8 +931,18 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
                 render_w = cfg.TUI_RENDER_WIDTH * sdf_scale
                 render_h = cfg.TUI_RENDER_HEIGHT * sdf_scale
                 font_size = cfg.TUI_FONT_SIZE * sdf_scale
-                rendered = render_char_quartz(char, render_w, render_h, TUI_FONT_NAME, font_size)
+                # 图形字符需要填满格子
+                fill_cell = is_graphic_char(char)
+                rendered = render_char_quartz(char, render_w, render_h, TUI_FONT_NAME, font_size,
+                                              fill_cell=fill_cell, text_padding=text_padding,
+                                              font_path=MSDFGEN_TUI_FONT)
                 if rendered:
+                    # 保存位图到缓存目录
+                    if save_bitmap:
+                        safe_char = char if char.isprintable() and char not in '/\\:*?"<>|' else f"U{cp:04X}"
+                        bitmap_path = os.path.join(bitmap_cache_dir, f"{i:04d}_{safe_char}.png")
+                        rendered.save(bitmap_path)
+
                     sdf_img = bitmap_to_sdf(rendered, spread=msdf_pxrange * sdf_scale)
                     symbol = sdf_img.resize(
                         (cfg.TUI_CHAR_WIDTH, cfg.TUI_CHAR_HEIGHT), Image.LANCZOS
@@ -799,9 +963,13 @@ def render_tui_chars(tui_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
 
             if symbol is None and i < len(tui_chars) and HAS_QUARTZ:
                 char = tui_chars[i]
+                # 图形字符需要填满格子
+                fill_cell = is_graphic_char(char)
                 rendered = render_char_quartz(
                     char, cfg.TUI_RENDER_WIDTH, cfg.TUI_RENDER_HEIGHT,
-                    TUI_FONT_NAME, cfg.TUI_FONT_SIZE
+                    TUI_FONT_NAME, cfg.TUI_FONT_SIZE,
+                    fill_cell=fill_cell, text_padding=text_padding,
+                    font_path=MSDFGEN_TUI_FONT
                 )
                 if rendered:
                     symbol = rendered
@@ -933,7 +1101,8 @@ def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
         except Exception as e:
             print(f"    警告: 计算 CJK 字体参数失败: {e}")
 
-    sdf_scale = 4
+    # SDF fallback 的超采样倍率（与 TUI 保持一致）
+    sdf_scale = 2
 
     for i in range(total):
         symbol = None
@@ -956,7 +1125,8 @@ def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
             if symbol is None and HAS_QUARTZ:
                 render_size = cfg.CJK_RENDER_SIZE * sdf_scale
                 font_size = cfg.CJK_FONT_SIZE * sdf_scale
-                rendered = render_char_quartz(char, render_size, render_size, CJK_FONT_NAME, font_size)
+                rendered = render_char_quartz(char, render_size, render_size, CJK_FONT_NAME, font_size,
+                                              text_padding=text_padding)
                 if rendered:
                     sdf_img = bitmap_to_sdf(rendered, spread=msdf_pxrange * sdf_scale)
                     symbol = sdf_img.resize(
@@ -974,7 +1144,7 @@ def render_cjk_chars(cjk_chars, use_cache=False, use_msdf=False, msdf_pxrange=4,
                 char = cjk_chars[i]
                 rendered = render_char_quartz(
                     char, cfg.CJK_RENDER_SIZE, cfg.CJK_RENDER_SIZE,
-                    CJK_FONT_NAME, cfg.CJK_FONT_SIZE
+                    CJK_FONT_NAME, cfg.CJK_FONT_SIZE, text_padding=text_padding
                 )
                 if rendered:
                     symbol = rendered
@@ -1114,6 +1284,8 @@ def main():
                         help=f'输出 PNG 文件路径 (默认: symbols.png 或 symbols_8192.png)')
     parser.add_argument('--output-json', default=None,
                         help=f'输出 JSON 文件路径 (默认: symbol_map.json 或 symbol_map_8192.json)')
+    parser.add_argument('--sdf', action='store_true',
+                        help='TUI/CJK 使用纯 SDF 渲染（Quartz bitmap-to-SDF，无需 msdfgen）')
     parser.add_argument('--msdf', action='store_true',
                         help='TUI/CJK 使用 MSDF 渲染（msdfgen 生成，fallback 到 bitmap-to-SDF）')
     parser.add_argument('--tui-sdf', action='store_true',
@@ -1124,6 +1296,8 @@ def main():
                         help='文本字符 MSDF 缩放系数 (0~1, 默认: 0.92, 图形字符始终为 1.0)')
     parser.add_argument('--msdfgen', default=MSDFGEN_BIN,
                         help=f'msdfgen 可执行文件路径 (默认: {MSDFGEN_BIN})')
+    parser.add_argument('--save-bitmap', action='store_true',
+                        help='保存 SDF 渲染前的位图到缓存目录（用于调试）')
     args = parser.parse_args()
 
     # 初始化配置
@@ -1145,8 +1319,18 @@ def main():
     # 设置 msdfgen 路径
     MSDFGEN_BIN = args.msdfgen
 
+    # SDF 模式：纯 bitmap-to-SDF，无需 msdfgen
+    if args.sdf:
+        if not HAS_QUARTZ:
+            print("错误: SDF 模式需要 Quartz（仅 macOS）")
+            sys.exit(1)
+        print("\n准备 SDF 渲染...")
+        print(f"  TUI: {TUI_FONT_NAME} (Quartz bitmap-to-SDF)")
+        print(f"  CJK: {CJK_FONT_NAME} (Quartz bitmap-to-SDF)")
+        print(f"  pxrange: {args.msdf_pxrange}")
+
     # MSDF 模式：检查 msdfgen 并提取 CJK 字体
-    if args.msdf:
+    elif args.msdf:
         if not os.path.exists(MSDFGEN_BIN):
             print(f"错误: msdfgen 不存在: {MSDFGEN_BIN}")
             print("  安装: brew install msdfgen 或指定 --msdfgen 路径")
@@ -1176,10 +1360,14 @@ def main():
     print(f"生成 {cfg.size}x{cfg.size} symbols.png 和 symbol_map.json")
     if cfg.scale > 1:
         print(f"  缩放因子: {cfg.scale}x (基础符号: {cfg.SPRITE_CHAR_SIZE}x{cfg.SPRITE_CHAR_SIZE}px)")
-    if args.msdf and args.tui_sdf:
+    if args.sdf:
+        print(f"  模式: SDF (Quartz bitmap-to-SDF，无需 msdfgen)")
+    elif args.msdf and args.tui_sdf:
         print(f"  模式: MSDF (TUI: Quartz bitmap-to-SDF, CJK: bitmap-to-SDF)")
     elif args.msdf:
         print(f"  模式: MSDF (msdfgen + bitmap-to-SDF fallback)")
+    else:
+        print(f"  模式: 位图 (bitmap)")
     print("=" * 70)
 
     # 检查输入文件
@@ -1226,20 +1414,26 @@ def main():
     print(f"  总共 {len(all_sprites)} 个 Sprite 符号")
 
     # ========== 渲染 TUI 字符 ==========
-    if args.msdf and args.tui_sdf:
+    if args.sdf:
+        print(f"\n渲染 TUI 字符 (SDF, pxrange={args.msdf_pxrange})...")
+    elif args.msdf and args.tui_sdf:
         print(f"\n渲染 TUI 字符 (Quartz bitmap-to-SDF, pxrange={args.msdf_pxrange})...")
     elif args.msdf:
         print(f"\n渲染 TUI 字符 (MSDF, pxrange={args.msdf_pxrange})...")
     else:
         print("\n渲染 TUI 字符...")
-    if not args.msdf and not HAS_QUARTZ and not args.use_cache:
+    if not args.msdf and not args.sdf and not HAS_QUARTZ and not args.use_cache:
         print("  警告: Quartz 不可用，强制使用缓存")
         args.use_cache = True
+    # --sdf 模式：use_msdf=True + tui_sdf=True 触发纯 bitmap-to-SDF
+    use_msdf_mode = args.msdf or args.sdf
+    force_sdf = args.tui_sdf or args.sdf
     tui_images = render_tui_chars(tui_chars, args.use_cache,
-                                   use_msdf=args.msdf,
+                                   use_msdf=use_msdf_mode,
                                    msdf_pxrange=args.msdf_pxrange,
-                                   tui_sdf=args.tui_sdf,
-                                   text_padding=args.text_padding)
+                                   tui_sdf=force_sdf,
+                                   text_padding=args.text_padding,
+                                   save_bitmap=args.save_bitmap)
     print(f"  生成 {len(tui_images)} 个 TUI 字符图像")
 
     # ========== 渲染 Emoji ==========
@@ -1248,12 +1442,14 @@ def main():
     print(f"  生成 {len(emoji_images)} 个 Emoji 图像")
 
     # ========== 渲染 CJK 汉字 ==========
-    if args.msdf:
+    if args.sdf:
+        print(f"\n渲染 CJK 汉字 (SDF, pxrange={args.msdf_pxrange})...")
+    elif args.msdf:
         print(f"\n渲染 CJK 汉字 (MSDF, pxrange={args.msdf_pxrange})...")
     else:
         print("\n渲染 CJK 汉字...")
     cjk_images = render_cjk_chars(cjk_chars, args.use_cache,
-                                    use_msdf=args.msdf,
+                                    use_msdf=use_msdf_mode,
                                     msdf_pxrange=args.msdf_pxrange,
                                     text_padding=args.text_padding)
     print(f"  生成 {len(cjk_images)} 个 CJK 图像")
