@@ -1,3 +1,15 @@
+# 2.3.0
+
+- Refactored Cell and Buffer internals: the cell's `symbol` string now fully determines the rendered glyph, with cleaner APIs to match. See `doc/architecture.md` for details
+- Optimized Tetris UI with TUI-style rendering
+- Enhanced PetView app: added screensaver fullscreen mode and a large collection of PETSCII artworks
+- Fixed rotation center calculation for mixed half-width / full-width character sprites
+- Code cleanup: removed deprecated type aliases, dead code, and stale documentation
+- Resolved all `cargo clippy` warnings (50 → 0)
+- Fixed PetView WASM crash caused by `SystemTime::now()` panic on `wasm32-unknown-unknown`
+
+---
+
 # 2.2.0
 
 - Added `gen-mdpt` Claude Code skill for AI-powered MDPT presentation generation
