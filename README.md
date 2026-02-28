@@ -135,9 +135,14 @@ Single 4096×4096 texture (16MB VRAM), 256 blocks: Sprite(0-159), TUI(160-169), 
 
 ## Showcase and games
 
-PETSCII art browser built with RustPixel. Art by [@PETSCIIWORLD](https://x.com/PETSCIIWORLD), transitions by **gltransition**.
+PETSCII art gallery with Matrix rain, GPU transitions, and 2000+ artworks. Fullscreen screensaver mode supported.
 
-https://github.com/user-attachments/assets/4758f2b6-66c2-47ed-997d-a9066be449aa
+![PetView](./screen-shot/petview.gif)
+
+```bash
+cargo pixel r petview wg -r    # WGPU mode (native)
+cargo pixel r petview w -r     # Web mode (browser)
+```
 
 ---
 
