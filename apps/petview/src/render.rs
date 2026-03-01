@@ -1,12 +1,10 @@
 //! PetView - Custom Rendering Pipeline Demo
 //!
-//! Demonstrates mixing Scene-based rendering with custom RT operations:
-//! - Normal: RT0(cur) → RT3 → display
-//! - TransBuf: CPU distortion on cur sprites → direct display
-//! - TransGl: blend_rts(RT0, RT1) → RT3 → display
+//! Graphics mode only
 
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+
 use crate::model::{PetviewModel, PetviewState, IMAGES_PER_SCREEN, PETH, PETW};
 use log::info;
 use num_derive::FromPrimitive;
@@ -39,7 +37,7 @@ const IMG_H: u16 = 25;
 const GRID_COLS: usize = 2;
 const PIXW: u16 = 40;
 const IMG_SCALE: f32 = 0.5;
-const YADJ: u16 = 0; // 图片区域整体下移像素数
+const YADJ: u16 = 0;
 
 // ============================================================================
 // Frame Border Constants
@@ -50,7 +48,6 @@ const FRAME_RIGHT: u16 = 6;
 const FRAME_BOTTOM: u16 = 4;
 const FRAME_SCALE: f32 = 0.5;
 
-// Frame colors
 const FRAME_COLOR: Color = Color::Rgba(0x33, 0x33, 0x33, 255);
 const BACK_COLOR: Color = Color::Rgba(35, 35, 35, 30);
 const FOOT_COLOR: Color = Color::Rgba(120, 120, 120, 255);
@@ -80,7 +77,7 @@ const RAIN_GLOW_MARGIN: u16 = 4;
 // ============================================================================
 // TransBuf Effect Constants
 // ============================================================================
-const TRANSBUF_NOISE_RATE: usize = 2; // noise count = stage / NOISE_RATE
+const TRANSBUF_NOISE_RATE: usize = 2;
 const RAND_COLOR: Color = Color::Rgba(155, 55, 155, 255);
 
 // ============================================================================
@@ -91,7 +88,7 @@ const FOOTER_LINE1: &str = "PETSCII ARTS RETRO C64";
 const FOOTER_LINE2: &str = "https://github.com/zipxing/rust_pixel";
 
 // ============================================================================
-// Cached Pixel Metrics (computed once in do_init)
+// Cached Pixel Metrics
 // ============================================================================
 #[derive(Default, Clone, Copy)]
 struct PixelMetrics {
@@ -117,7 +114,7 @@ impl PixelMetrics {
             rx,
             ry,
             cell_px_w: (IMG_W as f32 * 0.5 * sym_w / rx) as u16,
-            cell_px_h: (IMG_H  as f32 * 0.5 * sym_h / ry) as u16,
+            cell_px_h: (IMG_H as f32 * 0.5 * sym_h / ry) as u16,
             frame_x: (FRAME_LEFT as f32 * sym_w / rx) as u16,
             frame_y: (FRAME_TOP as f32 * sym_h / ry) as u16 - YADJ,
         }
@@ -126,7 +123,7 @@ impl PixelMetrics {
     fn viewport(&self) -> ARect {
         ARect {
             x: self.frame_x as i32,
-            y: self.frame_y as i32, // frame_y already includes YADJ
+            y: self.frame_y as i32,
             w: (PIXW as f32 * self.sym_w / self.rx) as u32,
             h: (IMG_H as f32 * self.sym_h / self.ry) as u32,
         }
@@ -137,7 +134,6 @@ impl PixelMetrics {
 // Helper Functions
 // ============================================================================
 
-/// Load a single image into a sprite. Returns true if loaded successfully.
 fn load_single_image(sprite: &mut Sprite, ctx: &mut Context, img_idx: usize) -> bool {
     let filename = format!("{}.pix", img_idx + 1);
     let full_path = format!(
@@ -162,7 +158,6 @@ fn load_single_image(sprite: &mut Sprite, ctx: &mut Context, img_idx: usize) -> 
     false
 }
 
-/// Render 4 sprites to a RenderTexture in 2x2 grid layout
 fn render_grid_to_rt(
     scene: &mut Scene,
     ctx: &mut Context,
@@ -195,17 +190,13 @@ fn render_grid_to_rt(
     ctx.adapter.rbuf2rt(&rbuf, rt_index, false);
 }
 
-/// Hide all image sprites (cur and next)
 fn hide_all_sprites(scene: &mut Scene) {
     for i in 0..IMAGES_PER_SCREEN {
         scene.get_sprite(&format!("img_cur_{}", i)).set_hidden(true);
-        scene
-            .get_sprite(&format!("img_next_{}", i))
-            .set_hidden(true);
+        scene.get_sprite(&format!("img_next_{}", i)).set_hidden(true);
     }
 }
 
-/// Apply CPU-based buffer distortion effects for 4-image grid
 fn process_buffer_transition_grid(
     scene: &mut Scene,
     cur_original: &[Buffer],
@@ -222,11 +213,9 @@ fn process_buffer_transition_grid(
         let src_content = &cur_original[i];
         let mut tbuf = src_content.clone();
 
-        // Apply ripple and wave effects
         RippleEffect::new(0.05, 10.0).apply(src_content, &mut tbuf, &params);
         WaveEffect::new(0.03, 15.0).apply(src_content, &mut tbuf, &params);
 
-        // Add noise
         let clen = tbuf.content.len();
         for _ in 0..transbuf_stage / TRANSBUF_NOISE_RATE {
             let idx = ctx.rand.rand() as usize % clen;
@@ -242,11 +231,8 @@ fn process_buffer_transition_grid(
         cur.set_hidden(false);
     }
 
-    // Keep next sprites hidden
     for i in 0..IMAGES_PER_SCREEN {
-        scene
-            .get_sprite(&format!("img_next_{}", i))
-            .set_hidden(true);
+        scene.get_sprite(&format!("img_next_{}", i)).set_hidden(true);
     }
 }
 
@@ -258,7 +244,6 @@ pub struct PetviewRender {
     pub scene: Scene,
     pub init: bool,
     metrics: PixelMetrics,
-    /// Saved original cur content at TransBuf start
     pub cur_original: Vec<Buffer>,
 }
 
@@ -266,12 +251,10 @@ impl PetviewRender {
     pub fn new() -> Self {
         let mut scene = Scene::new();
 
-        // Frame sprite (2x buffer for denser Matrix rain)
         let frame_w = (PETW as f32 / FRAME_SCALE) as u16;
         let frame_h = (PETH as f32 / FRAME_SCALE) as u16;
         scene.add_sprite(Sprite::new(0, 0, frame_w, frame_h), "frame");
 
-        // 4 current + 4 next image sprites
         for i in 0..IMAGES_PER_SCREEN {
             let mut cur = Sprite::new(0, 0, IMG_W, IMG_H);
             cur.set_hidden(true);
@@ -282,12 +265,10 @@ impl PetviewRender {
             scene.add_sprite(next, &format!("img_next_{}", i));
         }
 
-        // Footer sprite
         let footer_w = (PETW as f32 / FOOTER_SCALE) as u16;
         let footer_h = (4.0 / FOOTER_SCALE) as u16;
         scene.add_sprite(Sprite::new(0, 0, footer_w, footer_h), "footer");
 
-        // Border sprite (size = image area + 2 for border lines)
         let border_w = (PIXW as f32 / FRAME_SCALE) as u16 + 2;
         let border_h = (IMG_H as f32 / FRAME_SCALE) as u16 + 2;
         scene.add_sprite(Sprite::new(0, 0, border_w, border_h), "border");
@@ -303,16 +284,12 @@ impl PetviewRender {
         }
     }
 
-    /// Draw the gallery frame border with Matrix rain effect
     fn draw_frame(&mut self, stage: u32) {
         let frame = self.scene.get_sprite("frame");
         let buf = &mut frame.content;
         buf.reset();
 
-        // PETSCII characters
         let fill = 102u8;
-
-        // Internal dimensions (2x due to FRAME_SCALE=0.5)
         let iw = (PETW as f32 / FRAME_SCALE) as u16;
         let ih = (PETH as f32 / FRAME_SCALE) as u16;
         let fl = (FRAME_LEFT as f32 / FRAME_SCALE) as u16;
@@ -320,7 +297,6 @@ impl PetviewRender {
         let fr = (FRAME_RIGHT as f32 / FRAME_SCALE) as u16;
         let fb = (FRAME_BOTTOM as f32 / FRAME_SCALE) as u16;
 
-        // Fill background
         for y in 0..ih {
             for x in 0..iw {
                 let in_image = x >= fl && x < iw - fr && y >= ft && y < ih - fb;
@@ -330,7 +306,6 @@ impl PetviewRender {
             }
         }
 
-        // Matrix rain
         let rain_len = RAIN_CHARS.len();
         for x in 0..iw {
             let xh = x as usize;
@@ -391,7 +366,6 @@ impl PetviewRender {
             }
         }
 
-        // Draw border using set_border
         let border = self.scene.get_sprite("border");
         border.content.reset();
         border.content.set_border(
@@ -414,24 +388,20 @@ impl PetviewRender {
         buf.set_petscii_str(x2, 1, FOOTER_LINE2, FOOT_COLOR, Color::Reset);
     }
 
-    /// Check if adapter ratios changed (e.g. window maximized/restored)
     fn ratios_changed(&self, ctx: &mut Context) -> bool {
         let rx = ctx.adapter.get_base().gr.ratio_x;
         let ry = ctx.adapter.get_base().gr.ratio_y;
         (self.metrics.rx - rx).abs() > 0.001 || (self.metrics.ry - ry).abs() > 0.001
     }
 
-    /// Compute metrics and position all sprites. Called on init and ratio changes.
     fn update_layout(&mut self, ctx: &mut Context) {
         self.metrics = PixelMetrics::compute(ctx);
         let m = &self.metrics;
 
-        // Set frame sprite scale
         let frame = self.scene.get_sprite("frame");
         frame.set_scale_x(FRAME_SCALE);
         frame.set_scale_y(FRAME_SCALE);
 
-        // Position image sprites in 2x2 grid
         for i in 0..IMAGES_PER_SCREEN {
             let col = (i % GRID_COLS) as u16;
             let row = (i / GRID_COLS) as u16;
@@ -446,14 +416,12 @@ impl PetviewRender {
             }
         }
 
-        // Position footer
         let footer_y = ((PETH - FRAME_BOTTOM + 1) as f32 * m.sym_h / m.ry) as u16 + 6;
         let footer = self.scene.get_sprite("footer");
         footer.set_pos(0, footer_y);
         footer.set_scale_x(FOOTER_SCALE);
         footer.set_scale_y(FOOTER_SCALE);
 
-        // Position border sprite (half cell offset due to FRAME_SCALE=0.5)
         let border_x = m.frame_x - (0.5 * m.sym_w / m.rx) as u16;
         let border_y = m.frame_y - (0.5 * m.sym_h / m.ry) as u16;
         let border = self.scene.get_sprite("border");
@@ -464,13 +432,11 @@ impl PetviewRender {
 
     fn do_init(&mut self, ctx: &mut Context) {
         if self.init {
-            // Re-layout if ratios changed (window maximized/restored)
             if self.ratios_changed(ctx) {
                 self.update_layout(ctx);
             }
             return;
         }
-
         self.update_layout(ctx);
         self.init = true;
     }
@@ -494,10 +460,8 @@ impl Render for PetviewRender {
     fn handle_event(&mut self, _ctx: &mut Context, _data: &mut Self::Model, _dt: f32) {}
 
     fn handle_timer(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
-        // Load images
         if !model.tex_ready {
             if model.show_next_as_cur {
-                // Copy next → cur after transition completes
                 for i in 0..IMAGES_PER_SCREEN {
                     let next_content = self
                         .scene
@@ -515,7 +479,6 @@ impl Render for PetviewRender {
             } else {
                 let mut all_loaded = true;
 
-                // 使用打乱后的索引加载图片
                 for i in 0..IMAGES_PER_SCREEN {
                     let real_idx = model.get_image_index(model.img_cur + i);
                     let sprite = self.scene.get_sprite(&format!("img_cur_{}", i));
@@ -547,24 +510,18 @@ impl Render for PetviewRender {
                 PetviewState::Normal => {
                     self.cur_original.clear();
                     hide_all_sprites(&mut self.scene);
-
-                    // Render cur/next to RT0/RT1
                     render_grid_to_rt(&mut self.scene, ctx, "img_cur", 0, &self.metrics);
                     render_grid_to_rt(&mut self.scene, ctx, "img_next", 1, &self.metrics);
-
                     ctx.adapter.copy_rt(0, 3);
                 }
                 PetviewState::TransBuf => {
                     ctx.adapter.set_rt_visible(3, false);
-
-                    // Save original cur content once
                     if self.cur_original.is_empty() {
                         for i in 0..IMAGES_PER_SCREEN {
                             let cur = self.scene.get_sprite(&format!("img_cur_{}", i));
                             self.cur_original.push(cur.content.clone());
                         }
                     }
-
                     process_buffer_transition_grid(
                         &mut self.scene,
                         &self.cur_original,
@@ -590,10 +547,8 @@ impl Render for PetviewRender {
 
     fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         self.do_init(ctx);
-
         self.draw_frame(ctx.stage);
         self.draw_footer();
-
         self.scene.draw_to_rt(ctx).unwrap();
 
         if ctx.stage <= LOGO_FRAME {

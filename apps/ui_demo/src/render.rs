@@ -22,12 +22,12 @@ impl Render for UiDemoRender {
     type Model = UiDemoModel;
 
     fn init(&mut self, ctx: &mut Context, _model: &mut UiDemoModel) {
-        info!("UI Demo render initialized (graphics mode)");
+        info!("UI Demo render initialized");
 
-        // Enable TUI character height mode (32px) for UI components
+        // Enable TUI character height mode for UI components (graphics mode only)
+        #[cfg(graphics_mode)]
         ctx.adapter.get_base().gr.set_use_tui_height(true);
 
-        // Initialize adapter for graphics mode
         ctx.adapter.init(
             UI_DEMO_WIDTH as u16,
             UI_DEMO_HEIGHT as u16,
@@ -36,7 +36,6 @@ impl Render for UiDemoRender {
             String::new(),
         );
 
-        // Initialize the scene to cover the full screen
         self.scene.init(ctx);
     }
 

@@ -1,2 +1,2 @@
 use rust_pixel::app;
-app!(Tower);
+app!(Tower, graphics_only);

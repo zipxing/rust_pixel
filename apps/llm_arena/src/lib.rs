@@ -1,3 +1,3 @@
 use rust_pixel::app;
 
-app!(LlmArena);
+app!(LlmArena, dual);

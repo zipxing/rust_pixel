@@ -53,6 +53,7 @@ mod creat;
 use creat::*;
 mod convert_gif;
 use convert_gif::*;
+mod symbols;
 
 // current dir state
 // not pixel dir, rust_pixel root dir, depend rust_pixel project
@@ -640,6 +641,7 @@ fn main() {
         Some(("symbol", sub_m)) => pixel_symbol(&ctx, sub_m),
         Some(("ttf", sub_m)) => pixel_ttf(&ctx, sub_m),
         Some(("gen", sub_m)) => pixel_gen(&ctx, sub_m),
+        Some(("symbols", sub_m)) => symbols::generate_symbols(sub_m),
         _ => {
             // No subcommand provided, show help
             use crate::command::make_parser_app;

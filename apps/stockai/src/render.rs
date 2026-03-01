@@ -1,5 +1,5 @@
-// Stock AI - 终端模式渲染器
-// 使用 Table widget 显示股票列表
+// Stock AI - 渲染器
+// 使用 Panel + Table widget 显示股票列表
 
 use crate::model::{StockaiModel, ViewMode};
 use rust_pixel::{
@@ -143,7 +143,7 @@ impl StockaiRender {
             Color::DarkGray, Color::Reset);
     }
 
-    // 绘制分析详情视图（保持原有实现）
+    // 绘制分析详情视图
     fn draw_analysis_view(&mut self, model: &StockaiModel) {
         self.main_panel.clear_canvas();
 
@@ -291,6 +291,10 @@ impl Render for StockaiRender {
     type Model = StockaiModel;
 
     fn init(&mut self, context: &mut Context, _model: &mut Self::Model) {
+        // Enable TUI character height mode for UI components (graphics mode only)
+        #[cfg(graphics_mode)]
+        context.adapter.get_base().gr.set_use_tui_height(true);
+
         context.adapter.init(
             PANEL_WIDTH,
             PANEL_HEIGHT,

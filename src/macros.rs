@@ -208,30 +208,73 @@ macro_rules! app_body {
 ///
 /// ## Usage
 ///
-/// ### Dual-file mode (separate render_terminal.rs + render_graphics.rs):
+/// ### Unified mode (single render.rs, default):
 /// ```rust,ignore
 /// use rust_pixel::app;
 /// app!(MyGame);
 /// ```
 ///
-/// ### Unified mode (single render.rs with cfg for minor differences):
+/// ### Graphics-only mode (render.rs, compile error in term mode):
 /// ```rust,ignore
 /// use rust_pixel::app;
-/// app!(MyGame, unified);
+/// app!(MyGame, graphics_only);
+/// ```
+///
+/// ### Terminal-only mode (render.rs, compile error in graphics mode):
+/// ```rust,ignore
+/// use rust_pixel::app;
+/// app!(MyGame, terminal_only);
+/// ```
+///
+/// ### Dual-file mode (separate render_terminal.rs + render_graphics.rs):
+/// ```rust,ignore
+/// use rust_pixel::app;
+/// app!(MyGame, dual);
 /// ```
 #[cfg(not(feature = "base"))]
 #[macro_export]
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! app {
-    // Unified render mode: single render.rs file
-    ($name:ident, unified) => {
+    // Graphics-only mode: only compiles in graphics mode, error in term mode
+    ($name:ident, graphics_only) => {
+        #[cfg(not(graphics_mode))]
+        compile_error!(concat!(
+            stringify!($name),
+            " only supports graphics mode. Use: cargo pixel r ",
+            stringify!($name),
+            " g"
+        ));
+
+        #[cfg(graphics_mode)]
         mod model;
+        #[cfg(graphics_mode)]
         mod render;
+        #[cfg(graphics_mode)]
         use crate::{model::*, render::*};
+        #[cfg(graphics_mode)]
         $crate::app_body!($name);
     };
-    // Dual-file render mode (default, backward compatible)
-    ($name:ident) => {
+    // Terminal-only mode: only compiles in terminal mode, error in graphics mode
+    ($name:ident, terminal_only) => {
+        #[cfg(graphics_mode)]
+        compile_error!(concat!(
+            stringify!($name),
+            " only supports terminal mode. Use: cargo pixel r ",
+            stringify!($name),
+            " t"
+        ));
+
+        #[cfg(not(graphics_mode))]
+        mod model;
+        #[cfg(not(graphics_mode))]
+        mod render;
+        #[cfg(not(graphics_mode))]
+        use crate::{model::*, render::*};
+        #[cfg(not(graphics_mode))]
+        $crate::app_body!($name);
+    };
+    // Dual-file render mode: separate render_terminal.rs + render_graphics.rs
+    ($name:ident, dual) => {
         mod model;
         #[cfg(not(graphics_mode))]
         mod render_terminal;
@@ -242,6 +285,13 @@ macro_rules! app {
         use crate::{model::*, render_terminal::*};
         #[cfg(graphics_mode)]
         use crate::{model::*, render_graphics::*};
+        $crate::app_body!($name);
+    };
+    // Unified render mode (default): single render.rs file
+    ($name:ident) => {
+        mod model;
+        mod render;
+        use crate::{model::*, render::*};
         $crate::app_body!($name);
     };
 }

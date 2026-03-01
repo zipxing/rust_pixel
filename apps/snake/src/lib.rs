@@ -1,3 +1,3 @@
 use rust_pixel::app;
-app!(Snake);
+app!(Snake, dual);
 

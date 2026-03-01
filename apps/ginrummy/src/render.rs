@@ -81,6 +81,9 @@ impl GinRummyRender {
         for p in pv {
             let (i, bi, n, xadj) = p;
             let l = self.scene.get_sprite(&format!("t{}", i));
+            #[cfg(graphics_mode)]
+            let ext = "pix";
+            #[cfg(not(graphics_mode))]
             let ext = "txt";
             let cn = if bi == 0 {
                 format!("poker/back.{}", ext)

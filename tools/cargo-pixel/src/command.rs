@@ -283,6 +283,45 @@ fn build_app() -> Command {
                         .action(ArgAction::SetTrue),
                 ),
         )
+        .subcommand(
+            Command::new("symbols")
+                .alias("sym")
+                .about("Generate SDF texture atlas and symbol map for GPU rendering")
+                .arg(
+                    Arg::new("size")
+                        .short('s')
+                        .long("size")
+                        .help("Texture size: 4096 or 8192 (default)")
+                        .value_parser(["4096", "8192"])
+                        .default_value("8192"),
+                )
+                .arg(
+                    Arg::new("pxrange")
+                        .short('p')
+                        .long("pxrange")
+                        .help("SDF distance field pixel range (default: 4)")
+                        .default_value("4"),
+                )
+                .arg(
+                    Arg::new("padding")
+                        .long("padding")
+                        .help("Text character scale factor 0~1 (default: 0.92)")
+                        .default_value("0.92"),
+                )
+                .arg(
+                    Arg::new("output")
+                        .short('o')
+                        .long("output")
+                        .help("Output directory (default: current directory)")
+                        .default_value("."),
+                )
+                .arg(
+                    Arg::new("font")
+                        .short('f')
+                        .long("font")
+                        .help("Path to TUI font file (TTF/OTF)"),
+                ),
+        )
 }
 
 pub fn common_arg(app: Command) -> Command {

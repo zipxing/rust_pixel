@@ -1,2 +1,2 @@
 use rust_pixel::app;
-app!(Petview);
+app!(Petview, graphics_only);

@@ -124,12 +124,12 @@ impl ColorblkRender {
     pub fn draw_ready(&mut self, ctx: &mut Context, d: &mut ColorblkModel) {
         // 清空所有内容
         {
-            let back = self.panel.get_sprite("back");
+            let back = self.scene.get_sprite("back");
             back.content.reset();
 
             // 清空所有格子
             for i in 0..d.stage.board_width * d.stage.board_height {
-                let l = self.panel.get_sprite(&format!("cc{}", i));
+                let l = self.scene.get_sprite(&format!("cc{}", i));
                 l.content.reset();
             }
         }
@@ -140,7 +140,7 @@ impl ColorblkRender {
 
         // 绘制门
         {
-            let back = self.panel.get_sprite("back");
+            let back = self.scene.get_sprite("back");
             for i in 0..d.stage.board_width * 10 + 2 {
                 back.set_color_str(
                     i as u16, // 居中显示
@@ -235,8 +235,8 @@ impl Render for ColorblkRender {
     fn init(&mut self, ctx: &mut Context, _data: &mut Self::Model) {
         ctx.adapter
             .init(COLORBLKW, COLORBLKH, 1.0, 1.0, "colorblk".to_string());
-        self.panel.init(ctx);
-        // let l = self.panel.get_sprite("back");
+        self.scene.init(ctx);
+        // let l = self.scene.get_sprite("back");
         // asset2sprite!(l, ctx, &format!("back.txt"));
     }
 
@@ -251,6 +251,6 @@ impl Render for ColorblkRender {
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
         // self.draw_solution(ctx, data);
         self.draw_ready(ctx, data);
-        self.panel.draw(ctx).unwrap();
+        self.scene.draw(ctx).unwrap();
     }
 }

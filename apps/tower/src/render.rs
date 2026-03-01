@@ -1,6 +1,7 @@
 //
-// Only support graphics mode!!!
+// Tower Render - Graphics mode only
 //
+
 use crate::model::TowerModel;
 use rust_pixel::{
     asset::AssetType,
@@ -14,7 +15,6 @@ use rust_pixel::{
     util::{shape::lightning, PointU16},
 };
 use tower_lib::*;
-// use log::info;
 
 pub struct TowerRender {
     pub scene: Scene,
@@ -80,12 +80,10 @@ impl TowerRender {
         self.scene.draw_objpool(&mut d.bombs, |pl, b| {
             let li = [27u8, 26, 25, 24];
             if b.obj.btype == 0 {
-                // 怪物死掉后的炸弹波纹...
                 let sym = li[b.obj.stage as usize / 4];
                 pl.set_pos(b.obj.pixel_pos.x as u16, b.obj.pixel_pos.y as u16);
                 pl.set_graph_sym(0, 0, 2, sym, Color::Indexed(15));
             } else {
-                // 怪物中弹的炸弹波纹...
                 pl.set_pos(
                     b.obj.pixel_pos.x as u16 + ctx.cell_width() as u16 / 4,
                     b.obj.pixel_pos.y as u16 + ctx.cell_height() as u16 / 4,
@@ -97,7 +95,7 @@ impl TowerRender {
         self.scene.draw_objpool(&mut d.lasers, |pl, l| {
             pl.content.reset();
             pl.set_pos(0, 0);
-            pl.set_alpha(150); // 降低透明度，减少刺眼感
+            pl.set_alpha(150);
             let x0 = l.obj.src_pos.x * BW as u16 + 2;
             let y0 = l.obj.src_pos.y * BH as u16 + 2;
             let x1 = l.obj.dst_pos.x + 1;
@@ -132,7 +130,6 @@ impl TowerRender {
                 ((m.obj.pos.x * BW as u16 + 1) as f32 * ctx.cell_width()) as u16,
                 ((m.obj.pos.y * BH as u16 + 1) as f32 * ctx.cell_height()) as u16,
             );
-            // pl.set_scale(0.8);
             if m.obj.target.is_some() {
                 pl.set_angle((ctx.stage % 20 * 18) as f64);
             }
@@ -175,7 +172,6 @@ impl Render for TowerRender {
         );
         self.create_sprites(ctx, data);
         self.scene.init(ctx);
-        // ctx.adapter.only_render_buffer();
     }
 
     fn handle_event(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
