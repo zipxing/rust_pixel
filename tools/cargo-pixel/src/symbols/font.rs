@@ -8,6 +8,50 @@ use super::config::TextureConfig;
 use super::edt::{bitmap_to_sdf, is_graphic_char};
 use image::{imageops, ImageBuffer, Rgba, RgbaImage};
 
+/// Convert sRGB to linear (gamma 2.2)
+#[inline]
+fn srgb_to_linear(c: f32) -> f32 {
+    c.powf(2.2)
+}
+
+/// Convert linear to sRGB (gamma 2.2)
+#[inline]
+fn linear_to_srgb(c: f32) -> f32 {
+    c.powf(1.0 / 2.2)
+}
+
+/// Convert RGBA image from sRGB to linear space
+fn image_srgb_to_linear(img: &RgbaImage) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let mut result = RgbaImage::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let p = img.get_pixel(x, y);
+            let r = (srgb_to_linear(p[0] as f32 / 255.0) * 255.0).round() as u8;
+            let g = (srgb_to_linear(p[1] as f32 / 255.0) * 255.0).round() as u8;
+            let b = (srgb_to_linear(p[2] as f32 / 255.0) * 255.0).round() as u8;
+            result.put_pixel(x, y, Rgba([r, g, b, p[3]]));
+        }
+    }
+    result
+}
+
+/// Convert RGBA image from linear to sRGB space
+fn image_linear_to_srgb(img: &RgbaImage) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let mut result = RgbaImage::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let p = img.get_pixel(x, y);
+            let r = (linear_to_srgb(p[0] as f32 / 255.0) * 255.0).round() as u8;
+            let g = (linear_to_srgb(p[1] as f32 / 255.0) * 255.0).round() as u8;
+            let b = (linear_to_srgb(p[2] as f32 / 255.0) * 255.0).round() as u8;
+            result.put_pixel(x, y, Rgba([r, g, b, p[3]]));
+        }
+    }
+    result
+}
+
 /// TUI font paths - prefer NerdFont for complete symbol coverage
 const TUI_FONT_PATHS: &[&str] = &[
     // User-specified in symbols directory
@@ -880,14 +924,12 @@ fn render_tui_chars_macos(
         return images;
     }
 
-    // SDF workflow: render at 2x of TUI_RENDER_SIZE, compute SDF, then resize to target
-    let sdf_scale = 2u32;
-    let render_w = cfg.tui_render_width * sdf_scale;
-    let render_h = cfg.tui_render_height * sdf_scale;
-    let spread = pxrange as f32 * sdf_scale as f32;
+    // SDF workflow: render at cfg render size, compute SDF, then resize to target
+    let render_w = cfg.tui_render_width;
+    let render_h = cfg.tui_render_height;
+    let spread = pxrange as f32;
 
     println!("  TUI params:");
-    println!("    sdf_scale: {}", sdf_scale);
     println!("    render_size: {}x{}", render_w, render_h);
     println!("    target_size: {}x{}", cfg.tui_char_width, cfg.tui_char_height);
     println!("    font_size: {}", cfg.tui_font_size);
@@ -904,7 +946,7 @@ fn render_tui_chars_macos(
                 println!("    [{}] char='{}' U+{:04X} fill_cell={}", i, ch, ch as u32, fill_cell);
             }
 
-            // Render bitmap at 2x of TUI_RENDER_SIZE
+            // Render bitmap at render size
             let rendered = quartz::render_char_quartz(
                 ch,
                 render_w,
@@ -921,14 +963,17 @@ fn render_tui_chars_macos(
                     let has_content = bitmap.pixels().any(|p| p[3] > 0);
                     println!("    [{}] rendered {}x{} has_content={}", i, bitmap.width(), bitmap.height(), has_content);
                 }
-                // Compute SDF at render size, then resize
+                // Compute SDF at render size
                 let sdf = bitmap_to_sdf(&bitmap, spread);
-                imageops::resize(
-                    &sdf,
+                // sRGB -> linear -> resize -> sRGB
+                let linear = image_srgb_to_linear(&sdf);
+                let resized = imageops::resize(
+                    &linear,
                     cfg.tui_char_width,
                     cfg.tui_char_height,
                     imageops::FilterType::Lanczos3,
-                )
+                );
+                image_linear_to_srgb(&resized)
             } else {
                 ImageBuffer::from_pixel(cfg.tui_char_width, cfg.tui_char_height, Rgba([0, 0, 0, 255]))
             }
@@ -951,11 +996,15 @@ fn render_emojis_macos(emojis: &[String], cfg: &TextureConfig) -> Vec<RgbaImage>
     let total = (cfg.emoji_blocks_count * cfg.emoji_chars_per_block) as usize;
     let mut images = Vec::with_capacity(total);
 
+    // Render directly at target size (no resize needed for bitmap emoji)
+    // font_size = render_size for proper fill
+    let render_size = cfg.emoji_char_size;
+    let font_size = cfg.emoji_char_size;
+
     println!("  Emoji font: {}", EMOJI_FONT_NAME);
     println!("  Emoji params:");
-    println!("    render_size: {}x{}", cfg.emoji_render_size, cfg.emoji_render_size);
-    println!("    target_size: {}x{}", cfg.emoji_char_size, cfg.emoji_char_size);
-    println!("    font_size: {}", cfg.emoji_font_size);
+    println!("    render_size: {}x{} (direct, no resize)", render_size, render_size);
+    println!("    font_size: {}", font_size);
 
     for i in 0..total {
         let image = if i < emojis.len() {
@@ -967,13 +1016,13 @@ fn render_emojis_macos(emojis: &[String], cfg: &TextureConfig) -> Vec<RgbaImage>
                 println!("    [{}] emoji='{}' codepoints=[{}]", i, emoji, codepoints.join(", "));
             }
 
-            // Use full emoji string (supports multi-codepoint emoji)
+            // Render directly at target size
             let rendered = quartz::render_str_quartz(
                 emoji,
-                cfg.emoji_render_size,
-                cfg.emoji_render_size,
+                render_size,
+                render_size,
                 EMOJI_FONT_NAME,
-                cfg.emoji_font_size as f32,
+                font_size as f32,
             );
 
             if let Some(bitmap) = rendered {
@@ -981,22 +1030,12 @@ fn render_emojis_macos(emojis: &[String], cfg: &TextureConfig) -> Vec<RgbaImage>
                     let has_content = bitmap.pixels().any(|p| p[3] > 0);
                     println!("    [{}] rendered {}x{} has_content={}", i, bitmap.width(), bitmap.height(), has_content);
                 }
-                // Emojis don't use SDF, just resize
-                if bitmap.width() != cfg.emoji_char_size || bitmap.height() != cfg.emoji_char_size {
-                    imageops::resize(
-                        &bitmap,
-                        cfg.emoji_char_size,
-                        cfg.emoji_char_size,
-                        imageops::FilterType::Lanczos3,
-                    )
-                } else {
-                    bitmap
-                }
+                bitmap
             } else {
-                ImageBuffer::from_pixel(cfg.emoji_char_size, cfg.emoji_char_size, Rgba([0, 0, 0, 0]))
+                ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]))
             }
         } else {
-            ImageBuffer::from_pixel(cfg.emoji_char_size, cfg.emoji_char_size, Rgba([0, 0, 0, 0]))
+            ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]))
         };
 
         images.push(image);
@@ -1021,14 +1060,12 @@ fn render_cjk_chars_macos(
 
     println!("  CJK font: {}", CJK_FONT_NAME);
 
-    // SDF workflow: render at 2x of CJK_RENDER_SIZE, compute SDF, then resize to target
-    let sdf_scale = 2u32;
-    let render_size = cfg.cjk_render_size * sdf_scale;
-    let font_size = cfg.cjk_font_size as f32 * sdf_scale as f32;
-    let spread = pxrange as f32 * sdf_scale as f32;
+    // SDF workflow: render at cfg render size, compute SDF, then resize to target
+    let render_size = cfg.cjk_render_size;
+    let font_size = cfg.cjk_font_size as f32;
+    let spread = pxrange as f32;
 
     println!("  CJK params:");
-    println!("    sdf_scale: {}", sdf_scale);
     println!("    render_size: {}x{}", render_size, render_size);
     println!("    target_size: {}x{}", cfg.cjk_char_size, cfg.cjk_char_size);
     println!("    font_size: {}", font_size);
@@ -1060,14 +1097,17 @@ fn render_cjk_chars_macos(
                     let has_content = bitmap.pixels().any(|p| p[3] > 0);
                     println!("    [{}] rendered {}x{} has_content={}", i, bitmap.width(), bitmap.height(), has_content);
                 }
-                // Compute SDF at render size, then resize
+                // Compute SDF at render size
                 let sdf = bitmap_to_sdf(&bitmap, spread);
-                imageops::resize(
-                    &sdf,
+                // sRGB -> linear -> resize -> sRGB
+                let linear = image_srgb_to_linear(&sdf);
+                let resized = imageops::resize(
+                    &linear,
                     cfg.cjk_char_size,
                     cfg.cjk_char_size,
                     imageops::FilterType::Lanczos3,
-                )
+                );
+                image_linear_to_srgb(&resized)
             } else {
                 ImageBuffer::from_pixel(cfg.cjk_char_size, cfg.cjk_char_size, Rgba([0, 0, 0, 255]))
             }

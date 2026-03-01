@@ -451,6 +451,43 @@ impl WinitWgpuAdapter {
 
         let physical_size = window.inner_size();
 
+        // For fullscreen mode: use physical screen size as canvas size
+        // This ensures SDF renders at native resolution instead of being stretched
+        let (canvas_w, canvas_h, ratio_x, ratio_y) = if game_config.fullscreen {
+            // Calculate new ratios so that:
+            // canvas_size = physical_size
+            // ratio = logical_size / physical_size
+            // This way each character renders at: sym_size / ratio = larger pixels
+            let logical_w = self.base.gr.pixel_w as f32;
+            let logical_h = self.base.gr.pixel_h as f32;
+            let phys_w = physical_size.width as f32;
+            let phys_h = physical_size.height as f32;
+
+            let new_ratio_x = logical_w / phys_w;
+            let new_ratio_y = logical_h / phys_h;
+
+            info!(
+                "Fullscreen SDF optimization: logical {}x{} -> physical {}x{}, ratio {:.3}x{:.3}",
+                logical_w, logical_h, phys_w, phys_h, new_ratio_x, new_ratio_y
+            );
+
+            // Update base ratios for input handling etc.
+            self.base.gr.ratio_x = new_ratio_x;
+            self.base.gr.ratio_y = new_ratio_y;
+            self.base.gr.pixel_w = physical_size.width;
+            self.base.gr.pixel_h = physical_size.height;
+
+            // Update app_handler ratios (used for input event coordinate conversion)
+            if let Some(ref mut handler) = self.app_handler {
+                handler.ratio_x = new_ratio_x;
+                handler.ratio_y = new_ratio_y;
+            }
+
+            (physical_size.width, physical_size.height, new_ratio_x, new_ratio_y)
+        } else {
+            (self.base.gr.pixel_w, self.base.gr.pixel_h, self.base.gr.ratio_x, self.base.gr.ratio_y)
+        };
+
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -522,13 +559,14 @@ impl WinitWgpuAdapter {
         });
 
         // Build render core using the shared builder
+        // For fullscreen: canvas matches physical size, SDF renders at native resolution
         let tex_data = crate::get_pixel_texture_data();
         let render_core = WgpuRenderCoreBuilder::new(
-            self.base.gr.pixel_w,
-            self.base.gr.pixel_h,
+            canvas_w,
+            canvas_h,
             wgpu_surface_config.format,
         )
-        .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
+        .with_ratio(ratio_x, ratio_y)
         .build(
             device,
             queue,
