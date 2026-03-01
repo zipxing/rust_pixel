@@ -96,6 +96,10 @@ pub fn distance_transform(binary: &[bool], width: usize, height: usize) -> Vec<f
 /// Uses alpha channel to determine shape, computes signed distance
 /// where positive = inside, negative = outside.
 /// Normalizes to [0, 1] range where 0.5 = edge.
+///
+/// Note: This is the old method that computes SDF at source resolution then resizes.
+/// For better quality, use `bitmap_to_sdf_downsample` which downsamples binary first.
+#[allow(dead_code)]
 pub fn bitmap_to_sdf(bitmap: &RgbaImage, spread: f32) -> RgbaImage {
     let width = bitmap.width() as usize;
     let height = bitmap.height() as usize;
@@ -136,6 +140,119 @@ pub fn bitmap_to_sdf(bitmap: &RgbaImage, spread: f32) -> RgbaImage {
     for y in 0..height {
         for x in 0..width {
             let v = sdf_data[y * width + x];
+            result.put_pixel(x as u32, y as u32, image::Rgba([v, v, v, 255]));
+        }
+    }
+
+    result
+}
+
+/// Downsample binary image using majority voting (coverage-based)
+/// For each target pixel, count how many source pixels in the corresponding block are "inside"
+/// If > 50%, target pixel is inside
+fn downsample_binary(
+    binary: &[bool],
+    src_width: usize,
+    src_height: usize,
+    dst_width: usize,
+    dst_height: usize,
+) -> Vec<bool> {
+    let mut result = vec![false; dst_width * dst_height];
+
+    let scale_x = src_width as f32 / dst_width as f32;
+    let scale_y = src_height as f32 / dst_height as f32;
+
+    for dy in 0..dst_height {
+        for dx in 0..dst_width {
+            // Source region for this destination pixel
+            let sx_start = (dx as f32 * scale_x) as usize;
+            let sx_end = ((dx + 1) as f32 * scale_x).ceil() as usize;
+            let sy_start = (dy as f32 * scale_y) as usize;
+            let sy_end = ((dy + 1) as f32 * scale_y).ceil() as usize;
+
+            let sx_end = sx_end.min(src_width);
+            let sy_end = sy_end.min(src_height);
+
+            // Count inside pixels in the block
+            let mut inside_count = 0;
+            let mut total_count = 0;
+            for sy in sy_start..sy_end {
+                for sx in sx_start..sx_end {
+                    if binary[sy * src_width + sx] {
+                        inside_count += 1;
+                    }
+                    total_count += 1;
+                }
+            }
+
+            // Majority voting: > 50% inside means target is inside
+            result[dy * dst_width + dx] = inside_count * 2 > total_count;
+        }
+    }
+
+    result
+}
+
+/// Convert bitmap to SDF with downsampling
+///
+/// New workflow:
+/// 1. Binarize large bitmap (alpha > 127)
+/// 2. Downsample binary image using majority voting
+/// 3. Compute EDT on target-resolution binary image
+/// 4. Convert to SDF
+///
+/// This avoids SDF interpolation artifacts from resizing SDF values.
+pub fn bitmap_to_sdf_downsample(
+    bitmap: &RgbaImage,
+    target_width: u32,
+    target_height: u32,
+    spread: f32,
+) -> RgbaImage {
+    let src_width = bitmap.width() as usize;
+    let src_height = bitmap.height() as usize;
+    let dst_width = target_width as usize;
+    let dst_height = target_height as usize;
+
+    // Step 1: Binarize (alpha > 127 = inside)
+    let src_binary: Vec<bool> = bitmap
+        .pixels()
+        .map(|p| p[3] > 127)
+        .collect();
+
+    // Step 2: Downsample binary image using majority voting
+    let dst_binary = downsample_binary(
+        &src_binary,
+        src_width,
+        src_height,
+        dst_width,
+        dst_height,
+    );
+
+    // Step 3: Compute EDT on target-resolution binary image
+    let outside: Vec<bool> = dst_binary.iter().map(|&b| !b).collect();
+    let dist_to_inside = distance_transform(&dst_binary, dst_width, dst_height);
+    let dist_to_outside = distance_transform(&outside, dst_width, dst_height);
+
+    // Step 4: Convert to SDF
+    let mut sdf_data = vec![0u8; dst_width * dst_height];
+    for i in 0..dst_width * dst_height {
+        let signed_dist = if dst_binary[i] {
+            dist_to_outside[i]
+        } else {
+            -dist_to_inside[i]
+        };
+
+        // Normalize to [0, 1]: 0.5 = edge
+        let normalized = signed_dist / spread * 0.5 + 0.5;
+        let clamped = normalized.clamp(0.0, 1.0);
+        sdf_data[i] = (clamped * 255.0) as u8;
+    }
+
+    // Create RGBA image
+    let mut result = RgbaImage::new(target_width, target_height);
+    for y in 0..dst_height {
+        for x in 0..dst_width {
+            let v = sdf_data[y * dst_width + x];
             result.put_pixel(x as u32, y as u32, image::Rgba([v, v, v, 255]));
         }
     }

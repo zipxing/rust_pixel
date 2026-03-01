@@ -117,16 +117,18 @@ impl TextureConfig {
             cjk_char_size: 32 * scale,
             cjk_area_start_y: 3072 * scale,
 
-            // Render parameters
-            tui_render_width: 40 * scale,
-            tui_render_height: 80 * scale,
-            tui_font_size: 64 * scale,
+            // Render parameters (4x target size for high quality)
+            // TUI target: 32x64 (scale=2), render: 128x256
+            // CJK target: 64x64 (scale=2), render: 256x256
+            tui_render_width: 40 * scale,   // 80 for 8192 (matching Python)
+            tui_render_height: 80 * scale,  // 160 for 8192 (matching Python)
+            tui_font_size: 64 * scale,      // 128 for 8192 (matching Python)
 
-            emoji_render_size: 64 * scale,
-            emoji_font_size: 64 * scale,
+            emoji_render_size: 64 * scale, // 128 for 8192 (matching Python)
+            emoji_font_size: 64 * scale,   // 128 for 8192 (matching Python)
 
-            cjk_render_size: 64 * scale,
-            cjk_font_size: 56 * scale,
+            cjk_render_size: 64 * scale,    // 128 for 8192 (matching Python)
+            cjk_font_size: 56 * scale,      // 112 for 8192 (matching Python)
         };
 
         Ok(cfg)

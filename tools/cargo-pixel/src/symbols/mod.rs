@@ -151,16 +151,9 @@ pub fn generate_symbols(sub_m: &ArgMatches) {
 
     // Save output files
     let output_path = Path::new(output_dir);
-    let png_name = if size == 8192 {
-        "symbols_8192.png"
-    } else {
-        "symbols.png"
-    };
-    let json_name = if size == 8192 {
-        "symbol_map_8192.json"
-    } else {
-        "symbol_map.json"
-    };
+    // Always use symbols.png and symbol_map.json
+    let png_name = "symbols.png";
+    let json_name = "symbol_map.json";
 
     let png_path = output_path.join(png_name);
     let json_path = output_path.join(json_name);

@@ -30,6 +30,7 @@ const CJK_FONT_NAME: &str = "PingFang SC";
 /// Emoji font name for macOS CoreText
 const EMOJI_FONT_NAME: &str = "Apple Color Emoji";
 
+
 /// Expand $HOME in path
 fn expand_home(path: &str) -> String {
     if path.starts_with("$HOME") {
@@ -156,7 +157,6 @@ mod quartz {
     }
 
     /// Binary search to find font size for named font
-    #[allow(dead_code)]
     pub fn solve_font_size_for_height_by_name(font_name: &str, target_h: f32, padding: f32) -> f32 {
         let target = target_h * padding;
         let mut lo = 1.0f64;
@@ -211,8 +211,133 @@ mod quartz {
         size
     }
 
+    /// Create CTLine for a string (supports multi-codepoint emoji)
+    fn create_ct_line_str(font: &CTFont, s: &str) -> Option<CTLine> {
+        let cf_string = CFString::new(s);
+
+        // Create attributed string with font attribute
+        let mut attr_string = CFMutableAttributedString::new();
+        attr_string.replace_str(&cf_string, CFRange::init(0, 0));
+
+        let range = CFRange::init(0, cf_string.char_len());
+
+        // Set font attribute
+        unsafe {
+            core_foundation::attributed_string::CFAttributedStringSetAttribute(
+                attr_string.as_concrete_TypeRef(),
+                range,
+                kCTFontAttributeName,
+                font.as_concrete_TypeRef() as *const c_void,
+            );
+
+            // Set foreground color from context
+            let cf_true = core_foundation::boolean::CFBoolean::true_value();
+            core_foundation::attributed_string::CFAttributedStringSetAttribute(
+                attr_string.as_concrete_TypeRef(),
+                range,
+                kCTForegroundColorFromContextAttributeName,
+                cf_true.as_concrete_TypeRef() as *const c_void,
+            );
+        }
+
+        Some(CTLine::new_with_attributed_string(attr_string.as_concrete_TypeRef()))
+    }
+
     /// Create CTLine for a single character
     fn create_ct_line(font: &CTFont, ch: char) -> Option<CTLine> {
+        create_ct_line_str(font, &ch.to_string())
+    }
+
+    /// Render a string (for emoji) using Quartz
+    pub fn render_str_quartz(
+        s: &str,
+        width: u32,
+        height: u32,
+        font_name: &str,
+        font_size: f32,
+    ) -> Option<RgbaImage> {
+        let font = ctfont_from_name(font_name, font_size as f64)?;
+
+        let ascent = font.ascent();
+        let descent = font.descent();
+
+        // Create bitmap context
+        let color_space = CGColorSpace::create_device_rgb();
+        let mut context = CGContext::create_bitmap_context(
+            None,
+            width as usize,
+            height as usize,
+            8,
+            width as usize * 4,
+            &color_space,
+            CGImageAlphaInfo::CGImageAlphaPremultipliedLast as u32,
+        );
+
+        // Clear background (transparent)
+        context.clear_rect(CGRect::new(
+            &CGPoint::new(0.0, 0.0),
+            &CGSize::new(width as f64, height as f64),
+        ));
+
+        // Set text color to white
+        context.set_rgb_fill_color(1.0, 1.0, 1.0, 1.0);
+
+        // Create CTLine
+        let line = create_ct_line_str(&font, s)?;
+
+        // Calculate position (centered)
+        let typo_bounds = line.get_typographic_bounds();
+        let x = ((width as f64) - typo_bounds.width) / 2.0;
+        // Vertical centering: baseline_y from bottom (CGContext origin at bottom-left)
+        let baseline_y = ((height as f64) - (ascent + descent)) / 2.0 + descent;
+
+        // Pixel align
+        let x = x.round();
+        let baseline_y = baseline_y.round();
+
+        // Draw text
+        context.set_text_position(x, baseline_y);
+        line.draw(&context);
+
+        // Extract image data
+        let data = context.data();
+        let ptr = data.as_ptr() as *const u8;
+        let len = (width * height * 4) as usize;
+        let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
+
+        // Create RgbaImage from RGBA data
+        // CGContext bitmap data is stored with origin at top-left (when created with
+        // standard options), so no Y-flip needed
+        let mut img = RgbaImage::new(width, height);
+        for y in 0..height {
+            for x in 0..width {
+                let offset = ((y * width + x) * 4) as usize;
+                let r = slice[offset];
+                let g = slice[offset + 1];
+                let b = slice[offset + 2];
+                let a = slice[offset + 3];
+
+                // Unpremultiply alpha
+                let (r, g, b) = if a > 0 {
+                    let af = a as f32 / 255.0;
+                    (
+                        ((r as f32 / af).min(255.0)) as u8,
+                        ((g as f32 / af).min(255.0)) as u8,
+                        ((b as f32 / af).min(255.0)) as u8,
+                    )
+                } else {
+                    (0, 0, 0)
+                };
+
+                img.put_pixel(x, y, Rgba([r, g, b, a]));
+            }
+        }
+
+        Some(img)
+    }
+
+    #[allow(dead_code)]
+    fn _create_ct_line_old(font: &CTFont, ch: char) -> Option<CTLine> {
         let s = ch.to_string();
         let cf_string = CFString::new(&s);
 
@@ -251,7 +376,7 @@ mod quartz {
         height: u32,
         font_path: Option<&str>,
         font_name: Option<&str>,
-        font_size: f32,
+        _font_size: f32,
         fill_cell: bool,
         text_padding: f32,
     ) -> Option<RgbaImage> {
@@ -271,14 +396,16 @@ mod quartz {
                 let f = ctfont_from_file(path, size as f64)?;
                 (size, f)
             } else if let Some(name) = font_name {
-                let size = font_size * padding;
+                // Font path doesn't exist, fall back to named font
+                let size = solve_font_size_for_height_by_name(name, height as f32, padding);
                 let f = ctfont_from_name(name, size as f64)?;
                 (size, f)
             } else {
                 return None;
             }
         } else if let Some(name) = font_name {
-            let size = font_size * padding;
+            // Use font by name - directly use font_size * padding (matching Python)
+            let size = _font_size * padding;
             let f = ctfont_from_name(name, size as f64)?;
             (size, f)
         } else {
@@ -327,7 +454,7 @@ mod quartz {
             ((width as f64) - typo_bounds.width) / 2.0
         };
 
-        // Calculate y position (vertical centering)
+        // Calculate y position (vertical centering) - baseline from bottom
         let baseline_y = ((height as f64) - (ascent + descent)) / 2.0 + descent;
 
         // Pixel align
@@ -344,14 +471,11 @@ mod quartz {
         let len = (width * height * 4) as usize;
         let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
 
-        // Create RgbaImage from RGBA data
-        // Note: CGContext uses RGBA order with premultiplied alpha
+        // Create RgbaImage from RGBA data - no Y flip
         let mut img = RgbaImage::new(width, height);
         for y in 0..height {
             for x in 0..width {
-                // CGContext coordinates are flipped vertically
-                let src_y = height - 1 - y;
-                let offset = ((src_y * width + x) * 4) as usize;
+                let offset = ((y * width + x) * 4) as usize;
                 let r = slice[offset];
                 let g = slice[offset + 1];
                 let b = slice[offset + 2];
@@ -553,27 +677,28 @@ mod fontdue_impl {
             }
         };
 
+        // SDF workflow: render at 2x size, compute SDF, then resize to target
         let sdf_scale = 2u32;
+        let render_w = cfg.tui_char_width * sdf_scale;
+        let render_h = cfg.tui_char_height * sdf_scale;
+        let spread = pxrange as f32 * sdf_scale as f32;
 
         for i in 0..total {
             let image = if i < tui_chars.len() {
                 let ch = tui_chars[i];
                 let fill_cell = super::is_graphic_char(ch);
-
-                let render_w = cfg.tui_render_width * sdf_scale;
-                let render_h = cfg.tui_render_height * sdf_scale;
                 let padding = if fill_cell { 1.0 } else { text_padding };
-                let font_size = (cfg.tui_font_size as f32 * sdf_scale as f32 * padding) as f32;
+                let font_size = cfg.tui_font_size as f32 * padding;
 
                 let rendered = render_char(&font, ch, render_w, render_h, font_size, fill_cell);
-                let spread = pxrange as f32 * sdf_scale as f32;
-                let sdf = super::bitmap_to_sdf(&rendered, spread);
 
-                imageops::resize(
+                // Compute SDF at render size, then resize
+                let sdf = super::bitmap_to_sdf(&rendered, spread);
+                image::imageops::resize(
                     &sdf,
                     cfg.tui_char_width,
                     cfg.tui_char_height,
-                    imageops::FilterType::Lanczos3,
+                    image::imageops::FilterType::Lanczos3,
                 )
             } else {
                 ImageBuffer::from_pixel(cfg.tui_char_width, cfg.tui_char_height, Rgba([0, 0, 0, 255]))
@@ -635,23 +760,25 @@ mod fontdue_impl {
             }
         };
 
+        // SDF workflow: render at 2x size, compute SDF, then resize to target
         let sdf_scale = 2u32;
+        let render_size = cfg.cjk_char_size * sdf_scale;
+        let spread = pxrange as f32 * sdf_scale as f32;
+        let font_size = cfg.cjk_font_size as f32 * text_padding;
 
         for i in 0..total {
             let image = if i < cjk_chars.len() {
                 let ch = cjk_chars[i];
-                let render_size = cfg.cjk_render_size * sdf_scale;
-                let font_size = cfg.cjk_font_size as f32 * sdf_scale as f32 * text_padding;
 
                 let rendered = render_char(&font, ch, render_size, render_size, font_size, false);
-                let spread = pxrange as f32 * sdf_scale as f32;
-                let sdf = super::bitmap_to_sdf(&rendered, spread);
 
-                imageops::resize(
+                // Compute SDF at render size, then resize
+                let sdf = super::bitmap_to_sdf(&rendered, spread);
+                image::imageops::resize(
                     &sdf,
                     cfg.cjk_char_size,
                     cfg.cjk_char_size,
-                    imageops::FilterType::Lanczos3,
+                    image::imageops::FilterType::Lanczos3,
                 )
             } else {
                 ImageBuffer::from_pixel(cfg.cjk_char_size, cfg.cjk_char_size, Rgba([0, 0, 0, 255]))
@@ -753,35 +880,33 @@ fn render_tui_chars_macos(
         return images;
     }
 
+    // SDF workflow: render at 2x of TUI_RENDER_SIZE, compute SDF, then resize to target
+    // TUI: 160x320 render -> SDF -> 32x64 target (for 8192 texture)
     let sdf_scale = 2u32;
+    let render_w = cfg.tui_render_width * sdf_scale;
+    let render_h = cfg.tui_render_height * sdf_scale;
+    let spread = pxrange as f32 * sdf_scale as f32;
 
     for i in 0..total {
         let image = if i < tui_chars.len() {
             let ch = tui_chars[i];
             let fill_cell = is_graphic_char(ch);
 
-            // Render at higher resolution for SDF
-            let render_w = cfg.tui_render_width * sdf_scale;
-            let render_h = cfg.tui_render_height * sdf_scale;
-
-            // Render using Quartz
+            // Render bitmap at 2x of TUI_RENDER_SIZE
             let rendered = quartz::render_char_quartz(
                 ch,
                 render_w,
                 render_h,
                 resolved_font_path.as_deref(),
                 None,
-                cfg.tui_font_size as f32 * sdf_scale as f32,
+                cfg.tui_font_size as f32,
                 fill_cell,
                 text_padding,
             );
 
             if let Some(bitmap) = rendered {
-                // Convert to SDF
-                let spread = pxrange as f32 * sdf_scale as f32;
+                // Compute SDF at render size, then resize
                 let sdf = bitmap_to_sdf(&bitmap, spread);
-
-                // Resize to target size
                 imageops::resize(
                     &sdf,
                     cfg.tui_char_width,
@@ -813,33 +938,26 @@ fn render_emojis_macos(emojis: &[String], cfg: &TextureConfig) -> Vec<RgbaImage>
     for i in 0..total {
         let image = if i < emojis.len() {
             let emoji = &emojis[i];
-            // Get first char of emoji (may be multi-codepoint)
-            if let Some(ch) = emoji.chars().next() {
-                let rendered = quartz::render_char_quartz(
-                    ch,
-                    cfg.emoji_render_size,
-                    cfg.emoji_render_size,
-                    None,
-                    Some(EMOJI_FONT_NAME),
-                    cfg.emoji_font_size as f32,
-                    false,
-                    0.92,
-                );
+            // Use full emoji string (supports multi-codepoint emoji)
+            let rendered = quartz::render_str_quartz(
+                emoji,
+                cfg.emoji_render_size,
+                cfg.emoji_render_size,
+                EMOJI_FONT_NAME,
+                cfg.emoji_font_size as f32,
+            );
 
-                if let Some(bitmap) = rendered {
-                    // Emojis don't use SDF, just resize
-                    if bitmap.width() != cfg.emoji_char_size || bitmap.height() != cfg.emoji_char_size {
-                        imageops::resize(
-                            &bitmap,
-                            cfg.emoji_char_size,
-                            cfg.emoji_char_size,
-                            imageops::FilterType::Lanczos3,
-                        )
-                    } else {
-                        bitmap
-                    }
+            if let Some(bitmap) = rendered {
+                // Emojis don't use SDF, just resize
+                if bitmap.width() != cfg.emoji_char_size || bitmap.height() != cfg.emoji_char_size {
+                    imageops::resize(
+                        &bitmap,
+                        cfg.emoji_char_size,
+                        cfg.emoji_char_size,
+                        imageops::FilterType::Lanczos3,
+                    )
                 } else {
-                    ImageBuffer::from_pixel(cfg.emoji_char_size, cfg.emoji_char_size, Rgba([0, 0, 0, 0]))
+                    bitmap
                 }
             } else {
                 ImageBuffer::from_pixel(cfg.emoji_char_size, cfg.emoji_char_size, Rgba([0, 0, 0, 0]))
@@ -870,14 +988,16 @@ fn render_cjk_chars_macos(
 
     println!("  CJK font: {}", CJK_FONT_NAME);
 
+    // SDF workflow: render at 2x of CJK_RENDER_SIZE, compute SDF, then resize to target
+    // CJK: 256x256 render -> SDF -> 64x64 target (for 8192 texture)
     let sdf_scale = 2u32;
+    let render_size = cfg.cjk_render_size * sdf_scale;
+    let font_size = cfg.cjk_font_size as f32 * sdf_scale as f32;
+    let spread = pxrange as f32 * sdf_scale as f32;
 
     for i in 0..total {
         let image = if i < cjk_chars.len() {
             let ch = cjk_chars[i];
-
-            let render_size = cfg.cjk_render_size * sdf_scale;
-            let font_size = cfg.cjk_font_size as f32 * sdf_scale as f32;
 
             let rendered = quartz::render_char_quartz(
                 ch,
@@ -891,9 +1011,8 @@ fn render_cjk_chars_macos(
             );
 
             if let Some(bitmap) = rendered {
-                let spread = pxrange as f32 * sdf_scale as f32;
+                // Compute SDF at render size, then resize
                 let sdf = bitmap_to_sdf(&bitmap, spread);
-
                 imageops::resize(
                     &sdf,
                     cfg.cjk_char_size,
