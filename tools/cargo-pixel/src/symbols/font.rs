@@ -881,16 +881,28 @@ fn render_tui_chars_macos(
     }
 
     // SDF workflow: render at 2x of TUI_RENDER_SIZE, compute SDF, then resize to target
-    // TUI: 160x320 render -> SDF -> 32x64 target (for 8192 texture)
     let sdf_scale = 2u32;
     let render_w = cfg.tui_render_width * sdf_scale;
     let render_h = cfg.tui_render_height * sdf_scale;
     let spread = pxrange as f32 * sdf_scale as f32;
 
+    println!("  TUI params:");
+    println!("    sdf_scale: {}", sdf_scale);
+    println!("    render_size: {}x{}", render_w, render_h);
+    println!("    target_size: {}x{}", cfg.tui_char_width, cfg.tui_char_height);
+    println!("    font_size: {}", cfg.tui_font_size);
+    println!("    spread: {}", spread);
+    println!("    text_padding: {}", text_padding);
+
     for i in 0..total {
         let image = if i < tui_chars.len() {
             let ch = tui_chars[i];
             let fill_cell = is_graphic_char(ch);
+
+            // Debug first few chars
+            if i < 3 {
+                println!("    [{}] char='{}' U+{:04X} fill_cell={}", i, ch, ch as u32, fill_cell);
+            }
 
             // Render bitmap at 2x of TUI_RENDER_SIZE
             let rendered = quartz::render_char_quartz(
@@ -905,6 +917,10 @@ fn render_tui_chars_macos(
             );
 
             if let Some(bitmap) = rendered {
+                if i < 3 {
+                    let has_content = bitmap.pixels().any(|p| p[3] > 0);
+                    println!("    [{}] rendered {}x{} has_content={}", i, bitmap.width(), bitmap.height(), has_content);
+                }
                 // Compute SDF at render size, then resize
                 let sdf = bitmap_to_sdf(&bitmap, spread);
                 imageops::resize(
@@ -935,9 +951,22 @@ fn render_emojis_macos(emojis: &[String], cfg: &TextureConfig) -> Vec<RgbaImage>
     let total = (cfg.emoji_blocks_count * cfg.emoji_chars_per_block) as usize;
     let mut images = Vec::with_capacity(total);
 
+    println!("  Emoji font: {}", EMOJI_FONT_NAME);
+    println!("  Emoji params:");
+    println!("    render_size: {}x{}", cfg.emoji_render_size, cfg.emoji_render_size);
+    println!("    target_size: {}x{}", cfg.emoji_char_size, cfg.emoji_char_size);
+    println!("    font_size: {}", cfg.emoji_font_size);
+
     for i in 0..total {
         let image = if i < emojis.len() {
             let emoji = &emojis[i];
+
+            // Debug first few emojis
+            if i < 3 {
+                let codepoints: Vec<String> = emoji.chars().map(|c| format!("U+{:04X}", c as u32)).collect();
+                println!("    [{}] emoji='{}' codepoints=[{}]", i, emoji, codepoints.join(", "));
+            }
+
             // Use full emoji string (supports multi-codepoint emoji)
             let rendered = quartz::render_str_quartz(
                 emoji,
@@ -948,6 +977,10 @@ fn render_emojis_macos(emojis: &[String], cfg: &TextureConfig) -> Vec<RgbaImage>
             );
 
             if let Some(bitmap) = rendered {
+                if i < 3 {
+                    let has_content = bitmap.pixels().any(|p| p[3] > 0);
+                    println!("    [{}] rendered {}x{} has_content={}", i, bitmap.width(), bitmap.height(), has_content);
+                }
                 // Emojis don't use SDF, just resize
                 if bitmap.width() != cfg.emoji_char_size || bitmap.height() != cfg.emoji_char_size {
                     imageops::resize(
@@ -989,15 +1022,27 @@ fn render_cjk_chars_macos(
     println!("  CJK font: {}", CJK_FONT_NAME);
 
     // SDF workflow: render at 2x of CJK_RENDER_SIZE, compute SDF, then resize to target
-    // CJK: 256x256 render -> SDF -> 64x64 target (for 8192 texture)
     let sdf_scale = 2u32;
     let render_size = cfg.cjk_render_size * sdf_scale;
     let font_size = cfg.cjk_font_size as f32 * sdf_scale as f32;
     let spread = pxrange as f32 * sdf_scale as f32;
 
+    println!("  CJK params:");
+    println!("    sdf_scale: {}", sdf_scale);
+    println!("    render_size: {}x{}", render_size, render_size);
+    println!("    target_size: {}x{}", cfg.cjk_char_size, cfg.cjk_char_size);
+    println!("    font_size: {}", font_size);
+    println!("    spread: {}", spread);
+    println!("    text_padding: {}", text_padding);
+
     for i in 0..total {
         let image = if i < cjk_chars.len() {
             let ch = cjk_chars[i];
+
+            // Debug first few chars
+            if i < 3 {
+                println!("    [{}] char='{}' U+{:04X}", i, ch, ch as u32);
+            }
 
             let rendered = quartz::render_char_quartz(
                 ch,
@@ -1011,6 +1056,10 @@ fn render_cjk_chars_macos(
             );
 
             if let Some(bitmap) = rendered {
+                if i < 3 {
+                    let has_content = bitmap.pixels().any(|p| p[3] > 0);
+                    println!("    [{}] rendered {}x{} has_content={}", i, bitmap.width(), bitmap.height(), has_content);
+                }
                 // Compute SDF at render size, then resize
                 let sdf = bitmap_to_sdf(&bitmap, spread);
                 imageops::resize(
