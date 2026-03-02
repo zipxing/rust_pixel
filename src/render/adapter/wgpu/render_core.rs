@@ -26,6 +26,8 @@ pub struct WgpuRenderCore {
     pub ratio_x: f32,
     /// Y-axis scaling ratio
     pub ratio_y: f32,
+    /// Render scale for HiDPI (physical_size / logical_size)
+    pub render_scale: f32,
 }
 
 impl WgpuRenderCore {
@@ -43,7 +45,14 @@ impl WgpuRenderCore {
             pixel_renderer,
             ratio_x,
             ratio_y,
+            render_scale: 1.0,
         }
+    }
+
+    /// Set render scale for HiDPI displays
+    pub fn set_render_scale(&mut self, scale: f32) {
+        self.render_scale = scale;
+        self.pixel_renderer.set_render_scale(scale);
     }
 
     /// Set the scaling ratios
@@ -210,14 +219,17 @@ impl WgpuRenderCore {
 
             // Calculate area and transform based on viewport
             let (area, transform) = if let Some(ref vp) = composite.viewport {
-                let vp_x = vp.x as f32;
-                let vp_y = vp.y as f32;
-                let pw = vp.w as f32;
-                let ph = vp.h as f32;
+                // Scale viewport coordinates by render_scale for HiDPI displays
+                // Viewport is specified in logical coordinates, but canvas uses physical size
+                let rs = self.render_scale;
+                let vp_x = vp.x as f32 * rs;
+                let vp_y = vp.y as f32 * rs;
+                let pw = vp.w as f32 * rs;
+                let ph = vp.h as f32 * rs;
 
-                // Get content size for texture sampling
+                // Get content size for texture sampling (also scaled)
                 let (content_w, content_h) = composite.content_size
-                    .map(|(w, h)| (w as f32, h as f32))
+                    .map(|(w, h)| (w as f32 * rs, h as f32 * rs))
                     .unwrap_or((pw, ph));
 
                 // area controls TEXTURE SAMPLING
@@ -344,13 +356,15 @@ impl WgpuRenderCoreBuilder {
         pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
         pixel_renderer.set_render_scale(self.render_scale);
 
-        Ok(WgpuRenderCore::new(
+        let mut core = WgpuRenderCore::new(
             device,
             queue,
             pixel_renderer,
             self.ratio_x,
             self.ratio_y,
-        ))
+        );
+        core.render_scale = self.render_scale;
+        Ok(core)
     }
 
     /// Build the render core with Texture2DArray (layered mode)
@@ -381,12 +395,14 @@ impl WgpuRenderCoreBuilder {
         pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
         pixel_renderer.set_render_scale(self.render_scale);
 
-        Ok(WgpuRenderCore::new(
+        let mut core = WgpuRenderCore::new(
             device,
             queue,
             pixel_renderer,
             self.ratio_x,
             self.ratio_y,
-        ))
+        );
+        core.render_scale = self.render_scale;
+        Ok(core)
     }
 }
