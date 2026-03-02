@@ -450,6 +450,14 @@ impl WinitWgpuAdapter {
         );
 
         let physical_size = window.inner_size();
+        let scale_factor = window.scale_factor();
+
+        info!(
+            "Window created - Logical: {}x{}, Physical: {}x{}, Scale factor: {:.2}",
+            self.base.gr.pixel_w, self.base.gr.pixel_h,
+            physical_size.width, physical_size.height,
+            scale_factor
+        );
 
         // For fullscreen mode: use physical screen size as canvas size
         // This ensures SDF renders at native resolution instead of being stretched
