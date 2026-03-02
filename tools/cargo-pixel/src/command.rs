@@ -286,12 +286,19 @@ fn build_app() -> Command {
         .subcommand(
             Command::new("symbols")
                 .alias("sym")
-                .about("Generate SDF texture atlas and symbol map for GPU rendering")
+                .about("Generate texture atlas and symbol map for GPU rendering")
+                .arg(
+                    Arg::new("layered")
+                        .short('l')
+                        .long("layered")
+                        .help("Generate layered Texture2DArray format (multi-resolution bitmap)")
+                        .action(ArgAction::SetTrue),
+                )
                 .arg(
                     Arg::new("size")
                         .short('s')
                         .long("size")
-                        .help("Texture size: 4096 or 8192 (default)")
+                        .help("Texture size: 4096 or 8192 (default, legacy mode only)")
                         .value_parser(["4096", "8192"])
                         .default_value("8192"),
                 )
@@ -299,7 +306,7 @@ fn build_app() -> Command {
                     Arg::new("pxrange")
                         .short('p')
                         .long("pxrange")
-                        .help("SDF distance field pixel range (default: 4)")
+                        .help("SDF distance field pixel range (legacy mode only, default: 4)")
                         .default_value("4"),
                 )
                 .arg(

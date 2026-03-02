@@ -375,31 +375,34 @@ demand[shelf_height] += rows_needed
 
 ```rust
 /// 对一层，在剩余需求约束下，求最优 shelf 组合
-fn dp_fill_layer(remaining: &mut [u32; 4]) -> Vec<(usize, u32)> {
-    // heights[i] 对应的单位数: [8, 4, 2, 1] （128/16, 64/16, 32/16, 16/16）
-    let units = [8u16, 4, 2, 1];
-    let capacity: u16 = 128; // 2048 / 16
+/// 使用 alloc 数组追踪每个容量下的完整分配方案，避免回溯错误
+pub fn dp_fill_layer(remaining: &mut [u32; 4]) -> Vec<(usize, u32)> {
+    const SHELF_UNITS: [u16; 4] = [8, 4, 2, 1]; // 128/16, 64/16, 32/16, 16/16
+    let capacity: usize = 128; // 2048 / 16
 
     // dp[c] = 容量 c 时的最大填充量
-    let mut dp = vec![0u16; (capacity + 1) as usize];
-    // 回溯用：choice[c] = (item_index, count)
-    let mut choice = vec![(0usize, 0u32); (capacity + 1) as usize];
+    // alloc[c][i] = 容量 c 的最优解中，类型 i 使用了多少个
+    let mut dp = vec![0u32; capacity + 1];
+    let mut alloc = vec![[0u32; 4]; capacity + 1];
 
-    for (i, &u) in units.iter().enumerate() {
+    for i in 0..4 {
+        let u = SHELF_UNITS[i] as usize;
         let avail = remaining[i].min((capacity / u) as u32);
         if avail == 0 { continue; }
 
-        // 二进制分组优化：将 avail 个相同物品拆为 1, 2, 4, ... 组
+        // 二进制分组优化
         let mut k = 1u32;
         let mut left = avail;
         while left > 0 {
             let batch = k.min(left);
-            let batch_size = u * batch as u16;
-            for c in (batch_size..=capacity).rev() {
-                let prev = c - batch_size;
-                if dp[prev as usize] + batch_size > dp[c as usize] {
-                    dp[c as usize] = dp[prev as usize] + batch_size;
-                    choice[c as usize] = (i, batch);
+            let batch_units = u * batch as usize;
+            for c in (batch_units..=capacity).rev() {
+                let prev = c - batch_units;
+                let new_fill = dp[prev] + batch_units as u32;
+                if new_fill > dp[c] {
+                    dp[c] = new_fill;
+                    alloc[c] = alloc[prev]; // 继承前一状态的分配
+                    alloc[c][i] += batch;   // 加上本次分配
                 }
             }
             left -= batch;
@@ -407,22 +410,23 @@ fn dp_fill_layer(remaining: &mut [u32; 4]) -> Vec<(usize, u32)> {
         }
     }
 
-    // 回溯最优解，扣减 remaining
+    // 找到填充量最大的容量
+    let best_c = (0..=capacity).max_by_key(|&c| dp[c]).unwrap_or(0);
+
+    // 从 alloc 直接读取结果，扣减 remaining
     let mut result = vec![];
-    let mut c = capacity;
-    while c > 0 && dp[c as usize] > 0 {
-        let (idx, count) = choice[c as usize];
+    for i in 0..4 {
+        let count = alloc[best_c][i];
         if count > 0 {
-            result.push((idx, count));
-            remaining[idx] -= count;
-            c -= units[idx] * count as u16;
-        } else {
-            break;
+            result.push((i, count));
+            remaining[i] -= count;
         }
     }
     result
 }
 ```
+
+**关键设计决策**：使用 `alloc[c][i]` 数组而非 `choice[c]` 回溯。二进制分组会覆盖 choice 条目，导致回溯时多次扣减同一物品，引发溢出。`alloc` 方案在每个容量下保存完整分配快照，空间 O(128×4)，完全消除回溯错误。
 
 #### Step 3: 迭代填充所有层
 

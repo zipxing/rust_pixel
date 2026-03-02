@@ -4,54 +4,48 @@
 
 ### 1.1 工具配置更新
 
-- [ ] 1.1.1 修改 `tools/cargo-pixel/src/symbols/config.rs`
+- [x] 1.1.1 修改 `tools/cargo-pixel/src/symbols/config.rs` ✅
   - 新增 `LayeredTextureConfig` 结构
   - 定义 mipmap level 配置（各符号类型的分辨率）
   - 定义 layer 大小（2048）和打包参数
 
-- [ ] 1.1.2 修改 `tools/cargo-pixel/src/symbols/mod.rs`
+- [x] 1.1.2 修改 `tools/cargo-pixel/src/symbols/mod.rs` + `command.rs` ✅
   - 新增 `--layered` 命令行参数
   - 区分旧模式（单张大图）和新模式（layered）
 
 ### 1.2 去除 SDF 生成
 
-- [ ] 1.2.1 修改 `tools/cargo-pixel/src/symbols/font.rs`
-  - 去除 `bitmap_to_sdf()` 调用
-  - 去除 msdfgen 工具调用
-  - Sprite 直接渲染为 bitmap（多分辨率：64×64, 32×32, 16×16）
-  - TUI 字符直接渲染为 bitmap（多分辨率：64×128, 32×64, 16×32）
-  - CJK 字符直接渲染为 bitmap（多分辨率：128×128, 64×64, 32×32）
-  - Emoji 渲染为 bitmap（多分辨率：128×128, 64×64, 32×32）
-  - 使用 Lanczos3 从高分辨率缩放得到低分辨率版本
+- [x] 1.2.1 修改 `tools/cargo-pixel/src/symbols/font.rs` ✅
+  - 新增 `MipBitmaps` 结构、`generate_mip_levels()`（gamma-correct Lanczos3）
+  - 新增 `generate_sprite_mips()`（Nearest neighbor 像素画）
+  - 新增 `render_tui_bitmaps()`、`render_emoji_bitmaps()`、`render_cjk_bitmaps()`
+  - macOS CoreText + fontdue 双路径分发
+  - 不触碰旧 SDF 代码，layered 模式完全跳过 SDF
 
-- [ ] 1.2.2 标记 `tools/cargo-pixel/src/symbols/edt.rs` 为可选/废弃
-  - EDT（Euclidean Distance Transform）不再用于主流程
-  - 保留代码但不在 layered 模式调用
+- [x] 1.2.2 标记 `tools/cargo-pixel/src/symbols/edt.rs` 为可选/废弃 ✅
+  - EDT（Euclidean Distance Transform）不再用于 layered 模式
+  - 保留代码，旧模式仍可调用
 
 ### 1.3 Layer 打包算法
 
-- [ ] 1.3.1 修改 `tools/cargo-pixel/src/symbols/texture.rs`
-  - 实现混合级别 DP shelf-packing 算法
-  - 统计各 (symbol_type, mip_level) 的 shelf 需求（高度 16/32/64/128）
-  - DP 求解每层最优 shelf 高度组合（有限背包，容量 128 单位）
-  - 各 mipmap level 的符号混合打包到同一组 2048×2048 层中
-  - 输入：各符号的多分辨率 bitmap
-  - 输出：`layers/layer_N.png` 多层 PNG（混合打包）
-  - 同时生成 `layered_symbol_map.json`
+- [x] 1.3.1 修改 `tools/cargo-pixel/src/symbols/texture.rs` ✅
+  - 实现 `dp_fill_layer()`（alloc 数组方案，修正了回溯溢出 bug）
+  - 实现 `pack_all_layers()` 迭代填充
+  - 实现 `pack_layered()` 完整流程：统计需求→DP 打包→生成层图→生成 JSON
+  - 实现 `pua_symbol()` PUA key 生成
 
-- [ ] 1.3.2 实现 `layered_symbol_map.json` 生成
-  - 包含 version、layer_size、layer_count、layer_files
-  - layer 索引为全局索引（各级别混合，无 per-level 分组）
-  - 以 symbol 字符串为 key（PUA 编码用 JSON unicode escape，Unicode 字符直接使用）
-  - 每个符号记录 w、h 和 3 级 mipmap 的 (layer, x, y, w, h)
+- [x] 1.3.2 实现 `layered_symbol_map.json` 生成 ✅
+  - version=2, layer_size, layer_count, layer_files
+  - symbol 字符串为 key（PUA/Unicode）
+  - 每个符号含 cell_w, cell_h, mips[3] = {layer, x, y, w, h}
 
 ### 1.4 测试 + 验证
 
-- [ ] 1.4.1 DP shelf-packing 单元测试（详见 tests.md §1）
-  - `dp_fill_layer`: 单类型/混合/溢出/空/最小/精确填满
-  - `pack_all_layers`: 单层/两层/零浪费/全量场景(84层)/典型app场景
-  - shelf 放置坐标 + UV 归一化验证
-  - 行数需求计算验证
+- [x] 1.4.1 DP shelf-packing 单元测试 ✅
+  - 16 个单元测试全部通过
+  - `dp_fill_layer`: 7 个测试（single_type/exact_capacity/mixed/overflow/prioritize_large/empty/minimal）
+  - `pack_all_layers`: 6 个测试（single_layer/two_layers/zero_waste/full_production=84层/level1_only/typical_app）
+  - UV 坐标 + PUA key 生成: 3 个测试
 
 - [ ] 1.4.2 JSON 生成单元测试（详见 tests.md §6）
   - version=2 标识
@@ -257,11 +251,11 @@
 
 ## 进度追踪
 
-- Phase 1: ⬜ 0/9 (0%) — 工具改造 + 测试
+- Phase 1: 🟡 6/9 (67%) — 工具改造 + 测试（核心代码完成，待 e2e 验证）
 - Phase 2: ⬜ 0/7 (0%) — Texture2DArray 基础 + 测试
 - Phase 3: ⬜ 0/7 (0%) — Shader 改造
 - Phase 4: ⬜ 0/11 (0%) — Tile 重构 + Mipmap 选择 + 测试
 - Phase 5: ⬜ 0/4 (0%) — 文档清理
 
-**总进度：⬜ 0/38 (0%)**
-**其中单元测试：6 个测试任务，45 个测试用例（详见 tests.md）**
+**总进度：🟡 6/38 (16%)**
+**其中单元测试：1/6 个测试任务完成，16/45 个测试用例通过（详见 tests.md）**

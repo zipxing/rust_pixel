@@ -4,9 +4,57 @@
 // Font rendering using macOS CoreText/Quartz for high-quality output (matching Python)
 // Falls back to fontdue on other platforms
 
-use super::config::TextureConfig;
+use super::config::{LayeredTextureConfig, TextureConfig};
 use super::edt::{bitmap_to_sdf, is_graphic_char};
 use image::{imageops, ImageBuffer, Rgba, RgbaImage};
+
+/// Multi-resolution bitmap set for a single symbol (3 mipmap levels)
+pub struct MipBitmaps {
+    pub levels: [RgbaImage; 3], // [Level 0 (high), Level 1 (mid), Level 2 (low)]
+}
+
+/// Downscale a high-res source bitmap to 3 mipmap levels using Lanczos3.
+/// sRGB -> linear -> resize -> sRGB for gamma-correct downscaling.
+fn generate_mip_levels(source: &RgbaImage, mip_cfg: &super::config::SymbolMipConfig) -> MipBitmaps {
+    let mut levels: [RgbaImage; 3] = [
+        ImageBuffer::new(1, 1),
+        ImageBuffer::new(1, 1),
+        ImageBuffer::new(1, 1),
+    ];
+    let linear = image_srgb_to_linear(source);
+    for (i, def) in mip_cfg.levels.iter().enumerate() {
+        let (sw, sh) = source.dimensions();
+        if sw == def.width && sh == def.height {
+            levels[i] = source.clone();
+        } else {
+            let resized = imageops::resize(&linear, def.width, def.height, imageops::FilterType::Lanczos3);
+            levels[i] = image_linear_to_srgb(&resized);
+        }
+    }
+    MipBitmaps { levels }
+}
+
+/// Generate mipmap levels for a sprite (upscale from 16×16 using Nearest neighbor)
+pub fn generate_sprite_mips(
+    source: &RgbaImage,
+    mip_cfg: &super::config::SymbolMipConfig,
+) -> MipBitmaps {
+    let mut levels: [RgbaImage; 3] = [
+        ImageBuffer::new(1, 1),
+        ImageBuffer::new(1, 1),
+        ImageBuffer::new(1, 1),
+    ];
+    for (i, def) in mip_cfg.levels.iter().enumerate() {
+        let (sw, sh) = source.dimensions();
+        if sw == def.width && sh == def.height {
+            levels[i] = source.clone();
+        } else {
+            // Nearest neighbor for pixel art upscaling
+            levels[i] = imageops::resize(source, def.width, def.height, imageops::FilterType::Nearest);
+        }
+    }
+    MipBitmaps { levels }
+}
 
 /// Convert sRGB to linear (gamma 2.2)
 #[inline]
@@ -564,7 +612,7 @@ mod fontdue_impl {
     ];
 
     /// Find and load a TUI font
-    fn find_tui_font(custom_path: Option<&str>) -> Option<Vec<u8>> {
+    pub(super) fn find_tui_font(custom_path: Option<&str>) -> Option<Vec<u8>> {
         if let Some(path) = custom_path {
             if let Ok(data) = std::fs::read(path) {
                 println!("  TUI font: {}", path);
@@ -584,7 +632,7 @@ mod fontdue_impl {
     }
 
     /// Find and load a CJK font
-    fn find_cjk_font() -> Option<fontdue::Font> {
+    pub(super) fn find_cjk_font() -> Option<fontdue::Font> {
         for (path, collection_index) in CJK_FONT_CONFIGS {
             let expanded = super::expand_home(path);
             if let Ok(data) = std::fs::read(&expanded) {
@@ -605,7 +653,7 @@ mod fontdue_impl {
     }
 
     /// Binary search to find font size that fills target height
-    fn solve_font_size_for_height(font: &fontdue::Font, target_h: f32, padding: f32) -> f32 {
+    pub(super) fn solve_font_size_for_height(font: &fontdue::Font, target_h: f32, padding: f32) -> f32 {
         let target = target_h * padding;
         let mut lo = 1.0f32;
         let mut hi = target * 3.0;
@@ -630,7 +678,7 @@ mod fontdue_impl {
     }
 
     /// Render a single character using fontdue
-    fn render_char(
+    pub(super) fn render_char(
         font: &fontdue::Font,
         ch: char,
         width: u32,
@@ -1123,4 +1171,274 @@ fn render_cjk_chars_macos(
     }
 
     images
+}
+
+// ============================================================================
+// Layered mode: multi-resolution bitmap rendering (no SDF)
+// ============================================================================
+
+/// Render TUI characters as multi-resolution bitmaps (no SDF)
+pub fn render_tui_bitmaps(
+    tui_chars: &[char],
+    lcfg: &LayeredTextureConfig,
+    text_padding: f32,
+    font_path: Option<&str>,
+) -> Vec<MipBitmaps> {
+    #[cfg(target_os = "macos")]
+    {
+        render_tui_bitmaps_macos(tui_chars, lcfg, text_padding, font_path)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        render_tui_bitmaps_fontdue(tui_chars, lcfg, text_padding, font_path)
+    }
+}
+
+/// Render emojis as multi-resolution bitmaps
+pub fn render_emoji_bitmaps(
+    emojis: &[String],
+    lcfg: &LayeredTextureConfig,
+) -> Vec<MipBitmaps> {
+    #[cfg(target_os = "macos")]
+    {
+        render_emoji_bitmaps_macos(emojis, lcfg)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        render_emoji_bitmaps_fontdue(emojis, lcfg)
+    }
+}
+
+/// Render CJK characters as multi-resolution bitmaps (no SDF)
+pub fn render_cjk_bitmaps(
+    cjk_chars: &[char],
+    lcfg: &LayeredTextureConfig,
+    text_padding: f32,
+) -> Vec<MipBitmaps> {
+    #[cfg(target_os = "macos")]
+    {
+        render_cjk_bitmaps_macos(cjk_chars, lcfg, text_padding)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        render_cjk_bitmaps_fontdue(cjk_chars, lcfg, text_padding)
+    }
+}
+
+// ============================================================================
+// macOS layered bitmap implementations
+// ============================================================================
+
+#[cfg(target_os = "macos")]
+fn render_tui_bitmaps_macos(
+    tui_chars: &[char],
+    lcfg: &LayeredTextureConfig,
+    text_padding: f32,
+    font_path: Option<&str>,
+) -> Vec<MipBitmaps> {
+    let mut results = Vec::with_capacity(tui_chars.len());
+    let render_w = lcfg.tui_render_w;
+    let render_h = lcfg.tui_render_h;
+
+    let resolved_font_path = find_tui_font_path(font_path);
+    if let Some(ref path) = resolved_font_path {
+        println!("  TUI font: {}", path);
+    } else {
+        eprintln!("Error: No TUI font found!");
+        return results;
+    }
+
+    println!("  TUI bitmap params:");
+    println!("    render_size: {}x{}", render_w, render_h);
+    println!("    mip levels: {:?}", lcfg.tui.levels);
+
+    for (i, &ch) in tui_chars.iter().enumerate() {
+        let fill_cell = is_graphic_char(ch);
+        let rendered = quartz::render_char_quartz(
+            ch,
+            render_w,
+            render_h,
+            resolved_font_path.as_deref(),
+            None,
+            render_h as f32,
+            fill_cell,
+            text_padding,
+        );
+
+        let source = rendered.unwrap_or_else(|| {
+            ImageBuffer::from_pixel(render_w, render_h, Rgba([0, 0, 0, 0]))
+        });
+        results.push(generate_mip_levels(&source, &lcfg.tui));
+
+        if (i + 1) % 256 == 0 {
+            println!("    TUI bitmap: {}/{}", i + 1, tui_chars.len());
+        }
+    }
+    results
+}
+
+#[cfg(target_os = "macos")]
+fn render_emoji_bitmaps_macos(
+    emojis: &[String],
+    lcfg: &LayeredTextureConfig,
+) -> Vec<MipBitmaps> {
+    let mut results = Vec::with_capacity(emojis.len());
+    let render_size = lcfg.emoji_render_size;
+
+    println!("  Emoji font: {}", EMOJI_FONT_NAME);
+    println!("  Emoji bitmap params:");
+    println!("    render_size: {}x{}", render_size, render_size);
+    println!("    mip levels: {:?}", lcfg.emoji.levels);
+
+    for (i, emoji) in emojis.iter().enumerate() {
+        let rendered = quartz::render_str_quartz(
+            emoji,
+            render_size,
+            render_size,
+            EMOJI_FONT_NAME,
+            render_size as f32,
+        );
+
+        let source = rendered.unwrap_or_else(|| {
+            ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]))
+        });
+        results.push(generate_mip_levels(&source, &lcfg.emoji));
+
+        if (i + 1) % 128 == 0 {
+            println!("    Emoji bitmap: {}/{}", i + 1, emojis.len());
+        }
+    }
+    results
+}
+
+#[cfg(target_os = "macos")]
+fn render_cjk_bitmaps_macos(
+    cjk_chars: &[char],
+    lcfg: &LayeredTextureConfig,
+    text_padding: f32,
+) -> Vec<MipBitmaps> {
+    let mut results = Vec::with_capacity(cjk_chars.len());
+    let render_size = lcfg.cjk_render_size;
+    let font_size = (render_size as f32) * 0.875;
+
+    println!("  CJK font: {}", CJK_FONT_NAME);
+    println!("  CJK bitmap params:");
+    println!("    render_size: {}x{}", render_size, render_size);
+    println!("    font_size: {}", font_size);
+    println!("    mip levels: {:?}", lcfg.cjk.levels);
+
+    for (i, &ch) in cjk_chars.iter().enumerate() {
+        let rendered = quartz::render_char_quartz(
+            ch,
+            render_size,
+            render_size,
+            None,
+            Some(CJK_FONT_NAME),
+            font_size,
+            false,
+            text_padding,
+        );
+
+        let source = rendered.unwrap_or_else(|| {
+            ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]))
+        });
+        results.push(generate_mip_levels(&source, &lcfg.cjk));
+
+        if (i + 1) % 512 == 0 {
+            println!("    CJK bitmap: {}/{}", i + 1, cjk_chars.len());
+        }
+    }
+    results
+}
+
+// ============================================================================
+// Fontdue layered bitmap implementations (non-macOS fallback)
+// ============================================================================
+
+#[cfg(not(target_os = "macos"))]
+fn render_tui_bitmaps_fontdue(
+    tui_chars: &[char],
+    lcfg: &LayeredTextureConfig,
+    text_padding: f32,
+    font_path: Option<&str>,
+) -> Vec<MipBitmaps> {
+    let mut results = Vec::with_capacity(tui_chars.len());
+    let render_w = lcfg.tui_render_w;
+    let render_h = lcfg.tui_render_h;
+
+    let font_data = match fontdue_impl::find_tui_font(font_path) {
+        Some(data) => data,
+        None => {
+            eprintln!("Error: No monospace font found!");
+            return results;
+        }
+    };
+    let font = match fontdue::Font::from_bytes(font_data.as_slice(), fontdue::FontSettings::default()) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Error parsing font: {}", e);
+            return results;
+        }
+    };
+
+    let base_font_size = fontdue_impl::solve_font_size_for_height(&font, render_h as f32, text_padding);
+
+    for (i, &ch) in tui_chars.iter().enumerate() {
+        let fill_cell = is_graphic_char(ch);
+        let rendered = fontdue_impl::render_char(&font, ch, render_w, render_h, base_font_size, fill_cell);
+        results.push(generate_mip_levels(&rendered, &lcfg.tui));
+
+        if (i + 1) % 256 == 0 {
+            println!("    TUI bitmap: {}/{}", i + 1, tui_chars.len());
+        }
+    }
+    results
+}
+
+#[cfg(not(target_os = "macos"))]
+fn render_emoji_bitmaps_fontdue(
+    emojis: &[String],
+    lcfg: &LayeredTextureConfig,
+) -> Vec<MipBitmaps> {
+    let render_size = lcfg.emoji_render_size;
+    emojis
+        .iter()
+        .map(|_| {
+            let empty = ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]));
+            generate_mip_levels(&empty, &lcfg.emoji)
+        })
+        .collect()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn render_cjk_bitmaps_fontdue(
+    cjk_chars: &[char],
+    lcfg: &LayeredTextureConfig,
+    text_padding: f32,
+) -> Vec<MipBitmaps> {
+    let mut results = Vec::with_capacity(cjk_chars.len());
+    let render_size = lcfg.cjk_render_size;
+
+    let font = match fontdue_impl::find_cjk_font() {
+        Some(f) => f,
+        None => {
+            eprintln!("Warning: No CJK font found");
+            return results;
+        }
+    };
+
+    let font_size = fontdue_impl::solve_font_size_for_height(&font, render_size as f32, text_padding);
+
+    for (i, &ch) in cjk_chars.iter().enumerate() {
+        let rendered = fontdue_impl::render_char(&font, ch, render_size, render_size, font_size, false);
+        results.push(generate_mip_levels(&rendered, &lcfg.cjk));
+
+        if (i + 1) % 512 == 0 {
+            println!("    CJK bitmap: {}/{}", i + 1, cjk_chars.len());
+        }
+    }
+    results
 }
