@@ -19,11 +19,9 @@
 //!   the contract in `graph.rs`.
 
 use crate::render::adapter::RenderCell;
+use crate::render::cell::cellsym_block;
 use crate::render::graph::UnifiedTransform;
-use crate::render::symbol_map::{iter_symbol_frames, layout, Tile, MipUV, get_layered_symbol_map};
-
-/// Background fill symbol - use centralized constant from symbol_map
-const BG_FILL_SYMBOL: usize = layout::BG_FILL_SYMBOL;
+use crate::render::symbol_map::{Tile, MipUV, get_layered_symbol_map};
 
 /// Symbol instance data for WGPU (matches OpenGL layout exactly)
 ///
@@ -85,19 +83,6 @@ pub struct WgpuQuadVertex {
 unsafe impl bytemuck::Pod for WgpuQuadVertex {}
 unsafe impl bytemuck::Zeroable for WgpuQuadVertex {}
 
-/// Symbol frame data (equivalent to OpenGL GlCell)
-#[derive(Clone, Debug)]
-pub struct WgpuSymbolFrame {
-    pub width: f32,
-    pub height: f32,
-    pub origin_x: f32,
-    pub origin_y: f32,
-    pub uv_left: f32,
-    pub uv_top: f32,
-    pub uv_width: f32,
-    pub uv_height: f32,
-}
-
 /// WGPU Symbol Renderer using instanced rendering
 ///
 /// This renderer exactly matches the OpenGL `GlRenderSymbols` behavior:
@@ -111,16 +96,6 @@ pub struct WgpuSymbolRenderer {
     /// Transform stack (equivalent to OpenGL transform_stack)
     transform_stack: UnifiedTransform,
 
-    /// Symbol frames for legacy single-atlas mode (equivalent to OpenGL symbols)
-    symbols: Vec<WgpuSymbolFrame>,
-
-    /// Tile data for layered mode: indexed by linear texsym, contains UV + layer per mip level.
-    /// Built from LayeredSymbolMap during load_layered_frames().
-    layered_tiles: Vec<Tile>,
-
-    /// Whether layered (Texture2DArray) mode is active
-    is_layered: bool,
-
     /// Current instance buffer data
     instance_buffer: Vec<WgpuSymbolInstance>,
 
@@ -133,11 +108,6 @@ pub struct WgpuSymbolRenderer {
     /// Ratio parameters for coordinate transformation
     pub ratio_x: f32,
     pub ratio_y: f32,
-
-    /// Whether the loaded texture contains MSDF/SDF data for TUI/CJK regions.
-    /// Automatically detected: 8192+ textures use MSDF/SDF, 4096 textures use bitmap.
-    /// Only used in legacy mode; layered mode always uses bitmap.
-    msdf_enabled: bool,
 
     /// Viewport scale factor: physical_window_height / canvas_height.
     /// Used to convert render-space cell heights to physical screen pixel heights
@@ -165,117 +135,12 @@ impl WgpuSymbolRenderer {
             canvas_width: canvas_width as f32,
             canvas_height: canvas_height as f32,
             transform_stack,
-            symbols: Vec::new(),
-            layered_tiles: Vec::new(),
-            is_layered: false,
             instance_buffer: Vec::with_capacity(max_instances),
             instance_count: 0,
             max_instances,
             ratio_x: 1.0,
             ratio_y: 1.0,
-            msdf_enabled: false,
             viewport_scale: 1.0,
-        }
-    }
-    
-    /// Load symbol texture using centralized iterator from symbol_map
-    ///
-    /// Uses iter_symbol_frames() which yields all symbols in linear order:
-    /// - [0, 40959]: Sprite (160 blocks × 256 = 40960 symbols, 16×16px)
-    /// - [40960, 43519]: TUI (10 blocks × 256 = 2560 symbols, 16×32px)
-    /// - [43520, 44287]: Emoji (6 blocks × 128 = 768 symbols, 32×32px)
-    /// - [44288, 48383]: CJK (128 cols × 32 rows = 4096 symbols, 32×32px)
-    pub fn load_texture(&mut self, texw: i32, texh: i32, _texdata: &[u8]) {
-        self.symbols.clear();
-        // 8192+ textures contain MSDF/SDF data for TUI/CJK; 4096 textures are pure bitmap
-        self.msdf_enabled = texw >= 8192;
-
-        let tex_width = texw as f32;
-        let tex_height = texh as f32;
-
-        // Use centralized iterator from symbol_map
-        for frame in iter_symbol_frames() {
-            let symbol_frame = self.make_symbols_frame_custom(
-                tex_width,
-                tex_height,
-                frame.pixel_x as f32,
-                frame.pixel_y as f32,
-                frame.width as f32,
-                frame.height as f32,
-            );
-            self.symbols.push(symbol_frame);
-        }
-    }
-    
-    /// Load layered frames from LayeredSymbolMap.
-    ///
-    /// Builds the `layered_tiles` lookup table: linear texsym index → Tile.
-    /// Uses the global SymbolMap to map each linear index to a symbol key,
-    /// then resolves that key in the LayeredSymbolMap to get UV + layer data.
-    pub fn load_layered_frames(&mut self) {
-        use crate::render::symbol_map::{
-            get_symbol_map, build_layered_tiles,
-        };
-
-        let symbol_map = get_symbol_map();
-        let layered_map = match get_layered_symbol_map() {
-            Some(m) => m,
-            None => {
-                log::error!("load_layered_frames: LayeredSymbolMap not initialized");
-                return;
-            }
-        };
-
-        self.layered_tiles = build_layered_tiles(symbol_map, layered_map);
-        self.is_layered = true;
-        self.msdf_enabled = false; // Layered mode always uses bitmap
-
-        log::info!(
-            "Loaded {} layered tiles ({} non-empty)",
-            self.layered_tiles.len(),
-            self.layered_tiles.iter().filter(|t| t.mips[0].w > 0.0 || t.mips[1].w > 0.0).count(),
-        );
-    }
-
-    /// Get whether this renderer is in layered (Texture2DArray) mode.
-    pub fn is_layered(&self) -> bool {
-        self.is_layered
-    }
-
-    /// Create a symbol frame (equivalent to OpenGL `make_symbols_frame`)
-    ///
-    /// Packs local width/height, origin, and UV rectangle for a single symbol.
-    // fn make_symbols_frame(&self, tex_width: f32, tex_height: f32, x: f32, y: f32) -> WgpuSymbolFrame {
-    //     let sym_width = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
-    //     let sym_height = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
-        
-    //     self.make_symbols_frame_custom(tex_width, tex_height, x, y, sym_width, sym_height)
-    // }
-    
-    /// Create a symbol frame with custom dimensions
-    ///
-    /// Used for TUI (16x32), Emoji (32x32), and Sprite (16x16) regions.
-    fn make_symbols_frame_custom(&self, tex_width: f32, tex_height: f32, x: f32, y: f32, width: f32, height: f32) -> WgpuSymbolFrame {
-        let origin_x = 1.0;
-        let origin_y = 1.0;
-        // Half-texel inset to prevent bilinear filtering from sampling
-        // adjacent symbols in the texture atlas (avoids grid line artifacts)
-        let half_texel_x = 0.5 / tex_width;
-        let half_texel_y = 0.5 / tex_height;
-        let uv_left = x / tex_width + half_texel_x;
-        let uv_top = y / tex_height + half_texel_y;
-        let uv_width = width / tex_width - half_texel_x * 2.0;
-        let uv_height = height / tex_height - half_texel_y * 2.0;
-        
-        WgpuSymbolFrame {
-            width,
-            height,
-            origin_x,
-            origin_y,
-            uv_left,
-            uv_top,
-            uv_width,
-            uv_height,
         }
     }
     
@@ -296,119 +161,7 @@ impl WgpuSymbolRenderer {
     pub fn generate_instances_from_render_cells(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
         self.instance_buffer.clear();
         self.instance_count = 0;
-
-        if self.is_layered {
-            self.generate_instances_layered(render_cells, ratio_x, ratio_y);
-        } else {
-            self.generate_instances_legacy(render_cells, ratio_x, ratio_y);
-        }
-    }
-
-    /// Legacy instance generation (single-atlas mode with MSDF support)
-    fn generate_instances_legacy(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
-        const MOD_BOLD: u16 = 0x0001;
-        const MOD_DIM: u16 = 0x0002;
-        const MOD_ITALIC: u16 = 0x0004;
-        const MOD_UNDERLINED: u16 = 0x0008;
-        const MOD_REVERSED: u16 = 0x0040;
-        const MOD_HIDDEN: u16 = 0x0080;
-        const MOD_CROSSED_OUT: u16 = 0x0100;
-        const MOD_GLOW: u16 = 0x0400;
-        const ITALIC_SKEW: f32 = 0.21;
-
-        for r in render_cells {
-            let cell_width = r.w as f32;
-            let cell_height = r.h as f32;
-            let modifier = r.modifier;
-
-            let (mut fg_color, bg_color) = if modifier & MOD_REVERSED != 0 {
-                let bg = r.bcolor.unwrap_or((0.0, 0.0, 0.0, 0.0));
-                let fg = r.fcolor;
-                (bg, Some(fg))
-            } else {
-                (r.fcolor, r.bcolor)
-            };
-
-            if modifier & MOD_BOLD != 0 {
-                fg_color.0 = (fg_color.0 * 1.3).min(1.0);
-                fg_color.1 = (fg_color.1 * 1.3).min(1.0);
-                fg_color.2 = (fg_color.2 * 1.3).min(1.0);
-            }
-            if modifier & MOD_DIM != 0 { fg_color.3 *= 0.6; }
-            if modifier & MOD_HIDDEN != 0 { fg_color.3 = 0.0; }
-
-            // Background
-            if let Some(b) = bg_color {
-                let mut bg_transform = self.transform_stack;
-                bg_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
-                if r.angle != 0.0 { bg_transform.rotate(r.angle); }
-                bg_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-
-                let bg_frame = &self.symbols[BG_FILL_SYMBOL];
-                let bg_frame_width = bg_frame.width / ratio_x;
-                let bg_frame_height = bg_frame.height / ratio_y;
-                let bg_scale_x = cell_width / bg_frame_width / ratio_x;
-                let bg_scale_y = cell_height / bg_frame_height / ratio_y;
-                bg_transform.scale(bg_scale_x, bg_scale_y);
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &bg_transform, [b.0, b.1, b.2, b.3], false, false);
-            }
-
-            let is_bold = modifier & MOD_BOLD != 0;
-            let is_glow = modifier & MOD_GLOW != 0;
-
-            // Glow halo
-            if is_glow {
-                let glow_color = [fg_color.0, fg_color.1, fg_color.2, fg_color.3 * 0.4];
-                let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
-                let mut glow_transform = self.transform_stack;
-                glow_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
-                if r.angle != 0.0 { glow_transform.rotate(r.angle); }
-                glow_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-                if modifier & MOD_ITALIC != 0 { glow_transform.skew_x(ITALIC_SKEW); }
-                let frame = &self.symbols[r.texsym];
-                let frame_width = frame.width / ratio_x;
-                let frame_height = frame.height / ratio_y;
-                glow_transform.scale(cell_width / frame_width / ratio_x, cell_height / frame_height / ratio_y);
-                self.draw_symbol_instance_with_glow(r.texsym, &glow_transform, glow_color, is_bold, use_msdf, 2.5);
-            }
-
-            // Foreground
-            let mut transform = self.transform_stack;
-            transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
-            if r.angle != 0.0 { transform.rotate(r.angle); }
-            transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-            if modifier & MOD_ITALIC != 0 { transform.skew_x(ITALIC_SKEW); }
-
-            let frame = &self.symbols[r.texsym];
-            let frame_width = frame.width / ratio_x;
-            let frame_height = frame.height / ratio_y;
-            transform.scale(cell_width / frame_width / ratio_x, cell_height / frame_height / ratio_y);
-
-            let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
-            self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], is_bold, use_msdf);
-
-            // Underline
-            if modifier & MOD_UNDERLINED != 0 {
-                let mut lt = self.transform_stack;
-                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.9);
-                if r.angle != 0.0 { lt.rotate(r.angle); }
-                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-                let lf = &self.symbols[BG_FILL_SYMBOL];
-                lt.scale(cell_width / (lf.width / ratio_x) / ratio_x, (cell_height * 0.08) / (lf.height / ratio_y) / ratio_y);
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
-            }
-
-            // Strikethrough
-            if modifier & MOD_CROSSED_OUT != 0 {
-                let mut lt = self.transform_stack;
-                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.46);
-                if r.angle != 0.0 { lt.rotate(r.angle); }
-                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-                let lf = &self.symbols[BG_FILL_SYMBOL];
-                lt.scale(cell_width / (lf.width / ratio_x) / ratio_x, (cell_height * 0.08) / (lf.height / ratio_y) / ratio_y);
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
-            }
-        }
+        self.generate_instances_layered(render_cells, ratio_x, ratio_y);
     }
 
     /// Layered instance generation (Texture2DArray mode, bitmap only, no MSDF)
@@ -441,11 +194,11 @@ impl WgpuSymbolRenderer {
         let base_h = crate::render::PIXEL_SYM_HEIGHT.get().copied().unwrap_or(32.0);
 
         // BG fill tile (always use mip1 — it's a solid block, mip level irrelevant)
-        let bg_tile = if BG_FILL_SYMBOL < self.layered_tiles.len() {
-            self.layered_tiles[BG_FILL_SYMBOL]
-        } else {
-            Tile::default()
-        };
+        // BG_FILL_SYMBOL linear index 160 = block 0, idx 160
+        let bg_pua = cellsym_block(0, 160);
+        let bg_tile = get_layered_symbol_map()
+            .map(|m| *m.resolve(&bg_pua))
+            .unwrap_or_default();
         let bg_mip = bg_tile.mips[1];
         let bg_frame_w = bg_tile.cell_w.max(1) as f32 * base_w;
         let bg_frame_h = bg_tile.cell_h.max(1) as f32 * base_h;
@@ -483,12 +236,8 @@ impl WgpuSymbolRenderer {
                 self.draw_layered_instance(&bg_tile, &bg_mip, bg_frame_w, bg_frame_h, &bg_transform, [b.0, b.1, b.2, b.3], false);
             }
 
-            // Look up tile for this symbol
-            let tile = if r.texsym < self.layered_tiles.len() {
-                self.layered_tiles[r.texsym]
-            } else {
-                Tile::default()
-            };
+            // Tile is carried directly from Cell — zero lookup
+            let tile = r.tile;
 
             // Dynamic mipmap selection based on physical screen pixel size.
             // viewport_scale converts render-space cell_height to physical pixels.
@@ -550,135 +299,6 @@ impl WgpuSymbolRenderer {
                 self.draw_layered_instance(&bg_tile, &bg_mip, bg_frame_w, bg_frame_h, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false);
             }
         }
-    }
-
-    /// Determine if a symbol should use MSDF rendering based on its linear index.
-    /// TUI and CJK regions use MSDF; Sprite and Emoji use bitmap.
-    #[inline]
-    fn is_msdf_symbol(texsym: usize) -> bool {
-        (texsym >= layout::TUI_BASE && texsym < layout::EMOJI_BASE)
-            || (texsym >= layout::CJK_BASE)
-    }
-
-    /// Add a symbol instance (equivalent to OpenGL `draw_symbol`)
-    ///
-    /// Packs per-instance attributes into the instance buffer:
-    /// - a1: origin, UV top-left
-    /// - a2: UV size, first column of local 2x2 scaled by frame size
-    /// - a3: second column of local 2x2 scaled by frame size, then translation
-    fn draw_symbol_instance(&mut self, sym: usize, transform: &UnifiedTransform, color: [f32; 4], is_bold: bool, use_msdf: bool) {
-        if self.instance_count >= self.max_instances {
-            // Instance limit reached (debug output removed for performance)
-            return;
-        }
-        if sym >= self.symbols.len() {
-            // Symbol index out of bounds (debug output removed for performance)
-            return;
-        }
-
-        let frame = &self.symbols[sym];
-
-        // Encode bold flag in origin_x sign: negative = bold
-        let origin_x = if is_bold { -frame.origin_x } else { frame.origin_x };
-        // Encode MSDF flag in origin_y sign: negative = MSDF
-        let origin_y = if use_msdf { -frame.origin_y } else { frame.origin_y };
-
-        // Create instance data matching OpenGL layout exactly
-        let instance = WgpuSymbolInstance {
-            // a1: [origin_x (sign=bold), origin_y (sign=msdf), uv_left, uv_top]
-            a1: [origin_x, origin_y, frame.uv_left, frame.uv_top],
-
-            // a2: [uv_width, uv_height, m00*width, m10*width]
-            // Matrix column 1: both m00 and m10 multiply by width
-            a2: [
-                frame.uv_width,
-                frame.uv_height,
-                transform.m00 * frame.width,
-                transform.m10 * frame.width  // Fixed: was * frame.height
-            ],
-
-            // a3: [m01*height, m11*height, m20, m21]
-            // Matrix column 2: both m01 and m11 multiply by height
-            a3: [
-                transform.m01 * frame.height,  // Fixed: was * frame.width
-                transform.m11 * frame.height,
-                transform.m20,
-                transform.m21
-            ],
-
-            // a4: [layer_index, reserved, reserved, reserved]
-            // Legacy mode: always 0.0 (single texture, no layers)
-            a4: [0.0, 0.0, 0.0, 0.0],
-
-            // color: [r, g, b, a]
-            color,
-        };
-        
-        self.instance_buffer.push(instance);
-        self.instance_count += 1;
-    }
-    
-    /// Add a glow halo symbol instance with centered enlargement.
-    ///
-    /// Takes the same transform as the normal foreground instance (including scale),
-    /// then enlarges by `glow_scale` while keeping the center aligned.
-    /// Center-preserving formula: M' = gs*M, t' = t - (gs-1)*M*(0.5, 0.5)
-    /// Glow flag encoded in a2.x sign (negative = glow) for the fragment shader.
-    fn draw_symbol_instance_with_glow(
-        &mut self, sym: usize, transform: &UnifiedTransform,
-        color: [f32; 4], is_bold: bool, use_msdf: bool, glow_scale: f32,
-    ) {
-        if self.instance_count >= self.max_instances { return; }
-        if sym >= self.symbols.len() { return; }
-
-        let frame = &self.symbols[sym];
-        let origin_x = if is_bold { -frame.origin_x } else { frame.origin_x };
-        let origin_y = if use_msdf { -frame.origin_y } else { frame.origin_y };
-
-        let gs = glow_scale;
-        // Matrix entries (already multiplied by frame size)
-        let mat_00_fw = transform.m00 * frame.width;
-        let mat_10_fw = transform.m10 * frame.width;
-        let mat_01_fh = transform.m01 * frame.height;
-        let mat_11_fh = transform.m11 * frame.height;
-
-        // Center-preserving enlargement:
-        // Quad center in local space = (0.5 - origin) where origin = (1.0, 1.0)
-        // So center = (-0.5, -0.5)
-        // Formula: t' = t - (gs-1) * M * center
-        let ox = frame.origin_x.abs();
-        let oy = frame.origin_y.abs();
-        let cx = 0.5 - ox;  // -0.5 when origin is 1.0
-        let cy = 0.5 - oy;
-        let center_x = mat_00_fw * cx + mat_01_fh * cy;
-        let center_y = mat_10_fw * cx + mat_11_fh * cy;
-        let tx = transform.m20 - (gs - 1.0) * center_x;
-        let ty = transform.m21 - (gs - 1.0) * center_y;
-
-        // Encode glow flag in uv_width sign: negative = glow
-        let uv_width = -frame.uv_width;
-
-        let instance = WgpuSymbolInstance {
-            a1: [origin_x, origin_y, frame.uv_left, frame.uv_top],
-            a2: [
-                uv_width,
-                frame.uv_height,
-                mat_00_fw * gs,
-                mat_10_fw * gs,
-            ],
-            a3: [
-                mat_01_fh * gs,
-                mat_11_fh * gs,
-                tx,
-                ty,
-            ],
-            // Legacy mode: always layer 0
-            a4: [0.0, 0.0, 0.0, 0.0],
-            color,
-        };
-
-        self.instance_buffer.push(instance);
-        self.instance_count += 1;
     }
 
     /// Add a symbol instance for layered mode (Texture2DArray).
@@ -840,17 +460,6 @@ impl WgpuSymbolRenderer {
         self.transform_stack.m21 = height as f32;
     }
     
-    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
-    /// When disabled, all symbols use bitmap rendering (for legacy 4096 textures).
-    pub fn set_msdf_enabled(&mut self, enabled: bool) {
-        self.msdf_enabled = enabled;
-    }
-
-    /// Get whether MSDF/SDF rendering is currently enabled.
-    pub fn get_msdf_enabled(&self) -> bool {
-        self.msdf_enabled
-    }
-
     /// Set ratio parameters for coordinate transformation
     pub fn set_ratio(&mut self, ratio_x: f32, ratio_y: f32) {
         self.ratio_x = ratio_x;

@@ -723,13 +723,6 @@ impl WgpuPixelRender {
             height: texture_height,
         });
 
-        // Load texture data into symbol renderer
-        self.symbol_renderer.load_texture(
-            texture_width as i32,
-            texture_height as i32,
-            texture_data,
-        );
-
         Ok(())
     }
 
@@ -749,9 +742,6 @@ impl WgpuPixelRender {
         );
 
         self.symbol_texture_array = Some(tex_array);
-
-        // Load layered tile data from LayeredSymbolMap for proper UV mapping
-        self.symbol_renderer.load_layered_frames();
 
         Ok(())
     }
@@ -928,16 +918,6 @@ impl WgpuPixelRender {
     /// 0.0 = off, 0.5 = moderate, 1.0 = maximum.
     pub fn set_sharpness(&mut self, sharpness: f32) {
         self.general2d_renderer.set_sharpness(sharpness);
-    }
-
-    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
-    pub fn set_msdf_enabled(&mut self, enabled: bool) {
-        self.symbol_renderer.set_msdf_enabled(enabled);
-    }
-
-    /// Get whether MSDF/SDF rendering is currently enabled.
-    pub fn get_msdf_enabled(&self) -> bool {
-        self.symbol_renderer.get_msdf_enabled()
     }
 
     /// Set viewport scale for mipmap selection.

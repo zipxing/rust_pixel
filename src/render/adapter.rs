@@ -505,8 +505,8 @@ pub trait Adapter {
             scale_x,
             scale_y,
             angle,
-            |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
-                push_render_buffer(rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, modifier);
+            |fc, bc, s2, tile, angle, ccp, modifier| {
+                push_render_buffer(rbuf, fc, bc, tile, s2, angle, &ccp, modifier);
             },
         );
     }

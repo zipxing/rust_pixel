@@ -74,7 +74,14 @@
 //! - Mouse coordinate conversion (accounts for double-height characters)
 
 use crate::{
-    render::{buffer::Buffer, sprite::Layer, style::{Color, Modifier}, symbol_map::{calc_linear_index, get_symbol_map}, AdapterBase},
+    render::{
+        buffer::Buffer,
+        cell::{cellsym_block, decode_pua, is_prerendered_emoji},
+        sprite::Layer,
+        style::{Color, Modifier},
+        symbol_map::{get_layered_symbol_map, get_symbol_map, Tile},
+        AdapterBase,
+    },
     util::{ARect, PointF32, PointI32, PointU16, Rand},
     LOGO_FRAME,
 };
@@ -1007,11 +1014,9 @@ pub struct RenderCell {
     /// If None, background is transparent.
     pub bcolor: Option<(f32, f32, f32, f32)>,
 
-    /// Packed texture and symbol index value
-    ///
-    /// - High bits: Texture index (which texture to use)
-    /// - Low bits: Symbol index (which character/symbol in texture)
-    pub texsym: usize,
+    /// Tile with resolved UV + layer data for 3 mipmap levels.
+    /// Carried from Cell through graph.rs — renderer reads directly, zero lookup.
+    pub tile: crate::render::symbol_map::Tile,
 
     /// Screen-space X position (in pixels)
     ///
@@ -1260,8 +1265,7 @@ impl Graph {
 /// - `rbuf`: Target RenderCell vector to append to
 /// - `fc`: Foreground color as (R,G,B,A) in 0-255 range
 /// - `bgc`: Optional background color
-/// - `texidx`: Texture region identifier (0=TUI, 255=Emoji, 1-254=Sprite)
-/// - `symidx`: Symbol index within the region (0-255 for most, 0-1023 for TUI)
+/// - `tile`: Tile with resolved UV + layer data for 3 mipmap levels
 /// - `s`: Destination rectangle in screen space (pixels). The helper functions
 ///        already apply ratio-based sizing and spacing; this function may derive
 ///        an offset from it to cooperate with backend transform chain.
@@ -1269,23 +1273,14 @@ impl Graph {
 /// - `ccp`: Center point for rotation
 /// - `modifier`: Style modifier flags (see Modifier enum in style.rs)
 ///
-/// # Linear Symbol Array Layout (4096x4096 texture)
+/// Push a RenderCell into the render buffer.
 ///
-/// The symbols array uses a simple linear indexing scheme:
-/// - **Sprite**: [0, 40959] = 160 blocks × 256 symbols (16×16px each)
-///   - Formula: texidx * 256 + symidx
-/// - **TUI**: [40960, 43519] = 10 blocks × 256 symbols (16×32px each)
-///   - Formula: 40960 + (texidx - 160) * 256 + symidx
-/// - **Emoji**: [43520, 44287] = 6 blocks × 128 symbols (32×32px each)
-///   - Formula: 43520 + (texidx - 170) * 128 + symidx
-/// - **CJK**: [44288, 48383] = 128 cols × 32 rows = 4096 symbols (32×32px each)
-///   - Formula: 44288 + linear_offset
+/// Tile is carried directly from Cell — no texsym/block/idx conversion needed.
 pub fn push_render_buffer(
     rbuf: &mut Vec<RenderCell>,
     fc: &(u8, u8, u8, u8),
     bgc: &Option<(u8, u8, u8, u8)>,
-    texidx: usize,
-    symidx: usize,
+    tile: crate::render::symbol_map::Tile,
     s: ARect,
     angle: f64,
     ccp: &PointI32,
@@ -1312,12 +1307,8 @@ pub fn push_render_buffer(
         wc.bcolor = None;
     }
 
-    // Calculate linear symbol index using centralized function from symbol_map
-    wc.texsym = calc_linear_index(texidx, symidx);
+    wc.tile = tile;
     // Derive the instance anchor from the destination rectangle produced by helper functions.
-    //
-    // The backend transform chain applies additional translation and ratio-compensation.
-    // Here we set the instance anchor relative to the destination rectangle to match that chain.
     wc.x = s.x as f32 + s.w as f32;
     wc.y = s.y as f32 + s.h as f32;
     wc.w = s.w;
@@ -1341,72 +1332,47 @@ pub fn push_render_buffer(
 }
 
 /// Position calculation helper for rendering (no scaling)
-/// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
-/// glyph_height: Height multiplier from Glyph (1 for Sprite, 2 for TUI/Emoji/CJK)
 pub fn render_helper(
     cell_w: u16,
     r: PointF32,
     i: usize,
-    sh: &(u8, u8, Color, Color),
     p: PointU16,
-    use_tui: bool,
-    glyph_height: u8,
-) -> (ARect, usize, usize) {
-    render_helper_with_scale(cell_w, r, i, sh, p, use_tui, 1.0, 1.0, 1.0, None, glyph_height)
+    cell_h: u8,
+) -> ARect {
+    render_helper_with_scale(cell_w, r, i, p, 1.0, 1.0, 1.0, None, cell_h)
 }
 
-/// Enhanced helper that returns destination rectangle and symbol indices with per-sprite scaling.
-/// sh: (sym_index, tex_index, fg, bg) - first 4 elements from CellInfo
+/// Enhanced helper that returns destination rectangle with per-sprite scaling.
 ///
 /// # Parameters
+/// - `cell_h`: Tile cell height (1 for Sprite, 2 for TUI/Emoji/CJK)
 /// - `scale_x`, `scale_y`: Combined scale (sprite_scale * cell_scale)
 /// - `sprite_scale_y`: Sprite-level Y scale, used for row height and vertical centering
-/// - `cumulative_x`: Pre-computed cumulative X position in pixel space (before adding p.x).
-///   When Some, uses cumulative layout; when None, uses grid-based layout.
-/// - `glyph_height`: Glyph height in multiples of PIXEL_SYM_HEIGHT (1 for Sprite, 2 for TUI/Emoji/CJK)
-///
-/// Returns: (dest_rect, texture_id, symbol_id)
+/// - `cumulative_x`: Pre-computed cumulative X position in pixel space
 pub fn render_helper_with_scale(
     cell_w: u16,
     r: PointF32,
     i: usize,
-    sh: &(u8, u8, Color, Color),
     p: PointU16,
-    _use_tui: bool,       // Deprecated: height now determined by glyph_height parameter
-    scale_x: f32,         // Combined (sprite * cell) scaling along X
-    scale_y: f32,         // Combined (sprite * cell) scaling along Y
-    sprite_scale_y: f32,  // Sprite-level Y scale for row height calculation
-    cumulative_x: Option<f32>, // Pre-computed cumulative X pixel position
-    glyph_height: u8,     // Glyph height multiplier (1 or 2)
-) -> (ARect, usize, usize) {
-    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32; // 16 pixels
-    // Height is determined by glyph_height from Glyph struct:
-    // - Sprite: glyph_height=1 → 16 pixels
-    // - TUI/Emoji/CJK: glyph_height=2 → 32 pixels
-    let h = (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32) * glyph_height as i32;
+    scale_x: f32,
+    scale_y: f32,
+    sprite_scale_y: f32,
+    cumulative_x: Option<f32>,
+    cell_h: u8,
+) -> ARect {
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as i32;
+    let h = (*PIXEL_SYM_HEIGHT.get().expect("lazylock init") as i32) * cell_h as i32;
 
     let dsty = i as u16 / cell_w;
 
-    let tx = sh.1 as usize;
-
-    // Compute tiling-corrected sizes and positions.
-    // When cell size is non-integer (e.g., 16/1.2 = 13.333), independently rounding
-    // each cell's position and width creates 1-pixel gaps between adjacent cells.
-    // Fix: compute width/height as round(next_pos) - round(this_pos), ensuring
-    // adjacent cells tile perfectly (sizes alternate e.g. 13,14,13,13,14,...).
     let (scaled_x, scaled_y, scaled_w, scaled_h) = if let Some(cum_x) = cumulative_x {
-        // Cumulative layout: X from accumulated widths, Y centered within row
         let row_h = h as f32 / r.y * sprite_scale_y;
-        let cell_h = h as f32 / r.y * scale_y;
-        let y_offset = (row_h - cell_h) / 2.0;
+        let cell_fh = h as f32 / r.y * scale_y;
+        let y_offset = (row_h - cell_fh) / 2.0;
         let base_y = dsty as f32 * row_h;
         let this_y_f = base_y + y_offset;
         let next_y_f = (dsty as f32 + 1.0) * row_h + y_offset;
-        // Width: use rounded value here; caller (render_buffer_to_cells) will
-        // correct it with grid_advance info for perfect X-direction tiling.
         let w_val = (w as f32 / r.x * scale_x).round() as u32;
-        // Height: tiling-corrected only when cell fills its row (no per-cell Y scaling).
-        // When y_offset != 0, cell is intentionally smaller and centered in row.
         let h_val = if y_offset.abs() < 0.01 {
             (next_y_f.round() - this_y_f.round()) as u32
         } else {
@@ -1414,7 +1380,6 @@ pub fn render_helper_with_scale(
         };
         (cum_x.round(), this_y_f.round(), w_val, h_val)
     } else {
-        // Grid-based layout with tiling fix
         let dstx = i as u16 % cell_w;
         let cell_f_w = w as f32 / r.x * scale_x;
         let cell_f_h = h as f32 / r.y * scale_y;
@@ -1425,16 +1390,12 @@ pub fn render_helper_with_scale(
         (this_x, this_y, (next_x - this_x) as u32, (next_y - this_y) as u32)
     };
 
-    (
-        ARect {
-            x: scaled_x as i32 + p.x as i32,
-            y: scaled_y as i32 + p.y as i32,
-            w: scaled_w,
-            h: scaled_h,
-        },
-        tx,
-        sh.0 as usize,
-    )
+    ARect {
+        x: scaled_x as i32 + p.x as i32,
+        y: scaled_y as i32 + p.y as i32,
+        w: scaled_w,
+        h: scaled_h,
+    }
 }
 
 /// Unified buffer to RenderCell conversion with full transformation support
@@ -1468,7 +1429,7 @@ pub fn render_buffer_to_cells<F>(
     angle: f64,
     mut f: F,
 ) where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32, u16),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, Tile, f64, PointI32, u16),
 {
     let px = buf.area.x;
     let py = buf.area.y;
@@ -1494,8 +1455,8 @@ pub fn render_buffer_to_cells<F>(
                 continue;
             }
             let row = i / pw as usize;
-            let glyph = cell.get_glyph();
-            
+            let tile = cell.get_tile();
+
             // Calculate slot width considering per-cell scale
             let has_fixed_slot = cell.modifier.contains(Modifier::FIXED_SLOT);
             let cell_sx = scale_x * cell.scale_x;
@@ -1507,8 +1468,8 @@ pub fn render_buffer_to_cells<F>(
                 scale_x
             };
             let slot_w = base_cell_w * effective_slot_scale;
-            
-            if glyph.is_double_width() {
+
+            if tile.cell_w >= 2 {
                 row_pixel_widths[row] += slot_w * 2.0;
                 if (i + 1) % pw as usize != 0 {
                     skip = true;
@@ -1543,19 +1504,31 @@ pub fn render_buffer_to_cells<F>(
         let cell_sx = scale_x * cell.scale_x;
         let cell_sy = scale_y * cell.scale_y;
 
-        // Get glyph with size info (block, idx, width, height)
-        let glyph = cell.get_glyph();
-        let mut sh = (glyph.idx, glyph.block, cell.fg, cell.bg);
+        // Get tile (pre-resolved from Cell's symbol via LayeredSymbolMap)
+        let mut tile = cell.get_tile();
+        let fg = cell.fg;
+        let bg = cell.bg;
         let modifier = cell.modifier.bits();
 
-        // TUI mode: remap Sprite region symbols to TUI region
-        if use_tui && sh.1 < 160 {
-            if let Some((block, idx)) = get_symbol_map().tui_idx(&cell.symbol) {
-                sh.1 = block;
-                sh.0 = idx;
-            } else {
-                sh.1 = 160;
-                sh.0 = 0;
+        // TUI mode: remap Sprite PUA symbols to TUI region tiles
+        if use_tui {
+            if let Some(ch) = cell.symbol.chars().next() {
+                if let Some((block, _idx)) = decode_pua(ch) {
+                    if block < 160 {
+                        if let Some((tui_block, tui_idx)) = get_symbol_map().tui_idx(&cell.symbol) {
+                            let tui_pua = cellsym_block(tui_block, tui_idx);
+                            if let Some(map) = get_layered_symbol_map() {
+                                tile = *map.resolve(&tui_pua);
+                            }
+                        } else {
+                            // Default: space in TUI region
+                            let tui_pua = cellsym_block(160, 0);
+                            if let Some(map) = get_layered_symbol_map() {
+                                tile = *map.resolve(&tui_pua);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -1578,26 +1551,23 @@ pub fn render_buffer_to_cells<F>(
         let x_center_offset = (slot_w - rendered_w) / 2.0;
 
         // Calculate destination rectangle with combined scaling and centered X
-        // Use glyph.height directly instead of block range detection
-        let (mut s2, texidx, symidx) = render_helper_with_scale(
+        let mut s2 = render_helper_with_scale(
             pw,
             PointF32 { x: rx, y: ry },
             i,
-            &sh,
             PointU16 { x: px, y: py },
-            use_tui,
             cell_sx,
             cell_sy,
             scale_y,
             Some(cumulative_x + x_center_offset),
-            glyph.height,
+            tile.cell_h,
         );
 
         // Grid advance: fixed slot width (per-cell scale doesn't shift neighbors)
         let mut grid_advance = slot_w;
 
-        // Handle double-width glyphs (Emoji, CJK)
-        if glyph.is_double_width() {
+        // Handle double-width tiles (Emoji, CJK)
+        if tile.cell_w >= 2 {
             s2.w *= 2;
             grid_advance = slot_w * 2.0;
             if (i + 1) % pw as usize != 0 {
@@ -1647,24 +1617,24 @@ pub fn render_buffer_to_cells<F>(
         };
 
         // Apply alpha to colors
-        // For Emoji in TUI mode, use white (no color modulation)
-        let fc = if use_tui && texidx >= 170 && texidx <= 175 {
+        // For pre-rendered Emoji in TUI mode, use white (no color modulation)
+        let fc = if use_tui && is_prerendered_emoji(&cell.symbol) {
             (255, 255, 255, alpha)
         } else {
-            let mut rgba = sh.2.get_rgba();
+            let mut rgba = fg.get_rgba();
             rgba.3 = alpha;
             rgba
         };
 
-        let bc = if sh.3 != Color::Reset {
-            let mut brgba = sh.3.get_rgba();
+        let bc = if bg != Color::Reset {
+            let mut brgba = bg.get_rgba();
             brgba.3 = alpha;
             Some(brgba)
         } else {
             None
         };
 
-        f(&fc, &bc, s2, texidx, symidx, angle, ccp, modifier);
+        f(&fc, &bc, s2, tile, angle, ccp, modifier);
     }
 }
 
@@ -1722,8 +1692,8 @@ pub fn render_buffer_to_cells<F>(
 /// - `f`: Callback function to process each sprite pixel
 pub fn render_layers<F>(layers: &mut Layer, rx: f32, ry: f32, mut f: F)
 where
-    // Callback signature: (fg_color, bg_color, dst_rect, tex_idx, sym_idx, angle, center_point, modifier)
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, f64, PointI32, u16),
+    // Callback signature: (fg_color, bg_color, dst_rect, tile, angle, center_point, modifier)
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, Tile, f64, PointI32, u16),
 {
     // Sort by render_weight
     layers.update_render_index();
@@ -1744,8 +1714,8 @@ where
             s.scale_x,
             s.scale_y,
             s.angle,
-            |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
-                f(fc, bc, s2, texidx, symidx, angle, ccp, modifier);
+            |fc, bc, s2, tile, angle, ccp, modifier| {
+                f(fc, bc, s2, tile, angle, ccp, modifier);
             },
         );
     }
@@ -1809,7 +1779,7 @@ pub fn render_main_buffer<F>(
     use_tui: bool,
     mut f: F,
 ) where
-    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, usize, usize, u16),
+    F: FnMut(&(u8, u8, u8, u8), &Option<(u8, u8, u8, u8)>, ARect, Tile, u16),
 {
     // Use unified function with default transformation (no scale, no rotation, full opacity)
     render_buffer_to_cells(
@@ -1821,9 +1791,9 @@ pub fn render_main_buffer<F>(
         1.0,   // scale_x: no scaling
         1.0,   // scale_y: no scaling
         0.0,   // angle: no rotation
-        |fc, bc, s2, texidx, symidx, _angle, _ccp, modifier| {
+        |fc, bc, s2, tile, _angle, _ccp, modifier| {
             // Forward to original callback (ignore angle and ccp for backward compatibility)
-            f(fc, bc, s2, texidx, symidx, modifier);
+            f(fc, bc, s2, tile, modifier);
         },
     );
 }
@@ -1878,7 +1848,7 @@ pub fn render_main_buffer<F>(
 /// - `f`: Callback function to render each logo character
 pub fn render_logo<F>(srx: f32, sry: f32, spw: u32, sph: u32, _rd: &mut Rand, stage: u32, mut f: F)
 where
-    F: FnMut(&(u8, u8, u8, u8), ARect, usize, usize),
+    F: FnMut(&(u8, u8, u8, u8), ARect, Tile),
 {
     let logo_cells = get_logo_cells();
 
@@ -1907,27 +1877,25 @@ where
             let (sym, fg, tex, _bg) = logo_cells[sci];
 
             // Use render_helper_with_scale for proper scaling
-            // Logo uses Sprite characters (16×16), so glyph_height = 1
-            let (mut s2, texidx, symidx) = render_helper_with_scale(
+            // Logo uses Sprite characters (16×16), so cell_h = 1
+            // Resolve (tex, sym) to Tile via LayeredSymbolMap
+            let logo_tile = get_layered_symbol_map()
+                .map(|m| *m.resolve(&cellsym_block(tex, sym)))
+                .unwrap_or_default();
+
+            let mut s2 = render_helper_with_scale(
                 PIXEL_LOGO_WIDTH as u16,
                 PointF32 { x: rx, y: ry },
                 sci,
-                &(
-                    sym,
-                    tex,
-                    Color::Indexed(fg),
-                    Color::Reset,
-                ),
                 PointU16 {
                     x: base_x,
                     y: base_y,
                 },
-                false, // Deprecated, kept for API compatibility
                 scale, // scale_x
                 scale, // scale_y
                 scale, // sprite_scale_y
                 None,  // cumulative_x (use grid-based layout)
-                1,     // glyph_height: Sprite (1x1)
+                1,     // cell_h: Sprite (1x1)
             );
 
             let fc = Color::Indexed(fg).get_rgba();
@@ -1951,8 +1919,6 @@ where
             let a: u8;
             let rand_x: i32;
             let mut rand_y: i32 = 0;
-            let final_symidx = symidx;
-            let final_texidx = texidx;
 
             if stage <= sg as u32 {
                 // Stage 1: Emergence — row/col displacement + alpha fade-in, original colors
@@ -2046,7 +2012,7 @@ where
             // Apply position jitter
             s2.x += rand_x;
             s2.y += rand_y;
-            f(&(r, g, b, a), s2, final_texidx, final_symidx);
+            f(&(r, g, b, a), s2, logo_tile);
         }
     }
 }
@@ -2092,9 +2058,9 @@ pub fn generate_render_buffer(
             base.gr.pixel_h,
             &mut base.rd,
             stage,
-            |fc, s2, texidx, symidx| {
+            |fc, s2, tile| {
                 // Logo uses no modifier (0)
-                push_render_buffer(&mut rbuf, fc, &None, texidx, symidx, s2, 0.0, &pz, 0);
+                push_render_buffer(&mut rbuf, fc, &None, tile, s2, 0.0, &pz, 0);
             },
         );
         return rbuf;
@@ -2118,8 +2084,8 @@ pub fn generate_render_buffer(
         // Note: All layers are now uniform (is_pixel removed), render all non-hidden layers
         for item in ps {
             if !item.is_hidden {
-                render_layers(item, rx, ry, |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
-                    push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, modifier);
+                render_layers(item, rx, ry, |fc, bc, s2, tile, angle, ccp, modifier| {
+                    push_render_buffer(&mut rbuf, fc, bc, tile, s2, angle, &ccp, modifier);
                 });
             }
         }
@@ -2129,10 +2095,9 @@ pub fn generate_render_buffer(
         let mut rfunc = |fc: &(u8, u8, u8, u8),
                          bc: &Option<(u8, u8, u8, u8)>,
                          s2: ARect,
-                         texidx: usize,
-                         symidx: usize,
+                         tile: Tile,
                          modifier: u16| {
-            push_render_buffer(&mut rbuf, fc, bc, texidx, symidx, s2, 0.0, &pz, modifier);
+            push_render_buffer(&mut rbuf, fc, bc, tile, s2, 0.0, &pz, modifier);
         };
         render_main_buffer(cb, width, rx, ry, true, &mut rfunc);
     }

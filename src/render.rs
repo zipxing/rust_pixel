@@ -36,7 +36,7 @@ pub mod symbols;
 pub use adapter::{Adapter, AdapterBase};
 pub use buffer::{Buffer, BufferMode, Borders, BorderType, SYMBOL_LINE};
 pub use cell::{
-    Cell, Glyph, cellsym, cellsym_block, decode_pua, is_pua_sprite,
+    Cell, cellsym, cellsym_block, decode_pua, is_pua_sprite,
     TuiCharType, detect_tui_char_type, is_tui_char, is_cjk,
     PUA_BASE, PUA_END, PUA_BLOCK_SIZE,
 };

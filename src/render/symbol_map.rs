@@ -156,7 +156,7 @@ pub fn get_symbol_map() -> &'static SymbolMap {
 // ============================================================================
 
 /// UV coordinates for one mipmap level in a texture array layer
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct MipUV {
     /// Layer index in Texture2DArray
     pub layer: u16,
@@ -172,7 +172,7 @@ pub struct MipUV {
 
 /// Resolved symbol with 3 mipmap levels of UV coordinates.
 /// Cached in Cell after first resolution — zero lookup on subsequent frames.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Tile {
     /// Cell width in grid units (1 for normal, 2 for wide chars like CJK/Emoji)
     pub cell_w: u8,

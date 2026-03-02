@@ -278,10 +278,8 @@ impl Adapter for WgpuWebAdapter {
         }
     }
 
-    fn set_msdf_enabled(&mut self, enabled: bool) {
-        if let Some(core) = &mut self.render_core {
-            core.set_msdf_enabled(enabled);
-        }
+    fn set_msdf_enabled(&mut self, _enabled: bool) {
+        // MSDF removed — layered mode always uses bitmap rendering
     }
 }
 
