@@ -50,10 +50,11 @@ pub mod init;
 pub use init::{
     get_game_config, get_pixel_texture_data, init_game_config, GameConfig, PixelTextureData,
     GAME_CONFIG, PIXEL_TEXTURE_DATA,
+    get_pixel_layer_data, is_layered_mode, PixelLayerData, PIXEL_LAYER_DATA,
 };
 
 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
-pub use init::init_pixel_assets;
+pub use init::{init_pixel_assets, init_layered_pixel_assets, has_layered_assets};
 
 #[cfg(target_arch = "wasm32")]
 pub use init::wasm_init_pixel_assets;

@@ -77,6 +77,12 @@ impl WgpuRenderCore {
         (self.pixel_renderer.canvas_width, self.pixel_renderer.canvas_height)
     }
 
+    /// Set viewport scale factor for mipmap selection.
+    /// Should be called before rbuf2rt() each frame.
+    pub fn set_viewport_scale(&mut self, scale: f32) {
+        self.pixel_renderer.set_viewport_scale(scale);
+    }
+
     /// Render buffer to render texture
     ///
     /// Converts RenderCell data and renders it to the specified render texture.
@@ -307,7 +313,7 @@ impl WgpuRenderCoreBuilder {
         self
     }
 
-    /// Build the render core with the given device, queue, and texture data
+    /// Build the render core with the given device, queue, and texture data (legacy single-atlas)
     pub fn build(
         self,
         device: wgpu::Device,
@@ -330,6 +336,42 @@ impl WgpuRenderCoreBuilder {
             tex_height,
             tex_data,
         )?;
+
+        pixel_renderer.create_shader(&device);
+        pixel_renderer.create_buffer(&device);
+        pixel_renderer.create_bind_group(&device);
+
+        pixel_renderer.init_render_textures(&device, &queue)?;
+
+        pixel_renderer.init_general2d_renderer(&device);
+        pixel_renderer.init_transition_renderer(&device);
+        pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
+
+        Ok(WgpuRenderCore::new(
+            device,
+            queue,
+            pixel_renderer,
+            self.ratio_x,
+            self.ratio_y,
+        ))
+    }
+
+    /// Build the render core with Texture2DArray (layered mode)
+    pub fn build_layered(
+        self,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        layer_size: u32,
+        layers: &[&[u8]],
+    ) -> Result<WgpuRenderCore, String> {
+        let mut pixel_renderer = WgpuPixelRender::new_with_format(
+            self.canvas_width,
+            self.canvas_height,
+            self.surface_format,
+        );
+
+        // Load Texture2DArray (must be done before create_shader so is_layered() works)
+        pixel_renderer.load_symbol_texture_array(&device, &queue, layer_size, layers)?;
 
         pixel_renderer.create_shader(&device);
         pixel_renderer.create_buffer(&device);

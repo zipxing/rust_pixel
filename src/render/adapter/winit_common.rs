@@ -542,27 +542,35 @@ where
 
     info!("Initializing Winit adapter common components...");
 
-    // 1. Use pre-loaded texture data from init_pixel_assets()
-    // Texture and symbol_map are already loaded during init_pixel_assets()
-    // PIXEL_SYM_WIDTH/HEIGHT are already set
-    let tex_data = crate::get_pixel_texture_data();
-    let texwidth = tex_data.width;
-    let texheight = tex_data.height;
-
-    // Build texture path for logging (actual data comes from cache)
+    // 1. Get texture info based on mode (layered or legacy)
     let project_path = &crate::get_game_config().project_path;
-    let texture_path = format!(
-        "{}{}{}",
-        project_path,
-        std::path::MAIN_SEPARATOR,
-        PIXEL_TEXTURE_FILE
-    );
+    let texture_path;
 
-    info!("Using pre-loaded texture: {}x{}", texwidth, texheight);
+    if crate::is_layered_mode() {
+        // Layered mode: Texture2DArray loaded from layers/
+        let layer_data = crate::get_pixel_layer_data().expect("Layer data not loaded");
+        texture_path = format!(
+            "{}{}assets/pix/layered_symbol_map.json",
+            project_path, std::path::MAIN_SEPARATOR,
+        );
+        info!(
+            "Using layered texture: {} layers ({}x{})",
+            layer_data.layers.len(), layer_data.layer_size, layer_data.layer_size
+        );
+    } else {
+        // Legacy mode: single texture atlas
+        let tex_data = crate::get_pixel_texture_data();
+        texture_path = format!(
+            "{}{}{}",
+            project_path, std::path::MAIN_SEPARATOR, PIXEL_TEXTURE_FILE
+        );
+        info!("Using pre-loaded texture: {}x{}", tex_data.width, tex_data.height);
+    }
+
     info!(
-        "Symbol dimensions: {}x{} (Sprite: 16x16, TUI: 16x32)",
-        PIXEL_SYM_WIDTH.get().expect("PIXEL_SYM_WIDTH not initialized - call init_pixel_assets first"),
-        PIXEL_SYM_HEIGHT.get().expect("PIXEL_SYM_HEIGHT not initialized - call init_pixel_assets first"),
+        "Symbol dimensions: {}x{}",
+        PIXEL_SYM_WIDTH.get().expect("PIXEL_SYM_WIDTH not initialized"),
+        PIXEL_SYM_HEIGHT.get().expect("PIXEL_SYM_HEIGHT not initialized"),
     );
 
     // 2. Set basic parameters

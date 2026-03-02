@@ -20,7 +20,7 @@
 
 use crate::render::adapter::RenderCell;
 use crate::render::graph::UnifiedTransform;
-use crate::render::symbol_map::{iter_symbol_frames, layout};
+use crate::render::symbol_map::{iter_symbol_frames, layout, Tile, MipUV, get_layered_symbol_map};
 
 /// Background fill symbol - use centralized constant from symbol_map
 const BG_FILL_SYMBOL: usize = layout::BG_FILL_SYMBOL;
@@ -32,16 +32,19 @@ const BG_FILL_SYMBOL: usize = layout::BG_FILL_SYMBOL;
 /// - `a1`: origin and UV top-left
 /// - `a2`: UV size and first column of the local 2x2 matrix multiplied by frame size
 /// - `a3`: second column of the local 2x2 matrix multiplied by frame size, and translation
+/// - `a4`: layer index (for Texture2DArray), reserved fields
 /// - `color`: per-instance color modulation
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct WgpuSymbolInstance {
     /// a1: [origin_x, origin_y, uv_left, uv_top]
     pub a1: [f32; 4],
-    /// a2: [uv_width, uv_height, m00*width, m10*height]  
+    /// a2: [uv_width, uv_height, m00*width, m10*height]
     pub a2: [f32; 4],
     /// a3: [m01*width, m11*height, m20, m21]
     pub a3: [f32; 4],
+    /// a4: [layer_index, reserved, reserved, reserved]
+    pub a4: [f32; 4],
     /// color: [r, g, b, a]
     pub color: [f32; 4],
 }
@@ -104,29 +107,42 @@ pub struct WgpuSymbolFrame {
 pub struct WgpuSymbolRenderer {
     canvas_width: f32,
     canvas_height: f32,
-    
+
     /// Transform stack (equivalent to OpenGL transform_stack)
     transform_stack: UnifiedTransform,
-    
-    /// Symbol frames (equivalent to OpenGL symbols)
+
+    /// Symbol frames for legacy single-atlas mode (equivalent to OpenGL symbols)
     symbols: Vec<WgpuSymbolFrame>,
-    
+
+    /// Tile data for layered mode: indexed by linear texsym, contains UV + layer per mip level.
+    /// Built from LayeredSymbolMap during load_layered_frames().
+    layered_tiles: Vec<Tile>,
+
+    /// Whether layered (Texture2DArray) mode is active
+    is_layered: bool,
+
     /// Current instance buffer data
     instance_buffer: Vec<WgpuSymbolInstance>,
-    
+
     /// Instance count for current frame
     instance_count: usize,
-    
+
     /// Max instances capacity
     max_instances: usize,
-    
+
     /// Ratio parameters for coordinate transformation
     pub ratio_x: f32,
     pub ratio_y: f32,
 
     /// Whether the loaded texture contains MSDF/SDF data for TUI/CJK regions.
     /// Automatically detected: 8192+ textures use MSDF/SDF, 4096 textures use bitmap.
+    /// Only used in legacy mode; layered mode always uses bitmap.
     msdf_enabled: bool,
+
+    /// Viewport scale factor: physical_window_height / canvas_height.
+    /// Used to convert render-space cell heights to physical screen pixel heights
+    /// for accurate mipmap level selection. Updated on window resize.
+    viewport_scale: f32,
 }
 
 
@@ -150,12 +166,15 @@ impl WgpuSymbolRenderer {
             canvas_height: canvas_height as f32,
             transform_stack,
             symbols: Vec::new(),
+            layered_tiles: Vec::new(),
+            is_layered: false,
             instance_buffer: Vec::with_capacity(max_instances),
             instance_count: 0,
             max_instances,
             ratio_x: 1.0,
             ratio_y: 1.0,
             msdf_enabled: false,
+            viewport_scale: 1.0,
         }
     }
     
@@ -188,6 +207,41 @@ impl WgpuSymbolRenderer {
         }
     }
     
+    /// Load layered frames from LayeredSymbolMap.
+    ///
+    /// Builds the `layered_tiles` lookup table: linear texsym index → Tile.
+    /// Uses the global SymbolMap to map each linear index to a symbol key,
+    /// then resolves that key in the LayeredSymbolMap to get UV + layer data.
+    pub fn load_layered_frames(&mut self) {
+        use crate::render::symbol_map::{
+            get_symbol_map, build_layered_tiles,
+        };
+
+        let symbol_map = get_symbol_map();
+        let layered_map = match get_layered_symbol_map() {
+            Some(m) => m,
+            None => {
+                log::error!("load_layered_frames: LayeredSymbolMap not initialized");
+                return;
+            }
+        };
+
+        self.layered_tiles = build_layered_tiles(symbol_map, layered_map);
+        self.is_layered = true;
+        self.msdf_enabled = false; // Layered mode always uses bitmap
+
+        log::info!(
+            "Loaded {} layered tiles ({} non-empty)",
+            self.layered_tiles.len(),
+            self.layered_tiles.iter().filter(|t| t.mips[0].w > 0.0 || t.mips[1].w > 0.0).count(),
+        );
+    }
+
+    /// Get whether this renderer is in layered (Texture2DArray) mode.
+    pub fn is_layered(&self) -> bool {
+        self.is_layered
+    }
+
     /// Create a symbol frame (equivalent to OpenGL `make_symbols_frame`)
     ///
     /// Packs local width/height, origin, and UV rectangle for a single symbol.
@@ -240,8 +294,18 @@ impl WgpuSymbolRenderer {
     ///   is preserved.
     /// - `ratio_x`/`ratio_y` are applied to keep DPI scaling parity with GL.
     pub fn generate_instances_from_render_cells(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
-        // Modifier bit flags (matching Modifier enum in style.rs)
-        // 样式修饰符位标志（与 style.rs 中的 Modifier 枚举匹配）
+        self.instance_buffer.clear();
+        self.instance_count = 0;
+
+        if self.is_layered {
+            self.generate_instances_layered(render_cells, ratio_x, ratio_y);
+        } else {
+            self.generate_instances_legacy(render_cells, ratio_x, ratio_y);
+        }
+    }
+
+    /// Legacy instance generation (single-atlas mode with MSDF support)
+    fn generate_instances_legacy(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
         const MOD_BOLD: u16 = 0x0001;
         const MOD_DIM: u16 = 0x0002;
         const MOD_ITALIC: u16 = 0x0004;
@@ -250,195 +314,240 @@ impl WgpuSymbolRenderer {
         const MOD_HIDDEN: u16 = 0x0080;
         const MOD_CROSSED_OUT: u16 = 0x0100;
         const MOD_GLOW: u16 = 0x0400;
-
-        // ITALIC slant factor: tan(12°) ≈ 0.21
-        // ITALIC 倾斜因子：tan(12°) ≈ 0.21
         const ITALIC_SKEW: f32 = 0.21;
 
-        self.instance_buffer.clear();
-        self.instance_count = 0;
-        
         for r in render_cells {
             let cell_width = r.w as f32;
             let cell_height = r.h as f32;
-            
-            // Apply modifier effects to colors
-            // 应用样式修饰符效果到颜色
             let modifier = r.modifier;
-            
-            // Get base colors (may be swapped if REVERSED)
-            // 获取基础颜色（如果设置了 REVERSED 则交换）
+
             let (mut fg_color, bg_color) = if modifier & MOD_REVERSED != 0 {
-                // REVERSED: swap foreground and background colors
-                // REVERSED: 交换前景色和背景色
                 let bg = r.bcolor.unwrap_or((0.0, 0.0, 0.0, 0.0));
                 let fg = r.fcolor;
                 (bg, Some(fg))
             } else {
                 (r.fcolor, r.bcolor)
             };
-            
-            // Apply BOLD effect: multiply RGB by 1.3, clamp to 1.0
-            // BOLD 效果：RGB 值乘以 1.3，限制在 1.0 以内
+
             if modifier & MOD_BOLD != 0 {
                 fg_color.0 = (fg_color.0 * 1.3).min(1.0);
                 fg_color.1 = (fg_color.1 * 1.3).min(1.0);
                 fg_color.2 = (fg_color.2 * 1.3).min(1.0);
             }
-            
-            // Apply DIM effect: multiply alpha by 0.6
-            // DIM 效果：Alpha 值乘以 0.6
-            if modifier & MOD_DIM != 0 {
-                fg_color.3 *= 0.6;
-            }
-            
-            // Apply HIDDEN effect: set alpha to 0.0
-            // HIDDEN 效果：Alpha 值设为 0.0
-            if modifier & MOD_HIDDEN != 0 {
-                fg_color.3 = 0.0;
-            }
-            
-            // Background rendering - needs separate transform calculation
-            // Background使用独立的transform，因为background symbol (1280) 的frame尺寸
-            // 与foreground symbol可能不同（如TUI字符是16x32，而填充符号是16x16）
+            if modifier & MOD_DIM != 0 { fg_color.3 *= 0.6; }
+            if modifier & MOD_HIDDEN != 0 { fg_color.3 = 0.0; }
+
+            // Background
             if let Some(b) = bg_color {
                 let mut bg_transform = self.transform_stack;
-                bg_transform.translate(
-                    r.x + r.cx - r.w as f32,
-                    r.y + r.cy - r.h as f32,
-                );
-                if r.angle != 0.0 {
-                    bg_transform.rotate(r.angle);
-                }
-                bg_transform.translate(
-                    -r.cx + r.w as f32,
-                    -r.cy + r.h as f32,
-                );
-                
-                // Background symbol (BG_FILL_SYMBOL, solid block in PETSCII) has its own frame size, scale to match cell size
-                // 背景符号160 (PETSCII中的实心方块) 有自己的frame尺寸，需要缩放以匹配cell尺寸
+                bg_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+                if r.angle != 0.0 { bg_transform.rotate(r.angle); }
+                bg_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+
                 let bg_frame = &self.symbols[BG_FILL_SYMBOL];
                 let bg_frame_width = bg_frame.width / ratio_x;
                 let bg_frame_height = bg_frame.height / ratio_y;
                 let bg_scale_x = cell_width / bg_frame_width / ratio_x;
                 let bg_scale_y = cell_height / bg_frame_height / ratio_y;
                 bg_transform.scale(bg_scale_x, bg_scale_y);
-
                 self.draw_symbol_instance(BG_FILL_SYMBOL, &bg_transform, [b.0, b.1, b.2, b.3], false, false);
             }
 
             let is_bold = modifier & MOD_BOLD != 0;
             let is_glow = modifier & MOD_GLOW != 0;
 
-            // GLOW halo instance (drawn BEFORE foreground so it renders behind)
-            // Uses the same transform as foreground, then enlarges+centers in instance data
+            // Glow halo
             if is_glow {
                 let glow_color = [fg_color.0, fg_color.1, fg_color.2, fg_color.3 * 0.4];
                 let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
-                // Build exact same transform as foreground (will be built below too)
                 let mut glow_transform = self.transform_stack;
-                glow_transform.translate(
-                    r.x + r.cx - r.w as f32,
-                    r.y + r.cy - r.h as f32,
-                );
-                if r.angle != 0.0 {
-                    glow_transform.rotate(r.angle);
-                }
-                glow_transform.translate(
-                    -r.cx + r.w as f32,
-                    -r.cy + r.h as f32,
-                );
-                if modifier & MOD_ITALIC != 0 {
-                    glow_transform.skew_x(ITALIC_SKEW);
-                }
+                glow_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+                if r.angle != 0.0 { glow_transform.rotate(r.angle); }
+                glow_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                if modifier & MOD_ITALIC != 0 { glow_transform.skew_x(ITALIC_SKEW); }
                 let frame = &self.symbols[r.texsym];
                 let frame_width = frame.width / ratio_x;
                 let frame_height = frame.height / ratio_y;
-                let base_sx = cell_width / frame_width / ratio_x;
-                let base_sy = cell_height / frame_height / ratio_y;
-                glow_transform.scale(base_sx, base_sy);
-                // Emit enlarged+centered glow instance (centering handled inside)
+                glow_transform.scale(cell_width / frame_width / ratio_x, cell_height / frame_height / ratio_y);
                 self.draw_symbol_instance_with_glow(r.texsym, &glow_transform, glow_color, is_bold, use_msdf, 2.5);
             }
 
-            // Foreground rendering
+            // Foreground
             let mut transform = self.transform_stack;
-            transform.translate(
-                r.x + r.cx - r.w as f32,
-                r.y + r.cy - r.h as f32,
-            );
-            if r.angle != 0.0 {
-                transform.rotate(r.angle);
-            }
-            transform.translate(
-                -r.cx + r.w as f32,
-                -r.cy + r.h as f32,
-            );
+            transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+            if r.angle != 0.0 { transform.rotate(r.angle); }
+            transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+            if modifier & MOD_ITALIC != 0 { transform.skew_x(ITALIC_SKEW); }
 
-            // Apply ITALIC effect: horizontal skew transformation
-            // ITALIC 效果：水平倾斜变换
-            if modifier & MOD_ITALIC != 0 {
-                transform.skew_x(ITALIC_SKEW);
-            }
-
-            // Apply scaling based on RenderCell dimensions vs actual frame size.
-            // This preserves per-sprite scaling beyond DPI ratio adjustments.
-            // IMPORTANT: Use frame dimensions (not PIXEL_SYM_WIDTH/HEIGHT) because
-            // TUI (16x32) and Emoji (32x32) have different sizes than Sprite (16x16).
             let frame = &self.symbols[r.texsym];
             let frame_width = frame.width / ratio_x;
             let frame_height = frame.height / ratio_y;
+            transform.scale(cell_width / frame_width / ratio_x, cell_height / frame_height / ratio_y);
 
-            let scale_x = cell_width / frame_width / ratio_x;
-            let scale_y = cell_height / frame_height / ratio_y;
-
-            transform.scale(scale_x, scale_y);
-
-            // Draw foreground symbol with modified color
             let use_msdf = self.msdf_enabled && Self::is_msdf_symbol(r.texsym);
             self.draw_symbol_instance(r.texsym, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], is_bold, use_msdf);
-            
-            // Draw UNDERLINED effect: a line at the bottom of the cell
-            // UNDERLINED 效果：在单元格底部绘制线条
-            // Uses BG_FILL_SYMBOL (solid block in PETSCII) scaled to line thickness
+
+            // Underline
             if modifier & MOD_UNDERLINED != 0 {
-                let mut line_transform = self.transform_stack;
-                // Position at bottom of cell (90% down)
-                let line_y = r.y + r.cy - r.h as f32 + cell_height * 0.9;
-                line_transform.translate(r.x + r.cx - r.w as f32, line_y);
-                if r.angle != 0.0 {
-                    line_transform.rotate(r.angle);
-                }
-                line_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
-
-                // Scale to full width, thin height (10% of cell height)
-                let line_frame = &self.symbols[BG_FILL_SYMBOL];
-                let line_scale_x = cell_width / (line_frame.width / ratio_x) / ratio_x;
-                let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
-                line_transform.scale(line_scale_x, line_scale_y);
-
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
+                let mut lt = self.transform_stack;
+                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.9);
+                if r.angle != 0.0 { lt.rotate(r.angle); }
+                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                let lf = &self.symbols[BG_FILL_SYMBOL];
+                lt.scale(cell_width / (lf.width / ratio_x) / ratio_x, (cell_height * 0.08) / (lf.height / ratio_y) / ratio_y);
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
             }
 
-            // Draw CROSSED_OUT effect: a line through the middle of the cell
-            // CROSSED_OUT 效果：在单元格中间绘制删除线
+            // Strikethrough
             if modifier & MOD_CROSSED_OUT != 0 {
-                let mut line_transform = self.transform_stack;
-                // Position at middle of cell (50% down, adjusted for line thickness)
-                let line_y = r.y + r.cy - r.h as f32 + cell_height * 0.46;
-                line_transform.translate(r.x + r.cx - r.w as f32, line_y);
-                if r.angle != 0.0 {
-                    line_transform.rotate(r.angle);
-                }
-                line_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                let mut lt = self.transform_stack;
+                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.46);
+                if r.angle != 0.0 { lt.rotate(r.angle); }
+                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                let lf = &self.symbols[BG_FILL_SYMBOL];
+                lt.scale(cell_width / (lf.width / ratio_x) / ratio_x, (cell_height * 0.08) / (lf.height / ratio_y) / ratio_y);
+                self.draw_symbol_instance(BG_FILL_SYMBOL, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
+            }
+        }
+    }
 
-                // Scale to full width, thin height (8% of cell height)
-                let line_frame = &self.symbols[BG_FILL_SYMBOL];
-                let line_scale_x = cell_width / (line_frame.width / ratio_x) / ratio_x;
-                let line_scale_y = (cell_height * 0.08) / (line_frame.height / ratio_y) / ratio_y;
-                line_transform.scale(line_scale_x, line_scale_y);
+    /// Layered instance generation (Texture2DArray mode, bitmap only, no MSDF)
+    /// Select mipmap level based on screen pixel height.
+    ///
+    /// Thresholds are per base unit (PIXEL_SYMBOL_SIZE = 16px):
+    /// - >= 48px/unit → mip0 (×4, highest resolution)
+    /// - >= 24px/unit → mip1 (×2, mid resolution)
+    /// - < 24px/unit  → mip2 (×1, base resolution)
+    #[inline]
+    fn select_mip_level(screen_pixel_h: f32, cell_h: u8) -> usize {
+        let per_unit = screen_pixel_h / cell_h.max(1) as f32;
+        if per_unit >= 48.0 { 0 }
+        else if per_unit >= 24.0 { 1 }
+        else { 2 }
+    }
 
-                self.draw_symbol_instance(BG_FILL_SYMBOL, &line_transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false, false);
+    fn generate_instances_layered(&mut self, render_cells: &[RenderCell], ratio_x: f32, ratio_y: f32) {
+        const MOD_BOLD: u16 = 0x0001;
+        const MOD_DIM: u16 = 0x0002;
+        const MOD_ITALIC: u16 = 0x0004;
+        const MOD_UNDERLINED: u16 = 0x0008;
+        const MOD_REVERSED: u16 = 0x0040;
+        const MOD_HIDDEN: u16 = 0x0080;
+        const MOD_CROSSED_OUT: u16 = 0x0100;
+        const MOD_GLOW: u16 = 0x0400;
+        const ITALIC_SKEW: f32 = 0.21;
+
+        let base_w = crate::render::PIXEL_SYM_WIDTH.get().copied().unwrap_or(32.0);
+        let base_h = crate::render::PIXEL_SYM_HEIGHT.get().copied().unwrap_or(32.0);
+
+        // BG fill tile (always use mip1 — it's a solid block, mip level irrelevant)
+        let bg_tile = if BG_FILL_SYMBOL < self.layered_tiles.len() {
+            self.layered_tiles[BG_FILL_SYMBOL]
+        } else {
+            Tile::default()
+        };
+        let bg_mip = bg_tile.mips[1];
+        let bg_frame_w = bg_tile.cell_w.max(1) as f32 * base_w;
+        let bg_frame_h = bg_tile.cell_h.max(1) as f32 * base_h;
+
+        for r in render_cells {
+            let cell_width = r.w as f32;
+            let cell_height = r.h as f32;
+            let modifier = r.modifier;
+
+            let (mut fg_color, bg_color) = if modifier & MOD_REVERSED != 0 {
+                let bg = r.bcolor.unwrap_or((0.0, 0.0, 0.0, 0.0));
+                let fg = r.fcolor;
+                (bg, Some(fg))
+            } else {
+                (r.fcolor, r.bcolor)
+            };
+
+            if modifier & MOD_BOLD != 0 {
+                fg_color.0 = (fg_color.0 * 1.3).min(1.0);
+                fg_color.1 = (fg_color.1 * 1.3).min(1.0);
+                fg_color.2 = (fg_color.2 * 1.3).min(1.0);
+            }
+            if modifier & MOD_DIM != 0 { fg_color.3 *= 0.6; }
+            if modifier & MOD_HIDDEN != 0 { fg_color.3 = 0.0; }
+
+            // Background
+            if let Some(b) = bg_color {
+                let mut bg_transform = self.transform_stack;
+                bg_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+                if r.angle != 0.0 { bg_transform.rotate(r.angle); }
+                bg_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                let bg_fw = bg_frame_w / ratio_x;
+                let bg_fh = bg_frame_h / ratio_y;
+                bg_transform.scale(cell_width / bg_fw / ratio_x, cell_height / bg_fh / ratio_y);
+                self.draw_layered_instance(&bg_tile, &bg_mip, bg_frame_w, bg_frame_h, &bg_transform, [b.0, b.1, b.2, b.3], false);
+            }
+
+            // Look up tile for this symbol
+            let tile = if r.texsym < self.layered_tiles.len() {
+                self.layered_tiles[r.texsym]
+            } else {
+                Tile::default()
+            };
+
+            // Dynamic mipmap selection based on physical screen pixel size.
+            // viewport_scale converts render-space cell_height to physical pixels.
+            let mip_level = Self::select_mip_level(cell_height * self.viewport_scale, tile.cell_h);
+            let mip = tile.mips[mip_level];
+            let frame_width = tile.cell_w.max(1) as f32 * base_w;
+            let frame_height = tile.cell_h.max(1) as f32 * base_h;
+
+            let is_bold = modifier & MOD_BOLD != 0;
+            let is_glow = modifier & MOD_GLOW != 0;
+
+            // Glow halo
+            if is_glow {
+                let glow_color = [fg_color.0, fg_color.1, fg_color.2, fg_color.3 * 0.4];
+                let mut glow_transform = self.transform_stack;
+                glow_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+                if r.angle != 0.0 { glow_transform.rotate(r.angle); }
+                glow_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                if modifier & MOD_ITALIC != 0 { glow_transform.skew_x(ITALIC_SKEW); }
+                let fw = frame_width / ratio_x;
+                let fh = frame_height / ratio_y;
+                glow_transform.scale(cell_width / fw / ratio_x, cell_height / fh / ratio_y);
+                self.draw_layered_instance_with_glow(&tile, &mip, frame_width, frame_height, &glow_transform, glow_color, is_bold, 2.5);
+            }
+
+            // Foreground
+            let mut transform = self.transform_stack;
+            transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+            if r.angle != 0.0 { transform.rotate(r.angle); }
+            transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+            if modifier & MOD_ITALIC != 0 { transform.skew_x(ITALIC_SKEW); }
+
+            let fw = frame_width / ratio_x;
+            let fh = frame_height / ratio_y;
+            transform.scale(cell_width / fw / ratio_x, cell_height / fh / ratio_y);
+            self.draw_layered_instance(&tile, &mip, frame_width, frame_height, &transform, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], is_bold);
+
+            // Underline
+            if modifier & MOD_UNDERLINED != 0 {
+                let mut lt = self.transform_stack;
+                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.9);
+                if r.angle != 0.0 { lt.rotate(r.angle); }
+                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                let bg_fw = bg_frame_w / ratio_x;
+                let bg_fh = bg_frame_h / ratio_y;
+                lt.scale(cell_width / bg_fw / ratio_x, (cell_height * 0.08) / bg_fh / ratio_y);
+                self.draw_layered_instance(&bg_tile, &bg_mip, bg_frame_w, bg_frame_h, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false);
+            }
+
+            // Strikethrough
+            if modifier & MOD_CROSSED_OUT != 0 {
+                let mut lt = self.transform_stack;
+                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.46);
+                if r.angle != 0.0 { lt.rotate(r.angle); }
+                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                let bg_fw = bg_frame_w / ratio_x;
+                let bg_fh = bg_frame_h / ratio_y;
+                lt.scale(cell_width / bg_fw / ratio_x, (cell_height * 0.08) / bg_fh / ratio_y);
+                self.draw_layered_instance(&bg_tile, &bg_mip, bg_frame_w, bg_frame_h, &lt, [fg_color.0, fg_color.1, fg_color.2, fg_color.3], false);
             }
         }
     }
@@ -478,16 +587,16 @@ impl WgpuSymbolRenderer {
         let instance = WgpuSymbolInstance {
             // a1: [origin_x (sign=bold), origin_y (sign=msdf), uv_left, uv_top]
             a1: [origin_x, origin_y, frame.uv_left, frame.uv_top],
-            
+
             // a2: [uv_width, uv_height, m00*width, m10*width]
             // Matrix column 1: both m00 and m10 multiply by width
             a2: [
-                frame.uv_width, 
+                frame.uv_width,
                 frame.uv_height,
                 transform.m00 * frame.width,
                 transform.m10 * frame.width  // Fixed: was * frame.height
             ],
-            
+
             // a3: [m01*height, m11*height, m20, m21]
             // Matrix column 2: both m01 and m11 multiply by height
             a3: [
@@ -496,7 +605,11 @@ impl WgpuSymbolRenderer {
                 transform.m20,
                 transform.m21
             ],
-            
+
+            // a4: [layer_index, reserved, reserved, reserved]
+            // Legacy mode: always 0.0 (single texture, no layers)
+            a4: [0.0, 0.0, 0.0, 0.0],
+
             // color: [r, g, b, a]
             color,
         };
@@ -559,6 +672,108 @@ impl WgpuSymbolRenderer {
                 tx,
                 ty,
             ],
+            // Legacy mode: always layer 0
+            a4: [0.0, 0.0, 0.0, 0.0],
+            color,
+        };
+
+        self.instance_buffer.push(instance);
+        self.instance_count += 1;
+    }
+
+    /// Add a symbol instance for layered mode (Texture2DArray).
+    ///
+    /// Uses Tile data from LayeredSymbolMap for UV + layer coordinates.
+    /// No MSDF path — all layered rendering is bitmap-only.
+    fn draw_layered_instance(
+        &mut self,
+        tile: &Tile,
+        mip: &MipUV,
+        frame_width: f32,
+        frame_height: f32,
+        transform: &UnifiedTransform,
+        color: [f32; 4],
+        is_bold: bool,
+    ) {
+        if self.instance_count >= self.max_instances { return; }
+
+        let origin_x = if is_bold { -1.0_f32 } else { 1.0 };
+        let origin_y = 1.0_f32; // No MSDF flag in layered mode
+
+        // Half-texel inset to prevent bilinear filtering from sampling adjacent symbols
+        let half_texel = 0.5 / 2048.0; // layer_size = 2048
+        let uv_left = mip.x + half_texel;
+        let uv_top = mip.y + half_texel;
+        let uv_width = mip.w - half_texel * 2.0;
+        let uv_height = mip.h - half_texel * 2.0;
+
+        let instance = WgpuSymbolInstance {
+            a1: [origin_x, origin_y, uv_left, uv_top],
+            a2: [
+                uv_width,
+                uv_height,
+                transform.m00 * frame_width,
+                transform.m10 * frame_width,
+            ],
+            a3: [
+                transform.m01 * frame_height,
+                transform.m11 * frame_height,
+                transform.m20,
+                transform.m21,
+            ],
+            a4: [mip.layer as f32, 0.0, 0.0, 0.0],
+            color,
+        };
+
+        self.instance_buffer.push(instance);
+        self.instance_count += 1;
+    }
+
+    /// Add a glow halo instance for layered mode.
+    fn draw_layered_instance_with_glow(
+        &mut self,
+        tile: &Tile,
+        mip: &MipUV,
+        frame_width: f32,
+        frame_height: f32,
+        transform: &UnifiedTransform,
+        color: [f32; 4],
+        is_bold: bool,
+        glow_scale: f32,
+    ) {
+        if self.instance_count >= self.max_instances { return; }
+
+        let origin_x = if is_bold { -1.0_f32 } else { 1.0 };
+        let origin_y = 1.0_f32;
+
+        let half_texel = 0.5 / 2048.0;
+        let uv_left = mip.x + half_texel;
+        let uv_top = mip.y + half_texel;
+        let uv_width_raw = mip.w - half_texel * 2.0;
+        let uv_height_val = mip.h - half_texel * 2.0;
+
+        let gs = glow_scale;
+        let mat_00_fw = transform.m00 * frame_width;
+        let mat_10_fw = transform.m10 * frame_width;
+        let mat_01_fh = transform.m01 * frame_height;
+        let mat_11_fh = transform.m11 * frame_height;
+
+        // Center-preserving enlargement (same formula as legacy)
+        let cx = 0.5 - 1.0;  // -0.5 when origin is 1.0
+        let cy = 0.5 - 1.0;
+        let center_x = mat_00_fw * cx + mat_01_fh * cy;
+        let center_y = mat_10_fw * cx + mat_11_fh * cy;
+        let tx = transform.m20 - (gs - 1.0) * center_x;
+        let ty = transform.m21 - (gs - 1.0) * center_y;
+
+        // Encode glow flag in uv_width sign: negative = glow
+        let uv_width = -uv_width_raw;
+
+        let instance = WgpuSymbolInstance {
+            a1: [origin_x, origin_y, uv_left, uv_top],
+            a2: [uv_width, uv_height_val, mat_00_fw * gs, mat_10_fw * gs],
+            a3: [mat_01_fh * gs, mat_11_fh * gs, tx, ty],
+            a4: [mip.layer as f32, 0.0, 0.0, 0.0],
             color,
         };
 
@@ -641,6 +856,12 @@ impl WgpuSymbolRenderer {
         self.ratio_x = ratio_x;
         self.ratio_y = ratio_y;
     }
+
+    /// Set viewport scale factor (physical_window_height / canvas_height).
+    /// Called before each frame to ensure mipmap selection accounts for window size.
+    pub fn set_viewport_scale(&mut self, scale: f32) {
+        self.viewport_scale = scale;
+    }
     
     /// Generate vertices from buffer (legacy method for compatibility)
     /// This method exists for backward compatibility but is no longer used
@@ -693,10 +914,16 @@ impl WgpuSymbolInstance {
                     shader_location: 3,
                     format: wgpu::VertexFormat::Float32x4,
                 },
-                // color: vec4<f32> at location 4
+                // a4: vec4<f32> at location 4 (layer_index, reserved...)
                 wgpu::VertexAttribute {
                     offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
                     shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // color: vec4<f32> at location 5
+                wgpu::VertexAttribute {
+                    offset: (4 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
+                    shader_location: 5,
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],

@@ -372,10 +372,135 @@ impl WgpuRenderTexture {
     }
 
     /// Get texture dimensions
-    /// 
+    ///
     /// # Returns
     /// (width, height) tuple
     pub fn get_dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
     }
-} 
+}
+
+// ============================================================================
+// Texture2DArray for Layered Symbol Atlas
+// ============================================================================
+
+/// WGPU Texture2DArray for multi-layer symbol atlas.
+///
+/// Each layer is a square RGBA image (typically 2048x2048).
+/// Used with `texture_2d_array<f32>` in WGSL shaders.
+pub struct WgpuTextureArray {
+    /// WGPU texture object (Dimension::D2, depth_or_array_layers = layer_count)
+    pub texture: wgpu::Texture,
+    /// Texture view with D2Array dimension
+    pub view: wgpu::TextureView,
+    /// Sampler for texture filtering
+    pub sampler: wgpu::Sampler,
+    /// Layer size in pixels (all layers are square)
+    pub layer_size: u32,
+    /// Number of layers
+    pub layer_count: u32,
+}
+
+impl WgpuTextureArray {
+    /// Create a Texture2DArray from multiple layer images.
+    ///
+    /// All layers must be the same size (layer_size × layer_size, RGBA).
+    ///
+    /// # Arguments
+    /// * `device` - WGPU device
+    /// * `queue` - WGPU queue
+    /// * `layer_size` - Width/height of each layer in pixels
+    /// * `layers` - Raw RGBA data for each layer (each must be layer_size*layer_size*4 bytes)
+    pub fn from_layers(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layer_size: u32,
+        layers: &[&[u8]],
+    ) -> Result<Self, String> {
+        let layer_count = layers.len() as u32;
+        if layer_count == 0 {
+            return Err("No layers provided".to_string());
+        }
+
+        let expected_bytes = (layer_size * layer_size * 4) as usize;
+        for (i, layer) in layers.iter().enumerate() {
+            if layer.len() != expected_bytes {
+                return Err(format!(
+                    "Layer {} has {} bytes, expected {} ({}x{}x4)",
+                    i, layer.len(), expected_bytes, layer_size, layer_size
+                ));
+            }
+        }
+
+        // Create the Texture2DArray
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Symbol Texture2DArray"),
+            size: wgpu::Extent3d {
+                width: layer_size,
+                height: layer_size,
+                depth_or_array_layers: layer_count,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        // Upload each layer
+        let bytes_per_row = 4 * layer_size;
+        for (i, layer_data) in layers.iter().enumerate() {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: i as u32,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                layer_data,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(layer_size),
+                },
+                wgpu::Extent3d {
+                    width: layer_size,
+                    height: layer_size,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+
+        // Create D2Array view
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("Symbol Texture2DArray View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+
+        // Create sampler - Nearest for pixel-perfect rendering
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Symbol Texture2DArray Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        Ok(Self {
+            texture,
+            view,
+            sampler,
+            layer_size,
+            layer_count,
+        })
+    }
+}

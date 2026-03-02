@@ -78,8 +78,13 @@ macro_rules! app_body {
                 // - WASM mode: JS already called wasm_init_pixel_assets before this
                 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
                 {
-                    rust_pixel::init_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
-                        .expect("Failed to initialize pixel assets");
+                    if rust_pixel::has_layered_assets(&pp) {
+                        rust_pixel::init_layered_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
+                            .expect("Failed to initialize layered pixel assets");
+                    } else {
+                        rust_pixel::init_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
+                            .expect("Failed to initialize pixel assets");
+                    }
                 }
 
                 #[cfg(not(graphics_mode))]

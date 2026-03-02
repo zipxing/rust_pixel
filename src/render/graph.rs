@@ -635,18 +635,26 @@ pub fn set_letterboxing_override(enabled: bool) {
     LETTERBOXING_OVERRIDE.store(enabled, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Symbol width (in pixels) resolved from the symbol atlas (16 pixels)
+/// Base symbol size in pixels (1 base unit = 16px).
 ///
-/// Initialized exactly once during adapter initialization. Accessing this
-/// before initialization will panic with "lazylock init".
+/// All mipmap levels are integer multiples of this base:
+/// - mip0: ×4 (64px sprites, 64×128 TUI, 128×128 emoji/CJK)
+/// - mip1: ×2 (32px sprites, 32×64 TUI, 64×64 emoji/CJK)
+/// - mip2: ×1 (16px sprites, 16×32 TUI, 32×32 emoji/CJK)
+pub const PIXEL_SYMBOL_SIZE: f32 = 16.0;
+
+/// Symbol width used for cell layout calculations.
 ///
-/// Note: Both Sprite and TUI layers use the same width (16 pixels).
+/// Set once during adapter initialization:
+/// - Legacy mode: `texture_width / 256` (e.g. 8192/256 = 32.0)
+/// - Layered mode: `PIXEL_SYMBOL_SIZE * 2` = 32.0
 pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 
-/// Symbol height (in pixels) resolved from the symbol atlas (16 pixels for Sprite)
-/// Note:
-/// - Sprite layer: uses this value directly (16 pixels)
-/// - TUI layer: uses double this value (32 pixels = PIXEL_SYM_HEIGHT * 2)
+/// Symbol height used for cell layout calculations.
+///
+/// Set once during adapter initialization:
+/// - Legacy mode: `texture_height / 256` (e.g. 8192/256 = 32.0)
+/// - Layered mode: `PIXEL_SYMBOL_SIZE * 2` = 32.0
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
 /// X-axis DPI scaling ratio for coordinate conversion

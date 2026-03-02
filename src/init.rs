@@ -113,6 +113,31 @@ pub struct PixelTextureData {
     pub data: Vec<u8>,
 }
 
+/// Cached layer data for Texture2DArray mode.
+///
+/// Each layer is a square RGBA image loaded from `layers/layer_N.png`.
+/// All layers have the same dimensions (layer_size × layer_size).
+#[derive(Debug, Clone)]
+pub struct PixelLayerData {
+    /// Layer size in pixels (all layers are square)
+    pub layer_size: u32,
+    /// Raw RGBA data for each layer
+    pub layers: Vec<Vec<u8>>,
+}
+
+/// Global cached layer data (layered mode)
+pub static PIXEL_LAYER_DATA: OnceLock<PixelLayerData> = OnceLock::new();
+
+/// Get the cached layer data, if loaded
+pub fn get_pixel_layer_data() -> Option<&'static PixelLayerData> {
+    PIXEL_LAYER_DATA.get()
+}
+
+/// Check if layered mode is active
+pub fn is_layered_mode() -> bool {
+    PIXEL_LAYER_DATA.get().is_some()
+}
+
 /// Global cached texture data - loaded once during init_pixel_assets()
 pub static PIXEL_TEXTURE_DATA: OnceLock<PixelTextureData> = OnceLock::new();
 
@@ -208,6 +233,104 @@ pub fn init_pixel_assets(game_name: &str, project_path: &str, fullscreen: bool, 
     );
 
     Ok(())
+}
+
+/// Initialize layered pixel assets: game config + layer PNGs + layered_symbol_map.json
+///
+/// This function should be called instead of `init_pixel_assets` when
+/// `layered_symbol_map.json` exists in the app's assets directory.
+///
+/// After calling this function:
+/// - `get_game_config()` returns the game configuration
+/// - `get_pixel_layer_data()` returns the layer images
+/// - `get_layered_symbol_map()` returns the layered symbol mapping
+#[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
+pub fn init_layered_pixel_assets(
+    game_name: &str,
+    project_path: &str,
+    fullscreen: bool,
+    fullscreen_fit: bool,
+) -> Result<(), String> {
+    use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
+    use crate::render::symbol_map::{
+        init_layered_symbol_map_from_file, PIXEL_LAYERED_SYMBOL_MAP_FILE,
+    };
+
+    // 1. Set global game configuration
+    init_game_config(game_name, project_path, fullscreen, fullscreen_fit);
+
+    // 2. Set PIXEL_SYM_WIDTH/HEIGHT for grid calculations
+    // PIXEL_SYMBOL_SIZE (16) × 2 = 32.0, matching legacy 8192/256
+    use crate::render::graph::PIXEL_SYMBOL_SIZE;
+    let _ = PIXEL_SYM_WIDTH.set(PIXEL_SYMBOL_SIZE * 2.0);
+    let _ = PIXEL_SYM_HEIGHT.set(PIXEL_SYMBOL_SIZE * 2.0);
+
+    // 3. Load layered_symbol_map.json
+    let json_path = format!(
+        "{}{}{}",
+        project_path,
+        std::path::MAIN_SEPARATOR,
+        PIXEL_LAYERED_SYMBOL_MAP_FILE
+    );
+    init_layered_symbol_map_from_file(&json_path)?;
+
+    let lmap = crate::render::symbol_map::get_layered_symbol_map()
+        .ok_or("Layered symbol map not initialized")?;
+
+    // 3. Load layer PNGs
+    let layer_size = lmap.layer_size;
+    let mut layers = Vec::with_capacity(lmap.layer_files.len());
+
+    for layer_file in &lmap.layer_files {
+        let layer_path = format!(
+            "{}{}assets/pix/{}",
+            project_path,
+            std::path::MAIN_SEPARATOR,
+            layer_file
+        );
+        let img = image::open(&layer_path)
+            .map_err(|e| format!("Failed to load layer '{}': {}", layer_path, e))?
+            .to_rgba8();
+
+        if img.width() != layer_size || img.height() != layer_size {
+            return Err(format!(
+                "Layer {} size {}x{} != expected {}x{}",
+                layer_file,
+                img.width(),
+                img.height(),
+                layer_size,
+                layer_size
+            ));
+        }
+
+        layers.push(img.into_raw());
+    }
+
+    let layer_count = layers.len();
+
+    // 4. Cache layer data
+    PIXEL_LAYER_DATA
+        .set(PixelLayerData { layer_size, layers })
+        .map_err(|_| "PIXEL_LAYER_DATA already initialized".to_string())?;
+
+    println!(
+        "Layered pixel assets initialized: {} layers ({}x{}), {} symbols from {}",
+        layer_count, layer_size, layer_size, lmap.symbol_count(), project_path
+    );
+
+    Ok(())
+}
+
+/// Check if layered assets exist for the given project path
+#[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
+pub fn has_layered_assets(project_path: &str) -> bool {
+    let json_path = format!(
+        "{}{}{}",
+        project_path,
+        std::path::MAIN_SEPARATOR,
+        crate::render::symbol_map::PIXEL_LAYERED_SYMBOL_MAP_FILE
+    );
+    std::path::Path::new(&json_path).exists()
 }
 
 // ============================================================================

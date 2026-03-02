@@ -566,23 +566,27 @@ impl WinitWgpuAdapter {
             (device, queue, surface_config)
         });
 
-        // Build render core using the shared builder
-        // For fullscreen: canvas matches physical size, SDF renders at native resolution
-        let tex_data = crate::get_pixel_texture_data();
-        let render_core = WgpuRenderCoreBuilder::new(
+        // Build render core — detect layered vs legacy mode
+        let builder = WgpuRenderCoreBuilder::new(
             canvas_w,
             canvas_h,
             wgpu_surface_config.format,
         )
-        .with_ratio(ratio_x, ratio_y)
-        .build(
-            device,
-            queue,
-            tex_data.width,
-            tex_data.height,
-            &tex_data.data,
-        )
-        .expect("Failed to build render core");
+        .with_ratio(ratio_x, ratio_y);
+
+        let render_core = if let Some(layer_data) = crate::get_pixel_layer_data() {
+            // Layered mode: Texture2DArray
+            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+            builder
+                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                .expect("Failed to build render core (layered)")
+        } else {
+            // Legacy mode: single texture atlas
+            let tex_data = crate::get_pixel_texture_data();
+            builder
+                .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
+                .expect("Failed to build render core")
+        };
 
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_surface = Some(wgpu_surface);
@@ -651,15 +655,24 @@ impl WinitWgpuAdapter {
             let queue = old_core.queue;
             let format = self.wgpu_surface_config.as_ref().unwrap().format;
 
-            let tex_data = crate::get_pixel_texture_data();
-            let new_core = WgpuRenderCoreBuilder::new(
+            let builder = WgpuRenderCoreBuilder::new(
                 self.base.gr.pixel_w,
                 self.base.gr.pixel_h,
                 format,
             )
-            .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
-            .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
-            .expect("Failed to rebuild render core");
+            .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
+
+            let new_core = if let Some(layer_data) = crate::get_pixel_layer_data() {
+                let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+                builder
+                    .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                    .expect("Failed to rebuild render core (layered)")
+            } else {
+                let tex_data = crate::get_pixel_texture_data();
+                builder
+                    .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
+                    .expect("Failed to rebuild render core")
+            };
 
             info!(
                 "Render core rebuilt: {}x{}, ratio: ({}, {})",
@@ -859,7 +872,18 @@ impl Adapter for WinitWgpuAdapter {
     ) where
         Self: Sized,
     {
+        // Compute viewport scale (physical window height / canvas height)
+        // for accurate mipmap level selection on resize/fullscreen.
+        let viewport_scale = if let (Some(window), Some(core)) = (&self.window, &self.render_core) {
+            let phys_h = window.inner_size().height as f32;
+            let (_, canvas_h) = core.canvas_size();
+            if canvas_h > 0 { phys_h / canvas_h as f32 } else { 1.0 }
+        } else {
+            1.0
+        };
+
         if let Some(core) = &mut self.render_core {
+            core.set_viewport_scale(viewport_scale);
             core.rbuf2rt(rbuf, rtidx, debug);
         } else {
             eprintln!("WinitWgpuAdapter: render core not initialized");

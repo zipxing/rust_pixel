@@ -44,7 +44,8 @@ pub use cell::{
 pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_logo,
     render_main_buffer, render_layers, RenderCell, PIXEL_LOGO_HEIGHT,
-    PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+    PIXEL_LOGO_WIDTH, PIXEL_SYMBOL_SIZE, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
+    PIXEL_TEXTURE_FILE,
 };
 pub use effect::{
     // CPU Effects (Buffer级别)

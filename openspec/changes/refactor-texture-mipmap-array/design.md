@@ -93,6 +93,19 @@ let view = texture.create_view(&wgpu::TextureViewDescriptor {
 
 **所有 mipmap level 的符号混合打包到同一组 Texture2DArray layers 中**，通过 DP 优化的 shelf-packing 算法最小化层数（详见 Decision 8）。
 
+**基准单元：PIXEL_SYMBOL_SIZE = 16**
+
+Mipmap 倍率以 16px 为基准单元（1 base unit = 16px），各级别像素尺寸 = cell_size × mip_scale × 16：
+
+| 类型 | cell | mip0 (×4) | mip1 (×2) | mip2 (×1) |
+|------|------|-----------|-----------|-----------|
+| Sprite (1×1) | 1×1 | 4×4 (64px) | 2×2 (32px) | 1×1 (16px) |
+| TUI (1×2) | 1×2 | 4×8 (64×128) | 2×4 (32×64) | 1×2 (16×32) |
+| Emoji (2×2) | 2×2 | 8×8 (128px) | 4×4 (64px) | 2×2 (32px) |
+| CJK (2×2) | 2×2 | 8×8 (128px) | 4×4 (64px) | 2×2 (32px) |
+
+旧架构中 `PIXEL_SYM_WIDTH = texture_width / 256`（动态计算），新架构中改为固定常量 `PIXEL_SYMBOL_SIZE = 16`，布局代码使用 `PIXEL_SYM_WIDTH = PIXEL_SYMBOL_SIZE * 2`（32.0）保持与现有 cell_width()/cell_height() 接口兼容。
+
 ### Decision 3: CPU 端 Mipmap 选择
 
 **选择：** 在 `WgpuSymbolRenderer::generate_instances_from_render_cells()` 中选择 mipmap level
