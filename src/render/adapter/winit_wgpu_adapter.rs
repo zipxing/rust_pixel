@@ -461,7 +461,7 @@ impl WinitWgpuAdapter {
 
         // For fullscreen mode: use physical screen size as canvas size
         // This ensures SDF renders at native resolution instead of being stretched
-        let (canvas_w, canvas_h, ratio_x, ratio_y) = if game_config.fullscreen {
+        let (canvas_w, canvas_h, ratio_x, ratio_y, render_scale) = if game_config.fullscreen {
             // Calculate new ratios so that:
             // canvas_size = physical_size
             // ratio = logical_size / physical_size
@@ -491,9 +491,22 @@ impl WinitWgpuAdapter {
                 handler.ratio_y = new_ratio_y;
             }
 
-            (physical_size.width, physical_size.height, new_ratio_x, new_ratio_y)
+            (physical_size.width, physical_size.height, new_ratio_x, new_ratio_y, 1.0)
         } else {
-            (self.base.gr.pixel_w, self.base.gr.pixel_h, self.base.gr.ratio_x, self.base.gr.ratio_y)
+            // Windowed mode: use physical size for RT, keep ratio for layout
+            // render_scale = physical / logical, used to scale render coordinates
+            let logical_w = self.base.gr.pixel_w as f32;
+            let logical_h = self.base.gr.pixel_h as f32;
+            let phys_w = physical_size.width as f32;
+            let phys_h = physical_size.height as f32;
+            let render_scale = phys_h / logical_h;
+
+            info!(
+                "Windowed mode: logical {}x{} -> physical {}x{}, render_scale={:.2}, ratio={:.2}",
+                logical_w, logical_h, phys_w, phys_h, render_scale, self.base.gr.ratio_y
+            );
+
+            (physical_size.width, physical_size.height, self.base.gr.ratio_x, self.base.gr.ratio_y, render_scale)
         };
 
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -572,7 +585,8 @@ impl WinitWgpuAdapter {
             canvas_h,
             wgpu_surface_config.format,
         )
-        .with_ratio(ratio_x, ratio_y);
+        .with_ratio(ratio_x, ratio_y)
+        .with_render_scale(render_scale);
 
         let render_core = if let Some(layer_data) = crate::get_pixel_layer_data() {
             // Layered mode: Texture2DArray

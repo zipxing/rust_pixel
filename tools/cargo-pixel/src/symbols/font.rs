@@ -1240,8 +1240,6 @@ fn render_tui_bitmaps_macos(
     font_path: Option<&str>,
 ) -> Vec<MipBitmaps> {
     let mut results = Vec::with_capacity(tui_chars.len());
-    let render_w = lcfg.tui_render_w;
-    let render_h = lcfg.tui_render_h;
 
     let resolved_font_path = find_tui_font_path(font_path);
     if let Some(ref path) = resolved_font_path {
@@ -1251,27 +1249,43 @@ fn render_tui_bitmaps_macos(
         return results;
     }
 
-    println!("  TUI bitmap params:");
-    println!("    render_size: {}x{}", render_w, render_h);
+    println!("  TUI bitmap params (direct render per mip):");
     println!("    mip levels: {:?}", lcfg.tui.levels);
 
     for (i, &ch) in tui_chars.iter().enumerate() {
         let fill_cell = is_graphic_char(ch);
-        let rendered = quartz::render_char_quartz(
-            ch,
-            render_w,
-            render_h,
-            resolved_font_path.as_deref(),
-            None,
-            render_h as f32,
-            fill_cell,
-            text_padding,
-        );
 
-        let source = rendered.unwrap_or_else(|| {
-            ImageBuffer::from_pixel(render_w, render_h, Rgba([0, 0, 0, 0]))
-        });
-        results.push(generate_mip_levels(&source, &lcfg.tui));
+        // Render each mip level directly at target size (no downsampling)
+        let mut levels: [RgbaImage; 3] = [
+            ImageBuffer::new(1, 1),
+            ImageBuffer::new(1, 1),
+            ImageBuffer::new(1, 1),
+        ];
+
+        for (mip_idx, level) in lcfg.tui.levels.iter().enumerate() {
+            let w = level.width;
+            let h = level.height;
+            let font_size = if fill_cell {
+                h as f32  // Graphic chars fill cell
+            } else {
+                h as f32 * text_padding  // Text chars with padding
+            };
+            let rendered = quartz::render_char_quartz(
+                ch,
+                w,
+                h,
+                resolved_font_path.as_deref(),
+                None,
+                font_size,
+                fill_cell,
+                1.0,  // padding already applied to font_size
+            );
+            levels[mip_idx] = rendered.unwrap_or_else(|| {
+                ImageBuffer::from_pixel(w, h, Rgba([0, 0, 0, 0]))
+            });
+        }
+
+        results.push(MipBitmaps { levels });
 
         if (i + 1) % 256 == 0 {
             println!("    TUI bitmap: {}/{}", i + 1, tui_chars.len());
@@ -1286,26 +1300,34 @@ fn render_emoji_bitmaps_macos(
     lcfg: &LayeredTextureConfig,
 ) -> Vec<MipBitmaps> {
     let mut results = Vec::with_capacity(emojis.len());
-    let render_size = lcfg.emoji_render_size;
 
     println!("  Emoji font: {}", EMOJI_FONT_NAME);
-    println!("  Emoji bitmap params:");
-    println!("    render_size: {}x{}", render_size, render_size);
+    println!("  Emoji bitmap params (direct render per mip):");
     println!("    mip levels: {:?}", lcfg.emoji.levels);
 
     for (i, emoji) in emojis.iter().enumerate() {
-        let rendered = quartz::render_str_quartz(
-            emoji,
-            render_size,
-            render_size,
-            EMOJI_FONT_NAME,
-            render_size as f32,
-        );
+        // Render each mip level directly at target size (no downsampling)
+        let mut levels: [RgbaImage; 3] = [
+            ImageBuffer::new(1, 1),
+            ImageBuffer::new(1, 1),
+            ImageBuffer::new(1, 1),
+        ];
 
-        let source = rendered.unwrap_or_else(|| {
-            ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]))
-        });
-        results.push(generate_mip_levels(&source, &lcfg.emoji));
+        for (mip_idx, level) in lcfg.emoji.levels.iter().enumerate() {
+            let size = level.width;  // Emoji is square
+            let rendered = quartz::render_str_quartz(
+                emoji,
+                size,
+                size,
+                EMOJI_FONT_NAME,
+                size as f32,
+            );
+            levels[mip_idx] = rendered.unwrap_or_else(|| {
+                ImageBuffer::from_pixel(size, size, Rgba([0, 0, 0, 0]))
+            });
+        }
+
+        results.push(MipBitmaps { levels });
 
         if (i + 1) % 128 == 0 {
             println!("    Emoji bitmap: {}/{}", i + 1, emojis.len());
@@ -1321,31 +1343,38 @@ fn render_cjk_bitmaps_macos(
     text_padding: f32,
 ) -> Vec<MipBitmaps> {
     let mut results = Vec::with_capacity(cjk_chars.len());
-    let render_size = lcfg.cjk_render_size;
-    let font_size = (render_size as f32) * 0.875;
 
     println!("  CJK font: {}", CJK_FONT_NAME);
-    println!("  CJK bitmap params:");
-    println!("    render_size: {}x{}", render_size, render_size);
-    println!("    font_size: {}", font_size);
+    println!("  CJK bitmap params (direct render per mip):");
     println!("    mip levels: {:?}", lcfg.cjk.levels);
 
     for (i, &ch) in cjk_chars.iter().enumerate() {
-        let rendered = quartz::render_char_quartz(
-            ch,
-            render_size,
-            render_size,
-            None,
-            Some(CJK_FONT_NAME),
-            font_size,
-            false,
-            text_padding,
-        );
+        // Render each mip level directly at target size (no downsampling)
+        let mut levels: [RgbaImage; 3] = [
+            ImageBuffer::new(1, 1),
+            ImageBuffer::new(1, 1),
+            ImageBuffer::new(1, 1),
+        ];
 
-        let source = rendered.unwrap_or_else(|| {
-            ImageBuffer::from_pixel(render_size, render_size, Rgba([0, 0, 0, 0]))
-        });
-        results.push(generate_mip_levels(&source, &lcfg.cjk));
+        for (mip_idx, level) in lcfg.cjk.levels.iter().enumerate() {
+            let size = level.width;  // CJK is square
+            let font_size = (size as f32) * 0.875 * text_padding;
+            let rendered = quartz::render_char_quartz(
+                ch,
+                size,
+                size,
+                None,
+                Some(CJK_FONT_NAME),
+                font_size,
+                false,
+                1.0,  // padding already applied to font_size
+            );
+            levels[mip_idx] = rendered.unwrap_or_else(|| {
+                ImageBuffer::from_pixel(size, size, Rgba([0, 0, 0, 0]))
+            });
+        }
+
+        results.push(MipBitmaps { levels });
 
         if (i + 1) % 512 == 0 {
             println!("    CJK bitmap: {}/{}", i + 1, cjk_chars.len());

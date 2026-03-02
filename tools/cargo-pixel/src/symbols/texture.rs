@@ -261,9 +261,10 @@ const SHELF_UNITS: [u16; 4] = [8, 4, 2, 1];
 /// Finds the optimal combination of shelf heights to maximize utilization.
 ///
 /// remaining[i] = number of shelf rows still needed for height index i
+/// layer_size: texture layer size (e.g., 4096)
 /// Returns: Vec<(height_index, count)> of shelves assigned to this layer
-pub fn dp_fill_layer(remaining: &mut [u32; 4]) -> Vec<(usize, u32)> {
-    let capacity: usize = 128; // 2048 / 16
+pub fn dp_fill_layer(remaining: &mut [u32; 4], layer_size: u32) -> Vec<(usize, u32)> {
+    let capacity: usize = (layer_size / 16) as usize; // layer_size / base_unit
 
     // dp[c] = max fill units achievable with exactly capacity c
     // alloc[c][i] = how many of item i are used in the optimal solution for capacity c
@@ -271,7 +272,7 @@ pub fn dp_fill_layer(remaining: &mut [u32; 4]) -> Vec<(usize, u32)> {
     let mut alloc = vec![[0u32; 4]; capacity + 1];
 
     // Simple bounded knapsack: iterate over all items, try adding 1..=avail of each
-    // Since capacity is small (128) and item types are few (4), brute force is fine
+    // Since capacity is relatively small and item types are few (4), brute force is fine
     for i in 0..4 {
         let u = SHELF_UNITS[i] as usize;
         let max_fit = (capacity / u) as u32;
@@ -319,12 +320,12 @@ pub fn dp_fill_layer(remaining: &mut [u32; 4]) -> Vec<(usize, u32)> {
 }
 
 /// Pack all symbols into layers using iterative DP
-fn pack_all_layers(demands: &[u32; 4]) -> Vec<LayerConfig> {
+fn pack_all_layers(demands: &[u32; 4], layer_size: u32) -> Vec<LayerConfig> {
     let mut remaining = *demands;
     let mut layers = vec![];
 
     while remaining.iter().any(|&r| r > 0) {
-        let shelves = dp_fill_layer(&mut remaining);
+        let shelves = dp_fill_layer(&mut remaining, layer_size);
         if shelves.is_empty() {
             break; // Safety: shouldn't happen if demands are valid
         }
@@ -477,7 +478,7 @@ pub fn pack_layered(
     );
 
     // Step 4: DP packing to determine layer configs
-    let layer_configs = pack_all_layers(&demands);
+    let layer_configs = pack_all_layers(&demands, layer_size);
     println!("  DP result: {} layers", layer_configs.len());
 
     // Step 5: Create layer images and place symbols
@@ -572,11 +573,14 @@ mod tests {
     // dp_fill_layer: single layer DP tests
     // =====================================================
 
+    // Test layer size for DP tests (use 2048 for original test cases)
+    const TEST_LAYER_SIZE: u32 = 2048;
+
     #[test]
     fn test_dp_fill_single_type() {
         // Only h64 shelves, 16 rows = 16×4 = 64 units
         let mut remaining = [0u32, 16, 0, 0];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         let total_units: u16 = result
             .iter()
             .map(|&(idx, count)| SHELF_UNITS[idx] * count as u16)
@@ -589,7 +593,7 @@ mod tests {
     fn test_dp_fill_exact_capacity() {
         // 8×h128(64) + 16×h64(64) = 128 units exactly
         let mut remaining = [8u32, 16, 0, 0];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         let total_units: u16 = result
             .iter()
             .map(|&(idx, count)| SHELF_UNITS[idx] * count as u16)
@@ -602,7 +606,7 @@ mod tests {
     fn test_dp_fill_mixed_all_heights() {
         // 4×h128 + 8×h64 + 16×h32 + 32×h16 = 32+32+32+32 = 128
         let mut remaining = [4u32, 8, 16, 32];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         let total_units: u16 = result
             .iter()
             .map(|&(idx, count)| SHELF_UNITS[idx] * count as u16)
@@ -615,7 +619,7 @@ mod tests {
     fn test_dp_fill_overflow_to_next_layer() {
         // 20×h128 = 160 units > 128, should only take 16
         let mut remaining = [20u32, 0, 0, 0];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         let total_units: u16 = result
             .iter()
             .map(|&(idx, count)| SHELF_UNITS[idx] * count as u16)
@@ -628,7 +632,7 @@ mod tests {
     fn test_dp_fill_prioritize_large_shelves() {
         // 1×h128(8) + 100×h16(100) = 108 units
         let mut remaining = [1u32, 0, 0, 100];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         let total_units: u16 = result
             .iter()
             .map(|&(idx, count)| SHELF_UNITS[idx] * count as u16)
@@ -640,7 +644,7 @@ mod tests {
     #[test]
     fn test_dp_fill_empty_demand() {
         let mut remaining = [0u32, 0, 0, 0];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         assert!(result.is_empty());
     }
 
@@ -648,7 +652,7 @@ mod tests {
     fn test_dp_fill_minimal() {
         // Only 1 row of h16
         let mut remaining = [0u32, 0, 0, 1];
-        let result = dp_fill_layer(&mut remaining);
+        let result = dp_fill_layer(&mut remaining, TEST_LAYER_SIZE);
         let total_units: u16 = result
             .iter()
             .map(|&(idx, count)| SHELF_UNITS[idx] * count as u16)
@@ -664,14 +668,14 @@ mod tests {
     #[test]
     fn test_pack_single_layer() {
         let demands = [16u32, 0, 0, 0]; // 16×h128 = 128 units = 1 layer
-        let layers = pack_all_layers(&demands);
+        let layers = pack_all_layers(&demands, TEST_LAYER_SIZE);
         assert_eq!(layers.len(), 1);
     }
 
     #[test]
     fn test_pack_two_layers() {
         let demands = [17u32, 0, 0, 0]; // 17×h128: layer1=16, layer2=1
-        let layers = pack_all_layers(&demands);
+        let layers = pack_all_layers(&demands, TEST_LAYER_SIZE);
         assert_eq!(layers.len(), 2);
     }
 
@@ -679,16 +683,17 @@ mod tests {
     fn test_pack_zero_waste() {
         // 10×8 + 20×4 + 40×2 + 80×1 = 320, ceil(320/128) = 3
         let demands = [10u32, 20, 40, 80];
-        let layers = pack_all_layers(&demands);
+        let layers = pack_all_layers(&demands, TEST_LAYER_SIZE);
         assert_eq!(layers.len(), 3);
     }
 
     #[test]
     fn test_pack_full_production_scenario() {
         // h128:384 h64:1472 h32:736 h16:320
+        // For 2048 layer: capacity=128 units
         // total = 384×8+1472×4+736×2+320×1 = 10752, ceil(10752/128) = 84
         let demands = [384u32, 1472, 736, 320];
-        let layers = pack_all_layers(&demands);
+        let layers = pack_all_layers(&demands, TEST_LAYER_SIZE);
         assert_eq!(layers.len(), 84);
     }
 
@@ -696,7 +701,7 @@ mod tests {
     fn test_pack_level1_only() {
         // h64:192 h32:640 → 192×4+640×2 = 2048, ceil(2048/128) = 16
         let demands = [0u32, 192, 640, 0];
-        let layers = pack_all_layers(&demands);
+        let layers = pack_all_layers(&demands, TEST_LAYER_SIZE);
         assert_eq!(layers.len(), 16);
     }
 
@@ -706,7 +711,7 @@ mod tests {
         // total = 84×8+74×4+37×2+8×1 = 672+296+74+8 = 1050
         // ceil(1050/128) = 9
         let demands = [84u32, 74, 37, 8];
-        let layers = pack_all_layers(&demands);
+        let layers = pack_all_layers(&demands, TEST_LAYER_SIZE);
         assert_eq!(layers.len(), 9);
     }
 

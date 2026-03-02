@@ -113,6 +113,10 @@ pub struct WgpuSymbolRenderer {
     /// Used to convert render-space cell heights to physical screen pixel heights
     /// for accurate mipmap level selection. Updated on window resize.
     viewport_scale: f32,
+
+    /// Render scale for HiDPI/Retina: physical_size / logical_size.
+    /// Used to scale render coordinates so content renders at correct physical size.
+    render_scale: f32,
 }
 
 
@@ -141,6 +145,7 @@ impl WgpuSymbolRenderer {
             ratio_x: 1.0,
             ratio_y: 1.0,
             viewport_scale: 1.0,
+            render_scale: 1.0,
         }
     }
     
@@ -203,9 +208,16 @@ impl WgpuSymbolRenderer {
         let bg_frame_w = bg_tile.cell_w.max(1) as f32 * base_w;
         let bg_frame_h = bg_tile.cell_h.max(1) as f32 * base_h;
 
+        let rs = self.render_scale;  // HiDPI scale factor
+
         for r in render_cells {
-            let cell_width = r.w as f32;
-            let cell_height = r.h as f32;
+            // Scale coordinates by render_scale for HiDPI/Retina displays
+            let cell_width = r.w as f32 * rs;
+            let cell_height = r.h as f32 * rs;
+            let rx = r.x * rs;
+            let ry = r.y * rs;
+            let rcx = r.cx * rs;
+            let rcy = r.cy * rs;
             let modifier = r.modifier;
 
             let (mut fg_color, bg_color) = if modifier & MOD_REVERSED != 0 {
@@ -227,9 +239,9 @@ impl WgpuSymbolRenderer {
             // Background
             if let Some(b) = bg_color {
                 let mut bg_transform = self.transform_stack;
-                bg_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+                bg_transform.translate(rx + rcx - cell_width, ry + rcy - cell_height);
                 if r.angle != 0.0 { bg_transform.rotate(r.angle); }
-                bg_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                bg_transform.translate(-rcx + cell_width, -rcy + cell_height);
                 let bg_fw = bg_frame_w / ratio_x;
                 let bg_fh = bg_frame_h / ratio_y;
                 bg_transform.scale(cell_width / bg_fw / ratio_x, cell_height / bg_fh / ratio_y);
@@ -253,9 +265,9 @@ impl WgpuSymbolRenderer {
             if is_glow {
                 let glow_color = [fg_color.0, fg_color.1, fg_color.2, fg_color.3 * 0.4];
                 let mut glow_transform = self.transform_stack;
-                glow_transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+                glow_transform.translate(rx + rcx - cell_width, ry + rcy - cell_height);
                 if r.angle != 0.0 { glow_transform.rotate(r.angle); }
-                glow_transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                glow_transform.translate(-rcx + cell_width, -rcy + cell_height);
                 if modifier & MOD_ITALIC != 0 { glow_transform.skew_x(ITALIC_SKEW); }
                 let fw = frame_width / ratio_x;
                 let fh = frame_height / ratio_y;
@@ -265,9 +277,9 @@ impl WgpuSymbolRenderer {
 
             // Foreground
             let mut transform = self.transform_stack;
-            transform.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32);
+            transform.translate(rx + rcx - cell_width, ry + rcy - cell_height);
             if r.angle != 0.0 { transform.rotate(r.angle); }
-            transform.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+            transform.translate(-rcx + cell_width, -rcy + cell_height);
             if modifier & MOD_ITALIC != 0 { transform.skew_x(ITALIC_SKEW); }
 
             let fw = frame_width / ratio_x;
@@ -278,9 +290,9 @@ impl WgpuSymbolRenderer {
             // Underline
             if modifier & MOD_UNDERLINED != 0 {
                 let mut lt = self.transform_stack;
-                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.9);
+                lt.translate(rx + rcx - cell_width, ry + rcy - cell_height + cell_height * 0.9);
                 if r.angle != 0.0 { lt.rotate(r.angle); }
-                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                lt.translate(-rcx + cell_width, -rcy + cell_height);
                 let bg_fw = bg_frame_w / ratio_x;
                 let bg_fh = bg_frame_h / ratio_y;
                 lt.scale(cell_width / bg_fw / ratio_x, (cell_height * 0.08) / bg_fh / ratio_y);
@@ -290,9 +302,9 @@ impl WgpuSymbolRenderer {
             // Strikethrough
             if modifier & MOD_CROSSED_OUT != 0 {
                 let mut lt = self.transform_stack;
-                lt.translate(r.x + r.cx - r.w as f32, r.y + r.cy - r.h as f32 + cell_height * 0.46);
+                lt.translate(rx + rcx - cell_width, ry + rcy - cell_height + cell_height * 0.46);
                 if r.angle != 0.0 { lt.rotate(r.angle); }
-                lt.translate(-r.cx + r.w as f32, -r.cy + r.h as f32);
+                lt.translate(-rcx + cell_width, -rcy + cell_height);
                 let bg_fw = bg_frame_w / ratio_x;
                 let bg_fh = bg_frame_h / ratio_y;
                 lt.scale(cell_width / bg_fw / ratio_x, (cell_height * 0.08) / bg_fh / ratio_y);
@@ -471,7 +483,13 @@ impl WgpuSymbolRenderer {
     pub fn set_viewport_scale(&mut self, scale: f32) {
         self.viewport_scale = scale;
     }
-    
+
+    /// Set render scale for HiDPI/Retina displays.
+    /// render_scale = physical_size / logical_size.
+    pub fn set_render_scale(&mut self, scale: f32) {
+        self.render_scale = scale;
+    }
+
     /// Generate vertices from buffer (legacy method for compatibility)
     /// This method exists for backward compatibility but is no longer used
     /// in the instanced rendering pipeline

@@ -19,7 +19,7 @@ pub struct SymbolMipConfig {
 /// Configuration for layered texture generation (Texture2DArray)
 #[derive(Debug, Clone)]
 pub struct LayeredTextureConfig {
-    pub layer_size: u32,         // 2048
+    pub layer_size: u32,         // 4096
     pub sprite: SymbolMipConfig, // Sprite: 64×64, 32×32, 16×16
     pub tui: SymbolMipConfig,    // TUI: 64×128, 32×64, 16×32
     pub emoji: SymbolMipConfig,  // Emoji: 128×128, 64×64, 32×32
@@ -35,7 +35,7 @@ pub struct LayeredTextureConfig {
 impl LayeredTextureConfig {
     pub fn new() -> Self {
         Self {
-            layer_size: 2048,
+            layer_size: 4096,
             sprite: SymbolMipConfig {
                 levels: [
                     MipLevelDef { width: 64, height: 64 },

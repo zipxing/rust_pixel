@@ -283,6 +283,7 @@ pub struct WgpuRenderCoreBuilder {
     pub surface_format: wgpu::TextureFormat,
     pub ratio_x: f32,
     pub ratio_y: f32,
+    pub render_scale: f32,
 }
 
 impl WgpuRenderCoreBuilder {
@@ -293,12 +294,18 @@ impl WgpuRenderCoreBuilder {
             surface_format,
             ratio_x: 1.0,
             ratio_y: 1.0,
+            render_scale: 1.0,
         }
     }
 
     pub fn with_ratio(mut self, rx: f32, ry: f32) -> Self {
         self.ratio_x = rx;
         self.ratio_y = ry;
+        self
+    }
+
+    pub fn with_render_scale(mut self, scale: f32) -> Self {
+        self.render_scale = scale;
         self
     }
 
@@ -335,6 +342,7 @@ impl WgpuRenderCoreBuilder {
         pixel_renderer.init_general2d_renderer(&device);
         pixel_renderer.init_transition_renderer(&device);
         pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
+        pixel_renderer.set_render_scale(self.render_scale);
 
         Ok(WgpuRenderCore::new(
             device,
@@ -371,6 +379,7 @@ impl WgpuRenderCoreBuilder {
         pixel_renderer.init_general2d_renderer(&device);
         pixel_renderer.init_transition_renderer(&device);
         pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
+        pixel_renderer.set_render_scale(self.render_scale);
 
         Ok(WgpuRenderCore::new(
             device,

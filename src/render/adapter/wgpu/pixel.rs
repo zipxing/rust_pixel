@@ -912,6 +912,12 @@ impl WgpuPixelRender {
         self.symbol_renderer.set_ratio(ratio_x, ratio_y);
     }
 
+    /// Set render scale for HiDPI/Retina displays
+    /// render_scale = physical_size / logical_size
+    pub fn set_render_scale(&mut self, scale: f32) {
+        self.symbol_renderer.set_render_scale(scale);
+    }
+
     /// Set CAS (Contrast Adaptive Sharpening) intensity for the General2D renderer
     ///
     /// Applied during the final RT-to-screen composition (Stage 4).

@@ -455,9 +455,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     var texColor = textureSampleLevel(source, source_sampler, input.uv, layer, 0.0);
 
-    // Precompute fwidth in uniform control flow (required by WebGPU WGSL)
-    let edge_alpha = fwidth(texColor.a);
-
     // === GLOW path: radial Gaussian halo ===
     if (input.v_glow > 0.5) {
         let local = input.v_local_pos;
@@ -468,19 +465,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // === Bitmap path (all rendering in layered mode) ===
+    // Bold: sample adjacent pixels for thicker stroke
     if (input.v_bold > 0.5) {
         let ts = vec2<f32>(textureDimensions(source));
         let dx = 0.35 / ts.x;
         texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(dx, 0.0), layer, 0.0));
         texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0), layer, 0.0));
-        texColor.a = smoothstep(0.15, 0.95, texColor.a);
     }
 
-    // Alpha edge sharpening
-    if (edge_alpha > 0.001) {
-        texColor.a = smoothstep(0.5 - edge_alpha, 0.5 + edge_alpha, texColor.a);
-    }
-
+    // Bitmap mode: use alpha directly, no SDF edge processing
     return texColor * input.colorj;
 }
 "#;
