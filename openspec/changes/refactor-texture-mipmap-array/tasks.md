@@ -257,10 +257,11 @@
 
 ## 进度追踪
 
-- Phase 1: ⬜ 0/7 (0%) — 工具改造
-- Phase 2: ⬜ 0/6 (0%) — Texture2DArray 基础
+- Phase 1: ⬜ 0/9 (0%) — 工具改造 + 测试
+- Phase 2: ⬜ 0/7 (0%) — Texture2DArray 基础 + 测试
 - Phase 3: ⬜ 0/7 (0%) — Shader 改造
-- Phase 4: ⬜ 0/8 (0%) — Tile 重构（Glyph→Tile）+ Mipmap 选择
+- Phase 4: ⬜ 0/11 (0%) — Tile 重构 + Mipmap 选择 + 测试
 - Phase 5: ⬜ 0/4 (0%) — 文档清理
 
-**总进度：⬜ 0/32 (0%)**
+**总进度：⬜ 0/38 (0%)**
+**其中单元测试：6 个测试任务，45 个测试用例（详见 tests.md）**
