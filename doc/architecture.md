@@ -76,7 +76,7 @@ Scene
 
 Each Layer holds Sprites. Each Sprite holds a Buffer of Cells:
 ```
-Cell { symbol, fg, bg, modifier, scale_x, scale_y }
+Cell { symbol, fg, bg, modifier, scale_x, scale_y, tile (graphics_mode only) }
 ```
 
 ### Cell and Tile
@@ -91,8 +91,12 @@ pub struct Cell {
     pub modifier: Modifier,
     pub scale_x: f32,
     pub scale_y: f32,
+    #[cfg(graphics_mode)]
+    tile: Tile,            // Cached tile info (resolved from symbol)
 }
 ```
+
+**Tile caching**: `set_symbol()` automatically calls `compute_tile()`, caching the Tile in the Cell. Rendering reads the cached tile directly — no symbol map lookup at render time.
 
 `Tile` describes how to render a symbol using mipmap textures:
 ```rust
