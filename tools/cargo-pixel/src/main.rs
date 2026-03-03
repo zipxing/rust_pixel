@@ -53,7 +53,6 @@ mod creat;
 use creat::*;
 mod convert_gif;
 use convert_gif::*;
-mod symbols;
 
 // current dir state
 // not pixel dir, rust_pixel root dir, depend rust_pixel project
@@ -598,6 +597,73 @@ fn pixel_ttf(ctx: &PixelContext, sub_m: &ArgMatches) {
     }
 }
 
+/// Handle the symbols subcommand by converting it to a run command
+/// cargo pixel symbols [options] -> cargo run -p symbols --features term -r -- [options]
+fn pixel_symbols(ctx: &PixelContext, sub_m: &ArgMatches) {
+    println!("🎨 Running RustPixel Symbol Texture Generator...");
+
+    // Forward all symbols-specific arguments
+    let mut extra_args: Vec<String> = Vec::new();
+
+    if let Some(padding) = sub_m.get_one::<String>("padding") {
+        extra_args.push("--padding".to_string());
+        extra_args.push(padding.clone());
+    }
+    if let Some(output) = sub_m.get_one::<String>("output") {
+        extra_args.push("--output".to_string());
+        extra_args.push(output.clone());
+    }
+    if let Some(font) = sub_m.get_one::<String>("font") {
+        extra_args.push("--font".to_string());
+        extra_args.push(font.clone());
+    }
+
+    // Build argument list for the run command
+    // Use "--" to separate run args from symbols-specific args (which have --flags)
+    let mut run_args: Vec<&str> = vec![
+        "run",
+        "symbols",
+        "t",        // terminal mode (tool doesn't use graphics)
+        "-r",       // release mode
+        "--",       // everything after this is passed through as "other"
+    ];
+
+    let extra_refs: Vec<&str> = extra_args.iter().map(|s| s.as_str()).collect();
+    for arg in &extra_refs {
+        run_args.push(arg);
+    }
+
+    println!(
+        "   Running: cargo pixel r symbols t -r -- {}",
+        extra_args.join(" ")
+    );
+    println!();
+
+    // Create and execute the run command
+    use clap::{Command, Arg, ArgAction};
+    let run_app = Command::new("run")
+        .arg(Arg::new("mod_name"))
+        .arg(Arg::new("build_type"))
+        .arg(Arg::new("other").action(ArgAction::Append))
+        .arg(
+            Arg::new("release")
+                .short('r')
+                .long("release")
+                .action(ArgAction::SetTrue),
+        );
+
+    let run_matches = run_app.try_get_matches_from(run_args);
+
+    match run_matches {
+        Ok(matches) => {
+            pixel_run(ctx, &matches);
+        }
+        Err(e) => {
+            eprintln!("Error: Failed to set up symbols command: {}", e);
+        }
+    }
+}
+
 /// Handle the gen subcommand - generate MDPT presentation using AI
 /// cargo pixel gen "topic" [--img] -> cargo run -p mdpt --features wgpu --bin gen -- "topic" [--img]
 fn pixel_gen(ctx: &PixelContext, sub_m: &ArgMatches) {
@@ -641,7 +707,7 @@ fn main() {
         Some(("symbol", sub_m)) => pixel_symbol(&ctx, sub_m),
         Some(("ttf", sub_m)) => pixel_ttf(&ctx, sub_m),
         Some(("gen", sub_m)) => pixel_gen(&ctx, sub_m),
-        Some(("symbols", sub_m)) => symbols::generate_symbols(sub_m),
+        Some(("symbols", sub_m)) => pixel_symbols(&ctx, sub_m),
         _ => {
             // No subcommand provided, show help
             use crate::command::make_parser_app;

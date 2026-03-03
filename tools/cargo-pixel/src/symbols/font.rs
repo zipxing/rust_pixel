@@ -193,6 +193,7 @@ mod quartz {
         ) -> core_graphics::geometry::CGRect;
     }
 
+
     // CTLineBoundsOptions
     const K_CT_LINE_BOUNDS_USE_GLYPH_PATH_BOUNDS: u64 = 1 << 1;
 
@@ -340,7 +341,9 @@ mod quartz {
         create_ct_line_str(font, &ch.to_string())
     }
 
-    /// Render a string (for emoji) using Quartz
+    /// Render a string (for emoji) using Quartz.
+    /// NOTE: This runs in a subprocess (spawned via sh -c) to avoid
+    /// memory corruption from prior TUI/CJK rendering in the parent.
     pub fn render_str_quartz(
         s: &str,
         width: u32,
@@ -353,12 +356,14 @@ mod quartz {
         let ascent = font.ascent();
         let descent = font.descent();
 
-        // Create bitmap context
+        // Context tall enough for the full glyph (ascent + descent)
+        let render_h = height.max((ascent + descent).ceil() as u32);
+
         let color_space = CGColorSpace::create_device_rgb();
         let mut context = CGContext::create_bitmap_context(
             None,
             width as usize,
-            height as usize,
+            render_h as usize,
             8,
             width as usize * 4,
             &color_space,
@@ -368,42 +373,34 @@ mod quartz {
         // Clear background (transparent)
         context.clear_rect(CGRect::new(
             &CGPoint::new(0.0, 0.0),
-            &CGSize::new(width as f64, height as f64),
+            &CGSize::new(width as f64, render_h as f64),
         ));
 
         // Set text color to white
         context.set_rgb_fill_color(1.0, 1.0, 1.0, 1.0);
 
-        // Create CTLine
+        // Create CTLine and draw centered
         let line = create_ct_line_str(&font, s)?;
-
-        // Calculate position (centered)
         let typo_bounds = line.get_typographic_bounds();
         let x = ((width as f64) - typo_bounds.width) / 2.0;
-        // Vertical centering: baseline_y from bottom (CGContext origin at bottom-left)
-        let baseline_y = ((height as f64) - (ascent + descent)) / 2.0 + descent;
+        let baseline_y = ((render_h as f64) - (ascent + descent)) / 2.0 + descent;
 
-        // Pixel align
-        let x = x.round();
-        let baseline_y = baseline_y.round();
-
-        // Draw text
-        context.set_text_position(x, baseline_y);
+        context.set_text_position(x.round(), baseline_y.round());
         line.draw(&context);
 
-        // Extract image data
+        // Extract pixels (RGBA)
         let data = context.data();
-        let ptr = data.as_ptr() as *const u8;
-        let len = (width * height * 4) as usize;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
+        let bytes_per_row = width as usize * 4;
+        let slice = unsafe {
+            std::slice::from_raw_parts(data.as_ptr() as *const u8, bytes_per_row * render_h as usize)
+        };
 
-        // Create RgbaImage from RGBA data
-        // CGContext bitmap data is stored with origin at top-left (when created with
-        // standard options), so no Y-flip needed
+        let y_offset = ((render_h - height) / 2) as usize;
         let mut img = RgbaImage::new(width, height);
-        for y in 0..height {
-            for x in 0..width {
-                let offset = ((y * width + x) * 4) as usize;
+        for y in 0..height as usize {
+            let src_y = y + y_offset;
+            for x in 0..width as usize {
+                let offset = src_y * bytes_per_row + x * 4;
                 let r = slice[offset];
                 let g = slice[offset + 1];
                 let b = slice[offset + 2];
@@ -421,7 +418,7 @@ mod quartz {
                     (0, 0, 0)
                 };
 
-                img.put_pixel(x, y, Rgba([r, g, b, a]));
+                img.put_pixel(x as u32, y as u32, Rgba([r, g, b, a]));
             }
         }
 
@@ -1294,6 +1291,58 @@ fn render_tui_bitmaps_macos(
     results
 }
 
+/// Subprocess entry point for emoji rendering on macOS.
+/// Called when _PIXEL_RENDER_EMOJI env var is set.
+/// Protocol: reads JSON from stdin, writes raw RGBA pixel data to stdout.
+#[cfg(target_os = "macos")]
+pub fn emoji_subprocess_main() {
+    use std::io::{Read, Write};
+
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input).unwrap();
+
+    let req: serde_json::Value = serde_json::from_str(&input).unwrap();
+    let emojis: Vec<String> = req["emojis"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    let sizes: Vec<u32> = req["sizes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().unwrap() as u32)
+        .collect();
+
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    for emoji in &emojis {
+        for &size in &sizes {
+            let rendered = quartz::render_str_quartz(
+                emoji,
+                size,
+                size,
+                EMOJI_FONT_NAME,
+                size as f32,
+            );
+            match rendered {
+                Some(img) => {
+                    // Write 1 byte success flag + raw RGBA data
+                    out.write_all(&[1u8]).unwrap();
+                    out.write_all(img.as_raw()).unwrap();
+                }
+                None => {
+                    // Write 0 byte failure flag
+                    out.write_all(&[0u8]).unwrap();
+                }
+            }
+        }
+    }
+    out.flush().unwrap();
+}
+
 #[cfg(target_os = "macos")]
 fn render_emoji_bitmaps_macos(
     emojis: &[String],
@@ -1305,34 +1354,77 @@ fn render_emoji_bitmaps_macos(
     println!("  Emoji bitmap params (direct render per mip):");
     println!("    mip levels: {:?}", lcfg.emoji.levels);
 
-    for (i, emoji) in emojis.iter().enumerate() {
-        // Render each mip level directly at target size (no downsampling)
-        let mut levels: [RgbaImage; 3] = [
-            ImageBuffer::new(1, 1),
-            ImageBuffer::new(1, 1),
-            ImageBuffer::new(1, 1),
-        ];
+    // Apple Color Emoji + CTLineDraw can bus-error in certain process
+    // contexts on macOS (works fine under lldb or sh -c, but crashes
+    // when run directly from zsh). Spawn via "sh -c" to get a clean
+    // process environment.
+    let sizes: Vec<u32> = lcfg.emoji.levels.iter().map(|l| l.width).collect();
 
-        for (mip_idx, level) in lcfg.emoji.levels.iter().enumerate() {
-            let size = level.width;  // Emoji is square
-            let rendered = quartz::render_str_quartz(
-                emoji,
-                size,
-                size,
-                EMOJI_FONT_NAME,
-                size as f32,
-            );
-            levels[mip_idx] = rendered.unwrap_or_else(|| {
-                ImageBuffer::from_pixel(size, size, Rgba([0, 0, 0, 0]))
-            });
-        }
+    let exe = std::env::current_exe().expect("cannot get current exe path");
+    let req = serde_json::json!({
+        "emojis": emojis,
+        "sizes": sizes,
+    });
 
-        results.push(MipBitmaps { levels });
+    println!("    Spawning subprocess for emoji rendering...");
+    let mut child = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("exec '{}'", exe.display()))
+        .env("_PIXEL_RENDER_EMOJI", "1")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()
+        .expect("failed to spawn emoji render subprocess");
 
-        if (i + 1) % 128 == 0 {
-            println!("    Emoji bitmap: {}/{}", i + 1, emojis.len());
+    // Send request via stdin
+    {
+        use std::io::Write;
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(req.to_string().as_bytes()).unwrap();
+    }
+    drop(child.stdin.take());
+
+    // Read results from stdout
+    {
+        use std::io::Read;
+        let stdout = child.stdout.as_mut().unwrap();
+
+        for (i, _emoji) in emojis.iter().enumerate() {
+            let mut levels: [RgbaImage; 3] = [
+                ImageBuffer::new(1, 1),
+                ImageBuffer::new(1, 1),
+                ImageBuffer::new(1, 1),
+            ];
+
+            for (mip_idx, &size) in sizes.iter().enumerate() {
+                let mut flag = [0u8; 1];
+                stdout.read_exact(&mut flag).expect("emoji subprocess: unexpected EOF reading flag");
+
+                if flag[0] == 1 {
+                    let pixel_count = (size * size * 4) as usize;
+                    let mut buf = vec![0u8; pixel_count];
+                    stdout.read_exact(&mut buf).expect("emoji subprocess: unexpected EOF reading pixels");
+                    levels[mip_idx] = ImageBuffer::from_raw(size, size, buf)
+                        .unwrap_or_else(|| ImageBuffer::from_pixel(size, size, Rgba([0, 0, 0, 0])));
+                } else {
+                    levels[mip_idx] = ImageBuffer::from_pixel(size, size, Rgba([0, 0, 0, 0]));
+                }
+            }
+
+            results.push(MipBitmaps { levels });
+
+            if (i + 1) % 128 == 0 {
+                println!("    Emoji bitmap: {}/{}", i + 1, emojis.len());
+            }
         }
     }
+
+    let status = child.wait().expect("failed to wait for subprocess");
+    if !status.success() {
+        eprintln!("Warning: emoji render subprocess exited with {}", status);
+    }
+
     results
 }
 

@@ -13,6 +13,8 @@ mod texture;
 
 pub use config::{LayeredTextureConfig, SymbolType, TextureConfig};
 pub use font::MipBitmaps;
+#[cfg(target_os = "macos")]
+pub use font::emoji_subprocess_main;
 
 use clap::ArgMatches;
 use image::{ImageBuffer, RgbaImage};
