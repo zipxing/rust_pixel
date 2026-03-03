@@ -28,7 +28,7 @@ Web mode uses the same WGPU pipeline as desktop. When compiled to WASM, wgpu aut
 
 ### What's the difference between `term` and `wgpu` mode?
 - **term**: Renders directly to a terminal emulator using crossterm. Characters are Unicode text, colors are ANSI. Works over SSH.
-- **wgpu**: Opens a native window with GPU rendering. Characters are glyphs from Texture2DArray. Supports scaling, rotation, alpha blending, shader effects.
+- **wgpu**: Opens a native window with GPU rendering. Characters are tiles from Texture2DArray with mipmaps. Supports scaling, rotation, alpha blending, shader effects.
 
 Both modes share the same Model code. Only the Render implementation differs.
 

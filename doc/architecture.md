@@ -76,12 +76,12 @@ Scene
 
 Each Layer holds Sprites. Each Sprite holds a Buffer of Cells:
 ```
-Cell { symbol, fg, bg, modifier, scale_x, scale_y, glyph (cached) }
+Cell { symbol, fg, bg, modifier, scale_x, scale_y }
 ```
 
-### Cell and Glyph
+### Cell and Tile
 
-`Cell` is the fundamental rendering unit. The `symbol` string fully determines what gets rendered — no separate texture field.
+`Cell` is the fundamental rendering unit. The `symbol` string fully determines what gets rendered.
 
 ```rust
 pub struct Cell {
@@ -91,29 +91,39 @@ pub struct Cell {
     pub modifier: Modifier,
     pub scale_x: f32,
     pub scale_y: f32,
-    // glyph: Glyph (cached, computed on set_symbol)
 }
 ```
 
-`Glyph` describes how to find and render a symbol in the texture atlas:
+`Tile` describes how to render a symbol using mipmap textures:
 ```rust
-pub struct Glyph {
-    pub block: u8,   // Texture block index
-    pub idx: u8,     // Symbol index within block
-    pub width: u8,   // Width multiplier (1 or 2)
-    pub height: u8,  // Height multiplier (1 or 2)
+pub struct MipUV {
+    pub layer: u16,  // Layer index in Texture2DArray
+    pub x: f32,      // Normalized UV x (0.0-1.0)
+    pub y: f32,      // Normalized UV y (0.0-1.0)
+    pub w: f32,      // Normalized UV width
+    pub h: f32,      // Normalized UV height
+}
+
+pub struct Tile {
+    pub cell_w: u8,       // Cell width (1=normal, 2=wide like CJK/Emoji)
+    pub cell_h: u8,       // Cell height (1=single, 2=tall like TUI/CJK)
+    pub is_emoji: bool,   // Pre-rendered emoji (no color modulation)
+    pub mips: [MipUV; 3], // 3 mipmap levels: [high, mid, low]
 }
 ```
 
-Glyph sizes (in PIXEL_SYM_WIDTH/HEIGHT units):
-- **Sprite**: width=1, height=1 → 16×16 pixels
-- **TUI**: width=1, height=2 → 16×32 pixels
-- **Emoji**: width=2, height=2 → 32×32 pixels
-- **CJK**: width=2, height=2 → 32×32 pixels
+Cell sizes in grid units:
+- **Sprite**: cell_w=1, cell_h=1
+- **TUI**: cell_w=1, cell_h=2
+- **Emoji**: cell_w=2, cell_h=2
+- **CJK**: cell_w=2, cell_h=2
 
-**Glyph caching**: `set_symbol()` automatically calls `compute_glyph()`, caching (block, idx, width, height) in the Cell. Rendering reads the cached glyph directly via `get_cell_info()` — no symbol string parsing at render time.
+**Mipmap selection**: At render time, the engine calculates actual pixel size and selects the appropriate mip level:
+- `per_unit >= 48` → mip0 (high resolution, for fullscreen)
+- `per_unit >= 24` → mip1 (medium resolution)
+- `per_unit < 24` → mip2 (low resolution, for small windows)
 
-Lookup order: PUA Sprite (1×1) → Emoji (2×2) → CJK (2×2) → TUI (1×2) → fallback (space)
+**Symbol lookup**: `LayeredSymbolMap` maps symbol strings to `Tile`. Lookup order: PUA Sprite → Emoji → CJK → TUI → fallback (space)
 
 ### Buffer
 
@@ -132,29 +142,29 @@ pub struct Buffer {
 
 - **Tui mode**: symbol is standard Unicode
 - **Sprite mode**: symbol is PUA-encoded, constructed via `cellsym_block(block, idx)`
-- Rendering is mode-independent: fully determined by the cached glyph
+- Rendering uses `LayeredSymbolMap` to look up `Tile` with mipmap UV coordinates
 
-### Symbol → Glyph Mapping (Two-Layer System)
+### Symbol → Tile Mapping
 
-The engine has two numbering systems: **Unicode codepoints** (stored in `cell.symbol`) and **atlas block indices** (in `Glyph`). `compute_glyph()` maps between them:
+`LayeredSymbolMap` (loaded from `layered_symbol_map.json`) maps symbol strings directly to `Tile`:
 
 ```
-cell.symbol (Unicode)              Glyph (atlas block + idx)
-───────────────────────            ──────────────────────────
-PUA U+F0000 + block*256 + idx  →   Block 0-159,   idx   (decode PUA)
-Real Emoji characters           →   Block 170-175, idx   (symbol_map lookup)
-Real CJK characters             →   Block 176-239, idx   (symbol_map lookup)
-Real ASCII/Box/Braille chars    →   Block 160-169, idx   (symbol_map lookup)
+cell.symbol (String)         →    Tile { cell_w, cell_h, is_emoji, mips[3] }
+─────────────────────────         ─────────────────────────────────────────
+"A", "█", "─", "⠿"           →    TUI tile (cell_w=1, cell_h=2)
+"中", "国"                    →    CJK tile (cell_w=2, cell_h=2)
+"😀", "🎮"                    →    Emoji tile (cell_w=2, cell_h=2, is_emoji=true)
+PUA "\u{F0000}"...           →    Sprite tile (cell_w=1, cell_h=1)
 ```
 
-**Sprite PUA encoding**: Sprite symbols have no standard Unicode codepoint, so they use **Supplementary Private Use Area-A** (Plane 15) as artificial encoding:
+**Sprite PUA encoding**: Sprite symbols use **Supplementary Private Use Area-A** (Plane 15):
 ```
 Range: U+F0000 ~ U+F9FFF (40960 codepoints)
 Encoding: 0xF0000 + block * 256 + idx
 Blocks: 160 blocks × 256 symbols each
 ```
 
-**No Unicode conflict**: Sprite PUA uses Plane 15 (U+F0000-U+F9FFF), completely separate from standard characters (Plane 0), Emoji (Plane 0+1), and CJK extensions (Plane 2). `compute_glyph()` can unambiguously determine type by codepoint range.
+**No Unicode conflict**: PUA Plane 15 is completely separate from standard characters (Plane 0), Emoji (Plane 0+1), and CJK extensions (Plane 2).
 
 ## GPU Rendering Pipeline (4-Stage)
 
@@ -178,7 +188,7 @@ Stage 4: RT → Screen
 ```
 
 GPU shaders:
-- **Symbols shader** — instanced rendering of glyphs from texture atlas
+- **Symbols shader** — instanced rendering of tiles from Texture2DArray
 - **Transition shader** — blends two RTs with effects (dissolve, wipe, etc.)
 - **General2D shader** — final composition to screen
 
@@ -489,7 +499,7 @@ impl Render for MyRender {
 
 - **Model and Render should be loosely coupled** — use events for communication
 - Use `#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]` to differentiate graphics vs text mode
-- Use `set_graph_sym()` for GPU glyph rendering, `set_default_str()` / `set_color_str()` for text
+- Use `set_graph_sym()` for GPU sprite rendering, `set_default_str()` / `set_color_str()` for text
 - `asset2sprite!` loads `.pix` / `.ssf` / `.esc` assets into sprites
 - `draw_objpool()` manages drawing particle systems and pooled game objects
 
@@ -537,11 +547,11 @@ src/
 │   │   ├── winit_common.rs    # Shared window/input handling
 │   │   └── wgpu/              # Shared WGPU pipeline
 │   │       ├── pixel.rs       # Render texture management
-│   │       ├── render_symbols.rs      # Instanced glyph shader
+│   │       ├── render_symbols.rs      # Instanced tile shader
 │   │       ├── render_transition.rs   # Transition effects
 │   │       └── render_general2d.rs    # Final composition
 │   ├── buffer.rs              # Cell buffer (BufferMode, diff tracking, set_str API)
-│   ├── cell.rs                # Cell + Glyph (PUA encoding, glyph caching)
+│   ├── cell.rs                # Cell (PUA encoding for sprites)
 │   ├── scene.rs               # Scene container
 │   ├── sprite/                # Sprite + Layer
 │   ├── graph.rs               # Graphics data structures

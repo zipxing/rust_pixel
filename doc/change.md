@@ -74,13 +74,15 @@ This release introduces a significant rendering refactoring using **Texture2DArr
 
 # 2.1.1
 
+> **Note**: MSDF/SDF rendering was replaced by mipmap-based rendering in v2.4.0 for better quality and simpler architecture.
+
 - Font rendering now supports SDF/MSDF textures — TUI and CJK characters stay crisp at any scale
 - MDPT fullscreen mode uses MSDF rendering for sharper text on high-DPI displays
 - Added `-f` / `--fullscreen` command line flag for all apps to launch in fullscreen mode
 - MDPT: added `--no-status` flag to hide the bottom status bar; `--status` to force show it. In fullscreen mode the status bar is hidden by default
 ```
-cargo pixel r mdpt wg -r -f                # fullscreen, status bar hidden
-cargo pixel r mdpt wg -r                   # windowed, status bar shown
+cargo pixel r mdpt g -r -f                # fullscreen, status bar hidden
+cargo pixel r mdpt g -r                   # windowed, status bar shown
 ```
 - Optimized web mode: canvas auto-fits browser window with proper aspect ratio
 - Improved pie chart and bar chart rendering
@@ -98,7 +100,7 @@ cargo pixel r mdpt wg -r                   # windowed, status bar shown
 - Added CJK character support in GPU texture atlas
 - Fixed command line argument parsing for project path and app-specific args
 ```
-cargo pixel r mdpt wg -r apps/mdpt/ demo.md
+cargo pixel r mdpt g -r apps/mdpt/ demo.md
 ```
 
 ---
@@ -135,7 +137,7 @@ Unlike terminal-based presenters (presenterm, slides), MDPT:
 ### Usage
 
 ```bash
-cargo pixel r mdpt wg -r . assets/demo.md  # WGPU mode
+cargo pixel r mdpt g -r . assets/demo.md  # WGPU mode
 cargo pixel r mdpt t -r . assets/demo.md   # Terminal mode
 cargo pixel r mdpt w -r                    # Web mode
 ```
@@ -410,7 +412,7 @@ cargo pixel
 # 1.0.0
 - Added wgpu render backend
 ```
-cargo pixel r petview wg -r   # wgpu backend (winit + wgpu)
+cargo pixel r petview g -r   # wgpu backend (winit + wgpu)
 cargo pixel r petview g -r    # glow backend (winit + opengl)
 cargo pixel r petview s -r    # sdl backend (sdl2 + opengl)
 cargo pixel r petview w -r    # web backend (wasm + webgl)

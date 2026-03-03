@@ -1,5 +1,7 @@
 # MSDF/SDF Text Rendering in RustPixel
 
+> **Historical Note**: This document describes the MSDF/SDF approach used in v2.1.1 ~ v2.3.0. As of v2.4.0, this has been replaced by **Texture2DArray with 3-level mipmaps** for better quality and simpler architecture. See `doc/architecture.md` for the current implementation.
+
 ## Background
 
 RustPixel uses a single texture atlas for all rendering. In the 8192x8192 atlas, four regions coexist:
