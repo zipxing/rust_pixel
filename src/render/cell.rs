@@ -149,8 +149,19 @@ pub fn detect_tui_char_type(symbol: &str) -> TuiCharType {
 pub fn is_prerendered_emoji(symbol: &str) -> bool {
     if let Some(ch) = symbol.chars().next() {
         let cp = ch as u32;
-        // Emoji range check
-        if (0x1F600..=0x1FAFF).contains(&cp) {
+        // Emoji Unicode ranges:
+        // - U+1F000-U+1FAFF: Main emoji block (emoticons, symbols, hands 👉, etc.)
+        // - U+2300-U+23FF: Miscellaneous Technical (⏰⌛ etc.)
+        // - U+2600-U+26FF: Miscellaneous Symbols (⚓⚡⚽⛵ etc.)
+        // - U+2700-U+27BF: Dingbats (✅✌✏ etc.)
+        // - U+2B00-U+2BFF: Miscellaneous Symbols and Arrows (⭐⬛⬜ etc.)
+        let is_emoji_range = (0x1F000..=0x1FAFF).contains(&cp)
+            || (0x2300..=0x23FF).contains(&cp)
+            || (0x2600..=0x26FF).contains(&cp)
+            || (0x2700..=0x27BF).contains(&cp)
+            || (0x2B00..=0x2BFF).contains(&cp);
+
+        if is_emoji_range {
             #[cfg(graphics_mode)]
             {
                 return get_layered_symbol_map()

@@ -328,6 +328,8 @@ impl WgpuSymbolRenderer {
         is_bold: bool,
     ) {
         if self.instance_count >= self.max_instances { return; }
+        // Skip rendering for missing/unknown symbols (mip size is 0)
+        if mip.w <= 0.0 || mip.h <= 0.0 { return; }
 
         let origin_x = if is_bold { -1.0_f32 } else { 1.0 };
         let origin_y = 1.0_f32; // No MSDF flag in layered mode
@@ -374,6 +376,8 @@ impl WgpuSymbolRenderer {
         glow_scale: f32,
     ) {
         if self.instance_count >= self.max_instances { return; }
+        // Skip rendering for missing/unknown symbols (mip size is 0)
+        if mip.w <= 0.0 || mip.h <= 0.0 { return; }
 
         let origin_x = if is_bold { -1.0_f32 } else { 1.0 };
         let origin_y = 1.0_f32;

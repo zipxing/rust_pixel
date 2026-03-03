@@ -76,7 +76,7 @@
 use crate::{
     render::{
         buffer::Buffer,
-        cell::{cellsym_block, decode_pua, is_prerendered_emoji},
+        cell::{cellsym_block, decode_pua},
         sprite::Layer,
         style::{Color, Modifier},
         symbol_map::{get_layered_symbol_map, Tile},
@@ -1608,7 +1608,7 @@ pub fn render_buffer_to_cells<F>(
 
         // Apply alpha to colors
         // For pre-rendered Emoji in TUI mode, use white (no color modulation)
-        let fc = if use_tui && is_prerendered_emoji(&cell.symbol) {
+        let fc = if use_tui && tile.is_emoji {
             (255, 255, 255, alpha)
         } else {
             let mut rgba = fg.get_rgba();

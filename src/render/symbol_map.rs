@@ -61,6 +61,8 @@ pub struct Tile {
     pub cell_w: u8,
     /// Cell height in grid units (1 for single-height, 2 for tall chars like TUI/CJK/Emoji)
     pub cell_h: u8,
+    /// True if this is a pre-rendered emoji (should not apply color modulation)
+    pub is_emoji: bool,
     /// 3 mipmap levels: [Level 0 (high), Level 1 (mid), Level 2 (low)]
     pub mips: [MipUV; 3],
 }
@@ -69,6 +71,7 @@ pub struct Tile {
 const DEFAULT_TILE: Tile = Tile {
     cell_w: 1,
     cell_h: 1,
+    is_emoji: false,
     mips: [MipUV { layer: 0, x: 0.0, y: 0.0, w: 0.0, h: 0.0 }; 3],
 };
 
@@ -272,7 +275,23 @@ impl LayeredSymbolMap {
                 }
             }
 
-            symbols.insert(key.clone(), Tile { cell_w, cell_h, mips });
+            // Determine if this symbol is an emoji (should not apply color modulation)
+            let is_emoji = key.chars().next().map_or(false, |ch| {
+                let cp = ch as u32;
+                // Emoji Unicode ranges:
+                // - U+1F000-U+1FAFF: Main emoji block (emoticons, symbols, hands, etc.)
+                // - U+2300-U+23FF: Miscellaneous Technical (⏰⌛ etc.)
+                // - U+2600-U+26FF: Miscellaneous Symbols (⚓⚡⚽⛵ etc.)
+                // - U+2700-U+27BF: Dingbats (✅✌✏ etc.)
+                // - U+2B00-U+2BFF: Miscellaneous Symbols and Arrows (⭐⬛⬜ etc.)
+                (0x1F000..=0x1FAFF).contains(&cp)
+                    || (0x2300..=0x23FF).contains(&cp)
+                    || (0x2600..=0x26FF).contains(&cp)
+                    || (0x2700..=0x27BF).contains(&cp)
+                    || (0x2B00..=0x2BFF).contains(&cp)
+            });
+
+            symbols.insert(key.clone(), Tile { cell_w, cell_h, is_emoji, mips });
 
             // Build reverse mapping: symbol → (block, idx)
             if let Some(ch) = key.chars().next() {
@@ -281,7 +300,13 @@ impl LayeredSymbolMap {
                     reverse.insert(key.clone(), (block, idx));
                 } else {
                     let cp = ch as u32;
-                    if (0x1F600..=0x1FAFF).contains(&cp) {
+                    // Use same emoji range check for reverse mapping
+                    let is_emoji_cp = (0x1F000..=0x1FAFF).contains(&cp)
+                        || (0x2300..=0x23FF).contains(&cp)
+                        || (0x2600..=0x26FF).contains(&cp)
+                        || (0x2700..=0x27BF).contains(&cp)
+                        || (0x2B00..=0x2BFF).contains(&cp);
+                    if is_emoji_cp {
                         // Emoji range → block 170+
                         let block = 170 + (emoji_count / 128) as u8;
                         let idx = (emoji_count % 128) as u8;

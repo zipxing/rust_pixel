@@ -84,11 +84,12 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
     // Find input files
     let script_dir = find_symbols_dir();
     if script_dir.is_none() {
-        eprintln!("Error: Cannot find tools/symbols_py directory");
+        eprintln!("Error: Cannot find tools/symbols directory");
         return;
     }
     let script_dir = script_dir.unwrap();
 
+    println!("\nResource directory: {}", script_dir.display());
     println!("\nChecking input files...");
 
     // Check C64 source files
@@ -104,24 +105,24 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
             eprintln!("Error: Cannot find {}", src.display());
             return;
         }
-        println!("  ✓ {}", src.file_name().unwrap().to_string_lossy());
+        println!("  ✓ {}", src.display());
     }
 
     // Check TUI file
     let tui_path = script_dir.join("tui.txt");
     if !tui_path.exists() {
-        eprintln!("Error: Cannot find tui.txt");
+        eprintln!("Error: Cannot find {}", tui_path.display());
         return;
     }
-    println!("  ✓ tui.txt");
+    println!("  ✓ {}", tui_path.display());
 
     // Check CJK file (optional)
     let cjk_path = script_dir.join("3500C.txt");
     let has_cjk = cjk_path.exists();
     if has_cjk {
-        println!("  ✓ 3500C.txt");
+        println!("  ✓ {}", cjk_path.display());
     } else {
-        println!("  ⚠ 3500C.txt (optional, not found)");
+        println!("  ⚠ {} (optional, not found)", cjk_path.display());
     }
 
     // Parse input files
@@ -218,18 +219,18 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
     println!("  CJK: {}", cjk_bitmaps.len());
     println!("\nOutput files:");
     for i in 0..pack_result.layers.len() {
-        println!("  layers/layer_{}.png", i);
+        println!("  {}", layers_dir.join(format!("layer_{}.png", i)).display());
     }
-    println!("  layered_symbol_map.json");
+    println!("  {}", json_path.display());
 }
 
-/// Find the tools/symbols_py directory (contains input data files: tui.txt, 3500C.txt, c64*.png)
+/// Find the tools/symbols directory (contains input data files: tui.txt, 3500C.txt, c64*.png)
 fn find_symbols_dir() -> Option<std::path::PathBuf> {
     // Try current directory first
     let cwd = std::env::current_dir().ok()?;
 
     // Check if we're in rust_pixel root
-    let symbols_dir = cwd.join("tools/symbols_py");
+    let symbols_dir = cwd.join("tools/symbols");
     if symbols_dir.exists() {
         return Some(symbols_dir);
     }
@@ -237,7 +238,7 @@ fn find_symbols_dir() -> Option<std::path::PathBuf> {
     // Check parent directories
     let mut dir = cwd.as_path();
     while let Some(parent) = dir.parent() {
-        let symbols_dir = parent.join("tools/symbols_py");
+        let symbols_dir = parent.join("tools/symbols");
         if symbols_dir.exists() {
             return Some(symbols_dir);
         }
