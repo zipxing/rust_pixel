@@ -1,251 +1,249 @@
-# Crisp Text at Any Scale in a Pixel Art Engine: From SDF to Mipmaps
-# 像素引擎里的清晰文字：从 SDF 到 Mipmap 的实战之路
+# SDF Looked Worse Than Bitmaps — How We Fixed Text Rendering in a Pixel Engine
+# SDF 竟然不如位图好看——我们怎么修好了像素引擎的文字渲染
 
 ---
 
-*[RustPixel](https://github.com/zipxing/rust_pixel) is a Rust 2D game engine with a unique twist: it renders everything — pixel art sprites, TUI text, CJK characters, emoji — through a single instanced draw call. One of its flagship apps is MDPT, a fullscreen Markdown presentation tool that blends pixel aesthetics with readable text. This is the story of how we solved its hardest rendering problem.*
+*[RustPixel](https://github.com/zipxing/rust_pixel) is a Rust 2D game engine that renders pixel sprites, TUI text, CJK characters, and emoji in a single instanced draw call. When we needed crisp text at fullscreen 4K, we reached for SDF — the "correct" solution. It made things worse.*
 
-*[RustPixel](https://github.com/zipxing/rust_pixel) 是一个 Rust 2D 游戏引擎，有个独特之处：它用单次实例化 draw call 渲染所有内容——像素精灵、TUI 文字、中文字符、Emoji。其旗舰应用 MDPT 是一个全屏 Markdown 演示工具，把像素美学和可读文字融为一体。这是我们解决其中最难的渲染问题的故事。*
-
----
-
-## The Challenge: Pixel Art + Readable Text in One Draw Call / 挑战：一次 Draw Call 搞定像素美术 + 可读文字
-
-Here's what makes RustPixel unusual: a single frame might contain C64-style 16×16 pixel sprites, box-drawing characters, Nerd Font icons, Chinese text rendered in PingFang SC, and color emoji — all from one texture, all in one draw call.
-
-RustPixel 的独特之处在于：一帧画面里可能同时有 C64 风格 16×16 像素精灵、制表符、Nerd Font 图标、苹方渲染的中文、彩色 Emoji——全部来自一张纹理，一次 draw call。
-
-In a normal pixel art game, you'd just render everything as bitmaps. But MDPT changes the equation: it's a **fullscreen presentation tool**. When you go fullscreen on a 4K display, a TUI cell originally designed at 32×64 pixels gets magnified 4–8×. Pixel art sprites look intentionally chunky at that scale — that's the aesthetic. But text? Text just looks blurry and broken.
-
-在普通像素游戏里，所有东西都用位图渲染就行。但 MDPT 改变了这个等式：它是一个**全屏演示工具**。当你在 4K 显示器上全屏时，原本 32×64 像素的 TUI 字符格子要放大 4-8 倍。像素精灵在这个缩放下看起来是故意的粗粝感——那是美学。但文字？文字就是糊了。
-
-**The core tension: pixel sprites should stay pixelated, but text should stay crisp. Same texture. Same shader. Same draw call.**
-
-**核心矛盾：像素精灵应该保持像素感，但文字应该保持清晰。同一张纹理，同一个着色器，同一次 draw call。**
+*[RustPixel](https://github.com/zipxing/rust_pixel) 是一个 Rust 2D 游戏引擎，用单次实例化 draw call 渲染像素精灵、TUI 文字、中文和 Emoji。当我们需要全屏 4K 下的清晰文字时，选了 SDF——"正确"的方案。结果更糟了。*
 
 ---
 
-## Attempt 1: SDF/MSDF (v2.1 – v2.3) / 方案一：SDF/MSDF（v2.1 – v2.3）
+## The Setup / 背景
 
-The textbook answer for resolution-independent text is Signed Distance Fields. We implemented a hybrid approach:
+RustPixel's rendering is simple by design: one texture atlas, one instanced draw call, all symbols. Pixel sprites (C64-style 16×16), box-drawing characters, Nerd Font icons, PingFang SC Chinese text, Apple Color Emoji — all packed into one atlas, all rendered together.
 
-教科书式的分辨率无关文字方案是签名距离场。我们实现了混合方案：
+RustPixel 的渲染设计上就简单：一张纹理图集，一次实例化 draw call，所有符号。像素精灵（C64 风格 16×16）、制表符、Nerd Font 图标、苹方中文、Apple Color Emoji——全部打包进一张图集，一起渲染。
 
-- **TUI characters**: True MSDF via `msdfgen` — sharp corners preserved
-- **CJK (PingFang SC)**: Bitmap-to-SDF via `scipy` — Apple locks the glyph outlines
-- **Sprites & Emoji**: Regular bitmaps — pixel art should stay pixelated
+Then we built MDPT — a fullscreen Markdown presentation tool. A TUI cell at 32×64 pixels gets blown up 4–8× on a 4K display. Bitmap text goes blurry. We needed a solution.
 
-- **TUI 字符**：用 `msdfgen` 生成真 MSDF——保留尖角
-- **CJK（苹方）**：位图转 SDF，用 `scipy`——苹果锁了字形轮廓
-- **精灵 & Emoji**：普通位图——像素美术就该有像素感
+然后我们做了 MDPT——一个全屏 Markdown 演示工具。32×64 像素的 TUI 字符格子在 4K 显示器上放大 4-8 倍，位图文字就糊了。我们需要一个解决方案。
 
-We packed everything into an 8192×8192 atlas with four rendering regions, and the fragment shader branched per-fragment:
+---
 
-所有东西打包进 8192×8192 的图集，四个渲染区域，片段着色器逐片段分支：
+## SDF: The "Right" Answer That Wasn't / SDF："正确"的方案，但并不正确
+
+Every text rendering tutorial will tell you: use Signed Distance Fields. Resolution-independent. Crisp at any scale. So we did:
+
+每篇文字渲染教程都会告诉你：用签名距离场。分辨率无关，任何缩放都清晰。于是我们照做了：
+
+- **TUI characters**: True MSDF via `msdfgen` — 3-channel distance fields with sharp corners
+- **CJK (PingFang SC)**: Bitmap→SDF via `scipy.ndimage.distance_transform_edt` (Apple locks the glyph outlines in `.ttc`)
+- **Sprites & Emoji**: Regular bitmaps
+
+- **TUI 字符**：用 `msdfgen` 生成真 MSDF——三通道距离场，保留尖角
+- **CJK（苹方）**：位图→SDF 转换，用 `scipy.ndimage.distance_transform_edt`（苹果把字形轮廓锁在 `.ttc` 里）
+- **精灵 & Emoji**：普通位图
+
+Everything in one 8192×8192 atlas, fragment shader branching per-fragment:
+
+所有东西放进一张 8192×8192 的图集，片段着色器逐片段分支：
 
 ```wgsl
 if (v_msdf > 0.5) {
-    // Distance field path: math-based edge reconstruction
     let d = median3(texColor.r, texColor.g, texColor.b);
-    let alpha = smoothstep(0.5 - fwidth(d), 0.5 + fwidth(d), d);
+    let w = max(fwidth(d), 0.03);
+    let alpha = smoothstep(0.5 - w, 0.5 + w, d);
     output.color = vec4(fg_color.rgb, alpha);
 } else {
-    // Bitmap path: direct texture sampling
     output.color = texColor * instance_color;
 }
 ```
 
-The MSDF flag was cleverly encoded in the sign bit of `origin_y` — zero extra memory per instance.
+### The Problem: SDF Looked Bad / 问题：SDF 看起来更差
 
-MSDF 标记巧妙地编码在 `origin_y` 的符号位里——每个实例零额外内存。
+Here's the part nobody tells you in the tutorials: **the SDF anti-aliasing path actually produced worse results than direct bitmap rendering.**
 
-**It worked.** Text was crisp at any zoom. But after several months in production...
+教程里没人告诉你的部分来了：**SDF 的抗锯齿路径实际产生的效果比直接位图渲染更差。**
 
-**它工作了。** 文字在任何缩放下都清晰。但在生产环境跑了几个月后……
+The `median3() + smoothstep()` pipeline introduced two artifacts at scale boundaries:
 
----
+`median3() + smoothstep()` 管线在缩放边界处引入了两种瑕疵：
 
-## Why SDF Didn't Work For Us / 为什么 SDF 对我们不适用
+1. **Blur** — The anti-aliasing smoothing, when applied across scaled-up distance field texels, created a soft haze around character edges instead of clean lines. At 4–8× magnification, this was obvious.
+2. **Fringing** — At certain scale transitions, the multi-channel reconstruction produced color fringing artifacts at corners and thin strokes.
 
-### The dual-path problem / 双路径问题
+1. **模糊** — 抗锯齿平滑作用在放大后的距离场纹素上，在字符边缘产生一层柔和的雾气，而不是干净的线条。在 4-8 倍放大下非常明显。
+2. **毛刺** — 在某些缩放过渡处，多通道重建在拐角和细笔画处产生颜色毛刺。
 
-Every rendering feature needed two implementations. Bold text? MSDF bold lowers the distance threshold from 0.5 to 0.45. Bitmap bold samples neighboring texels. Two completely different algorithms for the same visual feature. Bugs loved this.
+The irony: we adopted SDF specifically for better quality at large scales. **It delivered worse quality than the bitmaps we were trying to improve.**
 
-每个渲染特性都需要两套实现。粗体？MSDF 粗体把距离阈值从 0.5 降到 0.45，位图粗体采样相邻纹素。同一个视觉效果的两种完全不同的算法。Bug 最喜欢这种了。
+讽刺的是：我们采用 SDF 就是为了大缩放下更好的质量。**结果它比我们想改善的位图质量更差。**
 
-### The CJK compromise / CJK 的妥协
+### The CJK Double Whammy / CJK 的双重打击
 
-Real MSDF needs vector glyph outlines. PingFang SC — the best CJK font on macOS — hides its outlines inside Apple's `.ttc` format. Our fallback was `bitmap → distance_transform_edt → SDF`, which looked *okay* but lost the sharp edge quality that justified using SDF in the first place. One atlas, three quality tiers. Not great.
+It got worse for Chinese text. Real MSDF requires vector glyph outlines, but PingFang SC hides its outlines inside Apple's `.ttc` format. Our fallback — `bitmap → EDT → SDF` — lost edge sharpness in the distance transform step. So CJK text had SDF artifacts *plus* reduced source quality. One atlas, three quality tiers (MSDF → okay, bitmap-SDF → poor, bitmap → at least honest). Not a good look.
 
-真正的 MSDF 需要矢量字形轮廓。苹方——macOS 上最好的中文字体——把轮廓藏在苹果的 `.ttc` 格式里。我们的退路是 `位图 → distance_transform_edt → SDF`，效果*还行*但丢失了用 SDF 的初衷——清晰的边缘质量。一张图集，三个质量档次。不太行。
+中文更糟。真正的 MSDF 需要矢量字形轮廓，但苹方把轮廓藏在苹果的 `.ttc` 格式里。我们的退路——`位图 → EDT → SDF`——在距离变换步骤中丢失了边缘锐度。所以中文字有 SDF 的瑕疵 *加上* 源质量降低。一张图集，三个质量档次（MSDF → 还行、位图-SDF → 差、位图 → 至少诚实）。
 
-### The toolchain friction / 工具链摩擦
+### And It Wasted 256MB / 而且浪费了 256MB
 
-Generating the atlas required Python 3 + scipy + Pillow + the `msdfgen` C++ binary. For a Rust engine, asking contributors to install a Python scientific computing stack plus a C++ tool felt wrong.
+The 8192×8192 atlas (256MB uncompressed RGBA) loaded fully into GPU memory even if an app only used a handful of sprite blocks + TUI characters. Most RustPixel apps use maybe 5% of the symbols in the atlas.
 
-生成图集需要 Python 3 + scipy + Pillow + `msdfgen` C++ 二进制。对于一个 Rust 引擎，让贡献者安装 Python 科学计算栈加 C++ 工具，这不对。
-
-### The 8192×8192 limit / 8192×8192 的限制
-
-To fit ~48,000 symbols with SDF padding, we needed an 8192×8192 atlas (256MB uncompressed). Some mobile GPUs and older WebGL implementations choke on textures this large.
-
-为了放下约 48000 个符号加 SDF 边距，我们需要 8192×8192 的图集（未压缩 256MB）。部分移动端 GPU 和旧版 WebGL 处理不了这么大的纹理。
+8192×8192 的图集（256MB 未压缩 RGBA）全量加载进 GPU 内存，即使一个 app 只用了几组精灵 + TUI 字符。大部分 RustPixel app 大概只用到图集里 5% 的符号。
 
 ---
 
-## The Insight / 顿悟
+## The Fix: Just Use Better Bitmaps / 修复：直接用更好的位图
 
-We stepped back and looked at what MDPT actually does. The screenshots tell the story: pixel sprites, formatted text, code blocks, CJK, emoji — all coexisting on screen. The display size range is known: from small windows (~720p) to fullscreen 4K. We don't need infinite mathematical scalability. We need "good enough at 3-4 sizes."
+We overthought this. The actual solution is embarrassingly simple: **if bitmaps look better than SDF, just use higher-resolution bitmaps.**
 
-我们退后一步，看了看 MDPT 实际在做什么。截图说明一切：像素精灵、格式化文字、代码块、中文、Emoji——全部共存在屏幕上。显示尺寸范围是已知的：从小窗口（~720p）到全屏 4K。我们不需要无限的数学可伸缩性，我们需要的是"在 3-4 个尺寸下足够好"。
+我们想多了。实际方案简单到令人尴尬：**如果位图比 SDF 好看，那就用更高分辨率的位图。**
 
-**The simplest solution: pre-render every symbol at multiple resolutions and pick the right one at render time.**
+### 3-Level Mipmap + Texture2DArray / 三级 Mipmap + Texture2DArray
 
-**最简单的方案：把每个符号预渲染成多个分辨率，渲染时选对的那个。**
+Pre-render every symbol at 3 resolutions. Let the engine pick the right one:
 
----
+每个符号预渲染 3 个分辨率。让引擎选对的那个：
 
-## The Mipmap Solution (v2.4+) / Mipmap 方案（v2.4+）
+| Symbol Type / 符号类型 | High (mip0) | Mid (mip1) | Low (mip2) |
+|------------------------|-------------|-------------|------------|
+| Sprite | 64×64 | 32×32 | 16×16 |
+| TUI / Braille | 64×128 | 32×64 | 16×32 |
+| Emoji | 128×128 | 64×64 | 32×32 |
+| CJK | 128×128 | 64×64 | 32×32 |
 
-### Texture2DArray with 3-level mipmaps / 三级 Mipmap 的 Texture2DArray
+Selection is dead simple — based on actual pixel size per cell:
 
-Instead of one giant 8192×8192 atlas, we use a `Texture2DArray` of multiple 4096×4096 layers. Each symbol is pre-rendered at 3 resolutions:
-
-不再用一张巨大的 8192×8192 图集，而是用多个 4096×4096 层的 `Texture2DArray`。每个符号预渲染 3 个分辨率：
+选择逻辑极其简单——基于每个格子的实际像素尺寸：
 
 | Render Size / 渲染尺寸 | Mip Level | Scene / 场景 |
 |------------------------|-----------|-------------|
-| ≥ 48 px/unit | mip0 (high) | Fullscreen 4K / 全屏 4K |
-| ≥ 24 px/unit | mip1 (mid) | Normal window / 普通窗口 |
-| < 24 px/unit | mip2 (low) | Small window, thumbnails / 小窗口 |
+| ≥ 48 px/unit | mip0 | Fullscreen 4K / 全屏 4K |
+| ≥ 24 px/unit | mip1 | Normal window / 普通窗口 |
+| < 24 px/unit | mip2 | Small window / 小窗口 |
+
+Pack them into a `Texture2DArray` of multiple 4096×4096 layers instead of one massive 8192×8192 atlas:
+
+打包进多张 4096×4096 层的 `Texture2DArray`，取代一张巨大的 8192×8192 图集：
 
 ```rust
 pub struct Tile {
     pub cell_w: u8,       // 1=normal, 2=wide (CJK/Emoji)
-    pub cell_h: u8,       // 1=single, 2=tall (TUI/CJK)
+    pub cell_h: u8,       // 1=single, 2=tall
     pub is_emoji: bool,   // Color emoji — no tint
     pub mips: [MipUV; 3], // UV coords for each mip level
 }
 ```
 
-The engine selects the mip level based on actual pixel size per cell. No shader branching. No distance field math. Just pick the right pre-rendered bitmap:
+### The Shader Got Stupid Simple / 着色器变得傻瓜式简单
 
-引擎根据每个格子的实际像素尺寸选择 mip 级别。没有着色器分支，没有距离场数学，只是选对预渲染好的位图：
+Before (SDF era):
+之前（SDF 时代）：
 
 ```wgsl
-// That's the entire fragment shader for ALL symbol types
+// 12 lines of branching, median3, smoothstep, fwidth...
+if (v_msdf > 0.5) {
+    let d = median3(texColor.r, texColor.g, texColor.b);
+    let w = max(fwidth(d), 0.03);
+    let alpha = smoothstep(0.5 - w, 0.5 + w, d);
+    // ... bold path A ...
+} else {
+    // ... bold path B ...
+}
+```
+
+After (mipmap era):
+之后（mipmap 时代）：
+
+```wgsl
 let texColor = textureSample(t_texture, s_sampler, uv, layer);
 output.color = texColor * instance_color;
 ```
 
-**Sprites, TUI glyphs, CJK, emoji — all the same code path. One draw call. No branching.**
+Same path for sprites, TUI, CJK, emoji. No branching. One draw call.
 
-**精灵、TUI 字形、CJK、Emoji——全部走同一条代码路径。一次 draw call，无分支。**
+精灵、TUI、CJK、Emoji 走同一条路径。无分支。一次 draw call。
 
-### Pure Rust toolchain / 纯 Rust 工具链
+### Memory: 48–80MB vs 256MB / 内存：48-80MB vs 256MB
 
-The texture generator is now a Rust tool using macOS CoreText bindings directly:
+A typical app loads 3–5 layers = 48–80MB, vs the old 256MB monolithic atlas. Apps that only use sprites + TUI can skip the CJK/emoji layers entirely.
 
-纹理生成器现在是 Rust 工具，直接用 macOS CoreText 绑定：
+典型 app 加载 3-5 层 = 48-80MB，对比旧的 256MB 单体图集。只用精灵 + TUI 的 app 可以完全跳过 CJK/Emoji 层。
+
+### Pure Rust Toolchain / 纯 Rust 工具链
+
+The old pipeline: Python 3 + scipy + Pillow + `msdfgen` C++ binary. 800+ lines of Python orchestrating external tools.
+
+旧管线：Python 3 + scipy + Pillow + `msdfgen` C++ 二进制。800 多行 Python 调度外部工具。
+
+The new pipeline:
+
+新管线：
 
 ```bash
 cargo pixel symbols -o assets/pix
 ```
 
-No Python. No scipy. No external binaries. It uses DP shelf-packing to optimally fit symbols into 4096×4096 layers, and outputs a compact JSON symbol map (~375KB) mapping every symbol to its 3-level mip UV coordinates.
+Pure Rust. macOS CoreText for font rendering. DP shelf-packing for optimal layer utilization. Outputs `layers/layer_N.png` + `layered_symbol_map.json` (~375KB).
 
-没有 Python，没有 scipy，没有外部二进制。用 DP 货架打包算法最优地把符号装进 4096×4096 的层，输出一个紧凑的 JSON 符号映射（~375KB），每个符号对应三级 mip 的 UV 坐标。
+纯 Rust。macOS CoreText 渲染字体。DP 货架打包最优化层利用率。输出 `layers/layer_N.png` + `layered_symbol_map.json`（~375KB）。
 
 ---
 
-## What Changed — Side by Side / 前后对比
+## Side by Side / 对比
 
-| | SDF/MSDF (v2.3) | Mipmap (v2.4+) |
+| | SDF/MSDF | Mipmap Bitmap |
 |---|---|---|
-| **Max texture** | 8192×8192 (single) | 4096×4096 × ~15 layers |
-| **Fragment shader** | Dual path (SDF + bitmap) | Single path (bitmap only) |
-| **CJK quality** | Acceptable (bitmap→SDF) | Good (native CoreText) |
-| **Scaling** | Infinite (math) | 3 discrete levels |
-| **Toolchain** | Python + scipy + msdfgen | Pure Rust (`cargo pixel symbols`) |
-| **Draw calls** | 1 | 1 |
+| **Text quality at 4-8×** | Blur + fringing | Crisp (native rendering) |
+| **CJK quality** | Poor (bitmap→EDT→SDF) | Good (CoreText direct) |
+| **Max texture** | 8192×8192 (256MB) | 4096×4096 × N layers |
+| **Typical memory** | 256MB (all or nothing) | 48–80MB (load what you need) |
+| **Fragment shader** | Dual path + median3 | Single path |
 | **Bold** | 2 implementations | 1 implementation |
-| **WebGL compat** | ⚠️ 8K texture limit | ✅ 4K layers |
+| **Toolchain** | Python + scipy + msdfgen | `cargo pixel symbols` |
+| **Draw calls** | 1 | 1 |
+| **Scaling** | Infinite (math) | 3 discrete levels (sufficient) |
 | **Rendering bugs since switch** | — | 0 |
 
 ---
 
 ## The Pixel Art Factor / 像素美术的因素
 
-Here's something specific to pixel art engines that general-purpose text rendering articles don't cover:
+In a pixel art engine, SDF's core value proposition — smooth edges at any scale — actually **conflicts with the aesthetic**. Pixel sprites are *supposed* to look chunky when scaled up. You end up needing a dual-path shader specifically to *prevent* SDF from smoothing your intentionally pixelated content.
 
-有个像素美术引擎特有的点，通用文字渲染文章不会提到：
+在像素引擎里，SDF 的核心价值——任何缩放下的平滑边缘——实际上**与美学冲突**。像素精灵在放大时*就应该*看起来粗粝。你需要双路径着色器专门来*阻止* SDF 平滑你故意做成像素风的内容。
 
-**Pixel sprites WANT to be pixelated.** That's the whole aesthetic. When a C64-style character is magnified 8×, those chunky pixels are a feature, not a bug. SDF's "smooth at any scale" philosophy actively fights against this — you end up needing the dual-path shader specifically to *prevent* SDF from "improving" your pixel art.
+With mipmaps, the intent is encoded in the content itself: pixel sprites use the same low-res bitmap at all mip levels (staying chunky), while text symbols have progressively higher-resolution bitmaps (staying crisp). Same texture array, same shader, same draw call.
 
-**像素精灵就是要有像素感的。** 这就是美学。当 C64 风格的角色放大 8 倍时，那些粗粝的像素是特性而非缺陷。SDF 的"任何缩放下都平滑"的理念恰好与此对立——你需要双路径着色器，专门来*阻止* SDF "改善"你的像素美术。
-
-With mipmaps, the solution is natural: pixel sprites have the same bitmap at all 3 mip levels (or just mip2). They stay chunky. Text symbols have progressively higher-resolution bitmaps. They stay crisp. Same texture array, same shader, same draw call — but the content itself encodes the intent.
-
-用 mipmap，解决方案很自然：像素精灵在 3 个 mip 级别用相同的位图（或只用 mip2），保持粗粝。文字符号有逐级更高分辨率的位图，保持清晰。同一个纹理数组、同一个着色器、同一次 draw call——但内容本身编码了意图。
+用 mipmap，意图编码在内容本身：像素精灵在所有 mip 级别用相同的低分辨率位图（保持粗粝），文字符号有逐级更高分辨率的位图（保持清晰）。同一个纹理数组、同一个着色器、同一次 draw call。
 
 ---
 
-## Honest Tradeoffs / 诚实的取舍
+## What We Actually Lost / 我们实际失去了什么
 
-**What we gave up:**
+**Infinite scalability.** SDF gives mathematically perfect edges at any scale. Our 3 mip levels cover 720p through 4K. If someone runs MDPT on an 8K display, mip0 still looks good, but it's not mathematically perfect. We're okay with that.
 
-**我们放弃了什么：**
+**无限可伸缩性。** SDF 在任何缩放下给出数学上完美的边缘。我们的 3 级 mip 覆盖 720p 到 4K。如果有人在 8K 显示器上跑 MDPT，mip0 仍然好看，但不是数学上完美。我们接受这个。
 
-- **Infinite scalability.** If someone runs MDPT on an 8K display, mip0 at 48+ px/unit is still good, but not mathematically perfect. We're okay with that — our target is 720p to 4K.
-- **Memory efficiency at extreme scales.** We store 3 copies of every symbol. In practice, total memory is similar because SDF needed larger cells for distance field padding, and our DP packing is tighter.
-- **The cool factor.** "We use multi-channel signed distance fields" sounds way more impressive at conferences than "we pre-render at 3 sizes."
+**The cool factor.** "We use multi-channel signed distance fields" sounds impressive at conferences. "We pre-render bitmaps at 3 sizes" does not.
 
-- **无限可伸缩性。** 如果有人在 8K 显示器上跑 MDPT，mip0 在 48+ px/unit 下仍然很好，但不是数学上完美的。我们接受——目标是 720p 到 4K。
-- **极端缩放下的内存效率。** 我们存了每个符号的 3 个副本。但实际总内存差不多，因为 SDF 需要更大的格子放距离场边距，而我们的 DP 打包更紧凑。
-- **炫酷因素。** "我们用多通道签名距离场"在会议上听着比"我们预渲染 3 个尺寸"帅多了。
-
-**What we gained:**
-
-**我们获得了什么：**
-
-- Zero rendering bugs since the switch
-- A fragment shader anyone can understand in 5 seconds
-- A Rust-native toolchain that `cargo` can build
-- Better CJK quality (native font rendering > mathematical approximation)
-- Smaller max texture size (4K vs 8K layers)
-- One rendering path for everything: sprites, text, CJK, emoji
-
-- 切换以来零渲染 Bug
-- 任何人 5 秒就能看懂的片段着色器
-- `cargo` 就能构建的 Rust 原生工具链
-- 更好的 CJK 质量（原生字体渲染 > 数学近似）
-- 更小的最大纹理尺寸（4K vs 8K 层）
-- 所有内容走一条渲染路径：精灵、文字、CJK、Emoji
+**炫酷因素。** "我们用多通道签名距离场"在会议上听着很帅。"我们把位图预渲染成 3 个尺寸"就不行。
 
 ---
 
 ## Takeaways / 总结
 
-1. **Know your actual scale range.** "Works at any scale" is seductive, but if your actual range is 720p–4K, discrete mipmaps are simpler and sufficient.
+1. **Test before you trust.** SDF is mathematically elegant. But `median3() + smoothstep()` on scaled-up distance field texels can produce worse results than a properly-sized bitmap. We should have compared actual render quality before committing to the SDF pipeline.
 
-2. **In pixel art engines, SDF fights your aesthetic.** You need a dual-path shader just to prevent SDF from smoothing your intentionally pixelated content. Mipmaps let the content itself carry the intent — pixel art stays chunky, text stays crisp.
+2. **"Best practice" isn't always best.** Every tutorial recommends SDF for resolution-independent text. For our case — a pixel engine with known display ranges and mixed content types — discrete mipmaps produced better visual quality with simpler code.
 
-3. **Toolchain is part of the architecture.** Replacing Python + scipy + C++ with `cargo pixel symbols` wasn't just convenience — it removed a class of contributor friction and CI complexity.
+3. **Memory matters.** 256MB GPU allocation for a texture atlas is a lot, especially when most apps use 5% of it. Texture2DArray lets you load only what you need.
 
-4. **Boring engineering wins.** Pre-rendering at 3 sizes isn't clever. It's reliable. We haven't touched the rendering pipeline since the switch.
-
----
-
-1. **了解你的实际缩放范围。** "任何缩放都能用"很诱人，但如果实际范围是 720p–4K，离散 mipmap 更简单且足够。
-
-2. **在像素引擎里，SDF 与你的美学对抗。** 你需要双路径着色器只是为了阻止 SDF 平滑你故意做成像素风的内容。Mipmap 让内容本身承载意图——像素美术保持粗粝，文字保持清晰。
-
-3. **工具链是架构的一部分。** 用 `cargo pixel symbols` 替换 Python + scipy + C++ 不只是方便——它消除了一整类贡献者摩擦和 CI 复杂度。
-
-4. **无聊的工程赢了。** 预渲染 3 个尺寸不聪明，但可靠。切换以来我们没碰过渲染管线。
+4. **Toolchain is architecture.** Replacing Python + scipy + C++ with `cargo pixel symbols` wasn't just convenience — it removed a class of build complexity and contributor friction.
 
 ---
 
-*RustPixel is open source: [github.com/zipxing/rust_pixel](https://github.com/zipxing/rust_pixel). MDPT and other apps are in the `apps/` directory.*
+1. **先测试再信任。** SDF 数学上很优雅。但 `median3() + smoothstep()` 作用在放大的距离场纹素上，可能比正确尺寸的位图效果更差。我们应该在投入 SDF 管线之前对比实际渲染质量。
 
-*RustPixel 是开源项目：[github.com/zipxing/rust_pixel](https://github.com/zipxing/rust_pixel)。MDPT 等应用在 `apps/` 目录。*
+2. **"最佳实践"不总是最佳的。** 每篇教程都推荐 SDF 做分辨率无关文字。对于我们的场景——一个有已知显示范围和混合内容类型的像素引擎——离散 mipmap 用更简单的代码产生了更好的视觉质量。
+
+3. **内存很重要。** 256MB GPU 分配给一张纹理图集很多，尤其当大部分 app 只用其中 5%。Texture2DArray 让你只加载需要的。
+
+4. **工具链就是架构。** 用 `cargo pixel symbols` 替换 Python + scipy + C++ 不只是方便——它消除了一整类构建复杂度和贡献者摩擦。
+
+---
+
+*RustPixel is open source: [github.com/zipxing/rust_pixel](https://github.com/zipxing/rust_pixel)*
+
+*RustPixel 是开源项目：[github.com/zipxing/rust_pixel](https://github.com/zipxing/rust_pixel)*
