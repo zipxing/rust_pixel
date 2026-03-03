@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # Winit + WGPU Adapter Implementation
 //!
@@ -92,6 +92,11 @@ pub struct WinitWgpuAdapter {
     original_ratio_y: f32,
     /// Whether ratio was overridden by maximize
     ratio_overridden: bool,
+
+    /// Original logical pixel size (before fullscreen override)
+    /// Used for letterboxing aspect ratio calculation
+    logical_content_w: f32,
+    logical_content_h: f32,
 }
 
 /// Winit + WGPU application event handler
@@ -366,6 +371,12 @@ impl ApplicationHandler for WinitWgpuAppHandler {
     }
 }
 
+impl Default for WinitWgpuAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WinitWgpuAdapter {
     pub fn new() -> Self {
         Self {
@@ -387,6 +398,8 @@ impl WinitWgpuAdapter {
             original_ratio_x: 1.0,
             original_ratio_y: 1.0,
             ratio_overridden: false,
+            logical_content_w: 0.0,
+            logical_content_h: 0.0,
         }
     }
 
@@ -459,42 +472,104 @@ impl WinitWgpuAdapter {
             scale_factor
         );
 
-        // For fullscreen mode: use physical screen size as canvas size
-        // This ensures SDF renders at native resolution instead of being stretched
-        let (canvas_w, canvas_h, ratio_x, ratio_y) = if game_config.fullscreen {
-            // Calculate new ratios so that:
-            // canvas_size = physical_size
-            // ratio = logical_size / physical_size
-            // This way each character renders at: sym_size / ratio = larger pixels
-            let logical_w = self.base.gr.pixel_w as f32;
-            let logical_h = self.base.gr.pixel_h as f32;
-            let phys_w = physical_size.width as f32;
-            let phys_h = physical_size.height as f32;
+        // Save original logical pixel size before fullscreen override (for letterboxing)
+        self.logical_content_w = self.base.gr.pixel_w as f32;
+        self.logical_content_h = self.base.gr.pixel_h as f32;
 
-            let new_ratio_x = logical_w / phys_w;
-            let new_ratio_y = logical_h / phys_h;
+        let logical_w = self.base.gr.pixel_w as f32;
+        let logical_h = self.base.gr.pixel_h as f32;
+        let phys_w = physical_size.width as f32;
+        let phys_h = physical_size.height as f32;
+        let orig_ratio_x = self.base.gr.ratio_x;
+        let orig_ratio_y = self.base.gr.ratio_y;
 
-            info!(
-                "Fullscreen SDF optimization: logical {}x{} -> physical {}x{}, ratio {:.3}x{:.3}",
-                logical_w, logical_h, phys_w, phys_h, new_ratio_x, new_ratio_y
-            );
+        log::info!("=== Window/Display Size Debug ===");
+        log::info!("  game_config.fullscreen = {}", game_config.fullscreen);
+        log::info!("  game_config.fullscreen_fit = {}", game_config.fullscreen_fit);
+        log::info!("  logical (pixel_w/h before override) = {}x{}", logical_w, logical_h);
+        log::info!("  physical (window inner_size) = {}x{}", phys_w, phys_h);
+        log::info!("  scale_factor = {:.2}", scale_factor);
+        log::info!("  original ratio_x={:.4}, ratio_y={:.4}", orig_ratio_x, orig_ratio_y);
+        log::info!("  logical_content saved = {}x{}", self.logical_content_w, self.logical_content_h);
 
-            // Update base ratios for input handling etc.
-            self.base.gr.ratio_x = new_ratio_x;
-            self.base.gr.ratio_y = new_ratio_y;
-            self.base.gr.pixel_w = physical_size.width;
-            self.base.gr.pixel_h = physical_size.height;
+        let (canvas_w, canvas_h, ratio_x, ratio_y, render_scale) = if game_config.fullscreen {
+            if game_config.fullscreen_fit {
+                // Fullscreen-fit mode: preserve aspect ratio (isotropic rendering).
+                // Use a canvas that matches the game's aspect ratio at max resolution.
+                // Letterboxing in the composition stage maps this to the physical screen.
+                let logical_aspect = logical_w / logical_h;
+                let phys_aspect = phys_w / phys_h;
 
-            // Update app_handler ratios (used for input event coordinate conversion)
-            if let Some(ref mut handler) = self.app_handler {
-                handler.ratio_x = new_ratio_x;
-                handler.ratio_y = new_ratio_y;
+                let (cw, ch) = if phys_aspect > logical_aspect {
+                    // Screen is wider than game: fit to height, pillarbox sides
+                    let ch = phys_h as u32;
+                    let cw = (phys_h * logical_aspect) as u32;
+                    (cw, ch)
+                } else {
+                    // Screen is taller than game: fit to width, letterbox top/bottom
+                    let cw = phys_w as u32;
+                    let ch = (phys_w / logical_aspect) as u32;
+                    (cw, ch)
+                };
+
+                // Uniform ratio: same for both axes → isotropic rendering
+                let uniform_ratio = logical_w / cw as f32;
+
+                log::info!("  [Fullscreen-FIT] logical_aspect={:.4}, phys_aspect={:.4}", logical_aspect, phys_aspect);
+                log::info!("  [Fullscreen-FIT] canvas={}x{}, uniform_ratio={:.6}", cw, ch, uniform_ratio);
+                log::info!("  [Fullscreen-FIT] render_scale=1.0");
+
+                self.base.gr.ratio_x = uniform_ratio;
+                self.base.gr.ratio_y = uniform_ratio;
+                self.base.gr.pixel_w = cw;
+                self.base.gr.pixel_h = ch;
+
+                if let Some(ref mut handler) = self.app_handler {
+                    handler.ratio_x = uniform_ratio;
+                    handler.ratio_y = uniform_ratio;
+                }
+
+                (cw, ch, uniform_ratio, uniform_ratio, 1.0)
+            } else {
+                // Fullscreen-stretch mode: fill entire screen (non-uniform ratio)
+                let new_ratio_x = logical_w / phys_w;
+                let new_ratio_y = logical_h / phys_h;
+
+                log::info!("  [Fullscreen-STRETCH] ratio_x={:.6}, ratio_y={:.6}", new_ratio_x, new_ratio_y);
+                log::info!("  [Fullscreen-STRETCH] canvas={}x{} (=physical)", physical_size.width, physical_size.height);
+                log::info!("  [Fullscreen-STRETCH] render_scale=1.0");
+
+                self.base.gr.ratio_x = new_ratio_x;
+                self.base.gr.ratio_y = new_ratio_y;
+                self.base.gr.pixel_w = physical_size.width;
+                self.base.gr.pixel_h = physical_size.height;
+
+                if let Some(ref mut handler) = self.app_handler {
+                    handler.ratio_x = new_ratio_x;
+                    handler.ratio_y = new_ratio_y;
+                }
+
+                (physical_size.width, physical_size.height, new_ratio_x, new_ratio_y, 1.0)
             }
-
-            (physical_size.width, physical_size.height, new_ratio_x, new_ratio_y)
         } else {
-            (self.base.gr.pixel_w, self.base.gr.pixel_h, self.base.gr.ratio_x, self.base.gr.ratio_y)
+            // Windowed mode: use physical size for RT, keep ratio for layout
+            // render_scale = physical / logical, used to scale render coordinates
+            let render_scale = phys_h / logical_h;
+
+            log::info!("  [Windowed] canvas={}x{} (=physical)", physical_size.width, physical_size.height);
+            log::info!("  [Windowed] ratio_x={:.6}, ratio_y={:.6} (unchanged)", self.base.gr.ratio_x, self.base.gr.ratio_y);
+            log::info!("  [Windowed] render_scale={:.4}", render_scale);
+
+            (physical_size.width, physical_size.height, self.base.gr.ratio_x, self.base.gr.ratio_y, render_scale)
         };
+
+        log::info!("  --- Final Settings ---");
+        log::info!("  canvas (RT) = {}x{}", canvas_w, canvas_h);
+        log::info!("  surface (physical) = {}x{}", physical_size.width, physical_size.height);
+        log::info!("  ratio = ({:.6}, {:.6}), render_scale = {:.4}", ratio_x, ratio_y, render_scale);
+        log::info!("  pixel_w/h (after override) = {}x{}", self.base.gr.pixel_w, self.base.gr.pixel_h);
+        log::info!("  isotropic = {}", (ratio_x - ratio_y).abs() < 0.0001);
+        log::info!("================================");
 
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -566,23 +641,21 @@ impl WinitWgpuAdapter {
             (device, queue, surface_config)
         });
 
-        // Build render core using the shared builder
-        // For fullscreen: canvas matches physical size, SDF renders at native resolution
-        let tex_data = crate::get_pixel_texture_data();
-        let render_core = WgpuRenderCoreBuilder::new(
+        // Build render core (Texture2DArray mode)
+        let builder = WgpuRenderCoreBuilder::new(
             canvas_w,
             canvas_h,
             wgpu_surface_config.format,
         )
         .with_ratio(ratio_x, ratio_y)
-        .build(
-            device,
-            queue,
-            tex_data.width,
-            tex_data.height,
-            &tex_data.data,
-        )
-        .expect("Failed to build render core");
+        .with_render_scale(render_scale);
+
+        let layer_data = crate::get_pixel_layer_data()
+            .expect("Layer data not loaded");
+        let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+        let render_core = builder
+            .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+            .expect("Failed to build render core");
 
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_surface = Some(wgpu_surface);
@@ -651,15 +724,19 @@ impl WinitWgpuAdapter {
             let queue = old_core.queue;
             let format = self.wgpu_surface_config.as_ref().unwrap().format;
 
-            let tex_data = crate::get_pixel_texture_data();
-            let new_core = WgpuRenderCoreBuilder::new(
+            let builder = WgpuRenderCoreBuilder::new(
                 self.base.gr.pixel_w,
                 self.base.gr.pixel_h,
                 format,
             )
-            .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
-            .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
-            .expect("Failed to rebuild render core");
+            .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
+
+            let layer_data = crate::get_pixel_layer_data()
+                .expect("Layer data not loaded");
+            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+            let new_core = builder
+                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                .expect("Failed to rebuild render core");
 
             info!(
                 "Render core rebuilt: {}x{}, ratio: ({}, {})",
@@ -691,10 +768,16 @@ impl WinitWgpuAdapter {
             (cw as f32, ch as f32)
         };
 
-        let content_w = cw as f32;
-        let content_h = ch as f32;
+        // For letterboxing, use original logical pixel size (before fullscreen override).
+        // In fullscreen mode, canvas_size == physical_size so using it would give aspect=1.
+        let (content_w, content_h) = if self.logical_content_w > 0.0 && self.logical_content_h > 0.0 {
+            (self.logical_content_w, self.logical_content_h)
+        } else {
+            (cw as f32, ch as f32)
+        };
 
-        let (scale_x, scale_y) = if is_letterboxing_enabled() {
+        let letterboxing = is_letterboxing_enabled();
+        let (scale_x, scale_y) = if letterboxing {
             let content_aspect = content_w / content_h;
             let window_aspect = phys_w / phys_h;
 
@@ -710,6 +793,19 @@ impl WinitWgpuAdapter {
         } else {
             (1.0, 1.0)
         };
+
+        // Log composition debug info (first frame only via static flag)
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static LOGGED: AtomicBool = AtomicBool::new(false);
+        if !LOGGED.swap(true, Ordering::Relaxed) {
+            println!("=== Composition Debug (first frame) ===");
+            println!("  canvas (RT) = {}x{}", cw, ch);
+            println!("  physical (window) = {}x{}", phys_w, phys_h);
+            println!("  content_w/h (for letterbox) = {}x{}", content_w, content_h);
+            println!("  letterboxing = {}", letterboxing);
+            println!("  composition scale = ({:.4}, {:.4})", scale_x, scale_y);
+            println!("=======================================");
+        }
 
         let mut rt2_transform = UnifiedTransform::new();
         rt2_transform.scale(scale_x, scale_y);
@@ -773,6 +869,14 @@ impl Adapter for WinitWgpuAdapter {
         &mut self.base
     }
 
+    fn get_canvas_size(&self) -> (u32, u32) {
+        if let Some(core) = &self.render_core {
+            core.canvas_size()
+        } else {
+            (self.base.gr.pixel_w, self.base.gr.pixel_h)
+        }
+    }
+
     fn reset(&mut self) {}
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
@@ -795,9 +899,10 @@ impl Adapter for WinitWgpuAdapter {
             if let PumpStatus::Exit(_) = status {
                 return true;
             }
+        } else {
+            // Event loop not ready yet; avoid busy spin in early initialization stage.
+            std::thread::sleep(timeout);
         }
-
-        std::thread::sleep(timeout);
 
         self.should_exit
     }
@@ -811,7 +916,7 @@ impl Adapter for WinitWgpuAdapter {
     ) -> Result<(), String> {
         winit_move_win(
             &mut self.drag.need,
-            self.window.as_ref().map(|v| &**v),
+            self.window.as_deref(),
             self.drag.dx,
             self.drag.dy,
         );
@@ -859,7 +964,18 @@ impl Adapter for WinitWgpuAdapter {
     ) where
         Self: Sized,
     {
+        // Compute viewport scale (physical window height / canvas height)
+        // for accurate mipmap level selection on resize/fullscreen.
+        let viewport_scale = if let (Some(window), Some(core)) = (&self.window, &self.render_core) {
+            let phys_h = window.inner_size().height as f32;
+            let (_, canvas_h) = core.canvas_size();
+            if canvas_h > 0 { phys_h / canvas_h as f32 } else { 1.0 }
+        } else {
+            1.0
+        };
+
         if let Some(core) = &mut self.render_core {
+            core.set_viewport_scale(viewport_scale);
             core.rbuf2rt(rbuf, rtidx, debug);
         } else {
             eprintln!("WinitWgpuAdapter: render core not initialized");
@@ -915,9 +1031,7 @@ impl Adapter for WinitWgpuAdapter {
         }
     }
 
-    fn set_msdf_enabled(&mut self, enabled: bool) {
-        if let Some(core) = &mut self.render_core {
-            core.set_msdf_enabled(enabled);
-        }
+    fn set_msdf_enabled(&mut self, _enabled: bool) {
+        // MSDF removed — layered mode always uses bitmap rendering
     }
 }

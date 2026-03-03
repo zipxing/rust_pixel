@@ -1,5 +1,5 @@
 // RustPixel UI Framework - ProgressBar Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! ProgressBar component - character-cell progress indicator.
 

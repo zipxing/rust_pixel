@@ -1,5 +1,5 @@
 // RustPixel UI Framework
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # RustPixel UI Framework
 //!
@@ -15,24 +15,23 @@
 //!
 //! ## Example Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use rust_pixel::ui::*;
 //!
-//! let mut app = UIApp::new();
-//! let mut panel = Panel::new(Rect::new(0, 0, 80, 25));
-//! 
+//! let mut app = UIApp::new(80, 25);
+//! let mut panel = Panel::new();
+//!
 //! panel.add_child(Box::new(
 //!     Label::new("Hello UI Framework!")
-//!         .style(Style::default().fg(Color::Green))
+//!         .with_style(Style::default().fg(Color::Green))
 //! ));
-//! 
+//!
 //! panel.add_child(Box::new(
 //!     Button::new("Click Me")
-//!         .on_click(|_| println!("Button clicked!"))
+//!         .on_click(|| println!("Button clicked!"))
 //! ));
-//! 
-//! app.set_root(Box::new(panel));
-//! app.run();
+//!
+//! app.set_root_widget(Box::new(panel));
 //! ```
 
 pub mod widget;

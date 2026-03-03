@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Implements load of .ssf seq frame file
 //! 
@@ -54,12 +54,12 @@ impl Asset for SeqFrameAsset {
     /// texture_id == 256 means seq frame in UTF8 text format,
     /// each cell may have different lengths: fg bg utf8_bytes
     ///
-    /// texture_id == 255 means seq frame in SDL format, each cell may have
+    /// texture_id == 255 means seq frame in binary format, each cell may have
     /// different textures, the length of each cell data is 3 bytes
     /// fg bg(bg i.e. cell_texture_id) cellsym
     /// ssf files in modern OSs are usually found in this format
     ///
-    /// texture_id < 255 means SDL frame data，each cell's texture is texture_id,
+    /// texture_id < 255 means binary frame data，each cell's texture is texture_id,
     /// the length of each cell data is 2 bytes : fg cellsym
     fn parse(&mut self) {
         if self.get_state() != AssetState::Parsing {

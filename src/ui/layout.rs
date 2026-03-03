@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Layout System
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Layout system for automatic widget positioning and sizing.
 

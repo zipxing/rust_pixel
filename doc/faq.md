@@ -28,21 +28,12 @@ Web mode uses the same WGPU pipeline as desktop. When compiled to WASM, wgpu aut
 
 ### What's the difference between `term` and `wgpu` mode?
 - **term**: Renders directly to a terminal emulator using crossterm. Characters are Unicode text, colors are ANSI. Works over SSH.
-- **wgpu**: Opens a native window with GPU rendering. Characters are glyphs from a texture atlas. Supports scaling, rotation, alpha blending, shader effects.
+- **wgpu**: Opens a native window with GPU rendering. Characters are glyphs from Texture2DArray. Supports scaling, rotation, alpha blending, shader effects.
 
 Both modes share the same Model code. Only the Render implementation differs.
 
-### How does the texture atlas work?
-A single PNG image contains all glyphs arranged in a 16x16 grid of blocks (256 blocks total). Each block contains 16x16 glyph cells. The GPU renders all characters in one draw call using instanced rendering.
-
-Block assignment:
-- 0-159: Sprite glyphs (PETSCII, ASCII, custom game art)
-- 160-169: TUI characters (box drawing, symbols)
-- 170-175: Emoji
-- 176-239: CJK characters
-
-### Why does MDPT use an 8192x8192 texture?
-Standard games use 4096x4096. For fullscreen presentation at high DPI, those cells look blurry. MDPT uses 8192x8192 for higher resolution. Cell sizes vary by glyph type: TUI characters are 32x64 (half-width), CJK characters are 64x64 (full-width). The engine auto-detects cell size from the atlas dimensions at startup. Even at 8192, fullscreen on high-DPI displays may still show slight edge blurring — a further increase to 16384 would solve this but doubles VRAM usage.
+### How does the texture system work?
+RustPixel uses GPU Texture2DArray with multiple 4096×4096 layers. All symbol types (Sprite, TUI, Emoji, CJK) are packed into the array with 3-level mipmaps (mip0/mip1/mip2). The engine auto-selects the appropriate mipmap level based on actual render size, ensuring crisp rendering at any scale. Single texture binding, instanced rendering, one draw call.
 
 ### What is the 4-stage GPU pipeline?
 1. **Data → RenderBuffer**: Collect cells from Buffer/Sprites into `Vec<RenderCell>`

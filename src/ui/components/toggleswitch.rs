@@ -1,5 +1,5 @@
 // RustPixel UI Framework - ToggleSwitch Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! ToggleSwitch component - character-cell toggle switch with label.
 

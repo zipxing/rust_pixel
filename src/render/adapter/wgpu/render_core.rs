@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # WGPU Render Core
 //!
@@ -26,6 +26,8 @@ pub struct WgpuRenderCore {
     pub ratio_x: f32,
     /// Y-axis scaling ratio
     pub ratio_y: f32,
+    /// Render scale for HiDPI (physical_size / logical_size)
+    pub render_scale: f32,
 }
 
 impl WgpuRenderCore {
@@ -43,7 +45,14 @@ impl WgpuRenderCore {
             pixel_renderer,
             ratio_x,
             ratio_y,
+            render_scale: 1.0,
         }
+    }
+
+    /// Set render scale for HiDPI displays
+    pub fn set_render_scale(&mut self, scale: f32) {
+        self.render_scale = scale;
+        self.pixel_renderer.set_render_scale(scale);
     }
 
     /// Set the scaling ratios
@@ -61,20 +70,15 @@ impl WgpuRenderCore {
         self.pixel_renderer.set_sharpness(sharpness);
     }
 
-    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
-    /// When disabled, all symbols use bitmap rendering (for legacy 4096 textures).
-    pub fn set_msdf_enabled(&mut self, enabled: bool) {
-        self.pixel_renderer.set_msdf_enabled(enabled);
-    }
-
-    /// Get whether MSDF/SDF rendering is currently enabled.
-    pub fn get_msdf_enabled(&self) -> bool {
-        self.pixel_renderer.get_msdf_enabled()
-    }
-
     /// Get canvas dimensions
     pub fn canvas_size(&self) -> (u32, u32) {
         (self.pixel_renderer.canvas_width, self.pixel_renderer.canvas_height)
+    }
+
+    /// Set viewport scale factor for mipmap selection.
+    /// Should be called before rbuf2rt() each frame.
+    pub fn set_viewport_scale(&mut self, scale: f32) {
+        self.pixel_renderer.set_viewport_scale(scale);
     }
 
     /// Render buffer to render texture
@@ -215,14 +219,17 @@ impl WgpuRenderCore {
 
             // Calculate area and transform based on viewport
             let (area, transform) = if let Some(ref vp) = composite.viewport {
-                let vp_x = vp.x as f32;
-                let vp_y = vp.y as f32;
-                let pw = vp.w as f32;
-                let ph = vp.h as f32;
+                // Scale viewport coordinates by render_scale for HiDPI displays
+                // Viewport is specified in logical coordinates, but canvas uses physical size
+                let rs = self.render_scale;
+                let vp_x = vp.x as f32 * rs;
+                let vp_y = vp.y as f32 * rs;
+                let pw = vp.w as f32 * rs;
+                let ph = vp.h as f32 * rs;
 
-                // Get content size for texture sampling
+                // Get content size for texture sampling (also scaled)
                 let (content_w, content_h) = composite.content_size
-                    .map(|(w, h)| (w as f32, h as f32))
+                    .map(|(w, h)| (w as f32 * rs, h as f32 * rs))
                     .unwrap_or((pw, ph));
 
                 // area controls TEXTURE SAMPLING
@@ -248,7 +255,7 @@ impl WgpuRenderCore {
             } else {
                 // Fullscreen
                 let area = [0.0, 0.0, 1.0, 1.0];
-                let transform = composite.transform.clone().unwrap_or_else(UnifiedTransform::new);
+                let transform = composite.transform.unwrap_or_else(UnifiedTransform::new);
                 (area, transform)
             };
 
@@ -288,6 +295,7 @@ pub struct WgpuRenderCoreBuilder {
     pub surface_format: wgpu::TextureFormat,
     pub ratio_x: f32,
     pub ratio_y: f32,
+    pub render_scale: f32,
 }
 
 impl WgpuRenderCoreBuilder {
@@ -298,6 +306,7 @@ impl WgpuRenderCoreBuilder {
             surface_format,
             ratio_x: 1.0,
             ratio_y: 1.0,
+            render_scale: 1.0,
         }
     }
 
@@ -307,14 +316,18 @@ impl WgpuRenderCoreBuilder {
         self
     }
 
-    /// Build the render core with the given device, queue, and texture data
-    pub fn build(
+    pub fn with_render_scale(mut self, scale: f32) -> Self {
+        self.render_scale = scale;
+        self
+    }
+
+    /// Build the render core with Texture2DArray
+    pub fn build_layered(
         self,
         device: wgpu::Device,
         queue: wgpu::Queue,
-        tex_width: u32,
-        tex_height: u32,
-        tex_data: &[u8],
+        layer_size: u32,
+        layers: &[&[u8]],
     ) -> Result<WgpuRenderCore, String> {
         let mut pixel_renderer = WgpuPixelRender::new_with_format(
             self.canvas_width,
@@ -322,14 +335,8 @@ impl WgpuRenderCoreBuilder {
             self.surface_format,
         );
 
-        // Initialize all WGPU components
-        pixel_renderer.load_symbol_texture_from_data(
-            &device,
-            &queue,
-            tex_width,
-            tex_height,
-            tex_data,
-        )?;
+        // Load Texture2DArray
+        pixel_renderer.load_symbol_texture_array(&device, &queue, layer_size, layers)?;
 
         pixel_renderer.create_shader(&device);
         pixel_renderer.create_buffer(&device);
@@ -340,13 +347,16 @@ impl WgpuRenderCoreBuilder {
         pixel_renderer.init_general2d_renderer(&device);
         pixel_renderer.init_transition_renderer(&device);
         pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
+        pixel_renderer.set_render_scale(self.render_scale);
 
-        Ok(WgpuRenderCore::new(
+        let mut core = WgpuRenderCore::new(
             device,
             queue,
             pixel_renderer,
             self.ratio_x,
             self.ratio_y,
-        ))
+        );
+        core.render_scale = self.render_scale;
+        Ok(core)
     }
 }

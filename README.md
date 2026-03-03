@@ -39,7 +39,7 @@ Scene > Layer > Sprite > Buffer > Cell
 
 Unified rendering abstraction
 
-High performance - **One texture, one draw call** 
+High performance - **Texture2DArray, one draw call** 
 
 </td>
 <td width="33%" align="center">
@@ -94,7 +94,7 @@ cargo pixel r mdpt w -r # Web mode (browser)
 | **Column Layouts** | Flexible multi-column content arrangement |
 | **PETSCII/SSF Images** | Native pixel-art and animation support |
 | **Full CJK Support** | Chinese, Japanese, Korean text rendering |
-| **MSDF Font Rendering** | [MSDF/SDF](doc/sdf.md) distance field rendering for crisp text at any scale |
+| **Mipmap Rendering** | Crisp text at any window size or fullscreen, single draw call performance |
 | **Incremental Display** | Step-by-step content reveal with pause markers |
 
 ### Why MDPT?
@@ -120,7 +120,7 @@ Two-player Tetris with AI opponent, attack flight animations, and sweep clear ef
 ![Tetris](./screen-shot/tetris_sdl.gif)
 
 ```bash
-cargo pixel r tetris wg -r  # WGPU mode (native)
+cargo pixel r tetris g -r  # WGPU mode (native)
 cargo pixel r tetris t -r   # Terminal mode
 cargo pixel r tetris w -r   # Web mode (browser)
 ```
@@ -129,7 +129,11 @@ cargo pixel r tetris w -r   # Web mode (browser)
 
 ### Unified Texture Architecture
 
-Single 4096×4096 texture (16MB VRAM), 256 blocks: Sprite(0-159), TUI(160-169), Emoji(170-175), CJK(176-239) — one texture binding, one draw call, zero texture switching.
+Texture2DArray with 3-level mipmaps (4096×4096 layers), containing Sprite, TUI, Emoji, and CJK symbols. Single texture binding, instanced rendering, one draw call.
+
+> Mipmaps = precomputed lower-resolution versions of the same texture, auto-selected based on render size.
+
+Pix resources (`assets/pix/`) are loaded with fallback: app-specific first, then shared root. Workspace apps share root `assets/pix/`; standalone projects need their own copy. See [Architecture](doc/architecture.md#pix-resource-loading-texture2darray) for details.
 
 ---
 
@@ -140,7 +144,7 @@ PETSCII art gallery with Matrix rain, GPU transitions, and 2000+ artworks. Fulls
 ![PetView](./screen-shot/petview.gif)
 
 ```bash
-cargo pixel r petview wg -r    # WGPU mode (native)
+cargo pixel r petview g -r    # WGPU mode (native)
 cargo pixel r petview w -r     # Web mode (browser)
 ```
 
@@ -160,9 +164,9 @@ cd ~/rust_pixel_work
 
 ```bash
 cargo pixel r snake t            # Snake - Terminal mode
-cargo pixel r snake wg           # Snake - WGPU mode (native window)
+cargo pixel r snake g           # Snake - WGPU mode (native window)
 cargo pixel r tetris w           # Tetris - Web mode (localhost:8080)
-cargo pixel r petview wg -r      # Petview - WGPU mode (release)
+cargo pixel r petview g -r      # Petview - WGPU mode (release)
 ```
 
 ### Create Your Own Game
@@ -173,7 +177,7 @@ cargo pixel r mygame t           # Run it!
 
 # Or create standalone project
 cargo pixel c myapp ..           # Create in ../myapp
-cd ../myapp && cargo pixel r myapp wg
+cd ../myapp && cargo pixel r myapp g
 ```
 
 ### Write Games in BASIC
@@ -250,7 +254,7 @@ See `pixel_basic/` for the interpreter source code.
 PETSCII animations with smooth gameplay
 
 ```bash
-cargo pixel r snake wg -r   # WGPU (native)
+cargo pixel r snake g -r   # WGPU (native)
 cargo pixel r snake t -r    # Terminal
 cargo pixel r snake w -r    # Web
 ```
@@ -264,7 +268,7 @@ cargo pixel r snake w -r    # Web
 Play against AI
 
 ```bash
-cargo pixel r tetris wg -r  # WGPU (native)
+cargo pixel r tetris g -r  # WGPU (native)
 cargo pixel r tetris t -r   # Terminal
 cargo pixel r tetris w -r   # Web
 ```
@@ -280,7 +284,7 @@ cargo pixel r tetris w -r   # Web
 Pixel-perfect sprite movement
 
 ```bash
-cargo pixel r tower wg -r   # WGPU (native)
+cargo pixel r tower g -r   # WGPU (native)
 cargo pixel r tower w -r    # Web
 ```
 
@@ -320,7 +324,7 @@ cargo pixel r palette t -r
 
 ```bash
 cargo pixel e t . assets/logo.txt    # Terminal mode
-cargo pixel e wg . assets/logo.pix   # WGPU mode
+cargo pixel e g . assets/logo.pix   # WGPU mode
 ```
 
 <table><tr>
@@ -332,7 +336,7 @@ cargo pixel e wg . assets/logo.pix   # WGPU mode
 
 ```bash
 cargo pixel p assets/lion.png 40 40 > lion.pix
-cargo pixel e wg . lion.pix
+cargo pixel e g . lion.pix
 ```
 
 <table><tr>

@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # WGPU Web Adapter
 //!
@@ -48,14 +48,15 @@ impl WgpuWebAdapter {
         }
     }
 
-    /// Initialize WGPU from cached texture data (called after wasm_init_pixel_assets)
+    /// Initialize WGPU from cached layer data (called after wasm_init_pixel_assets)
     ///
     /// This performs async WGPU initialization using wasm-bindgen-futures.
     /// Must be called after the adapter.init() to set up the WebGPU/WebGL2 context.
     ///
     /// Note: This is an async function that must be awaited from JavaScript.
     pub async fn init_wgpu_from_cache_async(&mut self) {
-        let tex_data = crate::get_pixel_texture_data();
+        let layer_data = crate::get_pixel_layer_data()
+            .expect("Layer data not loaded - call wasm_init_pixel_assets first");
 
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
@@ -70,14 +71,22 @@ impl WgpuWebAdapter {
         );
 
         // Get canvas element
-        let canvas = web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
-            .get_element_by_id("canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
+        let Some(window) = web_sys::window() else {
+            web_sys::console::error_1(&"WgpuWebAdapter: window is unavailable".into());
+            return;
+        };
+        let Some(document) = window.document() else {
+            web_sys::console::error_1(&"WgpuWebAdapter: document is unavailable".into());
+            return;
+        };
+        let Some(canvas_el) = document.get_element_by_id("canvas") else {
+            web_sys::console::error_1(&"WgpuWebAdapter: missing #canvas element".into());
+            return;
+        };
+        let Ok(canvas) = canvas_el.dyn_into::<web_sys::HtmlCanvasElement>() else {
+            web_sys::console::error_1(&"WgpuWebAdapter: #canvas type mismatch".into());
+            return;
+        };
 
         // Create WGPU instance with WebGL fallback
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -135,19 +144,19 @@ impl WgpuWebAdapter {
         };
         surface.configure(&device, &config);
 
-        // Build render core using the shared builder
+        // Build render core using the shared builder (Texture2DArray mode)
+        let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|l| l.as_slice()).collect();
         let render_core = WgpuRenderCoreBuilder::new(
             self.base.gr.pixel_w as u32,
             self.base.gr.pixel_h as u32,
             surface_format,
         )
         .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
-        .build(
+        .build_layered(
             device,
             queue,
-            tex_data.width,
-            tex_data.height,
-            &tex_data.data,
+            layer_data.layer_size,
+            &layer_refs,
         )
         .expect("Failed to build render core");
 
@@ -157,7 +166,7 @@ impl WgpuWebAdapter {
         self.wgpu_surface_config = Some(config);
         self.render_core = Some(render_core);
 
-        info!("WGPU Web initialized from cache: {}x{}", tex_data.width, tex_data.height);
+        info!("WGPU Web initialized: {} layers ({}x{})", layer_refs.len(), layer_data.layer_size, layer_data.layer_size);
     }
 }
 
@@ -278,10 +287,8 @@ impl Adapter for WgpuWebAdapter {
         }
     }
 
-    fn set_msdf_enabled(&mut self, enabled: bool) {
-        if let Some(core) = &mut self.render_core {
-            core.set_msdf_enabled(enabled);
-        }
+    fn set_msdf_enabled(&mut self, _enabled: bool) {
+        // MSDF removed — layered mode always uses bitmap rendering
     }
 }
 
@@ -311,7 +318,9 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
     let mut mcte: Option<MouseEvent> = None;
 
     if let Some(key_e) = wasm_bindgen::JsCast::dyn_ref::<web_sys::KeyboardEvent>(&e) {
-        assert!(t == 0);
+        if t != 0 {
+            return None;
+        }
         let key = key_e.key();
         let key_code = match key.as_str() {
             "ArrowLeft" => Some(KeyCode::Left),
@@ -327,11 +336,7 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
             "Backspace" => Some(KeyCode::Backspace),
             "Tab" => Some(KeyCode::Tab),
             " " => Some(KeyCode::Char(' ')),
-            s if s.len() == 1 => {
-                let ch = s.chars().next().unwrap();
-                Some(KeyCode::Char(ch))
-            }
-            _ => None,
+            s => s.chars().next().filter(|_| s.chars().count() == 1).map(KeyCode::Char),
         };
         if let Some(kc) = key_code {
             let cte = KeyEvent::new(kc, KeyModifiers::NONE);
@@ -345,10 +350,14 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
         // The canvas CSS size (display) differs from internal resolution (rendering)
         // due to fitCanvasToWindow() scaling + centering
         let (canvas_x, canvas_y) = {
-            let document = web_sys::window().unwrap().document().unwrap();
-            let canvas_elem = document.get_element_by_id("canvas").unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+            let canvas_elem = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.get_element_by_id("canvas"))
+                .and_then(|el| el.dyn_into::<web_sys::HtmlCanvasElement>().ok())?;
             let rect = canvas_elem.get_bounding_client_rect();
+            if rect.width() <= 0.0 || rect.height() <= 0.0 {
+                return None;
+            }
             let cw = canvas_elem.width() as f64;
             let ch = canvas_elem.height() as f64;
             let x = (mouse_e.client_x() as f64 - rect.left()) / rect.width() * cw;

@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Tabs Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Tabs component - character-cell tab view with a simple tab bar and page area.
 

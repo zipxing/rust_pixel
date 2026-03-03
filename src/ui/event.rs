@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Event System
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! UI event system built on top of rust_pixel's input events.
 

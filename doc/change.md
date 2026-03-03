@@ -1,3 +1,39 @@
+# 2.4.0 - Mipmap Rendering Refactoring
+
+## Major Rendering Architecture Upgrade
+
+This release introduces a significant rendering refactoring using **Texture2DArray with 3-level mipmaps**, replacing the previous single texture atlas approach. Characters now render crisp and clear at any window size or fullscreen resolution, while maintaining single draw call performance.
+
+### Key Changes
+
+- **Texture2DArray Architecture**: Multiple 4096×4096 texture layers with 3-level mipmaps (mip0/mip1/mip2)
+- **Auto Mipmap Selection**: Engine automatically selects optimal mipmap level based on actual render size
+- **Crisp at Any Scale**: From small windows to fullscreen high-DPI displays, text stays sharp
+- **Single Draw Call**: Instanced rendering maintains high performance despite multi-layer textures
+- **Compact Symbol Map**: JSON format optimized from 2.0MB to 375KB (flat array format)
+
+### Asset Loading
+
+- **Shared Pix Resources**: Workspace apps now share root `assets/pix/` directory
+- **Fallback Logic**: App-specific `assets/pix/` first, then root directory fallback
+- **Web Build Support**: `cargo pixel r app w` auto-copies shared pix resources
+- **Command Line Path**: Standalone deployment supports `./app /path/to/assets`
+
+### New Symbols Tool
+
+- **Rewritten in Rust**: `tools/symbols/` replaces the old Python script
+- **macOS CoreText/Quartz**: Native font rendering for high-quality TUI/CJK/Emoji glyphs
+- **3-Level Mipmap Generation**: Renders each symbol at multiple resolutions
+- **DP Shelf-Packing**: Efficient texture layer packing algorithm
+- **Usage**: `cargo pixel symbols -o assets/pix`
+
+### Documentation
+
+- Updated `doc/architecture.md` with Texture2DArray and pix resource loading documentation
+- Updated README with mipmap explanation and simplified command examples
+
+---
+
 # 2.3.0
 
 - Refactored Cell and Buffer internals: the cell's `symbol` string now fully determines the rendered glyph, with cleaner APIs to match. See `doc/architecture.md` for details

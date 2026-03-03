@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Text Utilities
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Public text utility functions for UI components.
 

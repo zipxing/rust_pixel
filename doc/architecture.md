@@ -182,28 +182,15 @@ GPU shaders:
 - **Transition shader** — blends two RTs with effects (dissolve, wipe, etc.)
 - **General2D shader** — final composition to screen
 
-## Texture Atlas
+## Texture2DArray Architecture
 
-Single texture atlas, 256 blocks organized as:
-```
-Block 0-159:   Sprite glyphs (PETSCII, ASCII, custom)
-Block 160-169: TUI characters
-Block 170-175: Emoji
-Block 176-239: CJK characters
-```
+Layered texture system using GPU Texture2DArray:
+- Multiple 4096×4096 layers packed with symbols
+- 3-level mipmaps for different display scales (mip0/mip1/mip2)
+- Sprite, TUI, Emoji, CJK symbols all in the same array
+- Single texture binding, instanced rendering, one draw call
 
-One texture binding, one draw call, zero texture switching.
-
-Atlas size is configurable per app. The default is 4096x4096. Apps that need fullscreen high-DPI rendering (e.g. MDPT) use 8192x8192 for crisper text. The engine auto-detects cell size from the atlas dimensions at startup. Different glyph regions have different cell sizes to match character widths:
-
-```
-               4096 atlas          8192 atlas
-TUI cells:     16x32              32x64           (half-width)
-CJK cells:     32x32              64x64           (full-width)
-Sprite cells:  16x16              32x32
-```
-
-Even at 8192, fullscreen on high-DPI displays may show slight edge blurring — the tradeoff between atlas size (VRAM) and rendering sharpness.
+The engine auto-selects mipmap level based on actual render size, ensuring crisp rendering from small windows to fullscreen high-DPI displays.
 
 ## Asset System
 
@@ -220,6 +207,78 @@ AssetManager
 
 States: Loading → Parsing → Ready
 ```
+
+### Pix Resource Loading (Texture2DArray)
+
+The `assets/pix/` directory contains the layered texture files (`layers/*.png`) and symbol map (`layered_symbol_map.json`). The engine uses a fallback mechanism to support both workspace apps and standalone projects.
+
+**Search Order:**
+1. `{app_path}/assets/pix/` — App-specific (if exists)
+2. `./assets/pix/` — Shared root directory (fallback)
+
+**Workspace Layout (rust_pixel/):**
+```
+rust_pixel/
+├── assets/pix/                    # Shared pix resources
+│   ├── layers/
+│   │   ├── layer_0.png
+│   │   └── ...
+│   └── layered_symbol_map.json
+├── apps/
+│   ├── mdpt/
+│   │   └── assets/               # App assets (no pix/)
+│   ├── tetris/
+│   │   └── assets/
+│   └── ...
+```
+
+All workspace apps share root `assets/pix/`. No duplication needed.
+
+**Standalone Project:**
+```
+my_game/
+└── assets/
+    ├── pix/                       # Must include pix/ for standalone
+    │   ├── layers/
+    │   └── layered_symbol_map.json
+    └── ...                        # Other app assets
+```
+
+**cargo pixel Commands:**
+
+| Command | Mode | Pix Loading |
+|---------|------|-------------|
+| `cargo pixel r app t` | Terminal | No pix needed |
+| `cargo pixel r app g` | Desktop GPU | Runtime fallback (app → root) |
+| `cargo pixel r app w` | Web | Build-time copy (app → root fallback) |
+
+**Web Build Process:**
+
+`cargo pixel r app w` copies assets to `tmp/web_app/`:
+1. Copy app's `assets/` directory
+2. If `assets/pix/` missing, copy from root `assets/pix/`
+3. Start local HTTP server
+
+**Deployment:**
+
+Option 1: Assets alongside executable (default):
+```
+deploy/
+├── my_game(.exe)
+└── assets/
+    ├── pix/
+    │   ├── layers/
+    │   └── layered_symbol_map.json
+    └── ...
+```
+
+Option 2: Specify asset path via command line:
+```bash
+./my_game /path/to/project    # Looks for /path/to/project/assets/pix/
+./my_game .                   # Current directory (default)
+```
+
+The first non-flag argument is used as project path. Flags like `-f` (fullscreen) are filtered out.
 
 ## Event System
 

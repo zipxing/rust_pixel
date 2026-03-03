@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 /// rust_pixel cargo build tools...
 ///
@@ -148,15 +148,31 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
             
             // Copy assets if exists
             let assets_src = Path::new(&crate_path).join("assets");
+            let assets_dst = tmpwd_path.join("assets");
             if assets_src.exists() {
-                let assets_dst = tmpwd_path.join("assets");
                 if let Err(e) = copy_dir_all(&assets_src, &assets_dst) {
                     eprintln!("Warning: Failed to copy assets: {}", e);
                 }
             }
-            
+
             // Copy web-templates
             let rust_pixel_path = Path::new(&ctx.rust_pixel_dir[ctx.rust_pixel_idx]);
+
+            // Fallback for pix directory: if app doesn't have assets/pix,
+            // copy from root assets/pix (shared resources)
+            let app_pix = assets_dst.join("pix");
+            if !app_pix.exists() {
+                let root_pix = rust_pixel_path.join("assets").join("pix");
+                if root_pix.exists() {
+                    fs::create_dir_all(&assets_dst).ok();
+                    if let Err(e) = copy_dir_all(&root_pix, &app_pix) {
+                        eprintln!("Warning: Failed to copy root pix assets: {}", e);
+                    } else {
+                        println!("📦 Copied shared pix assets from {}", root_pix.display());
+                    }
+                }
+            }
+
             let templates_src = rust_pixel_path.join("web-templates");
             if let Err(e) = copy_dir_contents(&templates_src, &tmpwd_path) {
                 eprintln!("Warning: Failed to copy web templates: {}", e);

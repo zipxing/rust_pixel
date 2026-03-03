@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 /// rust_pixel cargo build tools...
 ///
@@ -286,22 +286,7 @@ fn build_app() -> Command {
         .subcommand(
             Command::new("symbols")
                 .alias("sym")
-                .about("Generate SDF texture atlas and symbol map for GPU rendering")
-                .arg(
-                    Arg::new("size")
-                        .short('s')
-                        .long("size")
-                        .help("Texture size: 4096 or 8192 (default)")
-                        .value_parser(["4096", "8192"])
-                        .default_value("8192"),
-                )
-                .arg(
-                    Arg::new("pxrange")
-                        .short('p')
-                        .long("pxrange")
-                        .help("SDF distance field pixel range (default: 4)")
-                        .default_value("4"),
-                )
+                .about("Generate layered Texture2DArray with mipmap bitmaps for GPU rendering")
                 .arg(
                     Arg::new("padding")
                         .long("padding")

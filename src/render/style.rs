@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Defines styles such as color, bold or italics.
 //! Only foreground color is supported in Graphics mode, as background color is used for texture.

@@ -1,5 +1,5 @@
 // RustPixel UI Framework - TextBox Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! TextBox component for text input.
 

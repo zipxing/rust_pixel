@@ -1,5 +1,5 @@
 // RustPixel UI Framework - ScrollBar Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! ScrollBar component for scrollable content.
 

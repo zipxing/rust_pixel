@@ -1,12 +1,12 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # Render Module
 //!
 //! Supports two rendering modes: text mode and graphics mode.
 //!
 //! ## Sub-modules
-//! - `adapter`: Render adapter interfaces (crossterm, SDL, web, winit)
+//! - `adapter`: Render adapter interfaces (crossterm, winit+wgpu, wgpu-web)
 //! - `cell`: Basic rendering unit, i.e., a character
 //! - `buffer`: Vector composed of cells, manages screen buffer
 //! - `sprite`: Basic rendering component, further encapsulates buffer
@@ -36,7 +36,7 @@ pub mod symbols;
 pub use adapter::{Adapter, AdapterBase};
 pub use buffer::{Buffer, BufferMode, Borders, BorderType, SYMBOL_LINE};
 pub use cell::{
-    Cell, Glyph, cellsym, cellsym_block, decode_pua, is_pua_sprite,
+    Cell, cellsym, cellsym_block, decode_pua, is_pua_sprite,
     TuiCharType, detect_tui_char_type, is_tui_char, is_cjk,
     PUA_BASE, PUA_END, PUA_BLOCK_SIZE,
 };
@@ -44,7 +44,7 @@ pub use cell::{
 pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_logo,
     render_main_buffer, render_layers, RenderCell, PIXEL_LOGO_HEIGHT,
-    PIXEL_LOGO_WIDTH, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
+    PIXEL_LOGO_WIDTH, PIXEL_SYMBOL_SIZE, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
 };
 pub use effect::{
     // CPU Effects (Buffer级别)
@@ -57,5 +57,5 @@ pub use effect::{
 pub use scene::Scene;
 pub use sprite::Layer;
 pub use style::{Color, Style};
-pub use symbol_map::{ascii_to_petscii, SymbolMap, SymbolMapStats};
+pub use symbol_map::ascii_to_petscii;
 

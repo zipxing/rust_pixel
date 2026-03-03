@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # Render Adapter Module
 //!
@@ -92,14 +92,9 @@
 //! │          │       GPU Rendering             │                │
 //! │          │                                 │                │
 //! │          │  ┌────────────────────────────┐ │                │
-//! │          │  │    WebGL2 (Web/glow)       │ │                │
-//! │          │  │  - Vertex Arrays           │ │                │
-//! │          │  │  - Shader Programs         │ │                │
-//! │          │  │  - Texture Atlases         │ │                │
-//! │          │  └────────────────────────────┘ │                │
-//! │          │                                 │                │
-//! │          │  ┌────────────────────────────┐ │                │
-//! │          │  │  WGPU (Desktop + WebGPU)   │ │                │
+//! │          │  │  WGPU (Unified Backend)    │ │                │
+//! │          │  │  - Desktop: Vulkan/Metal  │ │                │
+//! │          │  │  - Web: WebGPU/WebGL2     │ │                │
 //! │          │  │  - Render Pipelines        │ │                │
 //! │          │  │  - Command Buffers         │ │                │
 //! │          │  │  - Bind Groups             │ │                │
@@ -191,7 +186,6 @@ pub use crate::render::graph::{
     PIXEL_RATIO_Y,
     PIXEL_SYM_HEIGHT,
     PIXEL_SYM_WIDTH,
-    PIXEL_TEXTURE_FILE,
 };
 
 /// Adapter base data structure containing shared information and OpenGL resources
@@ -353,7 +347,7 @@ pub trait Adapter {
 
     /// Main rendering pipeline with double buffering and render textures
     ///
-    /// This method implements the core graphics rendering pipeline for SDL, Winit, and Web
+    /// This method implements the core graphics rendering pipeline for Winit and Web
     /// modes. It follows a two-pass rendering approach with multiple render targets:
     ///
     /// ## Rendering Pipeline Architecture  
@@ -505,8 +499,8 @@ pub trait Adapter {
             scale_x,
             scale_y,
             angle,
-            |fc, bc, s2, texidx, symidx, angle, ccp, modifier| {
-                push_render_buffer(rbuf, fc, bc, texidx, symidx, s2, angle, &ccp, modifier);
+            |fc, bc, s2, tile, angle, ccp, modifier| {
+                push_render_buffer(rbuf, fc, bc, tile, s2, angle, &ccp, modifier);
             },
         );
     }
@@ -534,7 +528,6 @@ pub trait Adapter {
 
     /// Advanced rendering methods for special effects (petview, transitions, etc.)
     /// These methods provide unified high-level interfaces for graphics modes.
-
     /// Set render texture visibility
     ///
     /// Controls whether a specific render texture is visible in the final composition.
@@ -554,10 +547,7 @@ pub trait Adapter {
     /// # Returns
     /// (width, height) tuple in pixels
     #[cfg(graphics_mode)]
-    fn get_canvas_size(&self) -> (u32, u32) {
-        let base = unsafe { &*(self as *const Self as *const AdapterBase) };
-        (base.gr.pixel_w as u32, base.gr.pixel_h as u32)
-    }
+    fn get_canvas_size(&self) -> (u32, u32);
 
     /// Setup buffer transition rendering
     ///

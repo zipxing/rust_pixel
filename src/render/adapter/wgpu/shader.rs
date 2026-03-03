@@ -1,11 +1,12 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # WGPU Shader Management Module
 //! 
 //! Handles WGSL shader compilation, pipeline creation, and shader resource management.
 
 /// WGPU Shader compilation and management utilities
+#[derive(Default)]
 pub struct WgpuShader {
     /// Compiled vertex shader module
     pub vertex_module: Option<wgpu::ShaderModule>,
@@ -17,15 +18,11 @@ pub struct WgpuShader {
     pub bind_group_layout: Option<wgpu::BindGroupLayout>,
 }
 
+
 impl WgpuShader {
     /// Create new shader manager
     pub fn new() -> Self {
-        Self {
-            vertex_module: None,
-            fragment_module: None,
-            pipeline_layout: None,
-            bind_group_layout: None,
-        }
+        Self::default()
     }
 
     /// Compile WGSL shader from source
@@ -79,7 +76,7 @@ impl WgpuShader {
             vertex: wgpu::VertexState {
                 module: vertex_module,
                 entry_point: Some("vs_main"),
-                buffers: &[vertex_layout.clone()],
+                buffers: std::slice::from_ref(vertex_layout),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {

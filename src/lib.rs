@@ -1,7 +1,7 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
-//! **RustPixel** is a lightweight, glyph-based 2D game engine and rapid-prototyping toolkit.
+//! **RustPixel** is a lightweight, tile-based 2D game engine and rapid-prototyping toolkit.
 //!
 //! It provides a unified abstraction for both **terminal** and **graphic** rendering modes
 //! (including WebAssembly), allowing developers to build pixel-style games, tools, and
@@ -12,7 +12,7 @@
 //! top of game layers even in pure graphic mode.
 //!
 //! Designed for clarity, portability, and fast iteration, RustPixel is ideal for:
-//! - Glyph / PETSCII / ASCII / emoji-based pixel games
+//! - Tiles / PETSCII / ASCII / emoji-based pixel games
 //! - Terminal applications & hybrid TUI-over-graphics UIs
 //! - Rapid prototyping of gameplay ideas
 //! - Cross-platform rendering (Desktop, Web, Mobile, Mini-Game platforms)
@@ -22,8 +22,8 @@
 //!
 //! Rendering modes:
 //! - Text mode: Runs in a terminal via `crossterm`, drawing with ASCII and Unicode/Emoji.
-//! - Graphics mode (native): Uses `wgpu` or `SDL2`, rendering PETSCII and custom symbol sets.
-//! - Graphics mode (web): Same core logic compiled to WASM, rendered via WebGL + JavaScript
+//! - Graphics mode (native): Uses `wgpu`, rendering PETSCII and custom symbol sets.
+//! - Graphics mode (web): Same core logic compiled to WASM, rendered via wgpu + JavaScript
 //!
 //! Core concepts:
 //! - Cell: Smallest renderable unit (a character in text mode, or a fixed‑size glyph in graphics mode).
@@ -48,12 +48,13 @@ pub mod init;
 // Re-export commonly used items from init module
 #[cfg(not(feature = "base"))]
 pub use init::{
-    get_game_config, get_pixel_texture_data, init_game_config, GameConfig, PixelTextureData,
-    GAME_CONFIG, PIXEL_TEXTURE_DATA,
+    get_game_config, init_game_config, GameConfig,
+    GAME_CONFIG,
+    get_pixel_layer_data, PixelLayerData, PIXEL_LAYER_DATA,
 };
 
 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
-pub use init::init_pixel_assets;
+pub use init::init_layered_pixel_assets;
 
 #[cfg(target_arch = "wasm32")]
 pub use init::wasm_init_pixel_assets;
@@ -62,7 +63,7 @@ pub use init::wasm_init_pixel_assets;
 pub use init::{get_wasm_app_data, set_wasm_app_data};
 
 /// Target frames per second for the main game loop. Keep this moderate to conserve CPU.
-pub const GAME_FRAME: u32 = 48;
+pub const GAME_FRAME: u32 = 60;
 
 #[cfg(not(graphics_mode))]
 pub const LOGO_FRAME: u32 = GAME_FRAME / 4 * 2;
@@ -120,7 +121,7 @@ pub mod log;
 /// Rendering subsystem supporting both text and graphics modes.
 ///
 /// Components:
-/// - Adapter: Rendering adapter interface (crossterm; winit + glow/wgpu; SDL + glow; Web).
+/// - Adapter: Rendering adapter interface (crossterm; winit + wgpu; wgpu-web).
 /// - Cell: Base drawing unit (character in text mode; glyph/small bitmap in graphics mode).
 /// - Buffer: Screen buffer built from cells, with efficient updates.
 /// - Sprite: Higher‑level drawing primitive built on top of buffers.

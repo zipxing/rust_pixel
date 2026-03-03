@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # WGPU WGSL Shader Source Module
 //! 
@@ -197,19 +197,21 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 "#;
 
-/// Instanced vertex shader for symbols (matches OpenGL behavior exactly)
-pub const SYMBOLS_INSTANCED_VERTEX_SHADER: &str = r#"
-// Vertex input (base quad geometry)
+/// Instanced vertex shader for symbols — layered mode (Texture2DArray, no MSDF)
+///
+/// Uses a4.x as the layer index passed to the fragment shader via v_layer.
+/// No MSDF flag — all layered rendering uses bitmap.
+pub const SYMBOLS_INSTANCED_VERTEX_SHADER_LAYERED: &str = r#"
 struct VertexInput {
     @location(0) position: vec2<f32>,
 }
 
-// Instance input (per-symbol data, matches OpenGL layout)
 struct InstanceInput {
     @location(1) a1: vec4<f32>,  // origin_x (sign=bold flag), origin_y, uv_left, uv_top
-    @location(2) a2: vec4<f32>,  // uv_width, uv_height, m00*width, m10*width
+    @location(2) a2: vec4<f32>,  // uv_width (sign=glow flag), uv_height, m00*width, m10*width
     @location(3) a3: vec4<f32>,  // m01*height, m11*height, m20, m21
-    @location(4) color: vec4<f32>, // r, g, b, a
+    @location(4) a4: vec4<f32>,  // layer_index, reserved, reserved, reserved
+    @location(5) color: vec4<f32>, // r, g, b, a
 }
 
 struct VertexOutput {
@@ -217,16 +219,15 @@ struct VertexOutput {
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
     @location(2) v_bold: f32,
-    @location(3) v_msdf: f32,
+    @location(3) @interpolate(flat) v_layer: f32,
     @location(4) v_glow: f32,
     @location(5) v_local_pos: vec2<f32>,
 }
 
-// Transform uniform (matches OpenGL layout)
 struct Transform {
-    tw: vec4<f32>,      // [m00, m10, m20, canvas_width]
-    th: vec4<f32>,      // [m01, m11, m21, canvas_height]
-    colorFilter: vec4<f32>, // [r, g, b, a]
+    tw: vec4<f32>,
+    th: vec4<f32>,
+    colorFilter: vec4<f32>,
 }
 
 @group(0) @binding(0)
@@ -238,56 +239,41 @@ fn vs_main(vertex_input: VertexInput, instance: InstanceInput) -> VertexOutput {
 
     // Extract bold flag from origin_x sign (negative = bold)
     output.v_bold = select(0.0, 1.0, instance.a1.x < 0.0);
-    // Extract MSDF flag from origin_y sign (negative = MSDF)
-    output.v_msdf = select(0.0, 1.0, instance.a1.y < 0.0);
+    // Layer index from a4.x (per-instance, from LayeredSymbolMap)
+    output.v_layer = instance.a4.x;
     // Extract glow flag from uv_width sign (negative = glow)
     output.v_glow = select(0.0, 1.0, instance.a2.x < 0.0);
     let origin = abs(instance.a1.xy);
 
-    // Pass local quad position [0,1]×[0,1] for glow radial falloff
     output.v_local_pos = vertex_input.position;
 
-    // Calculate UV coordinates: uv = a1.zw + position * abs(a2.xy)
+    // UV coordinates from Tile mip data
     output.uv = instance.a1.zw + vertex_input.position * abs(instance.a2.xy);
 
-    // Apply the same transformation chain as OpenGL:
-    // transformed = (((vertex - origin) * mat2(a2.zw, a3.xy) + a3.zw) * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)) / vec2(tw.w, th.w) * 2.0
-    // gl_Position = vec4(transformed - vec2(1.0, 1.0), 0.0, 1.0);
-
-    // Step 1: vertex - origin
+    // Transform chain (same as legacy)
     let vertex_centered = vertex_input.position - origin;
-
-    // Step 2: * mat2(a2.zw, a3.xy) + a3.zw
     let transform_matrix = mat2x2<f32>(instance.a2.zw, instance.a3.xy);
     let transformed_local = transform_matrix * vertex_centered + instance.a3.zw;
-
-    // Step 3: * mat2(tw.xy, th.xy) + vec2(tw.z, th.z)
     let global_matrix = mat2x2<f32>(transform.tw.xy, transform.th.xy);
     let transformed_global = global_matrix * transformed_local + vec2<f32>(transform.tw.z, transform.th.z);
-
-    // Step 4: / vec2(tw.w, th.w) * 2.0
     let normalized = (transformed_global / vec2<f32>(transform.tw.w, transform.th.w)) * 2.0;
-
-    // Step 5: - vec2(1.0, 1.0) to convert to NDC coordinates
     let ndc_pos = normalized - vec2<f32>(1.0, 1.0);
 
-    // Step 6: Flip Y coordinate to match WGPU coordinate system (Y-axis up in OpenGL, Y-axis down in WGPU)
     output.clip_position = vec4<f32>(ndc_pos.x, -ndc_pos.y, 0.0, 1.0);
-
-    // Color modulation: colorj = color * colorFilter
     output.colorj = instance.color * transform.colorFilter;
 
     return output;
 }
 "#;
 
-/// Instanced fragment shader for symbols (matches OpenGL behavior)
-/// Note: Uses textureSampleLevel instead of textureSample in non-uniform control flow
-/// to comply with WebGPU uniform control flow requirements for derivative operations.
-/// Supports MSDF (Multi-channel Signed Distance Field) for TUI/CJK characters.
-pub const SYMBOLS_INSTANCED_FRAGMENT_SHADER: &str = r#"
+/// Instanced fragment shader for layered mode (Texture2DArray).
+///
+/// Uses `texture_2d_array<f32>` instead of `texture_2d<f32>`.
+/// Layer index comes from `v_layer` (flat interpolation, per-instance from a4.x).
+/// MSDF path is removed — layered mode uses bitmap-only rendering.
+pub const SYMBOLS_INSTANCED_FRAGMENT_SHADER_LAYERED: &str = r#"
 @group(0) @binding(1)
-var source: texture_2d<f32>;
+var source: texture_2d_array<f32>;
 @group(0) @binding(2)
 var source_sampler: sampler;
 
@@ -296,76 +282,38 @@ struct VertexOutput {
     @location(0) uv: vec2<f32>,
     @location(1) colorj: vec4<f32>,
     @location(2) v_bold: f32,
-    @location(3) v_msdf: f32,
+    @location(3) @interpolate(flat) v_layer: f32,
     @location(4) v_glow: f32,
     @location(5) v_local_pos: vec2<f32>,
 }
 
-fn median3(r: f32, g: f32, b: f32) -> f32 {
-    return max(min(r, g), min(max(r, g), b));
-}
-
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    var texColor = textureSampleLevel(source, source_sampler, input.uv, 0.0);
+    // Layer index from vertex shader (per-instance, from a4.x)
+    let layer = i32(input.v_layer);
 
-    // Precompute all fwidth() calls in uniform control flow (required by WebGPU WGSL)
-    let d = median3(texColor.r, texColor.g, texColor.b);
-    let w_msdf = max(fwidth(d), 0.03);
-    let edge_alpha = fwidth(texColor.a);
+    var texColor = textureSampleLevel(source, source_sampler, input.uv, layer, 0.0);
 
     // === GLOW path: radial Gaussian halo ===
-    // Uses radial distance from quad center for smooth circular falloff.
-    // No texture sampling needed — the character detail comes from the
-    // normal foreground instance rendered on top.
     if (input.v_glow > 0.5) {
         let local = input.v_local_pos;
         let center = vec2<f32>(0.5, 0.5);
-        let dist = length((local - center) * 2.0);  // normalized: 0 at center, 1 at edge
-        // Gaussian-like falloff: soft circular glow
+        let dist = length((local - center) * 2.0);
         let falloff = exp(-dist * dist * 3.0);
         return vec4<f32>(input.colorj.rgb, input.colorj.a * falloff);
     }
 
-    if (input.v_msdf > 0.5) {
-        // === MSDF path ===
-        var threshold = 0.5;
-        if (input.v_bold > 0.5) {
-            threshold = 0.45; // Bold: lower threshold to expand glyph
-        }
-
-        // Corner artifact correction:
-        // At sharp corners, two edges meet in different MSDF channels.
-        // The median overshoots (picks the middle value instead of the
-        // intersection = min of the two edge channels), causing small bumps.
-        // Detect corners by counting channels near the threshold edge:
-        // normal edge = 1 channel transitioning, corner = 2 channels.
-        let msd = texColor.rgb;
-        let near_r = 1.0 - smoothstep(0.0, 0.15, abs(msd.r - threshold));
-        let near_g = 1.0 - smoothstep(0.0, 0.15, abs(msd.g - threshold));
-        let near_b = 1.0 - smoothstep(0.0, 0.15, abs(msd.b - threshold));
-        let edge_count = near_r + near_g + near_b;
-        let is_corner = smoothstep(1.5, 2.0, edge_count);
-        let d_min = min(msd.r, min(msd.g, msd.b));
-        let corrected_d = mix(d, d_min, is_corner * 0.35);
-
-        let alpha = smoothstep(threshold - w_msdf, threshold + w_msdf, corrected_d);
-        return vec4<f32>(input.colorj.rgb, input.colorj.a * alpha);
-    } else {
-        // === Bitmap path (existing logic) ===
-        if (input.v_bold > 0.5) {
-            let ts = vec2<f32>(textureDimensions(source));
-            let dx = 0.35 / ts.x;
-            texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(dx, 0.0), 0.0));
-            texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0), 0.0));
-            texColor.a = smoothstep(0.15, 0.95, texColor.a);
-        }
-        // Alpha edge sharpening
-        if (edge_alpha > 0.001) {
-            texColor.a = smoothstep(0.5 - edge_alpha, 0.5 + edge_alpha, texColor.a);
-        }
-        return texColor * input.colorj;
+    // === Bitmap path (all rendering in layered mode) ===
+    // Bold: sample adjacent pixels for thicker stroke
+    if (input.v_bold > 0.5) {
+        let ts = vec2<f32>(textureDimensions(source));
+        let dx = 0.35 / ts.x;
+        texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(dx, 0.0), layer, 0.0));
+        texColor = max(texColor, textureSampleLevel(source, source_sampler, input.uv + vec2<f32>(-dx, 0.0), layer, 0.0));
     }
+
+    // Bitmap mode: use alpha directly, no SDF edge processing
+    return texColor * input.colorj;
 }
 "#;
 

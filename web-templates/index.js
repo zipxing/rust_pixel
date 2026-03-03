@@ -95,64 +95,51 @@ import init, {PixelGame, wasm_init_pixel_assets, wasm_set_app_data, wasm_on_asse
 const wasm = await init();
 
 /**
- * Symbol Texture Loading and Processing
+ * Layered Symbol Texture Loading (Texture2DArray)
  *
- * RustPixel uses a symbol atlas (symbols.png) containing all drawable characters
- * and sprites. This must be loaded and processed before the game can render.
- *
- * We use fetch + createImageBitmap to bypass browser Image size limits.
- * Some browsers limit Image objects to 4096x4096, but createImageBitmap
- * can handle larger images (up to GPU texture limits, typically 8192 or 16384).
+ * RustPixel uses a Texture2DArray with multiple square layers (e.g., 2048×2048)
+ * instead of a single large atlas. The layered_symbol_map.json describes which
+ * layer PNGs to load and maps symbol strings to (layer, u, v) coordinates.
  */
-const response = await fetch("assets/pix/symbols.png");
-const blob = await response.blob();
-
-// createImageBitmap bypasses Image object size limits
-const imageBitmap = await createImageBitmap(blob);
-console.log(`[DEBUG] ImageBitmap created: ${imageBitmap.width}x${imageBitmap.height}`);
-
-// Create OffscreenCanvas if available (better for large images), fallback to regular canvas
-let canvas, ctx;
-if (typeof OffscreenCanvas !== 'undefined') {
-    canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
-    ctx = canvas.getContext("2d");
-    console.log(`[DEBUG] Using OffscreenCanvas: ${canvas.width}x${canvas.height}`);
-} else {
-    canvas = document.createElement("canvas");
-    canvas.width = imageBitmap.width;
-    canvas.height = imageBitmap.height;
-    ctx = canvas.getContext("2d");
-    console.log(`[DEBUG] Using regular canvas: ${canvas.width}x${canvas.height}`);
-}
-
-if (!ctx) {
-    console.error("[ERROR] Failed to get 2D context!");
-}
-
-// Draw ImageBitmap to canvas and extract raw pixel data
-ctx.drawImage(imageBitmap, 0, 0);
-const imgdata = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height).data;
-console.log(`[DEBUG] getImageData complete, length: ${imgdata.length}`);
-
-// Use imageBitmap dimensions for Rust
-const timg = { width: imageBitmap.width, height: imageBitmap.height };
-
-/**
- * Unified Asset Loading (New Approach)
- *
- * Load the symbol_map.json configuration file and initialize all assets
- * at once using wasm_init_pixel_assets(). This provides:
- * - Unified loading for texture + symbol_map
- * - Consistent with native mode initialization
- * - All assets cached before game creation
- */
-const symbolMapResponse = await fetch("assets/pix/symbol_map.json");
+const symbolMapResponse = await fetch("assets/pix/layered_symbol_map.json");
 const symbolMapText = await symbolMapResponse.text();
+const symbolMap = JSON.parse(symbolMapText);
+const layerSize = symbolMap.layer_size;
+const layerFiles = symbolMap.layer_files;
+console.log(`[DEBUG] Loading ${layerFiles.length} layers (${layerSize}x${layerSize} each)`);
 
-// Initialize all assets at once: game config + texture + symbol_map
-console.log(`[DEBUG] Texture image size: ${timg.width}x${timg.height}`);
-console.log(`[DEBUG] Image data length: ${imgdata.length} bytes (expected: ${timg.width * timg.height * 4})`);
-wasm_init_pixel_assets("pixel_game", timg.width, timg.height, imgdata, symbolMapText);
+// Load all layer PNGs in parallel, extract raw RGBA data, and concatenate
+const bytesPerLayer = layerSize * layerSize * 4;
+const allLayerData = new Uint8Array(bytesPerLayer * layerFiles.length);
+
+await Promise.all(layerFiles.map(async (file, i) => {
+    const resp = await fetch(`assets/pix/${file}`);
+    const blob = await resp.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    // Extract raw RGBA pixels via OffscreenCanvas
+    let cv, cx;
+    if (typeof OffscreenCanvas !== 'undefined') {
+        cv = new OffscreenCanvas(bitmap.width, bitmap.height);
+        cx = cv.getContext("2d");
+    } else {
+        cv = document.createElement("canvas");
+        cv.width = bitmap.width;
+        cv.height = bitmap.height;
+        cx = cv.getContext("2d");
+    }
+    cx.drawImage(bitmap, 0, 0);
+    const pixels = cx.getImageData(0, 0, bitmap.width, bitmap.height).data;
+
+    // Copy into concatenated buffer at the correct offset
+    allLayerData.set(pixels, i * bytesPerLayer);
+    console.log(`[DEBUG] Layer ${i} loaded: ${bitmap.width}x${bitmap.height}`);
+}));
+
+console.log(`[DEBUG] All layers loaded: ${allLayerData.length} bytes total`);
+
+// Initialize all assets: game config + layers + symbol_map
+wasm_init_pixel_assets("pixel_game", layerSize, layerFiles.length, allLayerData, symbolMapText);
 
 /**
  * Optional App Data Loading
@@ -181,11 +168,11 @@ if (dataUrl) {
  * Game Instance Creation and Initialization
  *
  * Creates the main game object (compiled from Rust to WASM) and initializes
- * WebGL using the pre-cached texture data.
+ * WGPU using the pre-cached layer data (Texture2DArray).
  */
 const sg = PixelGame.new();
 
-// Initialize WGPU (async - must await!)
+// Initialize WGPU with cached layers (async - must await!)
 await sg.init_from_cache();
 
 /**

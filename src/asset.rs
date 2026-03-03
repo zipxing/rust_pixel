@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Asset module provides the resource manager.
 //! It supports async loading. It calls JavaScript methods to load resources asynchronously when running in WASM mode.

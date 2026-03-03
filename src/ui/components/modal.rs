@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Modal Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Modal/Dialog component - character-cell modal dialog with backdrop and focus trap.
 

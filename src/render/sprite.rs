@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Sprite further encapsulates Buffer.
 //! It is also the most common component in RustPixel.
@@ -149,7 +149,7 @@ pub trait Widget {
 /// - Graphics-specific features (rotation, transparency, scaling) are ignored
 /// - Example: `set_pos(10, 5)` places sprite at column 10, row 5
 ///
-/// ## Graphics Mode (SDL/Glow/WGPU/Web)
+/// ## Graphics Mode (WGPU)
 /// - Position coordinates are in **Pixel units** (sub-pixel precision)
 /// - Values are cast from u16 to f32 for rendering calculations
 /// - Supports pixel-perfect positioning, rotation, transparency, and scaling

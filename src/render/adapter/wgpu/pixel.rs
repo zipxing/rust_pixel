@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # WGPU Pixel Renderer Module
 //!
@@ -117,8 +117,8 @@ pub struct WgpuPixelRender {
     /// Uniform buffer for transform data
     uniform_buffer: Option<wgpu::Buffer>,
 
-    /// Main texture for symbols and characters
-    symbol_texture: Option<texture::WgpuTexture>,
+    /// Texture2DArray for layered symbol atlas
+    symbol_texture_array: Option<texture::WgpuTextureArray>,
 
     /// Bind group layout for shader resources
     bind_group_layout: Option<wgpu::BindGroupLayout>,
@@ -158,7 +158,7 @@ impl WgpuPixelRender {
             instance_buffer: None,
             index_buffer: None,
             uniform_buffer: None,
-            symbol_texture: None,
+            symbol_texture_array: None,
             bind_group_layout: None,
             bind_group: None,
             render_textures: Vec::new(),
@@ -193,13 +193,13 @@ impl WgpuPixelRender {
         // RT3: hidden (only shown during transitions)
         let rt_hidden = [true, true, false, true];
 
-        for i in 0..4 {
+        for hidden in &rt_hidden {
             let render_texture = WgpuRenderTexture::new_with_format(
                 device,
                 self.canvas_width,
                 self.canvas_height,
                 self.surface_format, // Use surface format to match pipelines
-                rt_hidden[i],
+                *hidden,
             )?;
 
             self.render_textures.push(render_texture);
@@ -410,7 +410,7 @@ impl WgpuPixelRender {
         });
 
         // Set up the instanced rendering pipeline automatically
-        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+        if let Some(pipeline) = self.base.render_pipelines.first() {
             render_pass.set_pipeline(pipeline);
 
             // Set quad vertex buffer (buffer 0)
@@ -607,135 +607,39 @@ impl WgpuPixelRender {
         Ok(())
     }
 
-    /// Load the symbol texture from pre-loaded data
-    ///
-    /// This is the preferred method when using init_pixel_assets() which pre-loads
-    /// the texture data into memory.
-    pub fn load_symbol_texture_from_data(
+    /// Load symbol texture array from layer data (Texture2DArray mode)
+    pub fn load_symbol_texture_array(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_width: u32,
-        texture_height: u32,
-        texture_data: &[u8],
+        layer_size: u32,
+        layers: &[&[u8]],
     ) -> Result<(), String> {
-        self.load_symbol_texture_internal(device, queue, texture_width, texture_height, texture_data)
-    }
+        let tex_array = texture::WgpuTextureArray::from_layers(device, queue, layer_size, layers)?;
 
-    /// Load the symbol texture from the specified path (legacy method)
-    ///
-    /// Prefer using load_symbol_texture_from_data() with pre-loaded texture data.
-    /// Note: This method is not available on wasm32 targets as it uses std::fs.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_symbol_texture(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_path: &str,
-    ) -> Result<(), String> {
-        // Load the texture file
-        let texture_bytes = std::fs::read(texture_path)
-            .map_err(|e| format!("Failed to read texture file {}: {}", texture_path, e))?;
-
-        let texture_image = image::load_from_memory(&texture_bytes)
-            .map_err(|e| format!("Failed to load texture image: {}", e))?
-            .to_rgba8();
-
-        let texture_width = texture_image.width();
-        let texture_height = texture_image.height();
-
-        self.load_symbol_texture_internal(device, queue, texture_width, texture_height, &texture_image)
-    }
-
-    /// Internal method for loading symbol texture
-    fn load_symbol_texture_internal(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_width: u32,
-        texture_height: u32,
-        texture_data: &[u8],
-    ) -> Result<(), String> {
-
-        // Symbol texture loaded successfully (debug output removed for performance)
-
-        // Create WGPU texture (use linear format to exactly match GL mode)
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Symbol Texture"),
-            size: wgpu::Extent3d {
-                width: texture_width,
-                height: texture_height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm, // Linear format like GL mode
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        // Write texture data
-        queue.write_texture(
-            texture.as_image_copy(),
-            texture_data,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * texture_width),
-                rows_per_image: Some(texture_height),
-            },
-            wgpu::Extent3d {
-                width: texture_width,
-                height: texture_height,
-                depth_or_array_layers: 1,
-            },
+        log::info!(
+            "Loaded Texture2DArray: {} layers, {}x{} each",
+            tex_array.layer_count, tex_array.layer_size, tex_array.layer_size
         );
 
-        // Create texture view
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        // Create sampler
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            compare: None,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            border_color: None,
-            anisotropy_clamp: 1,
-            label: Some("Symbol Sampler"),
-        });
-
-        // Store texture in WgpuTexture wrapper
-        self.symbol_texture = Some(texture::WgpuTexture {
-            texture,
-            view: texture_view,
-            sampler: Some(sampler),
-            width: texture_width,
-            height: texture_height,
-        });
-
-        // Load texture data into symbol renderer
-        self.symbol_renderer.load_texture(
-            texture_width as i32,
-            texture_height as i32,
-            texture_data,
-        );
+        self.symbol_texture_array = Some(tex_array);
 
         Ok(())
     }
 
-    /// Create bind group for texture and uniform buffer
+    /// Create bind group for texture and uniform buffer (Texture2DArray mode).
     pub fn create_bind_group(&mut self, device: &wgpu::Device) {
-        if let (Some(bind_group_layout), Some(symbol_texture), Some(uniform_buffer)) = (
-            &self.bind_group_layout,
-            &self.symbol_texture,
-            &self.uniform_buffer,
-        ) {
+        let bind_group_layout = match &self.bind_group_layout {
+            Some(l) => l,
+            None => return,
+        };
+        let uniform_buffer = match &self.uniform_buffer {
+            Some(b) => b,
+            None => return,
+        };
+
+        // Texture2DArray bind group
+        if let Some(tex_array) = &self.symbol_texture_array {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: bind_group_layout,
                 entries: &[
@@ -745,18 +649,15 @@ impl WgpuPixelRender {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&symbol_texture.view),
+                        resource: wgpu::BindingResource::TextureView(&tex_array.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::Sampler(
-                            symbol_texture.sampler.as_ref().unwrap(),
-                        ),
+                        resource: wgpu::BindingResource::Sampler(&tex_array.sampler),
                     },
                 ],
                 label: Some("Symbol Bind Group"),
             });
-
             self.bind_group = Some(bind_group);
         }
     }
@@ -816,7 +717,7 @@ impl WgpuPixelRender {
 
     /// Get the render pipeline (for internal access)
     pub fn get_render_pipeline(&self) -> Option<&wgpu::RenderPipeline> {
-        self.base.render_pipelines.get(0)
+        self.base.render_pipelines.first()
     }
 
     /// Get the quad vertex buffer (for internal access)
@@ -862,6 +763,12 @@ impl WgpuPixelRender {
         self.symbol_renderer.set_ratio(ratio_x, ratio_y);
     }
 
+    /// Set render scale for HiDPI/Retina displays
+    /// render_scale = physical_size / logical_size
+    pub fn set_render_scale(&mut self, scale: f32) {
+        self.symbol_renderer.set_render_scale(scale);
+    }
+
     /// Set CAS (Contrast Adaptive Sharpening) intensity for the General2D renderer
     ///
     /// Applied during the final RT-to-screen composition (Stage 4).
@@ -870,14 +777,9 @@ impl WgpuPixelRender {
         self.general2d_renderer.set_sharpness(sharpness);
     }
 
-    /// Set whether MSDF/SDF rendering is enabled for TUI/CJK regions.
-    pub fn set_msdf_enabled(&mut self, enabled: bool) {
-        self.symbol_renderer.set_msdf_enabled(enabled);
-    }
-
-    /// Get whether MSDF/SDF rendering is currently enabled.
-    pub fn get_msdf_enabled(&self) -> bool {
-        self.symbol_renderer.get_msdf_enabled()
+    /// Set viewport scale for mipmap selection.
+    pub fn set_viewport_scale(&mut self, scale: f32) {
+        self.symbol_renderer.set_viewport_scale(scale);
     }
 
     /// Bind screen as render target (matches OpenGL GlPixel interface)
@@ -1010,7 +912,7 @@ impl WgpuPixelRender {
         });
 
         // Set pipeline and buffers for instanced rendering
-        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+        if let Some(pipeline) = self.base.render_pipelines.first() {
             render_pass.set_pipeline(pipeline);
 
             // Set quad vertex buffer (buffer 0)
@@ -1052,20 +954,20 @@ impl WgpuRender for WgpuPixelRender {
     }
 
     fn create_shader(&mut self, device: &wgpu::Device) {
-        // Create shader modules for instanced rendering
+        // Layered mode shaders (Texture2DArray with v_layer output)
         let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Instanced Vertex Shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_VERTEX_SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_VERTEX_SHADER_LAYERED.into()),
         });
 
         let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Instanced Fragment Shader"),
-            source: wgpu::ShaderSource::Wgsl(
-                shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER.into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER_LAYERED.into()),
         });
 
-        // Create bind group layout for instanced rendering
+        // Create bind group layout for instanced rendering (Texture2DArray)
+        let texture_view_dimension = wgpu::TextureViewDimension::D2Array;
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Symbol Instanced Bind Group Layout"),
             entries: &[
@@ -1080,13 +982,13 @@ impl WgpuRender for WgpuPixelRender {
                     },
                     count: None,
                 },
-                // Texture
+                // Texture (D2Array)
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: texture_view_dimension,
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     },
                     count: None,
@@ -1168,7 +1070,7 @@ impl WgpuRender for WgpuPixelRender {
         let quad_vertices = WgpuSymbolRenderer::get_base_quad_vertices();
         let quad_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Quad Vertex Buffer"),
-            size: (quad_vertices.len() * std::mem::size_of::<WgpuQuadVertex>()) as u64,
+            size: std::mem::size_of_val(quad_vertices) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1190,7 +1092,7 @@ impl WgpuRender for WgpuPixelRender {
         let quad_indices = WgpuSymbolRenderer::get_base_quad_indices();
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Quad Index Buffer"),
-            size: (quad_indices.len() * std::mem::size_of::<u16>()) as u64,
+            size: std::mem::size_of_val(quad_indices) as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1257,7 +1159,7 @@ impl WgpuRender for WgpuPixelRender {
         });
 
         // Set pipeline and buffers for instanced rendering
-        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+        if let Some(pipeline) = self.base.render_pipelines.first() {
             render_pass.set_pipeline(pipeline);
 
             // Set quad vertex buffer (buffer 0)
