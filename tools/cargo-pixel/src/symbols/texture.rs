@@ -550,10 +550,15 @@ pub fn pack_layered(
         .map(|i| format!("layers/layer_{}.png", i))
         .collect();
 
+    // cell_pixel_size: screen pixels per 1×1 cell at ratio=1.0
+    // Derived from sprite mip1 width (the default rendering resolution)
+    let cell_pixel_size = lcfg.sprite.levels[1].width;
+
     let symbol_map = json!({
         "version": 2,
         "layer_size": layer_size,
         "layer_count": layer_images.len(),
+        "cell_pixel_size": cell_pixel_size,
         "layer_files": layer_files,
         "symbols": symbols_json,
     });

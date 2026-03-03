@@ -85,6 +85,10 @@ pub struct LayeredSymbolMap {
     pub layer_size: u32,
     /// Number of layers
     pub layer_count: u32,
+    /// Screen pixels per 1×1 cell at ratio=1.0 (derived from sprite mip1 width)
+    /// Used for window size calculation and mouse coordinate conversion.
+    /// E.g., 32 means a 1×1 cell occupies 32×32 screen pixels.
+    pub cell_pixel_size: u32,
     /// Relative paths to layer PNG files
     pub layer_files: Vec<String>,
     /// Symbol string → Tile mapping
@@ -163,6 +167,10 @@ impl LayeredSymbolMap {
             .ok_or("Missing layer_size")? as u32;
         let layer_count = root["layer_count"].as_u64()
             .ok_or("Missing layer_count")? as u32;
+
+        // cell_pixel_size: screen pixels per 1×1 cell at ratio=1.0
+        // Default to 32 (= PIXEL_SYMBOL_SIZE * 2) for backward compatibility
+        let cell_pixel_size = root["cell_pixel_size"].as_u64().unwrap_or(32) as u32;
 
         let layer_files: Vec<String> = root["layer_files"]
             .as_array()
@@ -243,6 +251,7 @@ impl LayeredSymbolMap {
         Ok(Self {
             layer_size,
             layer_count,
+            cell_pixel_size,
             layer_files,
             symbols,
             reverse,

@@ -19,6 +19,7 @@ macro_rules! app_body {
 
         #[cfg(wgpu_web_backend)]
         use rust_pixel::render::adapter::wgpu_web_adapter::{input_events_from_web, WgpuWebAdapter};
+        #[cfg(target_arch = "wasm32")]
         use wasm_bindgen::prelude::*;
         #[cfg(wgpu_web_backend)]
         use log::info;

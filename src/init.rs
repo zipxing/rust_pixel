@@ -146,13 +146,7 @@ pub fn init_layered_pixel_assets(
     // 1. Set global game configuration
     init_game_config(game_name, project_path, fullscreen, fullscreen_fit);
 
-    // 2. Set PIXEL_SYM_WIDTH/HEIGHT for grid calculations
-    // PIXEL_SYMBOL_SIZE (16) × 2 = 32.0, matching legacy 8192/256
-    use crate::render::graph::PIXEL_SYMBOL_SIZE;
-    let _ = PIXEL_SYM_WIDTH.set(PIXEL_SYMBOL_SIZE * 2.0);
-    let _ = PIXEL_SYM_HEIGHT.set(PIXEL_SYMBOL_SIZE * 2.0);
-
-    // 3. Load layered_symbol_map.json
+    // 2. Load layered_symbol_map.json (must be before setting PIXEL_SYM_WIDTH/HEIGHT)
     let json_path = format!(
         "{}{}{}",
         project_path,
@@ -163,6 +157,11 @@ pub fn init_layered_pixel_assets(
 
     let lmap = crate::render::symbol_map::get_layered_symbol_map()
         .ok_or("Layered symbol map not initialized")?;
+
+    // 3. Set PIXEL_SYM_WIDTH/HEIGHT from symbol map's cell_pixel_size
+    let cell_px = lmap.cell_pixel_size as f32;
+    let _ = PIXEL_SYM_WIDTH.set(cell_px);
+    let _ = PIXEL_SYM_HEIGHT.set(cell_px);
 
     // 4. Load layer PNGs
     let layer_size = lmap.layer_size;
@@ -241,25 +240,37 @@ pub fn wasm_init_pixel_assets(
     // 1. Set game configuration
     init_game_config(game_name, ".", true, false);
 
-    // 2. Set PIXEL_SYM_WIDTH/HEIGHT
-    use crate::render::graph::PIXEL_SYMBOL_SIZE;
-    let sym_w = PIXEL_SYMBOL_SIZE * 2.0;
-    let sym_h = PIXEL_SYMBOL_SIZE * 2.0;
+    // 2. Initialize layered symbol map (must be before setting PIXEL_SYM_WIDTH/HEIGHT)
+    if let Err(e) = crate::render::symbol_map::init_layered_symbol_map_from_json(symbol_map_json) {
+        web_sys::console::error_1(&format!("RUST: Failed to init symbol map: {}", e).into());
+        return false;
+    }
+
+    let lmap = match crate::render::symbol_map::get_layered_symbol_map() {
+        Some(m) => m,
+        None => {
+            web_sys::console::error_1(&"RUST: Layered symbol map not initialized".into());
+            return false;
+        }
+    };
+
+    // 3. Set PIXEL_SYM_WIDTH/HEIGHT from symbol map's cell_pixel_size
+    let cell_px = lmap.cell_pixel_size as f32;
     web_sys::console::log_1(
         &format!(
-            "RUST: layer_size={}, layer_count={}, sym_width={}, sym_height={}",
-            layer_size, layer_count, sym_w, sym_h
+            "RUST: layer_size={}, layer_count={}, cell_pixel_size={}",
+            layer_size, layer_count, lmap.cell_pixel_size
         )
         .into(),
     );
-    if PIXEL_SYM_WIDTH.set(sym_w).is_err() {
+    if PIXEL_SYM_WIDTH.set(cell_px).is_err() {
         web_sys::console::warn_1(&"PIXEL_SYM_WIDTH already initialized".into());
     }
-    if PIXEL_SYM_HEIGHT.set(sym_h).is_err() {
+    if PIXEL_SYM_HEIGHT.set(cell_px).is_err() {
         web_sys::console::warn_1(&"PIXEL_SYM_HEIGHT already initialized".into());
     }
 
-    // 3. Cache layer data
+    // 4. Cache layer data
     let bytes_per_layer = (layer_size * layer_size * 4) as usize;
     let mut layers = Vec::with_capacity(layer_count as usize);
     for i in 0..layer_count as usize {
@@ -279,21 +290,12 @@ pub fn wasm_init_pixel_assets(
         web_sys::console::warn_1(&"PIXEL_LAYER_DATA already initialized".into());
     }
 
-    // 4. Initialize layered symbol map
-    match crate::render::symbol_map::init_layered_symbol_map_from_json(symbol_map_json) {
-        Ok(()) => {
-            web_sys::console::log_1(
-                &format!(
-                    "RUST: Layered pixel assets initialized: {} layers ({}x{})",
-                    layer_count, layer_size, layer_size
-                )
-                .into(),
-            );
-            true
-        }
-        Err(e) => {
-            web_sys::console::error_1(&format!("RUST: Failed to init symbol map: {}", e).into());
-            false
-        }
-    }
+    web_sys::console::log_1(
+        &format!(
+            "RUST: Layered pixel assets initialized: {} layers ({}x{}), {} symbols",
+            layer_count, layer_size, layer_size, lmap.symbol_count()
+        )
+        .into(),
+    );
+    true
 }

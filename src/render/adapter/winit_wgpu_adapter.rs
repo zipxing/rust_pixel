@@ -483,14 +483,14 @@ impl WinitWgpuAdapter {
         let orig_ratio_x = self.base.gr.ratio_x;
         let orig_ratio_y = self.base.gr.ratio_y;
 
-        println!("=== Window/Display Size Debug ===");
-        println!("  game_config.fullscreen = {}", game_config.fullscreen);
-        println!("  game_config.fullscreen_fit = {}", game_config.fullscreen_fit);
-        println!("  logical (pixel_w/h before override) = {}x{}", logical_w, logical_h);
-        println!("  physical (window inner_size) = {}x{}", phys_w, phys_h);
-        println!("  scale_factor = {:.2}", scale_factor);
-        println!("  original ratio_x={:.4}, ratio_y={:.4}", orig_ratio_x, orig_ratio_y);
-        println!("  logical_content saved = {}x{}", self.logical_content_w, self.logical_content_h);
+        log::info!("=== Window/Display Size Debug ===");
+        log::info!("  game_config.fullscreen = {}", game_config.fullscreen);
+        log::info!("  game_config.fullscreen_fit = {}", game_config.fullscreen_fit);
+        log::info!("  logical (pixel_w/h before override) = {}x{}", logical_w, logical_h);
+        log::info!("  physical (window inner_size) = {}x{}", phys_w, phys_h);
+        log::info!("  scale_factor = {:.2}", scale_factor);
+        log::info!("  original ratio_x={:.4}, ratio_y={:.4}", orig_ratio_x, orig_ratio_y);
+        log::info!("  logical_content saved = {}x{}", self.logical_content_w, self.logical_content_h);
 
         let (canvas_w, canvas_h, ratio_x, ratio_y, render_scale) = if game_config.fullscreen {
             if game_config.fullscreen_fit {
@@ -515,9 +515,9 @@ impl WinitWgpuAdapter {
                 // Uniform ratio: same for both axes → isotropic rendering
                 let uniform_ratio = logical_w / cw as f32;
 
-                println!("  [Fullscreen-FIT] logical_aspect={:.4}, phys_aspect={:.4}", logical_aspect, phys_aspect);
-                println!("  [Fullscreen-FIT] canvas={}x{}, uniform_ratio={:.6}", cw, ch, uniform_ratio);
-                println!("  [Fullscreen-FIT] render_scale=1.0");
+                log::info!("  [Fullscreen-FIT] logical_aspect={:.4}, phys_aspect={:.4}", logical_aspect, phys_aspect);
+                log::info!("  [Fullscreen-FIT] canvas={}x{}, uniform_ratio={:.6}", cw, ch, uniform_ratio);
+                log::info!("  [Fullscreen-FIT] render_scale=1.0");
 
                 self.base.gr.ratio_x = uniform_ratio;
                 self.base.gr.ratio_y = uniform_ratio;
@@ -535,9 +535,9 @@ impl WinitWgpuAdapter {
                 let new_ratio_x = logical_w / phys_w;
                 let new_ratio_y = logical_h / phys_h;
 
-                println!("  [Fullscreen-STRETCH] ratio_x={:.6}, ratio_y={:.6}", new_ratio_x, new_ratio_y);
-                println!("  [Fullscreen-STRETCH] canvas={}x{} (=physical)", physical_size.width, physical_size.height);
-                println!("  [Fullscreen-STRETCH] render_scale=1.0");
+                log::info!("  [Fullscreen-STRETCH] ratio_x={:.6}, ratio_y={:.6}", new_ratio_x, new_ratio_y);
+                log::info!("  [Fullscreen-STRETCH] canvas={}x{} (=physical)", physical_size.width, physical_size.height);
+                log::info!("  [Fullscreen-STRETCH] render_scale=1.0");
 
                 self.base.gr.ratio_x = new_ratio_x;
                 self.base.gr.ratio_y = new_ratio_y;
@@ -556,20 +556,20 @@ impl WinitWgpuAdapter {
             // render_scale = physical / logical, used to scale render coordinates
             let render_scale = phys_h / logical_h;
 
-            println!("  [Windowed] canvas={}x{} (=physical)", physical_size.width, physical_size.height);
-            println!("  [Windowed] ratio_x={:.6}, ratio_y={:.6} (unchanged)", self.base.gr.ratio_x, self.base.gr.ratio_y);
-            println!("  [Windowed] render_scale={:.4}", render_scale);
+            log::info!("  [Windowed] canvas={}x{} (=physical)", physical_size.width, physical_size.height);
+            log::info!("  [Windowed] ratio_x={:.6}, ratio_y={:.6} (unchanged)", self.base.gr.ratio_x, self.base.gr.ratio_y);
+            log::info!("  [Windowed] render_scale={:.4}", render_scale);
 
             (physical_size.width, physical_size.height, self.base.gr.ratio_x, self.base.gr.ratio_y, render_scale)
         };
 
-        println!("  --- Final Settings ---");
-        println!("  canvas (RT) = {}x{}", canvas_w, canvas_h);
-        println!("  surface (physical) = {}x{}", physical_size.width, physical_size.height);
-        println!("  ratio = ({:.6}, {:.6}), render_scale = {:.4}", ratio_x, ratio_y, render_scale);
-        println!("  pixel_w/h (after override) = {}x{}", self.base.gr.pixel_w, self.base.gr.pixel_h);
-        println!("  isotropic = {}", (ratio_x - ratio_y).abs() < 0.0001);
-        println!("================================");
+        log::info!("  --- Final Settings ---");
+        log::info!("  canvas (RT) = {}x{}", canvas_w, canvas_h);
+        log::info!("  surface (physical) = {}x{}", physical_size.width, physical_size.height);
+        log::info!("  ratio = ({:.6}, {:.6}), render_scale = {:.4}", ratio_x, ratio_y, render_scale);
+        log::info!("  pixel_w/h (after override) = {}x{}", self.base.gr.pixel_w, self.base.gr.pixel_h);
+        log::info!("  isotropic = {}", (ratio_x - ratio_y).abs() < 0.0001);
+        log::info!("================================");
 
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
