@@ -11,13 +11,13 @@
 //!
 //! ## Native Graphics Mode
 //! ```ignore
-//! init_pixel_assets("my_game", "/path/to/project")?;
+//! init_layered_pixel_assets("my_game", "/path/to/project", false, false)?;
 //! // Now safe to create Model and Render
 //! ```
 //!
 //! ## WASM Mode (from JavaScript)
 //! ```js
-//! wasm_init_pixel_assets("my_game", tex_w, tex_h, imgdata, symbolMapJson);
+//! wasm_init_pixel_assets("my_game", layerSize, layerCount, layerData, symbolMapJson);
 //! const game = PixelGame.new();
 //! game.init_from_cache();
 //! ```
@@ -95,23 +95,8 @@ pub fn get_wasm_app_data() -> Option<&'static str> {
 }
 
 // ============================================================================
-// Texture Data Cache
+// Layer Data Cache (Texture2DArray mode)
 // ============================================================================
-
-/// Cached texture data loaded from symbols.png
-///
-/// This struct holds the raw pixel data after loading from disk but before
-/// uploading to GPU. This allows early loading during init_pixel_assets()
-/// while deferring GPU upload to adapter.init().
-#[derive(Debug, Clone)]
-pub struct PixelTextureData {
-    /// Texture width in pixels
-    pub width: u32,
-    /// Texture height in pixels
-    pub height: u32,
-    /// Raw RGBA pixel data
-    pub data: Vec<u8>,
-}
 
 /// Cached layer data for Texture2DArray mode.
 ///
@@ -125,7 +110,7 @@ pub struct PixelLayerData {
     pub layers: Vec<Vec<u8>>,
 }
 
-/// Global cached layer data (layered mode)
+/// Global cached layer data
 pub static PIXEL_LAYER_DATA: OnceLock<PixelLayerData> = OnceLock::new();
 
 /// Get the cached layer data, if loaded
@@ -133,112 +118,14 @@ pub fn get_pixel_layer_data() -> Option<&'static PixelLayerData> {
     PIXEL_LAYER_DATA.get()
 }
 
-/// Check if layered mode is active
-pub fn is_layered_mode() -> bool {
-    PIXEL_LAYER_DATA.get().is_some()
-}
-
-/// Global cached texture data - loaded once during init_pixel_assets()
-pub static PIXEL_TEXTURE_DATA: OnceLock<PixelTextureData> = OnceLock::new();
-
-/// Get the cached texture data
-///
-/// # Panics
-/// Panics if init_pixel_assets() was not called before this function.
-pub fn get_pixel_texture_data() -> &'static PixelTextureData {
-    PIXEL_TEXTURE_DATA
-        .get()
-        .expect("Texture data not loaded - call init_pixel_assets() first")
-}
-
 // ============================================================================
 // Native Graphics Mode Initialization
 // ============================================================================
 
-/// Initialize all pixel assets: game config + texture + symbol_map
-///
-/// This function should be called once at program startup, BEFORE creating
-/// Model/Render instances. It performs the following steps:
-/// 1. Set global game configuration (game_name, project_path)
-/// 2. Load symbols.png into memory and set PIXEL_SYM_WIDTH/HEIGHT
-/// 3. Load and parse symbol_map.json
-///
-/// After calling this function, all resources are ready for use:
-/// - `get_game_config()` returns the game configuration
-/// - `get_pixel_texture_data()` returns the texture data
-/// - `get_symbol_map()` returns the symbol mapping
-///
-/// # Arguments
-/// * `game_name` - Game identifier
-/// * `project_path` - Project root path for asset loading
-///
-/// # Returns
-/// * `Ok(())` on success
-/// * `Err(String)` with error message on failure
-///
-/// # Example
-/// ```ignore
-/// init_pixel_assets("my_game", "/path/to/project")?;
-/// // Now safe to create Model and Render
-/// let model = MyModel::new();
-/// let render = MyRender::new();
-/// ```
-#[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
-pub fn init_pixel_assets(game_name: &str, project_path: &str, fullscreen: bool, fullscreen_fit: bool) -> Result<(), String> {
-    use crate::render::adapter::{
-        init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE,
-    };
-
-    // 1. Set global game configuration
-    init_game_config(game_name, project_path, fullscreen, fullscreen_fit);
-
-    // 2. Load texture file into memory
-    let texture_path = format!(
-        "{}{}{}",
-        project_path,
-        std::path::MAIN_SEPARATOR,
-        PIXEL_TEXTURE_FILE
-    );
-
-    let img = image::open(&texture_path)
-        .map_err(|e| format!("Failed to load texture '{}': {}", texture_path, e))?
-        .to_rgba8();
-
-    let width = img.width();
-    let height = img.height();
-
-    // 3. Set PIXEL_SYM_WIDTH/HEIGHT
-    PIXEL_SYM_WIDTH
-        .set(init_sym_width(width))
-        .map_err(|_| "PIXEL_SYM_WIDTH already initialized".to_string())?;
-    PIXEL_SYM_HEIGHT
-        .set(init_sym_height(height))
-        .map_err(|_| "PIXEL_SYM_HEIGHT already initialized".to_string())?;
-
-    // 4. Cache texture data for later GPU upload
-    PIXEL_TEXTURE_DATA
-        .set(PixelTextureData {
-            width,
-            height,
-            data: img.into_raw(),
-        })
-        .map_err(|_| "PIXEL_TEXTURE_DATA already initialized".to_string())?;
-
-    // 5. Load symbol_map.json
-    crate::render::symbol_map::init_symbol_map_from_file()?;
-
-    println!(
-        "Pixel assets initialized: {}x{} texture, symbol_map loaded from {}",
-        width, height, project_path
-    );
-
-    Ok(())
-}
-
 /// Initialize layered pixel assets: game config + layer PNGs + layered_symbol_map.json
 ///
-/// This function should be called instead of `init_pixel_assets` when
-/// `layered_symbol_map.json` exists in the app's assets directory.
+/// This is the only initialization path for graphics mode. It loads the
+/// Texture2DArray layers and the layered symbol map.
 ///
 /// After calling this function:
 /// - `get_game_config()` returns the game configuration
@@ -277,7 +164,7 @@ pub fn init_layered_pixel_assets(
     let lmap = crate::render::symbol_map::get_layered_symbol_map()
         .ok_or("Layered symbol map not initialized")?;
 
-    // 3. Load layer PNGs
+    // 4. Load layer PNGs
     let layer_size = lmap.layer_size;
     let mut layers = Vec::with_capacity(lmap.layer_files.len());
 
@@ -308,7 +195,7 @@ pub fn init_layered_pixel_assets(
 
     let layer_count = layers.len();
 
-    // 4. Cache layer data
+    // 5. Cache layer data
     PIXEL_LAYER_DATA
         .set(PixelLayerData { layer_size, layers })
         .map_err(|_| "PIXEL_LAYER_DATA already initialized".to_string())?;
@@ -321,79 +208,47 @@ pub fn init_layered_pixel_assets(
     Ok(())
 }
 
-/// Check if layered assets exist for the given project path
-#[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
-pub fn has_layered_assets(project_path: &str) -> bool {
-    let json_path = format!(
-        "{}{}{}",
-        project_path,
-        std::path::MAIN_SEPARATOR,
-        crate::render::symbol_map::PIXEL_LAYERED_SYMBOL_MAP_FILE
-    );
-    std::path::Path::new(&json_path).exists()
-}
-
 // ============================================================================
 // WASM Mode Initialization
 // ============================================================================
 
 /// Initialize pixel assets for Web/WASM mode
 ///
-/// This function is called from JavaScript after loading the texture image
-/// and symbol_map.json. It performs the same initialization as `init_pixel_assets`
-/// but receives data directly from JavaScript instead of loading from files.
+/// This function is called from JavaScript after loading the layer images
+/// and layered_symbol_map.json. It initializes the layered symbol map
+/// and caches the layer data for GPU upload.
 ///
 /// # Arguments
 /// * `game_name` - Game identifier
-/// * `tex_w` - Texture width in pixels
-/// * `tex_h` - Texture height in pixels
-/// * `tex_data` - Raw RGBA pixel data from JavaScript
-/// * `symbol_map_json` - Content of symbol_map.json
+/// * `layer_size` - Size of each square layer in pixels
+/// * `layer_count` - Number of layers
+/// * `layer_data` - Concatenated raw RGBA pixel data for all layers
+/// * `symbol_map_json` - Content of layered_symbol_map.json
 ///
 /// # Returns
 /// * `true` on success
 /// * `false` on failure (error logged to console)
-///
-/// # JavaScript Example
-/// ```js
-/// import init, {PixelGame, wasm_init_pixel_assets} from "./pkg/pixel.js";
-/// await init();
-///
-/// // Load texture
-/// const timg = new Image();
-/// timg.src = "assets/pix/symbols.png";
-/// await timg.decode();
-/// const imgdata = ctx.getImageData(0, 0, timg.width, timg.height).data;
-///
-/// // Load symbol map
-/// const symbolMapJson = await fetch("assets/pix/symbol_map.json").then(r => r.text());
-///
-/// // Initialize all assets at once
-/// wasm_init_pixel_assets("my_game", timg.width, timg.height, imgdata, symbolMapJson);
-///
-/// // Now create the game
-/// const sg = PixelGame.new();
-/// ```
 #[cfg(target_arch = "wasm32")]
 pub fn wasm_init_pixel_assets(
     game_name: &str,
-    tex_w: u32,
-    tex_h: u32,
-    tex_data: &[u8],
+    layer_size: u32,
+    layer_count: u32,
+    layer_data: &[u8],
     symbol_map_json: &str,
 ) -> bool {
-    use crate::render::adapter::{init_sym_height, init_sym_width, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
+    use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 
-    // 1. Set game configuration (use "." as project_path for web mode, fullscreen for presentation)
+    // 1. Set game configuration
     init_game_config(game_name, ".", true, false);
 
     // 2. Set PIXEL_SYM_WIDTH/HEIGHT
-    let sym_w = init_sym_width(tex_w);
-    let sym_h = init_sym_height(tex_h);
+    use crate::render::graph::PIXEL_SYMBOL_SIZE;
+    let sym_w = PIXEL_SYMBOL_SIZE * 2.0;
+    let sym_h = PIXEL_SYMBOL_SIZE * 2.0;
     web_sys::console::log_1(
         &format!(
-            "RUST: tex_w={}, tex_h={}, sym_width={}, sym_height={}",
-            tex_w, tex_h, sym_w, sym_h
+            "RUST: layer_size={}, layer_count={}, sym_width={}, sym_height={}",
+            layer_size, layer_count, sym_w, sym_h
         )
         .into(),
     );
@@ -404,25 +259,33 @@ pub fn wasm_init_pixel_assets(
         web_sys::console::warn_1(&"PIXEL_SYM_HEIGHT already initialized".into());
     }
 
-    // 3. Cache texture data
-    if PIXEL_TEXTURE_DATA
-        .set(PixelTextureData {
-            width: tex_w,
-            height: tex_h,
-            data: tex_data.to_vec(),
-        })
-        .is_err()
-    {
-        web_sys::console::warn_1(&"PIXEL_TEXTURE_DATA already initialized".into());
+    // 3. Cache layer data
+    let bytes_per_layer = (layer_size * layer_size * 4) as usize;
+    let mut layers = Vec::with_capacity(layer_count as usize);
+    for i in 0..layer_count as usize {
+        let start = i * bytes_per_layer;
+        let end = start + bytes_per_layer;
+        if end > layer_data.len() {
+            web_sys::console::error_1(&format!("RUST: Layer data too short for layer {}", i).into());
+            return false;
+        }
+        layers.push(layer_data[start..end].to_vec());
     }
 
-    // 4. Initialize symbol map
-    match crate::render::symbol_map::init_symbol_map_from_json(symbol_map_json) {
+    if PIXEL_LAYER_DATA
+        .set(PixelLayerData { layer_size, layers })
+        .is_err()
+    {
+        web_sys::console::warn_1(&"PIXEL_LAYER_DATA already initialized".into());
+    }
+
+    // 4. Initialize layered symbol map
+    match crate::render::symbol_map::init_layered_symbol_map_from_json(symbol_map_json) {
         Ok(()) => {
             web_sys::console::log_1(
                 &format!(
-                    "RUST: Pixel assets initialized: {}x{} texture, symbol_map loaded",
-                    tex_w, tex_h
+                    "RUST: Layered pixel assets initialized: {} layers ({}x{})",
+                    layer_count, layer_size, layer_size
                 )
                 .into(),
             );
@@ -434,4 +297,3 @@ pub fn wasm_init_pixel_assets(
         }
     }
 }
-

@@ -499,7 +499,7 @@ pub fn input_events_from_winit(
 /// implementing DRY principle and greatly reducing code duplication.
 ///
 /// ## 🎯 Shared Initialization Steps
-/// 1. **Texture Loading**: Load PIXEL_TEXTURE_FILE and set symbol dimensions
+/// 1. **Texture Loading**: Load layer data and set symbol dimensions
 /// 2. **Parameter Setting**: Configure window size, scaling ratios and other basic parameters
 /// 3. **Event Loop**: Create winit EventLoop instance
 /// 4. **Parameter Storage**: Save WindowInitParams for resumed event use
@@ -533,36 +533,23 @@ pub fn winit_init_common<T>(
 where
     T: crate::render::adapter::Adapter,
 {
-    use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH, PIXEL_TEXTURE_FILE};
+    use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
     use log::info;
     use winit::event_loop::EventLoop;
 
     info!("Initializing Winit adapter common components...");
 
-    // 1. Get texture info based on mode (layered or legacy)
+    // 1. Get texture info (Texture2DArray mode)
     let project_path = &crate::get_game_config().project_path;
-    let texture_path;
-
-    if crate::is_layered_mode() {
-        // Layered mode: Texture2DArray loaded from layers/
-        let layer_data = crate::get_pixel_layer_data().expect("Layer data not loaded");
-        texture_path = format!(
-            "{}{}assets/pix/layered_symbol_map.json",
-            project_path, std::path::MAIN_SEPARATOR,
-        );
-        info!(
-            "Using layered texture: {} layers ({}x{})",
-            layer_data.layers.len(), layer_data.layer_size, layer_data.layer_size
-        );
-    } else {
-        // Legacy mode: single texture atlas
-        let tex_data = crate::get_pixel_texture_data();
-        texture_path = format!(
-            "{}{}{}",
-            project_path, std::path::MAIN_SEPARATOR, PIXEL_TEXTURE_FILE
-        );
-        info!("Using pre-loaded texture: {}x{}", tex_data.width, tex_data.height);
-    }
+    let layer_data = crate::get_pixel_layer_data().expect("Layer data not loaded");
+    let texture_path = format!(
+        "{}{}assets/pix/layered_symbol_map.json",
+        project_path, std::path::MAIN_SEPARATOR,
+    );
+    info!(
+        "Using layered texture: {} layers ({}x{})",
+        layer_data.layers.len(), layer_data.layer_size, layer_data.layer_size
+    );
 
     info!(
         "Symbol dimensions: {}x{}",

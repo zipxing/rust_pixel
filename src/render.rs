@@ -45,7 +45,6 @@ pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_logo,
     render_main_buffer, render_layers, RenderCell, PIXEL_LOGO_HEIGHT,
     PIXEL_LOGO_WIDTH, PIXEL_SYMBOL_SIZE, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH,
-    PIXEL_TEXTURE_FILE,
 };
 pub use effect::{
     // CPU Effects (Buffer级别)
@@ -58,5 +57,5 @@ pub use effect::{
 pub use scene::Scene;
 pub use sprite::Layer;
 pub use style::{Color, Style};
-pub use symbol_map::{ascii_to_petscii, SymbolMap, SymbolMapStats};
+pub use symbol_map::ascii_to_petscii;
 

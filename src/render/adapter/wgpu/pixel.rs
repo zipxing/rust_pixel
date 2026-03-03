@@ -117,10 +117,7 @@ pub struct WgpuPixelRender {
     /// Uniform buffer for transform data
     uniform_buffer: Option<wgpu::Buffer>,
 
-    /// Main texture for symbols and characters (legacy single-atlas mode)
-    symbol_texture: Option<texture::WgpuTexture>,
-
-    /// Texture2DArray for layered symbol atlas (new mode)
+    /// Texture2DArray for layered symbol atlas
     symbol_texture_array: Option<texture::WgpuTextureArray>,
 
     /// Bind group layout for shader resources
@@ -161,7 +158,6 @@ impl WgpuPixelRender {
             instance_buffer: None,
             index_buffer: None,
             uniform_buffer: None,
-            symbol_texture: None,
             symbol_texture_array: None,
             bind_group_layout: None,
             bind_group: None,
@@ -611,121 +607,6 @@ impl WgpuPixelRender {
         Ok(())
     }
 
-    /// Load the symbol texture from pre-loaded data
-    ///
-    /// This is the preferred method when using init_pixel_assets() which pre-loads
-    /// the texture data into memory.
-    pub fn load_symbol_texture_from_data(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_width: u32,
-        texture_height: u32,
-        texture_data: &[u8],
-    ) -> Result<(), String> {
-        self.load_symbol_texture_internal(device, queue, texture_width, texture_height, texture_data)
-    }
-
-    /// Load the symbol texture from the specified path (legacy method)
-    ///
-    /// Prefer using load_symbol_texture_from_data() with pre-loaded texture data.
-    /// Note: This method is not available on wasm32 targets as it uses std::fs.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_symbol_texture(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_path: &str,
-    ) -> Result<(), String> {
-        // Load the texture file
-        let texture_bytes = std::fs::read(texture_path)
-            .map_err(|e| format!("Failed to read texture file {}: {}", texture_path, e))?;
-
-        let texture_image = image::load_from_memory(&texture_bytes)
-            .map_err(|e| format!("Failed to load texture image: {}", e))?
-            .to_rgba8();
-
-        let texture_width = texture_image.width();
-        let texture_height = texture_image.height();
-
-        self.load_symbol_texture_internal(device, queue, texture_width, texture_height, &texture_image)
-    }
-
-    /// Internal method for loading symbol texture
-    fn load_symbol_texture_internal(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_width: u32,
-        texture_height: u32,
-        texture_data: &[u8],
-    ) -> Result<(), String> {
-
-        // Symbol texture loaded successfully (debug output removed for performance)
-
-        // Create WGPU texture (use linear format to exactly match GL mode)
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Symbol Texture"),
-            size: wgpu::Extent3d {
-                width: texture_width,
-                height: texture_height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm, // Linear format like GL mode
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        // Write texture data
-        queue.write_texture(
-            texture.as_image_copy(),
-            texture_data,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * texture_width),
-                rows_per_image: Some(texture_height),
-            },
-            wgpu::Extent3d {
-                width: texture_width,
-                height: texture_height,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        // Create texture view
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        // Create sampler
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            compare: None,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            border_color: None,
-            anisotropy_clamp: 1,
-            label: Some("Symbol Sampler"),
-        });
-
-        // Store texture in WgpuTexture wrapper
-        self.symbol_texture = Some(texture::WgpuTexture {
-            texture,
-            view: texture_view,
-            sampler: Some(sampler),
-            width: texture_width,
-            height: texture_height,
-        });
-
-        Ok(())
-    }
-
     /// Load symbol texture array from layer data (Texture2DArray mode)
     pub fn load_symbol_texture_array(
         &mut self,
@@ -746,13 +627,7 @@ impl WgpuPixelRender {
         Ok(())
     }
 
-    /// Check if layered (Texture2DArray) mode is active
-    pub fn is_layered(&self) -> bool {
-        self.symbol_texture_array.is_some()
-    }
-
-    /// Create bind group for texture and uniform buffer.
-    /// Supports both legacy (texture_2d) and layered (texture_2d_array) modes.
+    /// Create bind group for texture and uniform buffer (Texture2DArray mode).
     pub fn create_bind_group(&mut self, device: &wgpu::Device) {
         let bind_group_layout = match &self.bind_group_layout {
             Some(l) => l,
@@ -763,9 +638,8 @@ impl WgpuPixelRender {
             None => return,
         };
 
-        // Choose texture view and sampler based on mode
+        // Texture2DArray bind group
         if let Some(tex_array) = &self.symbol_texture_array {
-            // Layered mode: Texture2DArray
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: bind_group_layout,
                 entries: &[
@@ -780,29 +654,6 @@ impl WgpuPixelRender {
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&tex_array.sampler),
-                    },
-                ],
-                label: Some("Symbol Bind Group (Layered)"),
-            });
-            self.bind_group = Some(bind_group);
-        } else if let Some(symbol_texture) = &self.symbol_texture {
-            // Legacy mode: single texture_2d
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&symbol_texture.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(
-                            symbol_texture.sampler.as_ref().unwrap(),
-                        ),
                     },
                 ],
                 label: Some("Symbol Bind Group"),
@@ -1103,34 +954,19 @@ impl WgpuRender for WgpuPixelRender {
     }
 
     fn create_shader(&mut self, device: &wgpu::Device) {
-        // Select vertex shader based on mode (layered uses separate shader with v_layer output)
-        let vertex_shader_source = if self.is_layered() {
-            shader_source::SYMBOLS_INSTANCED_VERTEX_SHADER_LAYERED
-        } else {
-            shader_source::SYMBOLS_INSTANCED_VERTEX_SHADER
-        };
+        // Layered mode shaders (Texture2DArray with v_layer output)
         let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Instanced Vertex Shader"),
-            source: wgpu::ShaderSource::Wgsl(vertex_shader_source.into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_VERTEX_SHADER_LAYERED.into()),
         });
 
-        let fragment_shader_source = if self.is_layered() {
-            shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER_LAYERED
-        } else {
-            shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER
-        };
         let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Symbol Instanced Fragment Shader"),
-            source: wgpu::ShaderSource::Wgsl(fragment_shader_source.into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source::SYMBOLS_INSTANCED_FRAGMENT_SHADER_LAYERED.into()),
         });
 
-        // Create bind group layout for instanced rendering
-        // Use D2Array when in layered mode, D2 for legacy single-atlas mode
-        let texture_view_dimension = if self.is_layered() {
-            wgpu::TextureViewDimension::D2Array
-        } else {
-            wgpu::TextureViewDimension::D2
-        };
+        // Create bind group layout for instanced rendering (Texture2DArray)
+        let texture_view_dimension = wgpu::TextureViewDimension::D2Array;
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Symbol Instanced Bind Group Layout"),
@@ -1146,7 +982,7 @@ impl WgpuRender for WgpuPixelRender {
                     },
                     count: None,
                 },
-                // Texture (D2 or D2Array)
+                // Texture (D2Array)
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,

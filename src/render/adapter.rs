@@ -191,7 +191,6 @@ pub use crate::render::graph::{
     PIXEL_RATIO_Y,
     PIXEL_SYM_HEIGHT,
     PIXEL_SYM_WIDTH,
-    PIXEL_TEXTURE_FILE,
 };
 
 /// Adapter base data structure containing shared information and OpenGL resources

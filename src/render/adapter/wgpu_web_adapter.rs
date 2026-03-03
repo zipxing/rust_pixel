@@ -48,14 +48,15 @@ impl WgpuWebAdapter {
         }
     }
 
-    /// Initialize WGPU from cached texture data (called after wasm_init_pixel_assets)
+    /// Initialize WGPU from cached layer data (called after wasm_init_pixel_assets)
     ///
     /// This performs async WGPU initialization using wasm-bindgen-futures.
     /// Must be called after the adapter.init() to set up the WebGPU/WebGL2 context.
     ///
     /// Note: This is an async function that must be awaited from JavaScript.
     pub async fn init_wgpu_from_cache_async(&mut self) {
-        let tex_data = crate::get_pixel_texture_data();
+        let layer_data = crate::get_pixel_layer_data()
+            .expect("Layer data not loaded - call wasm_init_pixel_assets first");
 
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
@@ -135,19 +136,19 @@ impl WgpuWebAdapter {
         };
         surface.configure(&device, &config);
 
-        // Build render core using the shared builder
+        // Build render core using the shared builder (Texture2DArray mode)
+        let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|l| l.as_slice()).collect();
         let render_core = WgpuRenderCoreBuilder::new(
             self.base.gr.pixel_w as u32,
             self.base.gr.pixel_h as u32,
             surface_format,
         )
         .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
-        .build(
+        .build_layered(
             device,
             queue,
-            tex_data.width,
-            tex_data.height,
-            &tex_data.data,
+            layer_data.layer_size,
+            &layer_refs,
         )
         .expect("Failed to build render core");
 
@@ -157,7 +158,7 @@ impl WgpuWebAdapter {
         self.wgpu_surface_config = Some(config);
         self.render_core = Some(render_core);
 
-        info!("WGPU Web initialized from cache: {}x{}", tex_data.width, tex_data.height);
+        info!("WGPU Web initialized: {} layers ({}x{})", layer_refs.len(), layer_data.layer_size, layer_data.layer_size);
     }
 }
 

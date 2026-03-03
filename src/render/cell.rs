@@ -13,7 +13,6 @@
 //! Symbol mappings are loaded from layered_symbol_map.json via the LayeredSymbolMap.
 
 use crate::render::style::{Color, Modifier, Style};
-use crate::render::symbol_map::get_symbol_map;
 #[cfg(graphics_mode)]
 use crate::render::symbol_map::{Tile, get_layered_symbol_map};
 use serde::{Deserialize, Serialize};
@@ -144,18 +143,26 @@ pub fn detect_tui_char_type(symbol: &str) -> TuiCharType {
 
 /// Check if a symbol is a pre-rendered Emoji
 ///
-/// Returns true if the symbol exists in the Emoji mapping, meaning it has
-/// a pre-rendered 32x32 RGBA image in the Emoji region of the texture.
+/// Returns true if the symbol is in the Emoji Unicode range AND exists
+/// in the LayeredSymbolMap (meaning it has a pre-rendered image).
 pub fn is_prerendered_emoji(symbol: &str) -> bool {
-    get_symbol_map().emoji_idx(symbol).is_some()
-}
-
-/// Get the texture index and symbol index for a pre-rendered Emoji
-///
-/// Returns Some((block_idx, sym_idx)) if the Emoji is in the mapping,
-/// or None if the Emoji is not pre-rendered.
-pub fn emoji_texidx(symbol: &str) -> Option<(u8, u8)> {
-    get_symbol_map().emoji_idx(symbol)
+    if let Some(ch) = symbol.chars().next() {
+        let cp = ch as u32;
+        // Emoji range check
+        if (0x1F600..=0x1FAFF).contains(&cp) {
+            #[cfg(graphics_mode)]
+            {
+                return get_layered_symbol_map()
+                    .map(|m| m.contains(symbol))
+                    .unwrap_or(false);
+            }
+            #[cfg(not(graphics_mode))]
+            {
+                return true; // Assume emoji is renderable in text mode
+            }
+        }
+    }
+    false
 }
 
 #[repr(C)]
@@ -236,17 +243,11 @@ impl Cell {
                 return (block, idx);
             }
         }
-        // 2. Check Emoji
-        if let Some((block, idx)) = get_symbol_map().emoji_idx(&self.symbol) {
-            return (block, idx);
-        }
-        // 3. Check CJK
-        if let Some((block, idx)) = get_symbol_map().cjk_idx(&self.symbol) {
-            return (block, idx);
-        }
-        // 4. Check TUI
-        if let Some((block, idx)) = get_symbol_map().tui_idx(&self.symbol) {
-            return (block, idx);
+        // 2. Non-PUA: use LayeredSymbolMap reverse lookup
+        if let Some(map) = get_layered_symbol_map() {
+            if let Some((block, idx)) = map.reverse_lookup(&self.symbol) {
+                return (block, idx);
+            }
         }
         (0, 32)  // Default: space
     }

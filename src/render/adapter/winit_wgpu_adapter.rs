@@ -641,7 +641,7 @@ impl WinitWgpuAdapter {
             (device, queue, surface_config)
         });
 
-        // Build render core — detect layered vs legacy mode
+        // Build render core (Texture2DArray mode)
         let builder = WgpuRenderCoreBuilder::new(
             canvas_w,
             canvas_h,
@@ -650,19 +650,12 @@ impl WinitWgpuAdapter {
         .with_ratio(ratio_x, ratio_y)
         .with_render_scale(render_scale);
 
-        let render_core = if let Some(layer_data) = crate::get_pixel_layer_data() {
-            // Layered mode: Texture2DArray
-            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
-            builder
-                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
-                .expect("Failed to build render core (layered)")
-        } else {
-            // Legacy mode: single texture atlas
-            let tex_data = crate::get_pixel_texture_data();
-            builder
-                .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
-                .expect("Failed to build render core")
-        };
+        let layer_data = crate::get_pixel_layer_data()
+            .expect("Layer data not loaded");
+        let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+        let render_core = builder
+            .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+            .expect("Failed to build render core");
 
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_surface = Some(wgpu_surface);
@@ -738,17 +731,12 @@ impl WinitWgpuAdapter {
             )
             .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
 
-            let new_core = if let Some(layer_data) = crate::get_pixel_layer_data() {
-                let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
-                builder
-                    .build_layered(device, queue, layer_data.layer_size, &layer_refs)
-                    .expect("Failed to rebuild render core (layered)")
-            } else {
-                let tex_data = crate::get_pixel_texture_data();
-                builder
-                    .build(device, queue, tex_data.width, tex_data.height, &tex_data.data)
-                    .expect("Failed to rebuild render core")
-            };
+            let layer_data = crate::get_pixel_layer_data()
+                .expect("Layer data not loaded");
+            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+            let new_core = builder
+                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                .expect("Failed to rebuild render core");
 
             info!(
                 "Render core rebuilt: {}x{}, ratio: ({}, {})",

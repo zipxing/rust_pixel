@@ -321,53 +321,7 @@ impl WgpuRenderCoreBuilder {
         self
     }
 
-    /// Build the render core with the given device, queue, and texture data (legacy single-atlas)
-    pub fn build(
-        self,
-        device: wgpu::Device,
-        queue: wgpu::Queue,
-        tex_width: u32,
-        tex_height: u32,
-        tex_data: &[u8],
-    ) -> Result<WgpuRenderCore, String> {
-        let mut pixel_renderer = WgpuPixelRender::new_with_format(
-            self.canvas_width,
-            self.canvas_height,
-            self.surface_format,
-        );
-
-        // Initialize all WGPU components
-        pixel_renderer.load_symbol_texture_from_data(
-            &device,
-            &queue,
-            tex_width,
-            tex_height,
-            tex_data,
-        )?;
-
-        pixel_renderer.create_shader(&device);
-        pixel_renderer.create_buffer(&device);
-        pixel_renderer.create_bind_group(&device);
-
-        pixel_renderer.init_render_textures(&device, &queue)?;
-
-        pixel_renderer.init_general2d_renderer(&device);
-        pixel_renderer.init_transition_renderer(&device);
-        pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
-        pixel_renderer.set_render_scale(self.render_scale);
-
-        let mut core = WgpuRenderCore::new(
-            device,
-            queue,
-            pixel_renderer,
-            self.ratio_x,
-            self.ratio_y,
-        );
-        core.render_scale = self.render_scale;
-        Ok(core)
-    }
-
-    /// Build the render core with Texture2DArray (layered mode)
+    /// Build the render core with Texture2DArray
     pub fn build_layered(
         self,
         device: wgpu::Device,
@@ -381,7 +335,7 @@ impl WgpuRenderCoreBuilder {
             self.surface_format,
         );
 
-        // Load Texture2DArray (must be done before create_shader so is_layered() works)
+        // Load Texture2DArray
         pixel_renderer.load_symbol_texture_array(&device, &queue, layer_size, layers)?;
 
         pixel_renderer.create_shader(&device);

@@ -30,12 +30,12 @@ macro_rules! app_body {
             #[wasm_bindgen]
             pub fn wasm_init_pixel_assets(
                 game_name: &str,
-                tex_w: u32,
-                tex_h: u32,
-                tex_data: &[u8],
+                layer_size: u32,
+                layer_count: u32,
+                layer_data: &[u8],
                 symbol_map_json: &str,
             ) -> bool {
-                rust_pixel::wasm_init_pixel_assets(game_name, tex_w, tex_h, tex_data, symbol_map_json)
+                rust_pixel::wasm_init_pixel_assets(game_name, layer_size, layer_count, layer_data, symbol_map_json)
             }
 
             /// Pass app-specific text data from JavaScript before game creation.
@@ -73,18 +73,13 @@ macro_rules! app_body {
                 println!("asset path : {:?}, fullscreen: {}, fullscreen_fit: {}", pp, fullscreen, fullscreen_fit);
 
                 // Initialize assets based on mode:
-                // - Graphics mode (native): load texture + symbol_map via init_pixel_assets
+                // - Graphics mode (native): load layered texture + symbol_map
                 // - Terminal mode: only set game config (no texture needed)
                 // - WASM mode: JS already called wasm_init_pixel_assets before this
                 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
                 {
-                    if rust_pixel::has_layered_assets(&pp) {
-                        rust_pixel::init_layered_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
-                            .expect("Failed to initialize layered pixel assets");
-                    } else {
-                        rust_pixel::init_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
-                            .expect("Failed to initialize pixel assets");
-                    }
+                    rust_pixel::init_layered_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
+                        .expect("Failed to initialize layered pixel assets");
                 }
 
                 #[cfg(not(graphics_mode))]
@@ -155,16 +150,16 @@ macro_rules! app_body {
                     }
                 }
 
-                /// Initialize WGPU renderer using pre-cached texture data
+                /// Initialize WGPU renderer using pre-cached layer data
                 ///
                 /// Call this AFTER wasm_init_pixel_assets() to initialize the WGPU renderer
-                /// using the cached texture data. Uses WebGPU if available, falls back to WebGL2.
+                /// using the cached layer data. Uses WebGPU if available, falls back to WebGL2.
                 ///
                 /// # JavaScript Example
                 /// ```js
-                /// wasm_init_pixel_assets("my_game", tex_w, tex_h, imgdata, symbolMapJson);
+                /// wasm_init_pixel_assets("my_game", layerSize, layerCount, layerData, symbolMapJson);
                 /// const sg = PixelGame.new();
-                /// await sg.init_from_cache();  // Initialize WGPU using cached texture (async!)
+                /// await sg.init_from_cache();  // Initialize WGPU using cached layers (async!)
                 /// ```
                 pub async fn init_from_cache(&mut self) {
                     let wa = self

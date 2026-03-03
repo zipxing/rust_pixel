@@ -12,7 +12,7 @@
 //! - **RenderCell**: GPU-ready rendering unit data
 //!
 //! ### Texture and Symbol Management
-//! - **PIXEL_TEXTURE_FILE**: Symbol texture file path constant
+//! - Symbol texture management via LayeredSymbolMap (Texture2DArray)
 //! - **PIXEL_SYM_WIDTH/HEIGHT**: Global configuration for symbol dimensions
 //! - Texture coordinate calculation and symbol index conversion
 //!
@@ -79,7 +79,7 @@ use crate::{
         cell::{cellsym_block, decode_pua, is_prerendered_emoji},
         sprite::Layer,
         style::{Color, Modifier},
-        symbol_map::{get_layered_symbol_map, get_symbol_map, Tile},
+        symbol_map::{get_layered_symbol_map, Tile},
         AdapterBase,
     },
     util::{ARect, PointF32, PointI32, PointU16, Rand},
@@ -612,13 +612,6 @@ impl RtComposite {
 /// └────────────────────────────────────────────────────┘
 /// ```
 ///
-/// Block assignments:
-/// - Sprite: Block 0-159 (16×16 chars/block, 16×16px each)
-/// - TUI: Block 160-169 (16×16 chars/block, 16×32px each)
-/// - Emoji: Block 170-175 (8×16 chars/block, 32×32px each)
-/// - CJK: Grid-based (128×32 chars, 32×32px each)
-pub const PIXEL_TEXTURE_FILE: &str = "assets/pix/symbols.png";
-
 /// Runtime letterboxing override (for maximize/fullscreen toggle)
 static LETTERBOXING_OVERRIDE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -1513,21 +1506,16 @@ pub fn render_buffer_to_cells<F>(
         let modifier = cell.modifier.bits();
 
         // TUI mode: remap Sprite PUA symbols to TUI region tiles
+        // In layered mode, PUA sprite block 0 idx = ASCII code.
+        // We resolve the ASCII char directly in LayeredSymbolMap.
         if use_tui {
             if let Some(ch) = cell.symbol.chars().next() {
-                if let Some((block, _idx)) = decode_pua(ch) {
+                if let Some((block, idx)) = decode_pua(ch) {
                     if block < 160 {
-                        if let Some((tui_block, tui_idx)) = get_symbol_map().tui_idx(&cell.symbol) {
-                            let tui_pua = cellsym_block(tui_block, tui_idx);
-                            if let Some(map) = get_layered_symbol_map() {
-                                tile = *map.resolve(&tui_pua);
-                            }
-                        } else {
-                            // Default: space in TUI region
-                            let tui_pua = cellsym_block(160, 0);
-                            if let Some(map) = get_layered_symbol_map() {
-                                tile = *map.resolve(&tui_pua);
-                            }
+                        if let Some(map) = get_layered_symbol_map() {
+                            // idx is the ASCII code in block 0
+                            let ascii_str = (idx as char).to_string();
+                            tile = *map.resolve(&ascii_str);
                         }
                     }
                 }
