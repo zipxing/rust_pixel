@@ -39,7 +39,7 @@ Scene > Layer > Sprite > Buffer > Cell
 
 Unified rendering abstraction
 
-High performance - **One texture, one draw call** 
+High performance - **Texture2DArray, one draw call** 
 
 </td>
 <td width="33%" align="center">
@@ -129,7 +129,9 @@ cargo pixel r tetris w -r   # Web mode (browser)
 
 ### Unified Texture Architecture
 
-Single 4096×4096 texture (16MB VRAM), 256 blocks: Sprite(0-159), TUI(160-169), Emoji(170-175), CJK(176-239) — one texture binding, one draw call, zero texture switching.
+Texture2DArray with 3-level mipmaps (4096×4096 layers), containing Sprite, TUI, Emoji, and CJK symbols. Single texture binding, instanced rendering, one draw call.
+
+Pix resources (`assets/pix/`) are loaded with fallback: app-specific first, then shared root. Workspace apps share root `assets/pix/`; standalone projects need their own copy. See [Architecture](doc/architecture.md#pix-resource-loading-texture2darray) for details.
 
 ---
 
