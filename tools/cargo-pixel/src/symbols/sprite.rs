@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 //
 // Sprite loading from C64 character set images
 

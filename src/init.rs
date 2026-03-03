@@ -1,5 +1,5 @@
 // RustPixel - Asset Initialization Module
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Unified asset initialization for RustPixel applications.
 //!

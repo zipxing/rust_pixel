@@ -1,5 +1,5 @@
 // RustPixel - Application Macro Module
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Macro for scaffolding RustPixel applications.
 //!

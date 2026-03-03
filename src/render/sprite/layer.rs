@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! layer.rs implements a Layer that contains a set of Sprites.
 //! Sprites are stored in a vector and can be accessed via offset or by tag.

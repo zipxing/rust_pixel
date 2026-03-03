@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # WGPU Web Adapter
 //!

@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Panel Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Panel component - a container widget for organizing other widgets.
 

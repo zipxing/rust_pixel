@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Button Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Button component for user interaction.
 

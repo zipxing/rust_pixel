@@ -1,12 +1,12 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 
 //! This event module provides a global event center and a global timer center.
 //! For comparison testing: thread_local! + Rc<RefCell<T>> vs Mutex + lazy_static
 //!
 //! One event in this class namely Event, describing I/Os from keyboard and mouse.
-//! Input events triggered by renders such as web, SDL or cross are converted here to
+//! Input events triggered by renders such as web, winit or crossterm are converted here to
 //! unified Event.
 
 

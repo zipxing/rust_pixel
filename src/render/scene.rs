@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Scene supports rendering in both text and graphics modes.
 //! The core of it is to draw whatever in the buffer on the screen.

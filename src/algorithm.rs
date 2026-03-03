@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Here integrates some common algorithms e.g. disjoint-set data structure, A*.
 pub mod union_find;

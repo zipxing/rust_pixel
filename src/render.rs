@@ -1,12 +1,12 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # Render Module
 //!
 //! Supports two rendering modes: text mode and graphics mode.
 //!
 //! ## Sub-modules
-//! - `adapter`: Render adapter interfaces (crossterm, SDL, web, winit)
+//! - `adapter`: Render adapter interfaces (crossterm, winit+wgpu, wgpu-web)
 //! - `cell`: Basic rendering unit, i.e., a character
 //! - `buffer`: Vector composed of cells, manages screen buffer
 //! - `sprite`: Basic rendering component, further encapsulates buffer

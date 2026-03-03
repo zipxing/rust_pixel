@@ -1,7 +1,7 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
-//! **RustPixel** is a lightweight, glyph-based 2D game engine and rapid-prototyping toolkit.
+//! **RustPixel** is a lightweight, tile-based 2D game engine and rapid-prototyping toolkit.
 //!
 //! It provides a unified abstraction for both **terminal** and **graphic** rendering modes
 //! (including WebAssembly), allowing developers to build pixel-style games, tools, and
@@ -12,7 +12,7 @@
 //! top of game layers even in pure graphic mode.
 //!
 //! Designed for clarity, portability, and fast iteration, RustPixel is ideal for:
-//! - Glyph / PETSCII / ASCII / emoji-based pixel games
+//! - Tiles / PETSCII / ASCII / emoji-based pixel games
 //! - Terminal applications & hybrid TUI-over-graphics UIs
 //! - Rapid prototyping of gameplay ideas
 //! - Cross-platform rendering (Desktop, Web, Mobile, Mini-Game platforms)
@@ -22,8 +22,8 @@
 //!
 //! Rendering modes:
 //! - Text mode: Runs in a terminal via `crossterm`, drawing with ASCII and Unicode/Emoji.
-//! - Graphics mode (native): Uses `wgpu` or `SDL2`, rendering PETSCII and custom symbol sets.
-//! - Graphics mode (web): Same core logic compiled to WASM, rendered via WebGL + JavaScript
+//! - Graphics mode (native): Uses `wgpu`, rendering PETSCII and custom symbol sets.
+//! - Graphics mode (web): Same core logic compiled to WASM, rendered via wgpu + JavaScript
 //!
 //! Core concepts:
 //! - Cell: Smallest renderable unit (a character in text mode, or a fixed‑size glyph in graphics mode).
@@ -121,7 +121,7 @@ pub mod log;
 /// Rendering subsystem supporting both text and graphics modes.
 ///
 /// Components:
-/// - Adapter: Rendering adapter interface (crossterm; winit + glow/wgpu; SDL + glow; Web).
+/// - Adapter: Rendering adapter interface (crossterm; winit + wgpu; wgpu-web).
 /// - Cell: Base drawing unit (character in text mode; glyph/small bitmap in graphics mode).
 /// - Buffer: Screen buffer built from cells, with efficient updates.
 /// - Sprite: Higher‑level drawing primitive built on top of buffers.

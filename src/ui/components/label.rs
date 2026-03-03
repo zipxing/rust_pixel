@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Label Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Label component for displaying text, with optional animation effects.
 //!

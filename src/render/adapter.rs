@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! # Render Adapter Module
 //!
@@ -92,14 +92,9 @@
 //! │          │       GPU Rendering             │                │
 //! │          │                                 │                │
 //! │          │  ┌────────────────────────────┐ │                │
-//! │          │  │    WebGL2 (Web/glow)       │ │                │
-//! │          │  │  - Vertex Arrays           │ │                │
-//! │          │  │  - Shader Programs         │ │                │
-//! │          │  │  - Texture Atlases         │ │                │
-//! │          │  └────────────────────────────┘ │                │
-//! │          │                                 │                │
-//! │          │  ┌────────────────────────────┐ │                │
-//! │          │  │  WGPU (Desktop + WebGPU)   │ │                │
+//! │          │  │  WGPU (Unified Backend)    │ │                │
+//! │          │  │  - Desktop: Vulkan/Metal  │ │                │
+//! │          │  │  - Web: WebGPU/WebGL2     │ │                │
 //! │          │  │  - Render Pipelines        │ │                │
 //! │          │  │  - Command Buffers         │ │                │
 //! │          │  │  - Bind Groups             │ │                │
@@ -352,7 +347,7 @@ pub trait Adapter {
 
     /// Main rendering pipeline with double buffering and render textures
     ///
-    /// This method implements the core graphics rendering pipeline for SDL, Winit, and Web
+    /// This method implements the core graphics rendering pipeline for Winit and Web
     /// modes. It follows a two-pass rendering approach with multiple render targets:
     ///
     /// ## Rendering Pipeline Architecture  

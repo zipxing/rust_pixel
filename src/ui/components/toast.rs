@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Toast Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Toast/Notification component - character-cell temporary notification.
 

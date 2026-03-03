@@ -76,7 +76,7 @@ use winit::{
 /// Border area enumeration for window interaction
 ///
 /// Defines mouse click area types for determining whether drag operation should be triggered.
-/// Used by both Glow and WGPU adapters.
+/// Used by WGPU adapters (desktop and web).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorderArea {
     /// Normal content area (not a border)
@@ -187,7 +187,7 @@ pub fn apply_cursor_to_window(window: &Arc<Window>, cursor: &CustomCursor) {
 /// Window drag state management
 ///
 /// Records window drag related states, supporting window position movement through mouse dragging.
-/// Similar to SDL version implementation, providing the same user experience.
+/// Providing window drag user experience via mouse interaction.
 #[derive(Default)]
 pub struct Drag {
     /// Whether drag operation needs to be executed

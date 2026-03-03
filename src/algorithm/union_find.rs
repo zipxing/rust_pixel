@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Disjoint-set data structure, reference:
 //! https://chiclaim.blog.csdn.net/article/details/80721436

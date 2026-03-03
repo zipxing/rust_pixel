@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Widget System
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Core widget system defining the base traits and behaviors for all UI components.
 

@@ -1,5 +1,5 @@
 // RustPixel UI Framework - PresentTable Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Lightweight read-only table widget for presentation/display purposes.
 //!

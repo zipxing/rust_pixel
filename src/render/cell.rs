@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Cell is the basic rendering unit in RustPixel.
 //! Each cell stores a symbol string, foreground/background colors, modifier flags,

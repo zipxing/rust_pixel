@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 //
 // Font rendering using macOS CoreText/Quartz for high-quality output (matching Python)
 // Falls back to fontdue on other platforms

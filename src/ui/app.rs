@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Application Framework
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Application framework for building UI applications.
 //!

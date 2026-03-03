@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 //
 // Symbol texture generator - generates SDF texture atlas for GPU rendering
 // Replaces tools/symbols/generate_symbols.py

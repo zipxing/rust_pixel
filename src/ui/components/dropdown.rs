@@ -1,5 +1,5 @@
 // RustPixel UI Framework - Dropdown Component
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! Dropdown/Select component - character-cell dropdown selector.
 

@@ -1,5 +1,5 @@
 // RustPixel
-// copyright zipxing@hotmail.com 2022～2025
+// copyright zipxing@hotmail.com 2022～2026
 
 //! This module provides a unified Input Event, describing events from keyboard and mouse
 //! Input events triggered by renders adapter such as web, sdl or cross are converted here to
