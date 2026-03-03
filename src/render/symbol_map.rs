@@ -95,6 +95,14 @@ pub struct LayeredSymbolMap {
     symbols: HashMap<String, Tile>,
     /// Reverse mapping: symbol string → (block, idx) for .pix serialization
     reverse: HashMap<String, (u8, u8)>,
+    /// PETSCII mapping: Unicode char → PUA-encoded string
+    ///
+    /// Maps ASCII letters, digits, punctuation and box-drawing characters
+    /// to their corresponding C64 PETSCII sprite positions.
+    /// Built from the C64 character set layout:
+    /// - sprite_symbols: @abcdefghijklmnopqrstuvwxyz[£]↑← !"#$%&'()*+,-./0123456789:;<=>?─ABCDEFGHIJKLMNOPQRSTUVWXYZ┼
+    /// - sprite_extras: ▇▒∙│┐╮┌╭└╰┘╯_ → specific block 1/2 positions
+    petscii: HashMap<String, String>,
 }
 
 /// Statistics for layered symbol map
@@ -144,6 +152,54 @@ pub fn has_layered_symbol_map() -> bool {
 // ============================================================================
 // LayeredSymbolMap Implementation
 // ============================================================================
+
+
+/// Build the PETSCII mapping table.
+///
+/// Maps Unicode characters (ASCII letters, digits, punctuation, box-drawing)
+/// to PUA-encoded strings corresponding to C64 sprite positions.
+///
+/// The mapping follows the C64 character ROM layout:
+/// - `sprite_symbols` defines the sequential mapping at block 0 (92 chars)
+/// - `sprite_extras` maps specific Unicode chars to other sprite blocks
+fn build_petscii_map() -> HashMap<String, String> {
+    // C64 character set layout: each char maps to block 0, idx = position
+    // 92 characters: @a-z[£]↑←<space>!"#$%&'()*+,-./0-9:;<=>?─A-Z┼
+    let sprite_symbols: &str = "@abcdefghijklmnopqrstuvwxyz[£]↑← !\"#$%&'()*+,-./0123456789:;<=>?─ABCDEFGHIJKLMNOPQRSTUVWXYZ┼";
+
+    let mut map = HashMap::new();
+
+    // Sequential mapping from sprite_symbols (block 0)
+    for (idx, ch) in sprite_symbols.chars().enumerate() {
+        let block = (idx / 256) as u8;
+        let i = (idx % 256) as u8;
+        map.insert(ch.to_string(), cellsym_block(block, i));
+    }
+
+    // Sprite extras: special Unicode chars mapped to specific C64 sprite positions
+    let extras: &[(&str, u8, u8)] = &[
+        ("▇", 1, 209),  // ▇ UPPER SEVEN EIGHTHS BLOCK
+        ("▒", 1, 94),    // ▒ MEDIUM SHADE
+        ("∙", 1, 122),      // ∙ BULLET OPERATOR
+        ("│", 1, 93),     // │ BOX DRAWINGS LIGHT VERTICAL
+        ("┐", 1, 110),      // ┐ BOX DRAWINGS LIGHT DOWN AND LEFT
+        ("╮", 1, 73),   // ╮ BOX DRAWINGS LIGHT ARC DOWN AND LEFT
+        ("┌", 1, 112),      // ┌ BOX DRAWINGS LIGHT DOWN AND RIGHT
+        ("╭", 1, 85),   // ╭ BOX DRAWINGS LIGHT ARC DOWN AND RIGHT
+        ("└", 1, 109),      // └ BOX DRAWINGS LIGHT UP AND RIGHT
+        ("╰", 1, 74),   // ╰ BOX DRAWINGS LIGHT ARC UP AND RIGHT
+        ("┘", 1, 125),      // ┘ BOX DRAWINGS LIGHT UP AND LEFT
+        ("╯", 1, 75),   // ╯ BOX DRAWINGS LIGHT ARC UP AND LEFT
+        ("_", 2, 30),              // _ UNDERSCORE
+    ];
+
+    for &(sym, block, idx) in extras {
+        map.insert(sym.to_string(), cellsym_block(block, idx));
+    }
+
+    map
+}
+
 
 impl LayeredSymbolMap {
     /// Load from JSON file path
@@ -255,6 +311,7 @@ impl LayeredSymbolMap {
             layer_files,
             symbols,
             reverse,
+            petscii: build_petscii_map(),
         })
     }
 
@@ -278,6 +335,16 @@ impl LayeredSymbolMap {
         self.reverse.get(symbol).copied()
     }
 
+    /// PETSCII lookup: Unicode char → PUA-encoded string for C64 sprite rendering.
+    ///
+    /// Used by `ascii_to_petscii` and `set_border_sym` to map Unicode characters
+    /// (letters, digits, box-drawing) to their C64 PETSCII sprite equivalents.
+    /// Returns None if the character has no PETSCII mapping.
+    #[inline]
+    pub fn petscii_lookup(&self, symbol: &str) -> Option<&str> {
+        self.petscii.get(symbol).map(|s| s.as_str())
+    }
+
     /// Get total number of symbols
     pub fn symbol_count(&self) -> usize {
         self.symbols.len()
@@ -299,24 +366,23 @@ impl LayeredSymbolMap {
 
 /// Convert ASCII string to PETSCII PUA-encoded string.
 ///
-/// Each ASCII character is looked up in the LayeredSymbolMap's sprite region.
-/// If found, the corresponding PUA character is returned.
-/// Otherwise, falls back to block 0 with ASCII code as index.
+/// Each character is looked up in the PETSCII mapping table which maps
+/// Unicode characters to their C64 sprite equivalents (PUA-encoded).
+/// Falls back to block 0 with ASCII code as index for unmapped characters.
 pub fn ascii_to_petscii(s: &str) -> String {
     if let Some(map) = get_layered_symbol_map() {
-        s.chars()
-            .map(|ch| {
-                let ch_str = ch.to_string();
-                // Check if this char has a PUA sprite mapping via reverse lookup
-                if let Some((block, idx)) = map.reverse_lookup(&ch_str) {
-                    if block < 160 {
-                        return cellsym_block(block, idx);
-                    }
-                }
+        let mut result = String::with_capacity(s.len() * 4);
+        for ch in s.chars() {
+            let ch_str = ch.to_string();
+            // Look up in PETSCII table (sprite_symbols + sprite_extras)
+            if let Some(pua) = map.petscii_lookup(&ch_str) {
+                result.push_str(pua);
+            } else {
                 // Fallback: block 0 with ASCII code
-                cellsym_block(0, ch as u8)
-            })
-            .collect()
+                result.push_str(&cellsym_block(0, ch as u8));
+            }
+        }
+        result
     } else {
         // No layered map loaded — simple fallback
         s.chars()
@@ -536,5 +602,55 @@ mod tests {
     fn test_reverse_lookup_unknown() {
         let map = LayeredSymbolMap::from_json(&sample_layered_json()).unwrap();
         assert_eq!(map.reverse_lookup("NONEXISTENT"), None);
+    }
+
+    #[test]
+    fn test_petscii_lookup_letters() {
+        let map = LayeredSymbolMap::from_json(&sample_layered_json()).unwrap();
+        // 'A' should map to block 0, idx 65 (position in sprite_symbols)
+        let pua_a = map.petscii_lookup("A");
+        assert!(pua_a.is_some(), "A should have PETSCII mapping");
+        let pua_a = pua_a.unwrap();
+        assert_eq!(pua_a, &cellsym_block(0, 65));
+
+        // 'P' -> block 0, idx 80
+        assert_eq!(map.petscii_lookup("P").unwrap(), &cellsym_block(0, 80));
+
+        // '0' -> block 0, idx 48
+        assert_eq!(map.petscii_lookup("0").unwrap(), &cellsym_block(0, 48));
+    }
+
+    #[test]
+    fn test_petscii_lookup_extras() {
+        let map = LayeredSymbolMap::from_json(&sample_layered_json()).unwrap();
+        // Box-drawing extras should map to specific sprite positions
+        // U+2502 (|) -> block 1, idx 93
+        assert_eq!(
+            map.petscii_lookup("\u{2502}").unwrap(),
+            &cellsym_block(1, 93),
+        );
+        // U+250C -> block 1, idx 112
+        assert_eq!(
+            map.petscii_lookup("\u{250C}").unwrap(),
+            &cellsym_block(1, 112),
+        );
+        // U+256D -> block 1, idx 85
+        assert_eq!(
+            map.petscii_lookup("\u{256D}").unwrap(),
+            &cellsym_block(1, 85),
+        );
+        // _ -> block 2, idx 30
+        assert_eq!(
+            map.petscii_lookup("_").unwrap(),
+            &cellsym_block(2, 30),
+        );
+    }
+
+    #[test]
+    fn test_petscii_lookup_nonexistent() {
+        let map = LayeredSymbolMap::from_json(&sample_layered_json()).unwrap();
+        // Characters not in PETSCII table should return None
+        assert!(map.petscii_lookup("\u{1F600}").is_none()); // emoji
+        assert!(map.petscii_lookup("\u{4E2D}").is_none()); // CJK
     }
 }

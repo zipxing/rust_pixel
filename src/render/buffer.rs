@@ -535,16 +535,28 @@ impl Buffer {
 
     /// Set a border symbol at the given position.
     /// x, y are relative coordinates (0-based within buffer).
-    /// In Sprite mode: looks up LayeredSymbolMap reverse_lookup for (block, idx)
-    /// In TUI mode: uses the Unicode character directly
+    /// In Sprite mode: looks up PETSCII table first (C64-style border),
+    ///   then falls back to reverse_lookup for the general symbol map.
+    /// In TUI mode: uses the Unicode character directly.
     fn set_border_sym(&mut self, x: u16, y: u16, sym: &str, style: Style) {
-        use crate::render::cell::cellsym_block;
         use crate::render::symbol_map::get_layered_symbol_map;
 
         if self.mode == BufferMode::Sprite {
-            // Sprite mode: look up in LayeredSymbolMap reverse for (block, idx)
             if let Some(map) = get_layered_symbol_map() {
+                // Priority 1: PETSCII table (C64 sprite for box-drawing chars)
+                if let Some(pua) = map.petscii_lookup(sym) {
+                    let abs_x = x + self.area.x;
+                    let abs_y = y + self.area.y;
+                    let index = self.index_of(abs_x, abs_y);
+                    if index < self.content.len() {
+                        self.content[index].set_symbol(pua);
+                        self.content[index].set_style(style);
+                    }
+                    return;
+                }
+                // Priority 2: general reverse lookup
                 if let Some((block, idx)) = map.reverse_lookup(sym) {
+                    use crate::render::cell::cellsym_block;
                     let abs_x = x + self.area.x;
                     let abs_y = y + self.area.y;
                     let index = self.index_of(abs_x, abs_y);
