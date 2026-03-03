@@ -66,7 +66,7 @@
 //!
 //! ### TUI Height Mode
 //! Applications can enable TUI height mode for UI-focused rendering:
-//! ```rust
+//! ```rust,ignore
 //! ctx.adapter.get_base().gr.set_use_tui_height(true);
 //! ```
 //! This affects:
@@ -151,19 +151,13 @@ fn get_logo_cells() -> &'static Vec<(u8, u8, u8, u8)> {
 
 /// RT size strategy
 #[cfg(graphics_mode)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum RtSize {
     /// Follow window size (default)
+    #[default]
     FollowWindow,
     /// Fixed size in pixels
     Fixed(u32, u32),
-}
-
-#[cfg(graphics_mode)]
-impl Default for RtSize {
-    fn default() -> Self {
-        RtSize::FollowWindow
-    }
 }
 
 /// RT configuration
@@ -246,6 +240,7 @@ pub struct RtComposite {
     /// 显示区域 (屏幕坐标)
     /// - None = 全屏显示
     /// - Some(rect) = 自定义位置和大小
+    ///
     /// 调用 scale() 后此值会变化
     pub viewport: Option<ARect>,
 
@@ -397,7 +392,7 @@ impl RtComposite {
     /// let rt3 = ctx.centered_rt(3, 40, 25).rotate(45.0);  // 45° rotation
     /// ```
     pub fn rotate(mut self, degrees: f32) -> Self {
-        let mut transform = self.transform.unwrap_or_else(UnifiedTransform::new);
+        let mut transform = self.transform.unwrap_or_default();
         transform.rotate(degrees.to_radians());
         self.transform = Some(transform);
         self
@@ -412,7 +407,7 @@ impl RtComposite {
     /// - `dx`: Horizontal offset in pixels
     /// - `dy`: Vertical offset in pixels
     pub fn translate(mut self, dx: f32, dy: f32) -> Self {
-        let mut transform = self.transform.unwrap_or_else(UnifiedTransform::new);
+        let mut transform = self.transform.unwrap_or_default();
         transform.translate(dx, dy);
         self.transform = Some(transform);
         self
@@ -631,6 +626,7 @@ static LETTERBOXING_OVERRIDE: std::sync::atomic::AtomicBool =
 /// 是否启用等比缩放（letterboxing）
 /// - true: 保持宽高比，窗口边缘留黑边
 /// - false: 拉伸填充整个窗口
+///
 /// 通过 -tf 命令行参数启用，或运行时最大化/全屏时自动启用
 pub fn is_letterboxing_enabled() -> bool {
     crate::get_game_config().fullscreen_fit
@@ -1114,13 +1110,8 @@ pub struct Graph {
     pub rbuf: Vec<RenderCell>,
 }
 
-impl Graph {
-    /// Create new graphics rendering context
-    ///
-    /// Initializes all graphics mode related data structures and rendering state.
-    /// Render flag defaults to true (direct rendering to screen).
-    /// TUI height mode defaults to false (using Sprite character height).
-    pub fn new() -> Self {
+impl Default for Graph {
+    fn default() -> Self {
         Self {
             pixel_w: 0,
             pixel_h: 0,
@@ -1130,6 +1121,17 @@ impl Graph {
             rflag: true,
             rbuf: Vec::new(),
         }
+    }
+}
+
+impl Graph {
+    /// Create new graphics rendering context
+    ///
+    /// Initializes all graphics mode related data structures and rendering state.
+    /// Render flag defaults to true (direct rendering to screen).
+    /// TUI height mode defaults to false (using Sprite character height).
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Set X-axis scaling ratio
@@ -1267,8 +1269,8 @@ impl Graph {
 /// - `bgc`: Optional background color
 /// - `tile`: Tile with resolved UV + layer data for 3 mipmap levels
 /// - `s`: Destination rectangle in screen space (pixels). The helper functions
-///        already apply ratio-based sizing and spacing; this function may derive
-///        an offset from it to cooperate with backend transform chain.
+///   already apply ratio-based sizing and spacing; this function may derive
+///   an offset from it to cooperate with backend transform chain.
 /// - `angle`: Rotation angle in degrees (will be converted to radians internally)
 /// - `ccp`: Center point for rotation
 /// - `modifier`: Style modifier flags (see Modifier enum in style.rs)
@@ -1436,8 +1438,8 @@ pub fn render_buffer_to_cells<F>(
     let pw = buf.area.width;
     let ph = buf.area.height;
 
-    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init") as f32;
-    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init") as f32;
+    let w = *PIXEL_SYM_WIDTH.get().expect("lazylock init");
+    let h = *PIXEL_SYM_HEIGHT.get().expect("lazylock init");
 
     // Base cell width in pixel space (before any scaling)
     let base_cell_w = w / rx;

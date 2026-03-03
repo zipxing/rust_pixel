@@ -279,7 +279,7 @@ impl WgpuGeneral2dRender {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: format, // Use the specified format
+                    format, // Use the specified format
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

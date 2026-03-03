@@ -371,6 +371,12 @@ impl ApplicationHandler for WinitWgpuAppHandler {
     }
 }
 
+impl Default for WinitWgpuAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WinitWgpuAdapter {
     pub fn new() -> Self {
         Self {
@@ -913,7 +919,7 @@ impl Adapter for WinitWgpuAdapter {
     ) -> Result<(), String> {
         winit_move_win(
             &mut self.drag.need,
-            self.window.as_ref().map(|v| &**v),
+            self.window.as_deref(),
             self.drag.dx,
             self.drag.dy,
         );

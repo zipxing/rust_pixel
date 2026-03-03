@@ -255,7 +255,7 @@ impl WgpuRenderCore {
             } else {
                 // Fullscreen
                 let area = [0.0, 0.0, 1.0, 1.0];
-                let transform = composite.transform.clone().unwrap_or_else(UnifiedTransform::new);
+                let transform = composite.transform.unwrap_or_else(UnifiedTransform::new);
                 (area, transform)
             };
 

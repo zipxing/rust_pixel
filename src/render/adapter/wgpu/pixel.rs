@@ -197,13 +197,13 @@ impl WgpuPixelRender {
         // RT3: hidden (only shown during transitions)
         let rt_hidden = [true, true, false, true];
 
-        for i in 0..4 {
+        for hidden in &rt_hidden {
             let render_texture = WgpuRenderTexture::new_with_format(
                 device,
                 self.canvas_width,
                 self.canvas_height,
                 self.surface_format, // Use surface format to match pipelines
-                rt_hidden[i],
+                *hidden,
             )?;
 
             self.render_textures.push(render_texture);
@@ -414,7 +414,7 @@ impl WgpuPixelRender {
         });
 
         // Set up the instanced rendering pipeline automatically
-        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+        if let Some(pipeline) = self.base.render_pipelines.first() {
             render_pass.set_pipeline(pipeline);
 
             // Set quad vertex buffer (buffer 0)
@@ -866,7 +866,7 @@ impl WgpuPixelRender {
 
     /// Get the render pipeline (for internal access)
     pub fn get_render_pipeline(&self) -> Option<&wgpu::RenderPipeline> {
-        self.base.render_pipelines.get(0)
+        self.base.render_pipelines.first()
     }
 
     /// Get the quad vertex buffer (for internal access)
@@ -1061,7 +1061,7 @@ impl WgpuPixelRender {
         });
 
         // Set pipeline and buffers for instanced rendering
-        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+        if let Some(pipeline) = self.base.render_pipelines.first() {
             render_pass.set_pipeline(pipeline);
 
             // Set quad vertex buffer (buffer 0)
@@ -1234,7 +1234,7 @@ impl WgpuRender for WgpuPixelRender {
         let quad_vertices = WgpuSymbolRenderer::get_base_quad_vertices();
         let quad_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Quad Vertex Buffer"),
-            size: (quad_vertices.len() * std::mem::size_of::<WgpuQuadVertex>()) as u64,
+            size: std::mem::size_of_val(quad_vertices) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1256,7 +1256,7 @@ impl WgpuRender for WgpuPixelRender {
         let quad_indices = WgpuSymbolRenderer::get_base_quad_indices();
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Quad Index Buffer"),
-            size: (quad_indices.len() * std::mem::size_of::<u16>()) as u64,
+            size: std::mem::size_of_val(quad_indices) as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1323,7 +1323,7 @@ impl WgpuRender for WgpuPixelRender {
         });
 
         // Set pipeline and buffers for instanced rendering
-        if let Some(pipeline) = self.base.render_pipelines.get(0) {
+        if let Some(pipeline) = self.base.render_pipelines.first() {
             render_pass.set_pipeline(pipeline);
 
             // Set quad vertex buffer (buffer 0)

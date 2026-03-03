@@ -7,7 +7,7 @@
 //!
 //! Almost all Unicode chars can be drawn in text mode, depending on the terminal apps
 //! (use of iTerm2 in macOS is recommended). For example:
-//! ```
+//! ```rust,ignore
 //! my_buffer.set_str(0, 0, "Hello world 😃.",
 //!     Style::default().fg(Color::Red).bg(Color::Reset))
 //! ```

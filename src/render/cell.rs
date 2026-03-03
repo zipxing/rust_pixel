@@ -435,3 +435,96 @@ impl Default for Cell {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ====================================================================
+    // PUA encoding/decoding round-trip tests
+    // ====================================================================
+
+    #[test]
+    fn test_pua_roundtrip_block0() {
+        for idx in [0u8, 1, 127, 128, 255] {
+            let encoded = cellsym_block(0, idx);
+            let ch = encoded.chars().next().unwrap();
+            let (block, decoded_idx) = decode_pua(ch).expect("should decode");
+            assert_eq!(block, 0);
+            assert_eq!(decoded_idx, idx);
+        }
+    }
+
+    #[test]
+    fn test_pua_roundtrip_all_blocks() {
+        // Test representative blocks across the range
+        for block in [0u8, 1, 50, 100, 159] {
+            for idx in [0u8, 128, 255] {
+                let encoded = cellsym_block(block, idx);
+                let ch = encoded.chars().next().unwrap();
+                let (dec_block, dec_idx) = decode_pua(ch).expect("should decode");
+                assert_eq!(dec_block, block, "block mismatch for ({}, {})", block, idx);
+                assert_eq!(dec_idx, idx, "idx mismatch for ({}, {})", block, idx);
+            }
+        }
+    }
+
+    #[test]
+    fn test_pua_decode_non_pua() {
+        // Normal ASCII should not decode as PUA
+        assert_eq!(decode_pua('A'), None);
+        assert_eq!(decode_pua(' '), None);
+        // BMP PUA should not decode as Supplementary PUA
+        assert_eq!(decode_pua('\u{E000}'), None);
+        // Emoji should not decode
+        assert_eq!(decode_pua('😀'), None);
+    }
+
+    #[test]
+    fn test_pua_codepoint_range() {
+        // First PUA character: U+F0000
+        let first = cellsym_block(0, 0);
+        let cp = first.chars().next().unwrap() as u32;
+        assert_eq!(cp, PUA_BASE);
+
+        // Last PUA character: block=159, idx=255 → U+F9FFF
+        let last = cellsym_block(159, 255);
+        let cp = last.chars().next().unwrap() as u32;
+        assert_eq!(cp, PUA_END);
+    }
+
+    #[test]
+    fn test_cellsym_convenience() {
+        // cellsym(idx) == cellsym_block(0, idx)
+        for idx in [0u8, 42, 160, 255] {
+            assert_eq!(cellsym(idx), cellsym_block(0, idx));
+        }
+    }
+
+    #[test]
+    fn test_is_pua_sprite() {
+        let pua_ch = cellsym_block(0, 0).chars().next().unwrap();
+        assert!(is_pua_sprite(pua_ch));
+        assert!(!is_pua_sprite('A'));
+        assert!(!is_pua_sprite('😀'));
+    }
+
+    // ====================================================================
+    // TuiCharType detection tests
+    // ====================================================================
+
+    #[test]
+    fn test_tui_char_type_detection() {
+        // ASCII characters
+        assert_eq!(detect_tui_char_type("A"), TuiCharType::TuiChar);
+        assert_eq!(detect_tui_char_type(" "), TuiCharType::TuiChar);
+
+        // Box drawing characters (U+2500-U+257F)
+        assert_eq!(detect_tui_char_type("─"), TuiCharType::TuiChar);
+        assert_eq!(detect_tui_char_type("│"), TuiCharType::TuiChar);
+
+        // CJK characters
+        assert_eq!(detect_tui_char_type("中"), TuiCharType::CJK);
+        assert_eq!(detect_tui_char_type("一"), TuiCharType::CJK);
+    }
+}

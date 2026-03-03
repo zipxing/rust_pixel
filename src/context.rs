@@ -115,8 +115,8 @@ impl Context {
         let sym_h = *PIXEL_SYM_HEIGHT.get().expect("PIXEL_SYM_HEIGHT not initialized");
         let rx = self.adapter.get_base().gr.ratio_x;
         let ry = self.adapter.get_base().gr.ratio_y;
-        let canvas_w = self.adapter.get_base().gr.pixel_w as u32;
-        let canvas_h = self.adapter.get_base().gr.pixel_h as u32;
+        let canvas_w = self.adapter.get_base().gr.pixel_w;
+        let canvas_h = self.adapter.get_base().gr.pixel_h;
 
         let vp_w = (cell_w as f32 * sym_w / rx) as u32;
         let vp_h = (cell_h as f32 * sym_h / ry) as u32;
@@ -156,7 +156,7 @@ impl Context {
     #[cfg(graphics_mode)]
     pub fn canvas_size(&mut self) -> (u32, u32) {
         let gr = &self.adapter.get_base().gr;
-        (gr.pixel_w as u32, gr.pixel_h as u32)
+        (gr.pixel_w, gr.pixel_h)
     }
 
     /// Get current DPI scaling ratios

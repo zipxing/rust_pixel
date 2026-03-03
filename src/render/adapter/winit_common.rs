@@ -235,7 +235,7 @@ pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy
             if let Ok(pos) = win.outer_position() {
                 let new_x = pos.x + dx as i32;
                 let new_y = pos.y + dy as i32;
-                let _ = win.set_outer_position(winit::dpi::PhysicalPosition::new(new_x, new_y));
+                win.set_outer_position(winit::dpi::PhysicalPosition::new(new_x, new_y));
             }
         }
         *drag_need = false;
@@ -252,7 +252,7 @@ pub fn winit_move_win(drag_need: &mut bool, window: Option<&Window>, dx: f64, dy
 /// - `adjx`: X-axis adjustment factor (for high DPI displays)
 /// - `adjy`: Y-axis adjustment factor (for high DPI displays)
 /// - `use_tui_height`: If true, uses TUI character height (32px) for mouse coordinate conversion;
-///                     if false, uses Sprite character height (16px)
+///   if false, uses Sprite character height (16px)
 /// - `cursor_pos`: Mutable reference to current cursor position
 ///
 /// # Mouse Coordinate Conversion
@@ -275,223 +275,220 @@ pub fn input_events_from_winit(
     let sym_width = PIXEL_SYM_WIDTH.get().expect("lazylock init");
     let sym_height = PIXEL_SYM_HEIGHT.get().expect("lazylock init");
 
-    match event {
-        WinitEvent::WindowEvent {
+    if let WinitEvent::WindowEvent {
             event: window_event,
             ..
-        } => {
-            match window_event {
-                WindowEvent::KeyboardInput {
-                    event: key_event, ..
-                } => {
-                    if key_event.state == winit::event::ElementState::Pressed {
-                        if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key
-                        {
-                            let kc = match keycode {
-                                winit::keyboard::KeyCode::Space => ' ',
-                                winit::keyboard::KeyCode::KeyA => 'a',
-                                winit::keyboard::KeyCode::KeyB => 'b',
-                                winit::keyboard::KeyCode::KeyC => 'c',
-                                winit::keyboard::KeyCode::KeyD => 'd',
-                                winit::keyboard::KeyCode::KeyE => 'e',
-                                winit::keyboard::KeyCode::KeyF => 'f',
-                                winit::keyboard::KeyCode::KeyG => 'g',
-                                winit::keyboard::KeyCode::KeyH => 'h',
-                                winit::keyboard::KeyCode::KeyI => 'i',
-                                winit::keyboard::KeyCode::KeyJ => 'j',
-                                winit::keyboard::KeyCode::KeyK => 'k',
-                                winit::keyboard::KeyCode::KeyL => 'l',
-                                winit::keyboard::KeyCode::KeyM => 'm',
-                                winit::keyboard::KeyCode::KeyN => 'n',
-                                winit::keyboard::KeyCode::KeyO => 'o',
-                                winit::keyboard::KeyCode::KeyP => 'p',
-                                winit::keyboard::KeyCode::KeyQ => 'q',
-                                winit::keyboard::KeyCode::KeyR => 'r',
-                                winit::keyboard::KeyCode::KeyS => 's',
-                                winit::keyboard::KeyCode::KeyT => 't',
-                                winit::keyboard::KeyCode::KeyU => 'u',
-                                winit::keyboard::KeyCode::KeyV => 'v',
-                                winit::keyboard::KeyCode::KeyW => 'w',
-                                winit::keyboard::KeyCode::KeyX => 'x',
-                                winit::keyboard::KeyCode::KeyY => 'y',
-                                winit::keyboard::KeyCode::KeyZ => 'z',
-                                winit::keyboard::KeyCode::ArrowUp => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Up,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::ArrowDown => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Down,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::ArrowLeft => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Left,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::ArrowRight => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Right,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Enter => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Enter,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Escape => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Esc,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Backspace => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Backspace,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Tab => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Tab,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Delete => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Delete,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Home => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Home,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::End => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::End,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::PageUp => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::PageUp,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::PageDown => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::PageDown,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Insert => {
-                                    return Some(Event::Key(KeyEvent::new(
-                                        KeyCode::Insert,
-                                        KeyModifiers::NONE,
-                                    )))
-                                }
-                                winit::keyboard::KeyCode::Digit1 => '1',
-                                winit::keyboard::KeyCode::Digit2 => '2',
-                                winit::keyboard::KeyCode::Digit3 => '3',
-                                winit::keyboard::KeyCode::Digit4 => '4',
-                                winit::keyboard::KeyCode::Digit5 => '5',
-                                winit::keyboard::KeyCode::Digit6 => '6',
-                                winit::keyboard::KeyCode::Digit7 => '7',
-                                winit::keyboard::KeyCode::Digit8 => '8',
-                                winit::keyboard::KeyCode::Digit9 => '9',
-                                winit::keyboard::KeyCode::Digit0 => '0',
-                                _ => return None,
-                            };
-                            return Some(Event::Key(KeyEvent::new(
-                                KeyCode::Char(kc),
-                                KeyModifiers::NONE,
-                            )));
-                        }
+        } = event {
+        match window_event {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
+                if key_event.state == winit::event::ElementState::Pressed {
+                    if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key
+                    {
+                        let kc = match keycode {
+                            winit::keyboard::KeyCode::Space => ' ',
+                            winit::keyboard::KeyCode::KeyA => 'a',
+                            winit::keyboard::KeyCode::KeyB => 'b',
+                            winit::keyboard::KeyCode::KeyC => 'c',
+                            winit::keyboard::KeyCode::KeyD => 'd',
+                            winit::keyboard::KeyCode::KeyE => 'e',
+                            winit::keyboard::KeyCode::KeyF => 'f',
+                            winit::keyboard::KeyCode::KeyG => 'g',
+                            winit::keyboard::KeyCode::KeyH => 'h',
+                            winit::keyboard::KeyCode::KeyI => 'i',
+                            winit::keyboard::KeyCode::KeyJ => 'j',
+                            winit::keyboard::KeyCode::KeyK => 'k',
+                            winit::keyboard::KeyCode::KeyL => 'l',
+                            winit::keyboard::KeyCode::KeyM => 'm',
+                            winit::keyboard::KeyCode::KeyN => 'n',
+                            winit::keyboard::KeyCode::KeyO => 'o',
+                            winit::keyboard::KeyCode::KeyP => 'p',
+                            winit::keyboard::KeyCode::KeyQ => 'q',
+                            winit::keyboard::KeyCode::KeyR => 'r',
+                            winit::keyboard::KeyCode::KeyS => 's',
+                            winit::keyboard::KeyCode::KeyT => 't',
+                            winit::keyboard::KeyCode::KeyU => 'u',
+                            winit::keyboard::KeyCode::KeyV => 'v',
+                            winit::keyboard::KeyCode::KeyW => 'w',
+                            winit::keyboard::KeyCode::KeyX => 'x',
+                            winit::keyboard::KeyCode::KeyY => 'y',
+                            winit::keyboard::KeyCode::KeyZ => 'z',
+                            winit::keyboard::KeyCode::ArrowUp => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Up,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::ArrowDown => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Down,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::ArrowLeft => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Left,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::ArrowRight => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Right,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Enter => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Enter,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Escape => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Esc,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Backspace => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Backspace,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Tab => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Tab,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Delete => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Delete,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Home => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Home,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::End => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::End,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::PageUp => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::PageUp,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::PageDown => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::PageDown,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Insert => {
+                                return Some(Event::Key(KeyEvent::new(
+                                    KeyCode::Insert,
+                                    KeyModifiers::NONE,
+                                )))
+                            }
+                            winit::keyboard::KeyCode::Digit1 => '1',
+                            winit::keyboard::KeyCode::Digit2 => '2',
+                            winit::keyboard::KeyCode::Digit3 => '3',
+                            winit::keyboard::KeyCode::Digit4 => '4',
+                            winit::keyboard::KeyCode::Digit5 => '5',
+                            winit::keyboard::KeyCode::Digit6 => '6',
+                            winit::keyboard::KeyCode::Digit7 => '7',
+                            winit::keyboard::KeyCode::Digit8 => '8',
+                            winit::keyboard::KeyCode::Digit9 => '9',
+                            winit::keyboard::KeyCode::Digit0 => '0',
+                            _ => return None,
+                        };
+                        return Some(Event::Key(KeyEvent::new(
+                            KeyCode::Char(kc),
+                            KeyModifiers::NONE,
+                        )));
                     }
                 }
-                WindowEvent::CursorMoved { position, .. } => {
-                    cursor_pos.0 = position.x;
-                    cursor_pos.1 = position.y;
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                cursor_pos.0 = position.x;
+                cursor_pos.1 = position.y;
 
+                // Convert pixel coordinates to cell coordinates
+                // No border offset needed (using OS window decoration)
+                // Account for TUI mode: double height (32px) vs sprite height (16px)
+                let cell_height = if use_tui_height {
+                    *sym_height * 2.0
+                } else {
+                    *sym_height
+                };
+                let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
+                let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
+
+                return Some(Event::Mouse(MouseEvent {
+                    kind: Moved,
+                    column: px,
+                    row: py,
+                    modifiers: KeyModifiers::NONE,
+                }));
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                // Account for TUI mode: double height (32px) vs sprite height (16px)
+                let cell_height = if use_tui_height {
+                    *sym_height * 2.0
+                } else {
+                    *sym_height
+                };
+                
+                if *state == winit::event::ElementState::Pressed {
                     // Convert pixel coordinates to cell coordinates
                     // No border offset needed (using OS window decoration)
-                    // Account for TUI mode: double height (32px) vs sprite height (16px)
-                    let cell_height = if use_tui_height {
-                        *sym_height * 2.0
-                    } else {
-                        *sym_height
-                    };
                     let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
                     let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
 
+                    let mouse_button = match button {
+                        winit::event::MouseButton::Left => Left,
+                        winit::event::MouseButton::Right => Right,
+                        winit::event::MouseButton::Middle => Middle,
+                        _ => Left,
+                    };
+
                     return Some(Event::Mouse(MouseEvent {
-                        kind: Moved,
+                        kind: Down(mouse_button),
+                        column: px,
+                        row: py,
+                        modifiers: KeyModifiers::NONE,
+                    }));
+                } else {
+                    // Convert pixel coordinates to cell coordinates
+                    // No border offset needed (using OS window decoration)
+                    let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
+                    let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
+
+                    let mouse_button = match button {
+                        winit::event::MouseButton::Left => Left,
+                        winit::event::MouseButton::Right => Right,
+                        winit::event::MouseButton::Middle => Middle,
+                        _ => Left,
+                    };
+
+                    return Some(Event::Mouse(MouseEvent {
+                        kind: Up(mouse_button),
                         column: px,
                         row: py,
                         modifiers: KeyModifiers::NONE,
                     }));
                 }
-                WindowEvent::MouseInput { state, button, .. } => {
-                    // Account for TUI mode: double height (32px) vs sprite height (16px)
-                    let cell_height = if use_tui_height {
-                        *sym_height * 2.0
-                    } else {
-                        *sym_height
-                    };
-                    
-                    if *state == winit::event::ElementState::Pressed {
-                        // Convert pixel coordinates to cell coordinates
-                        // No border offset needed (using OS window decoration)
-                        let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
-                        let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
-
-                        let mouse_button = match button {
-                            winit::event::MouseButton::Left => Left,
-                            winit::event::MouseButton::Right => Right,
-                            winit::event::MouseButton::Middle => Middle,
-                            _ => Left,
-                        };
-
-                        return Some(Event::Mouse(MouseEvent {
-                            kind: Down(mouse_button),
-                            column: px,
-                            row: py,
-                            modifiers: KeyModifiers::NONE,
-                        }));
-                    } else {
-                        // Convert pixel coordinates to cell coordinates
-                        // No border offset needed (using OS window decoration)
-                        let px = (cursor_pos.0 / (*sym_width as f64 / adjx as f64)) as u16;
-                        let py = (cursor_pos.1 / (cell_height as f64 / adjy as f64)) as u16;
-
-                        let mouse_button = match button {
-                            winit::event::MouseButton::Left => Left,
-                            winit::event::MouseButton::Right => Right,
-                            winit::event::MouseButton::Middle => Middle,
-                            _ => Left,
-                        };
-
-                        return Some(Event::Mouse(MouseEvent {
-                            kind: Up(mouse_button),
-                            column: px,
-                            row: py,
-                            modifiers: KeyModifiers::NONE,
-                        }));
-                    }
-                }
-                _ => {}
             }
+            _ => {}
         }
-        _ => {}
     }
     None
 }

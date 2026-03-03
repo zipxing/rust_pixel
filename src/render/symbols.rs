@@ -914,7 +914,7 @@ pub fn calc_eigenvector(img: &BlockGrayImage, block_width: usize, block_height: 
 /// - **Perceptual relevance**: Features correlate better with human character recognition
 /// 
 /// # Mathematical Formula:
-/// ```
+/// ```text
 /// MSE = sqrt(Σ(feature1[i] - feature2[i])²) for i = 0 to 9
 /// ```
 /// 

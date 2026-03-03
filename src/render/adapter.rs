@@ -534,7 +534,6 @@ pub trait Adapter {
 
     /// Advanced rendering methods for special effects (petview, transitions, etc.)
     /// These methods provide unified high-level interfaces for graphics modes.
-
     /// Set render texture visibility
     ///
     /// Controls whether a specific render texture is visible in the final composition.
@@ -556,7 +555,7 @@ pub trait Adapter {
     #[cfg(graphics_mode)]
     fn get_canvas_size(&self) -> (u32, u32) {
         let base = unsafe { &*(self as *const Self as *const AdapterBase) };
-        (base.gr.pixel_w as u32, base.gr.pixel_h as u32)
+        (base.gr.pixel_w, base.gr.pixel_h)
     }
 
     /// Setup buffer transition rendering

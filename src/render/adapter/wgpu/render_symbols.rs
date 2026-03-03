@@ -177,7 +177,7 @@ impl WgpuSymbolRenderer {
     /// - >= 24px/unit → mip1 (×2, mid resolution)
     /// - < 24px/unit  → mip2 (×1, base resolution)
     #[inline]
-    fn select_mip_level(screen_pixel_h: f32, cell_h: u8) -> usize {
+    pub(crate) fn select_mip_level(screen_pixel_h: f32, cell_h: u8) -> usize {
         let per_unit = screen_pixel_h / cell_h.max(1) as f32;
         if per_unit >= 48.0 { 0 }
         else if per_unit >= 24.0 { 1 }
@@ -554,6 +554,84 @@ impl WgpuSymbolInstance {
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ====================================================================
+    // select_mip_level tests
+    // ====================================================================
+
+    #[test]
+    fn test_mip_level_high_res() {
+        // 96px screen height / 1 cell = 96 per-unit → mip0
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(96.0, 1), 0);
+        // 48px exactly → mip0
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(48.0, 1), 0);
+        // 200px → mip0
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(200.0, 1), 0);
+    }
+
+    #[test]
+    fn test_mip_level_mid_res() {
+        // 47px → mip1 (just below mip0 threshold)
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(47.0, 1), 1);
+        // 24px exactly → mip1
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(24.0, 1), 1);
+        // 36px → mip1
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(36.0, 1), 1);
+    }
+
+    #[test]
+    fn test_mip_level_low_res() {
+        // 23px → mip2 (just below mip1 threshold)
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(23.0, 1), 2);
+        // 16px → mip2
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(16.0, 1), 2);
+        // 1px → mip2
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(1.0, 1), 2);
+    }
+
+    #[test]
+    fn test_mip_level_multi_cell() {
+        // 96px / 2 cells = 48 per-unit → mip0
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(96.0, 2), 0);
+        // 48px / 2 cells = 24 per-unit → mip1
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(48.0, 2), 1);
+        // 24px / 2 cells = 12 per-unit → mip2
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(24.0, 2), 2);
+    }
+
+    #[test]
+    fn test_mip_level_zero_cell_h() {
+        // cell_h=0 should not panic (clamped to 1)
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(48.0, 0), 0);
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(24.0, 0), 1);
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(10.0, 0), 2);
+    }
+
+    #[test]
+    fn test_mip_level_boundary_values() {
+        // Test exact boundary at 48.0
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(48.0, 1), 0);
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(47.999, 1), 1);
+        // Test exact boundary at 24.0
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(24.0, 1), 1);
+        assert_eq!(WgpuSymbolRenderer::select_mip_level(23.999, 1), 2);
+    }
+
+    #[test]
+    fn test_mip_level_return_range() {
+        // Ensure return value is always 0, 1, or 2
+        for h in [0.1, 1.0, 10.0, 23.0, 24.0, 47.0, 48.0, 100.0, 1000.0] {
+            for cell_h in [1, 2, 4] {
+                let level = WgpuSymbolRenderer::select_mip_level(h, cell_h);
+                assert!(level <= 2, "mip level {} out of range for h={}, cell_h={}", level, h, cell_h);
+            }
         }
     }
 }
