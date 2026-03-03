@@ -259,20 +259,29 @@ impl LayeredSymbolMap {
         let mut cjk_count: u16 = 0;
 
         for (key, val) in symbols_obj {
-            let cell_w = val["w"].as_u64().unwrap_or(1) as u8;
-            let cell_h = val["h"].as_u64().unwrap_or(1) as u8;
+            // Flat array format (17 numbers):
+            //   [0]: cell_w, [1]: cell_h
+            //   [2-6]: mip0 (layer, x, y, w, h)
+            //   [7-11]: mip1 (layer, x, y, w, h)
+            //   [12-16]: mip2 (layer, x, y, w, h)
+            let arr = val.as_array().ok_or_else(|| format!("Symbol '{}' is not an array", key))?;
+            if arr.len() < 17 {
+                return Err(format!("Symbol '{}' array too short: {} < 17", key, arr.len()));
+            }
+
+            let cell_w = arr[0].as_u64().unwrap_or(1) as u8;
+            let cell_h = arr[1].as_u64().unwrap_or(1) as u8;
 
             let mut mips = [MipUV::default(); 3];
-            for (i, mip_key) in ["mip0", "mip1", "mip2"].iter().enumerate() {
-                if let Some(m) = val.get(*mip_key) {
-                    mips[i] = MipUV {
-                        layer: m["layer"].as_u64().unwrap_or(0) as u16,
-                        x: m["x"].as_u64().unwrap_or(0) as f32 * inv,
-                        y: m["y"].as_u64().unwrap_or(0) as f32 * inv,
-                        w: m["w"].as_u64().unwrap_or(0) as f32 * inv,
-                        h: m["h"].as_u64().unwrap_or(0) as f32 * inv,
-                    };
-                }
+            for i in 0..3 {
+                let base = 2 + i * 5;
+                mips[i] = MipUV {
+                    layer: arr[base].as_u64().unwrap_or(0) as u16,
+                    x: arr[base + 1].as_u64().unwrap_or(0) as f32 * inv,
+                    y: arr[base + 2].as_u64().unwrap_or(0) as f32 * inv,
+                    w: arr[base + 3].as_u64().unwrap_or(0) as f32 * inv,
+                    h: arr[base + 4].as_u64().unwrap_or(0) as f32 * inv,
+                };
             }
 
             // Determine if this symbol is an emoji (should not apply color modulation)

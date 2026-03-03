@@ -253,8 +253,10 @@ impl WgpuSymbolRenderer {
 
             // Dynamic mipmap selection based on physical screen pixel size.
             // viewport_scale converts render-space cell_height to physical pixels.
-            let mip_level = Self::select_mip_level(cell_height * self.viewport_scale, tile.cell_h);
+            let screen_pixel_h = cell_height * self.viewport_scale;
+            let mip_level = Self::select_mip_level(screen_pixel_h, tile.cell_h);
             let mip = tile.mips[mip_level];
+
             let frame_width = tile.cell_w.max(1) as f32 * base_w;
             let frame_height = tile.cell_h.max(1) as f32 * base_h;
 

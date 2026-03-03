@@ -301,26 +301,26 @@ pub fn pack_layered(
     }
 
     // Step 6: Generate layered_symbol_map.json
+    // Flat array format for each symbol (17 numbers):
+    //   [0]: cell_w, [1]: cell_h
+    //   [2-6]: mip0 (layer, x, y, w, h)
+    //   [7-11]: mip1 (layer, x, y, w, h)
+    //   [12-16]: mip2 (layer, x, y, w, h)
     let mut symbols_json = serde_json::Map::new();
     for (sym_idx, sym) in all_symbols.iter().enumerate() {
-        let mut mip_entries = serde_json::Map::new();
+        let mut arr: Vec<u32> = Vec::with_capacity(17);
+        arr.push(sym.cell_w as u32);
+        arr.push(sym.cell_h as u32);
         for mip_level in 0..3 {
             let (layer, x, y) = placements[sym_idx][mip_level];
             let (w, h) = sym.mips[mip_level].dimensions();
-            mip_entries.insert(
-                format!("mip{}", mip_level),
-                json!({
-                    "layer": layer,
-                    "x": x,
-                    "y": y,
-                    "w": w,
-                    "h": h,
-                }),
-            );
+            arr.push(layer as u32);
+            arr.push(x);
+            arr.push(y);
+            arr.push(w);
+            arr.push(h);
         }
-        mip_entries.insert("w".to_string(), json!(sym.cell_w));
-        mip_entries.insert("h".to_string(), json!(sym.cell_h));
-        symbols_json.insert(sym.key.clone(), Value::Object(mip_entries));
+        symbols_json.insert(sym.key.clone(), json!(arr));
     }
 
     let layer_files: Vec<String> = (0..layer_images.len())

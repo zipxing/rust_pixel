@@ -198,10 +198,31 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
 
     let json_path = output_path.join("layered_symbol_map.json");
     println!("Saving {}...", json_path.display());
-    if let Err(e) = std::fs::write(
-        &json_path,
-        serde_json::to_string_pretty(&pack_result.symbol_map).unwrap(),
-    ) {
+    // Custom format: header pretty, symbols one per line for balance of size and readability
+    let map = &pack_result.symbol_map;
+    let mut output = String::new();
+    output.push_str("{\n");
+    output.push_str(&format!("  \"version\": {},\n", map["version"]));
+    output.push_str(&format!("  \"layer_count\": {},\n", map["layer_count"]));
+    output.push_str(&format!("  \"layer_size\": {},\n", map["layer_size"]));
+    output.push_str(&format!("  \"layer_files\": {},\n", serde_json::to_string(&map["layer_files"]).unwrap()));
+    output.push_str("  \"symbols\": {\n");
+
+    let symbols = map["symbols"].as_object().unwrap();
+    let mut entries: Vec<_> = symbols.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+    for (i, (k, v)) in entries.iter().enumerate() {
+        let comma = if i < entries.len() - 1 { "," } else { "" };
+        output.push_str(&format!("    {}: {}{}\n",
+            serde_json::to_string(k).unwrap(),
+            serde_json::to_string(v).unwrap(),
+            comma
+        ));
+    }
+    output.push_str("  }\n");
+    output.push_str("}\n");
+
+    if let Err(e) = std::fs::write(&json_path, output) {
         eprintln!("Error saving symbol map: {}", e);
         return;
     }

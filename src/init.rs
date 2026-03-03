@@ -139,41 +139,51 @@ pub fn init_layered_pixel_assets(
     fullscreen_fit: bool,
 ) -> Result<(), String> {
     use crate::render::adapter::{PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
-    use crate::render::symbol_map::{
-        init_layered_symbol_map_from_file, PIXEL_LAYERED_SYMBOL_MAP_FILE,
-    };
+    use crate::render::symbol_map::init_layered_symbol_map_from_file;
 
     // 1. Set global game configuration
     init_game_config(game_name, project_path, fullscreen, fullscreen_fit);
 
-    // 2. Load layered_symbol_map.json (must be before setting PIXEL_SYM_WIDTH/HEIGHT)
-    let json_path = format!(
-        "{}{}{}",
-        project_path,
-        std::path::MAIN_SEPARATOR,
-        PIXEL_LAYERED_SYMBOL_MAP_FILE
-    );
+    // 2. Find pix directory with fallback:
+    //    - First try: {project_path}/assets/pix/
+    //    - Fallback:  ./assets/pix/ (project root)
+    let pix_base = {
+        let app_pix = format!("{}{}assets/pix", project_path, std::path::MAIN_SEPARATOR);
+        let app_json = format!("{}/layered_symbol_map.json", app_pix);
+        if std::path::Path::new(&app_json).exists() {
+            app_pix
+        } else {
+            let root_pix = "assets/pix".to_string();
+            let root_json = format!("{}/layered_symbol_map.json", root_pix);
+            if std::path::Path::new(&root_json).exists() {
+                root_pix
+            } else {
+                return Err(format!(
+                    "Cannot find layered_symbol_map.json in '{}' or '{}'",
+                    app_pix, root_pix
+                ));
+            }
+        }
+    };
+
+    // 3. Load layered_symbol_map.json (must be before setting PIXEL_SYM_WIDTH/HEIGHT)
+    let json_path = format!("{}/layered_symbol_map.json", pix_base);
     init_layered_symbol_map_from_file(&json_path)?;
 
     let lmap = crate::render::symbol_map::get_layered_symbol_map()
         .ok_or("Layered symbol map not initialized")?;
 
-    // 3. Set PIXEL_SYM_WIDTH/HEIGHT from symbol map's cell_pixel_size
+    // 4. Set PIXEL_SYM_WIDTH/HEIGHT from symbol map's cell_pixel_size
     let cell_px = lmap.cell_pixel_size as f32;
     let _ = PIXEL_SYM_WIDTH.set(cell_px);
     let _ = PIXEL_SYM_HEIGHT.set(cell_px);
 
-    // 4. Load layer PNGs
+    // 5. Load layer PNGs from the same pix_base directory
     let layer_size = lmap.layer_size;
     let mut layers = Vec::with_capacity(lmap.layer_files.len());
 
     for layer_file in &lmap.layer_files {
-        let layer_path = format!(
-            "{}{}assets/pix/{}",
-            project_path,
-            std::path::MAIN_SEPARATOR,
-            layer_file
-        );
+        let layer_path = format!("{}/{}", pix_base, layer_file);
         let img = image::open(&layer_path)
             .map_err(|e| format!("Failed to load layer '{}': {}", layer_path, e))?
             .to_rgba8();
@@ -194,14 +204,14 @@ pub fn init_layered_pixel_assets(
 
     let layer_count = layers.len();
 
-    // 5. Cache layer data
+    // 6. Cache layer data
     PIXEL_LAYER_DATA
         .set(PixelLayerData { layer_size, layers })
         .map_err(|_| "PIXEL_LAYER_DATA already initialized".to_string())?;
 
     println!(
         "Layered pixel assets initialized: {} layers ({}x{}), {} symbols from {}",
-        layer_count, layer_size, layer_size, lmap.symbol_count(), project_path
+        layer_count, layer_size, layer_size, lmap.symbol_count(), pix_base
     );
 
     Ok(())
