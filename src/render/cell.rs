@@ -26,30 +26,31 @@ fn default_scale() -> f32 {
 /// Used for .pix file serialization. Block/idx are computed on-demand from the symbol string.
 pub type CellInfo = (u8, u8, Color, Color, Modifier);
 
-/// PUA (Private Use Area) encoding for Sprite symbols.
+/// PUA (Private Use Area) encoding for Sprite/UI symbols.
 ///
-/// Uses Supplementary PUA-A (U+F0000-U+F9FFF) to support all 160 sprite blocks:
-/// - Block 0: U+F0000-U+F00FF
-/// - Block 1: U+F0100-U+F01FF
-/// - ...
-/// - Block 159: U+F9F00-U+F9FFF
-///
+/// Uses Supplementary PUA-A (U+F0000-U+FFFFD).
 /// Encoding: codepoint = 0xF0000 + block * 256 + idx
 pub const PUA_BASE: u32 = 0xF0000;
-pub const PUA_END: u32 = 0xF9FFF;  // 160 blocks × 256 = 40960
+pub const PUA_END: u32 = 0xFFFFD;
 pub const PUA_BLOCK_SIZE: u32 = 256;
 
 /// Encode block and index to PUA character string.
 ///
 /// # Arguments
-/// * `block` - Block index (0-159 for sprite region)
+/// * `block` - Block index (0-255)
 /// * `idx` - Symbol index within block (0-255)
 ///
 /// # Returns
 /// A String containing a single Supplementary PUA-A character.
 pub fn cellsym_block(block: u8, idx: u8) -> String {
-    debug_assert!((block as u32) < 160, "block must be 0-159, got {}", block);
     let codepoint = PUA_BASE + (block as u32) * PUA_BLOCK_SIZE + idx as u32;
+    debug_assert!(
+        codepoint <= PUA_END,
+        "invalid PUA codepoint U+{:X} from block={}, idx={}",
+        codepoint,
+        block,
+        idx
+    );
     char::from_u32(codepoint).unwrap().to_string()
 }
 
@@ -70,7 +71,7 @@ pub fn cellsym(idx: u8) -> String {
 /// * `ch` - A character to decode
 ///
 /// # Returns
-/// Some((block, idx)) if the character is in PUA range (U+F0000-U+F9FFF),
+/// Some((block, idx)) if the character is in PUA range (U+F0000-U+FFFFD),
 /// None otherwise.
 pub fn decode_pua(ch: char) -> Option<(u8, u8)> {
     let cp = ch as u32;
@@ -459,7 +460,7 @@ mod tests {
     #[test]
     fn test_pua_roundtrip_all_blocks() {
         // Test representative blocks across the range
-        for block in [0u8, 1, 50, 100, 159] {
+        for block in [0u8, 1, 50, 100, 159, 160, 200, 254] {
             for idx in [0u8, 128, 255] {
                 let encoded = cellsym_block(block, idx);
                 let ch = encoded.chars().next().unwrap();
@@ -488,8 +489,8 @@ mod tests {
         let cp = first.chars().next().unwrap() as u32;
         assert_eq!(cp, PUA_BASE);
 
-        // Last PUA character: block=159, idx=255 → U+F9FFF
-        let last = cellsym_block(159, 255);
+        // Last valid full-block codepoint before partial tail: block=255, idx=253 → U+FFFFD
+        let last = cellsym_block(255, 253);
         let cp = last.chars().next().unwrap() as u32;
         assert_eq!(cp, PUA_END);
     }

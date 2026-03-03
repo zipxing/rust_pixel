@@ -552,10 +552,7 @@ pub trait Adapter {
     /// # Returns
     /// (width, height) tuple in pixels
     #[cfg(graphics_mode)]
-    fn get_canvas_size(&self) -> (u32, u32) {
-        let base = unsafe { &*(self as *const Self as *const AdapterBase) };
-        (base.gr.pixel_w, base.gr.pixel_h)
-    }
+    fn get_canvas_size(&self) -> (u32, u32);
 
     /// Setup buffer transition rendering
     ///

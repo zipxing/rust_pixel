@@ -71,14 +71,22 @@ impl WgpuWebAdapter {
         );
 
         // Get canvas element
-        let canvas = web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
-            .get_element_by_id("canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .unwrap();
+        let Some(window) = web_sys::window() else {
+            web_sys::console::error_1(&"WgpuWebAdapter: window is unavailable".into());
+            return;
+        };
+        let Some(document) = window.document() else {
+            web_sys::console::error_1(&"WgpuWebAdapter: document is unavailable".into());
+            return;
+        };
+        let Some(canvas_el) = document.get_element_by_id("canvas") else {
+            web_sys::console::error_1(&"WgpuWebAdapter: missing #canvas element".into());
+            return;
+        };
+        let Ok(canvas) = canvas_el.dyn_into::<web_sys::HtmlCanvasElement>() else {
+            web_sys::console::error_1(&"WgpuWebAdapter: #canvas type mismatch".into());
+            return;
+        };
 
         // Create WGPU instance with WebGL fallback
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -310,7 +318,9 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
     let mut mcte: Option<MouseEvent> = None;
 
     if let Some(key_e) = wasm_bindgen::JsCast::dyn_ref::<web_sys::KeyboardEvent>(&e) {
-        assert!(t == 0);
+        if t != 0 {
+            return None;
+        }
         let key = key_e.key();
         let key_code = match key.as_str() {
             "ArrowLeft" => Some(KeyCode::Left),
@@ -326,11 +336,7 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
             "Backspace" => Some(KeyCode::Backspace),
             "Tab" => Some(KeyCode::Tab),
             " " => Some(KeyCode::Char(' ')),
-            s if s.len() == 1 => {
-                let ch = s.chars().next().unwrap();
-                Some(KeyCode::Char(ch))
-            }
-            _ => None,
+            s => s.chars().next().filter(|_| s.chars().count() == 1).map(KeyCode::Char),
         };
         if let Some(kc) = key_code {
             let cte = KeyEvent::new(kc, KeyModifiers::NONE);
@@ -344,10 +350,14 @@ pub fn input_events_from_web(t: u8, e: web_sys::Event, pixel_h: u32, ratiox: f32
         // The canvas CSS size (display) differs from internal resolution (rendering)
         // due to fitCanvasToWindow() scaling + centering
         let (canvas_x, canvas_y) = {
-            let document = web_sys::window().unwrap().document().unwrap();
-            let canvas_elem = document.get_element_by_id("canvas").unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+            let canvas_elem = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.get_element_by_id("canvas"))
+                .and_then(|el| el.dyn_into::<web_sys::HtmlCanvasElement>().ok())?;
             let rect = canvas_elem.get_bounding_client_rect();
+            if rect.width() <= 0.0 || rect.height() <= 0.0 {
+                return None;
+            }
             let cw = canvas_elem.width() as f64;
             let ch = canvas_elem.height() as f64;
             let x = (mouse_e.client_x() as f64 - rect.left()) / rect.width() * cw;

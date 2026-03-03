@@ -869,6 +869,14 @@ impl Adapter for WinitWgpuAdapter {
         &mut self.base
     }
 
+    fn get_canvas_size(&self) -> (u32, u32) {
+        if let Some(core) = &self.render_core {
+            core.canvas_size()
+        } else {
+            (self.base.gr.pixel_w, self.base.gr.pixel_h)
+        }
+    }
+
     fn reset(&mut self) {}
 
     fn poll_event(&mut self, timeout: Duration, es: &mut Vec<Event>) -> bool {
@@ -891,9 +899,10 @@ impl Adapter for WinitWgpuAdapter {
             if let PumpStatus::Exit(_) = status {
                 return true;
             }
+        } else {
+            // Event loop not ready yet; avoid busy spin in early initialization stage.
+            std::thread::sleep(timeout);
         }
-
-        std::thread::sleep(timeout);
 
         self.should_exit
     }
