@@ -1,0 +1,22 @@
+[package]
+name = "symbols"
+version = "0.1.0"
+edition = "2021"
+authors = ["zipxing@hotmail.com"]
+description = "Symbol texture atlas generator for RustPixel GPU rendering"
+
+[dependencies]
+image = "0.25.9"
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+fontdue = "0.9"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-text = "20"
+core-graphics = "0.23"
+core-foundation = "0.9"
+
+# Features for compatibility with cargo-pixel run infrastructure
+[features]
+term = []
+wgpu = []
