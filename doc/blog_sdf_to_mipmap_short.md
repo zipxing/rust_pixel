@@ -94,3 +94,23 @@ The question isn't "is SDF good?" — it's "does my use case need infinite scala
 ---
 
 *RustPixel: [github.com/zipxing/rust_pixel](https://github.com/zipxing/rust_pixel)*
+
+---
+
+## Why SDF Can't Be Rescued for Downscaled Text / 为什么 SDF 在文本缩小时无法挽救
+
+We tested this directly. Our MSDF glyphs are 32×64 texels, displayed at 16×32 pixels (ratio=2.0 window mode). That's a 2:1 downscale — the GPU maps multiple texels to one pixel.
+
+我们直接做了测试。MSDF 字形是 32×64 纹素，显示在 16×32 像素（ratio=2.0 窗口模式）。这是 2:1 的缩小——GPU 把多个纹素映射到一个像素。
+
+**The blur comes from `fwidth(d)`** — in the fragment shader, `fwidth()` measures how fast the distance field changes across adjacent pixels. At 2:1 downscale, each pixel covers 2 texels, so `fwidth()` returns ~2× its normal value. The `smoothstep(threshold - w, threshold + w, d)` transition band doubles in width. Result: blurry edges.
+
+**模糊来自 `fwidth(d)`**——在片段着色器里，`fwidth()` 测量距离场在相邻像素间变化的速度。在 2:1 缩小下，每个像素覆盖 2 个纹素，所以 `fwidth()` 返回值约为正常值的 2 倍。`smoothstep(threshold - w, threshold + w, d)` 的过渡带宽度翻倍。结果：边缘模糊。
+
+We tried forcing `w_msdf = 0.03` (ignoring `fwidth()` entirely) to see if sharper thresholds would help. The text got sharper but introduced aliasing artifacts — because the fundamental problem isn't the threshold width, it's that **multiple texels of distance data are collapsing into one pixel.** The distance field simply doesn't have enough output pixels to represent the glyph's edge detail.
+
+我们尝试强制 `w_msdf = 0.03`（完全忽略 `fwidth()`）看更锐利的阈值是否有帮助。文字确实更锐利了，但产生了锯齿——因为根本问题不是阈值宽度，而是**多个纹素的距离数据塌缩到了一个像素里。** 距离场根本没有足够的输出像素来表达字形的边缘细节。
+
+**SDF excels at upscaling** (few texels → many pixels, interpolation fills in smooth edges). **SDF fails at downscaling** (many texels → few pixels, information is irreversibly lost). For text rendering at known, bounded sizes, pre-baked bitmaps from a system font renderer will always win.
+
+**SDF 擅长放大**（少量纹素 → 大量像素，插值填充出平滑边缘）。**SDF 在缩小时失效**（大量纹素 → 少量像素，信息不可逆地丢失）。对于已知、有界尺寸的文本渲染，系统字体渲染器的预烘焙位图永远是赢家。
