@@ -192,6 +192,20 @@ impl LlmArenaRender {
                 }
             }
         }
+
+        // Draw safe zone boundary (circle)
+        let zone = &world.zone;
+        let num_points = 120; // Points to draw the circle
+        for i in 0..num_points {
+            let angle = (i as f32) * std::f32::consts::TAU / (num_points as f32);
+            let wx = zone.center.0 + angle.cos() * zone.radius;
+            let wy = zone.center.1 + angle.sin() * zone.radius;
+            let (sx, sy) = to_sprite(wx, wy);
+            if in_bounds(sx, sy) {
+                // Red warning color for zone boundary
+                buf.set_graph_sym(sx as u16, sy as u16, 0, 42, Color::Red); // '*' symbol
+            }
+        }
     }
 
     /// Draw legend to map_panel canvas (TUI layer, supports Chinese text)
@@ -317,8 +331,8 @@ impl LlmArenaRender {
         };
 
         let line1 = format!(
-            "回合:{} | 速度:{}x | {} | 缩放:{:.1}x | 视角:({:.0},{:.0})",
-            model.world.tick, model.speed, state_name, model.map_scale, model.viewport.0, model.viewport.1
+            "回合:{} | 速度:{}x | {} | 安全区:{:.0} | 缩放:{:.1}x",
+            model.world.tick, model.speed, state_name, model.world.zone.radius, model.map_scale
         );
         self.status_panel.set_str(0, 0, &line1, state_color, Color::Reset);
 

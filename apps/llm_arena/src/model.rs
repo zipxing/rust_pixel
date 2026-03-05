@@ -306,9 +306,9 @@ impl SafeZone {
         Self {
             center,
             radius,
-            shrink_rate: 0.0,    // 默认不收缩，后续可调
+            shrink_rate: 0.02,   // 每tick收缩0.02，约5000tick缩完
             min_radius: 20.0,
-            damage_rate: 0.0,    // 默认无伤害，后续可调
+            damage_rate: 0.01,   // 圈外每tick损失1%兵力
         }
     }
 

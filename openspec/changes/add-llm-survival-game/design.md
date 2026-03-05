@@ -471,15 +471,66 @@ apps/llm_arena/
 
 ## 7. 关键参数默认值
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| map_size | 256×256 | 大地图尺寸 |
-| tick_rate | 10/s | 仿真帧率 |
-| llm_decision_interval | 10 tick (1s) | LLM 决策频率 |
-| R_encounter | 0.8 tile | 遭遇触发半径 |
-| R_release | 1.2 tile | 遭遇解除半径 |
-| battle_duration | 80-120 tick | 战斗持续时间 |
-| zone_shrink_interval | 600 tick (1min) | 缩圈间隔 |
-| maintenance_alpha | 0.8 | 维护递增系数 |
-| maintenance_T0 | 6000 tick (10min) | 维护基准时间 |
-| maintenance_beta | 1.2 | 维护递增指数 |
+| 参数 | 设计值 | 实际值 | 说明 |
+|------|--------|--------|------|
+| map_size | 256×256 | 158×126 | 大地图尺寸（适配UI布局） |
+| tick_rate | 10/s | 60/s | 仿真帧率 |
+| llm_decision_interval | 10 tick | 未实现 | LLM 决策频率 |
+| R_encounter | 0.8 tile | 5.0 | 遭遇触发半径 |
+| R_release | 1.2 tile | 未实现 | 遭遇解除半径 |
+| battle_duration | 80-120 tick | 最大100 | 战斗持续时间 |
+| zone_shrink_interval | 600 tick | 500 tick | 缩圈间隔 |
+
+## 8. 实现状态 (2025-03)
+
+### 8.1 已实现功能
+
+**核心仿真 (model.rs)**
+- ✅ World 状态管理（地图、势力、军团、资源点、安全区）
+- ✅ 军团移动、遭遇检测、战斗实例结算
+- ✅ 安全区收缩 + 圈外伤害
+- ✅ 资源采集系统（食物、弹药、宝石）
+- ✅ 补给消耗 + 饿死机制
+- ✅ 宝石自动转化（换粮/换弹）
+- ✅ 地形系统（草地、森林、山脉、水域、沙漠、沼泽）
+- ✅ seed + PRNG 确保可复现
+
+**渲染层 (render.rs)**
+- ✅ TUI + Sprite 混合渲染
+- ✅ 地图面板 + 信息面板 + 日志面板 + 状态栏
+- ✅ 地形渲染（PETSCII 符号 + 颜色）
+- ✅ 军团渲染（阵营色块）
+- ✅ 资源点渲染（食物/弹药/宝石/医疗）
+- ✅ 战斗标记（⚔️）
+- ✅ 视口平移 + 缩放（方向键 + [/]）
+
+**交互控制**
+- ✅ 暂停/继续（空格）
+- ✅ 速度调节（+/-，1x-10x）
+- ✅ 视口平移（方向键）
+- ✅ 地图缩放（[/] 或 {/}，0.5x-4.0x）
+
+### 8.2 与设计差异
+
+| 设计项 | 设计 | 实现 | 原因 |
+|--------|------|------|------|
+| 文件结构 | core_sim/ ai_protocol/ agents/ viewer/ | model.rs render.rs | MVP 简化 |
+| Army 属性 | range_type, discipline, fatigue, focus | 缺少 | 简化战斗模型 |
+| UI 布局 | 资源面板左侧，地图右侧 | 地图左侧，面板右侧 | 适配显示 |
+| AI 协议 | JSON schema | 无 | 待实现 |
+| Agents | LLM/Rule/Random | 仅 Random | 待实现 |
+| 战斗窗口 | 弹出式详细窗口 | 无 | 待实现 |
+
+### 8.3 新增功能（超出原设计）
+
+- **地形系统**：6 种地形类型，Perlin-like 生成，PETSCII 渲染
+- **地图缩放**：0.5x-4.0x 缩放支持
+- **宝石资源**：第三种资源类型，可自动转化为食物或弹药
+
+### 8.4 待实现
+
+- [ ] AI 协议层（Observation/Action JSON schema）
+- [ ] LLM Agent / Rule Agent
+- [ ] 战斗详情窗口
+- [ ] 回放系统
+- [ ] 联赛模式
