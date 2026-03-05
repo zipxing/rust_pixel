@@ -38,7 +38,7 @@ impl Render for MdptRender {
         let scale = if rust_pixel::init::get_game_config().fullscreen {
             1.0
         } else {
-            2.0
+            2.5
         };
         #[cfg(not(graphics_mode))]
         let scale = 0.5;

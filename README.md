@@ -35,22 +35,22 @@
 
 ### Everything is Tiles
 
-Scene > Layer > Sprite > Buffer > Cell
+TUI & sprites → buffer → cells → tiles
 
-Unified rendering abstraction
+A unified rendering abstraction
 
-High performance - **Texture2DArray, one draw call** 
+High performance: **Texture2DArray, single draw call**
 
 </td>
 <td width="33%" align="center">
 
-### Write Once, Run Anywhere
+### One Codebase, Multiple Targets
 
-Terminal | Desktop | Web
+Terminal · Desktop · Web
 
-**TUI in GPU windows — no terminal emulator**
+**GPU-rendered TUI — no terminal emulator**
 
-One codebase, multiple targets
+Hybrid TUI + pixel content across targets
 
 </td>
 <td width="33%" align="center">
@@ -61,7 +61,7 @@ One codebase, multiple targets
 
 **Built-in BASIC interpreter**
 
-Model-Render-Game pattern with Event driven
+Event-driven Model–Render–Game loop
 
 </td>
 </tr>
