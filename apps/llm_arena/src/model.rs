@@ -1,10 +1,10 @@
-use log::info;
 use rust_pixel::context::Context;
 use rust_pixel::event::{Event, KeyCode};
 use rust_pixel::game::Model;
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 // Map dimensions
 pub const MAP_WIDTH: u16 = 200;
@@ -12,7 +12,25 @@ pub const MAP_HEIGHT: u16 = 100;
 
 // Screen dimensions
 pub const SCREEN_WIDTH: u16 = 120;
-pub const SCREEN_HEIGHT: u16 = 45;
+pub const SCREEN_HEIGHT: u16 = 40;
+
+// Maximum log lines kept in memory
+const MAX_LOG_LINES: usize = 200;
+
+/// In-game log buffer displayed in TUI
+#[derive(Debug, Clone, Default)]
+pub struct GameLog {
+    pub lines: VecDeque<String>,
+}
+
+impl GameLog {
+    pub fn push(&mut self, msg: String) {
+        self.lines.push_back(msg);
+        if self.lines.len() > MAX_LOG_LINES {
+            self.lines.pop_front();
+        }
+    }
+}
 
 // Encounter radius
 pub const R_ENCOUNTER: f32 = 5.0;
@@ -275,6 +293,8 @@ pub struct World {
     pub zone: SafeZone,
     #[serde(skip, default = "default_rng")]
     pub rng: StdRng,
+    #[serde(skip)]
+    pub log: GameLog,
 }
 
 impl World {
@@ -348,6 +368,7 @@ impl World {
             resource_points,
             zone: SafeZone::new(center, center.0.min(center.1)),
             rng,
+            log: GameLog::default(),
         }
     }
 
@@ -369,8 +390,8 @@ impl World {
         let old_radius = self.zone.radius;
         self.zone.tick();
         if self.zone.shrink_rate > 0.0 && self.tick % 100 == 0 && self.zone.radius < old_radius {
-            info!("[Tick {}] 安全区收缩: 半径 {:.1} -> {:.1}",
-                self.tick, old_radius, self.zone.radius);
+            self.log.push(format!("[{}] 安全区收缩: 半径 {:.1} -> {:.1}",
+                self.tick, old_radius, self.zone.radius));
         }
 
         // Apply zone damage to armies outside
@@ -380,8 +401,8 @@ impl World {
                     let damage = (army.troops as f32 * self.zone.damage_rate) as u32;
                     if damage > 0 {
                         army.troops = army.troops.saturating_sub(damage);
-                        info!("[Tick {}] ☢️ 军团#{} (阵营{}) 在安全区外受到伤害: -{}兵, 剩余{}兵",
-                            self.tick, army.id, army.faction_id, damage, army.troops);
+                        self.log.push(format!("[{}] 军团#{} (阵营{}) 区外受伤: -{}兵, 剩余{}",
+                            self.tick, army.id, army.faction_id, damage, army.troops));
                     }
                 }
             }
@@ -430,8 +451,8 @@ impl World {
             let army_b = self.armies.iter().find(|a| a.id == id_b);
 
             if let (Some(a), Some(b)) = (army_a, army_b) {
-                info!("[Tick {}] ⚔️ 遭遇! 军团#{} (阵营{}, {}兵) vs 军团#{} (阵营{}, {}兵) 距离{:.1}",
-                    self.tick, a.id, a.faction_id, a.troops, b.id, b.faction_id, b.troops, dist);
+                self.log.push(format!("[{}] 遭遇! #{}(阵营{},{}兵) vs #{}(阵营{},{}兵) 距{:.1}",
+                    self.tick, a.id, a.faction_id, a.troops, b.id, b.faction_id, b.troops, dist));
             }
 
             let pos_a = self.armies.iter().find(|a| a.id == id_a).map(|a| a.position).unwrap_or((0.0, 0.0));
@@ -456,8 +477,8 @@ impl World {
                 }
             }
 
-            info!("[Tick {}] 🏁 战斗#{} 开始于 ({:.1}, {:.1})",
-                self.tick, battle_id, battle_pos.0, battle_pos.1);
+            self.log.push(format!("[{}] 战斗#{} 开始 ({:.0},{:.0})",
+                self.tick, battle_id, battle_pos.0, battle_pos.1));
             self.battles.push(battle);
         }
     }
@@ -465,14 +486,13 @@ impl World {
     fn process_battles(&mut self) {
         let tick = self.tick;
         let mut ended_battles = Vec::new();
+        let mut log_msgs: Vec<String> = Vec::new();
 
         // 收集战斗中军团的弹药信息，并消耗弹药
         let mut army_ammo_factors: std::collections::HashMap<u32, f32> = std::collections::HashMap::new();
         for army in &mut self.armies {
             if army.current_battle.is_some() && army.troops > 0 {
-                // 消耗弹药
                 army.ammo = (army.ammo - AMMO_CONSUME_RATE).max(0.0);
-                // 计算伤害系数：有弹药=1.0，无弹药=0.5
                 let factor = if army.ammo > 0.0 { 1.0 } else { NO_AMMO_PENALTY };
                 army_ammo_factors.insert(army.id, factor);
             }
@@ -486,7 +506,6 @@ impl World {
             battle.duration += 1;
             battle.phase = BattlePhase::Combat;
 
-            // Simple combat resolution
             if battle.participants.len() >= 2 {
                 let total_power: f32 = battle.participants.iter().map(|p| p.effective_power).sum();
                 let mut tick_casualties = Vec::new();
@@ -495,11 +514,7 @@ impl World {
                     let my_power = battle.participants[i].effective_power;
                     let enemy_power = total_power - my_power;
                     let army_id = battle.participants[i].army_id;
-
-                    // 获取弹药系数（影响对敌方造成的伤害）
                     let ammo_factor = *army_ammo_factors.get(&army_id).unwrap_or(&1.0);
-
-                    // 计算敌方对我方造成的伤亡
                     let casualty_rate = (enemy_power / (my_power + enemy_power + 1.0)) * 0.01;
                     let casualties = (battle.participants[i].current_troops as f32 * casualty_rate) as u32;
 
@@ -516,14 +531,14 @@ impl World {
                 if battle.duration % 10 == 0 && !tick_casualties.is_empty() {
                     let status: Vec<String> = battle.participants.iter()
                         .map(|p| {
-                            let ammo_warning = if *army_ammo_factors.get(&p.army_id).unwrap_or(&1.0) < 1.0 {
-                                "⚠️无弹药"
+                            let warn = if *army_ammo_factors.get(&p.army_id).unwrap_or(&1.0) < 1.0 {
+                                "[缺弹]"
                             } else { "" };
-                            format!("阵营{}:{}兵(-{}){}", p.faction_id, p.current_troops, p.casualties, ammo_warning)
+                            format!("F{}:{}(-{}){}", p.faction_id, p.current_troops, p.casualties, warn)
                         })
                         .collect();
-                    info!("[Tick {}] 战斗#{} 进行中 ({}轮): {}",
-                        tick, battle.id, battle.duration, status.join(" vs "));
+                    log_msgs.push(format!("[{}] 战斗#{} 第{}轮: {}",
+                        tick, battle.id, battle.duration, status.join(" vs ")));
                 }
             }
 
@@ -539,22 +554,21 @@ impl World {
             if alive_factions.len() <= 1 || battle.duration > 300 {
                 battle.phase = BattlePhase::Ended;
 
-                // 战斗结束日志
                 let result: Vec<String> = battle.participants.iter()
-                    .map(|p| format!("阵营{}: {}->{}兵 (阵亡{})",
+                    .map(|p| format!("F{}: {}->{}(亡{})",
                         p.faction_id, p.initial_troops, p.current_troops, p.casualties))
                     .collect();
 
                 let winner = if alive_factions.len() == 1 {
-                    format!("阵营{}获胜", alive_factions[0])
+                    format!("阵营{}胜", alive_factions[0])
                 } else if alive_factions.is_empty() {
-                    "全军覆没".to_string()
+                    "全灭".to_string()
                 } else {
-                    "超时结束".to_string()
+                    "超时".to_string()
                 };
 
-                info!("[Tick {}] 🏆 战斗#{} 结束! {} | {} | 持续{}轮",
-                    tick, battle.id, winner, result.join(", "), battle.duration);
+                log_msgs.push(format!("[{}] 战斗#{} 结束! {} | {} | {}轮",
+                    tick, battle.id, winner, result.join(", "), battle.duration));
 
                 ended_battles.push(battle.id);
             }
@@ -570,8 +584,8 @@ impl World {
                         army.current_battle = None;
 
                         if army.troops == 0 {
-                            info!("[Tick {}] 💀 军团#{} (阵营{}) 全军覆没!",
-                                tick, army.id, army.faction_id);
+                            log_msgs.push(format!("[{}] 军团#{} (阵营{}) 全灭!",
+                                tick, army.id, army.faction_id));
                         }
                     }
                 }
@@ -580,6 +594,11 @@ impl World {
 
         // Remove ended battles
         self.battles.retain(|b| b.phase != BattlePhase::Ended);
+
+        // Push collected log messages
+        for msg in log_msgs {
+            self.log.push(msg);
+        }
     }
 
     fn check_eliminations(&mut self) {
@@ -592,8 +611,8 @@ impl World {
             let has_armies = self.armies.iter().any(|a| a.faction_id == faction.id && a.troops > 0);
             if !has_armies {
                 faction.is_alive = false;
-                info!("[Tick {}] ☠️ 阵营{} ({}) 被消灭! 已无存活军团",
-                    tick, faction.id, faction.name);
+                self.log.push(format!("[{}] 阵营{} ({}) 被消灭!",
+                    tick, faction.id, faction.name));
             }
         }
     }
@@ -601,6 +620,7 @@ impl World {
     /// 处理补给消耗、饥饿、资源采集和宝石转化
     fn process_supplies(&mut self) {
         let tick = self.tick;
+        let mut log_msgs: Vec<String> = Vec::new();
 
         // 1. 军团消耗补给
         for army in &mut self.armies {
@@ -608,7 +628,6 @@ impl World {
                 continue;
             }
 
-            // 按兵力消耗补给
             let consumption = army.troops as f32 * SUPPLY_CONSUME_RATE;
             army.supplies -= consumption;
 
@@ -619,13 +638,13 @@ impl World {
                 if starved > 0 {
                     army.troops = army.troops.saturating_sub(starved);
                     army.morale = (army.morale - MORALE_STARVE_DROP).max(0.0);
-                    info!("[Tick {}] 🍽️ 军团#{} (阵营{}) 补给耗尽! 饿死{}人, 剩余{}兵, 士气{:.0}",
-                        tick, army.id, army.faction_id, starved, army.troops, army.morale);
+                    log_msgs.push(format!("[{}] #{}(F{}) 断粮! 饿死{} 余{} 气{:.0}",
+                        tick, army.id, army.faction_id, starved, army.troops, army.morale));
                 }
             }
         }
 
-        // 2. 宝石自动转化（优先补给不足时转化为食物，其次弹药不足时转化为弹药）
+        // 2. 宝石自动转化
         for army in &mut self.armies {
             if army.troops == 0 || army.gems <= 0.0 {
                 continue;
@@ -633,38 +652,33 @@ impl World {
 
             let convert_amount = GEMS_CONVERT_RATE.min(army.gems);
 
-            // 优先转化为食物（当补给不足时）
             if army.supplies < 70.0 {
                 army.gems -= convert_amount;
                 let food_gained = convert_amount * GEMS_TO_FOOD_RATIO;
                 army.supplies = (army.supplies + food_gained).min(150.0);
                 if tick % 50 == 0 {
-                    info!("[Tick {}] 💎→🍞 军团#{} (阵营{}) 转化宝石: {:.1}宝石 → {:.1}食物, 当前补给{:.1}",
-                        tick, army.id, army.faction_id, convert_amount, food_gained, army.supplies);
+                    log_msgs.push(format!("[{}] #{}(F{}) 宝石换粮: {:.1}->{:.1}粮",
+                        tick, army.id, army.faction_id, convert_amount, army.supplies));
                 }
-            }
-            // 其次转化为弹药（当弹药不足时）
-            else if army.ammo < 50.0 && army.gems > 0.0 {
+            } else if army.ammo < 50.0 && army.gems > 0.0 {
                 let convert_amount = GEMS_CONVERT_RATE.min(army.gems);
                 army.gems -= convert_amount;
                 let ammo_gained = convert_amount * GEMS_TO_AMMO_RATIO;
                 army.ammo = (army.ammo + ammo_gained).min(100.0);
                 if tick % 50 == 0 {
-                    info!("[Tick {}] 💎→🔫 军团#{} (阵营{}) 转化宝石: {:.1}宝石 → {:.1}弹药, 当前弹药{:.1}",
-                        tick, army.id, army.faction_id, convert_amount, ammo_gained, army.ammo);
+                    log_msgs.push(format!("[{}] #{}(F{}) 宝石换弹: {:.1}->{:.1}弹",
+                        tick, army.id, army.faction_id, convert_amount, army.ammo));
                 }
             }
         }
 
-        // 3. 采集资源（需要收集军团位置信息，避免借用冲突）
-        // 收集军团信息：id, faction_id, position, needs_food, needs_ammo, needs_gems, gems
+        // 3. 采集资源
         let army_positions: Vec<(u32, u8, (f32, f32), bool, bool, bool, f32)> = self.armies.iter()
             .filter(|a| a.troops > 0 && a.engaged_lock == 0)
             .map(|a| (a.id, a.faction_id, a.position, a.supplies < 100.0, a.ammo < 80.0, a.gems < 80.0, a.gems))
             .collect();
 
         for (army_id, faction_id, pos, needs_food, needs_ammo, needs_gems, _current_gems) in &army_positions {
-            // 查找范围内的资源点
             for (i, rp) in self.resource_points.iter().enumerate() {
                 if rp.amount <= 0.0 {
                     continue;
@@ -676,12 +690,11 @@ impl World {
                     continue;
                 }
 
-                // 根据资源类型采集
                 let (should_gather, resource_name) = match rp.resource_type {
-                    0 => (*needs_food, "食物"),      // 食物 → supplies
-                    1 => (*needs_gems, "宝石"),      // 宝石 → gems
-                    2 => (*needs_ammo, "弹药"),      // 弹药 → ammo
-                    _ => (false, ""),                // 医疗暂不使用
+                    0 => (*needs_food, "粮"),
+                    1 => (*needs_gems, "宝"),
+                    2 => (*needs_ammo, "弹"),
+                    _ => (false, ""),
                 };
 
                 if !should_gather {
@@ -692,35 +705,39 @@ impl World {
                 let gather = GATHER_RATE.min(rp.amount);
                 rp.amount -= gather;
 
-                // 补充对应资源
                 if let Some(army) = self.armies.iter_mut().find(|a| a.id == *army_id) {
                     match rp.resource_type {
                         0 => {
                             army.supplies = (army.supplies + gather).min(150.0);
                             if tick % 50 == 0 {
-                                info!("[Tick {}] 📦 军团#{} (阵营{}) 采集{}: +{:.1}, 当前补给{:.1}",
-                                    tick, army_id, faction_id, resource_name, gather, army.supplies);
+                                log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
+                                    tick, army_id, faction_id, resource_name, gather, army.supplies));
                             }
                         }
                         1 => {
                             army.gems = (army.gems + gather).min(100.0);
                             if tick % 50 == 0 {
-                                info!("[Tick {}] 💎 军团#{} (阵营{}) 采集{}: +{:.1}, 当前宝石{:.1}",
-                                    tick, army_id, faction_id, resource_name, gather, army.gems);
+                                log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
+                                    tick, army_id, faction_id, resource_name, gather, army.gems));
                             }
                         }
                         2 => {
                             army.ammo = (army.ammo + gather).min(100.0);
                             if tick % 50 == 0 {
-                                info!("[Tick {}] 📦 军团#{} (阵营{}) 采集{}: +{:.1}, 当前弹药{:.1}",
-                                    tick, army_id, faction_id, resource_name, gather, army.ammo);
+                                log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
+                                    tick, army_id, faction_id, resource_name, gather, army.ammo));
                             }
                         }
                         _ => {}
                     }
                 }
-                break; // 每tick只采集一种资源
+                break;
             }
+        }
+
+        // Push collected log messages
+        for msg in log_msgs {
+            self.log.push(msg);
         }
 
         // 4. 资源点再生
@@ -775,17 +792,16 @@ impl Model for LlmArenaModel {
     fn init(&mut self, _context: &mut Context) {
         self.state = ArenaState::Running;
 
-        info!("========== LLM Arena 游戏初始化 ==========");
-        info!("种子: {} | 地图: {}x{}", self.world.seed, self.world.map_size.0, self.world.map_size.1);
+        self.world.log.push(format!("=== 游戏初始化 种子:{} 地图:{}x{} ===",
+            self.world.seed, self.world.map_size.0, self.world.map_size.1));
         for faction in &self.world.factions {
             let armies: Vec<String> = self.world.armies.iter()
                 .filter(|a| a.faction_id == faction.id)
-                .map(|a| format!("军团#{}({}兵,位置{:.0},{:.0})", a.id, a.troops, a.position.0, a.position.1))
+                .map(|a| format!("#{}({}兵)", a.id, a.troops))
                 .collect();
-            info!("阵营{} ({}): {}", faction.id, faction.name, armies.join(", "));
+            self.world.log.push(format!("阵营{} ({}): {}", faction.id, faction.name, armies.join(", ")));
         }
-        info!("资源点: {}个", self.world.resource_points.len());
-        info!("==========================================");
+        self.world.log.push(format!("资源点: {}个", self.world.resource_points.len()));
     }
 
     fn handle_input(&mut self, context: &mut Context, _dt: f32) {
@@ -825,6 +841,7 @@ impl Model for LlmArenaModel {
                 _ => {}
             }
         }
+        context.input_events.clear();
     }
 
     fn handle_auto(&mut self, _context: &mut Context, _dt: f32) {
@@ -907,18 +924,16 @@ impl Model for LlmArenaModel {
             if let Some(winner_id) = self.world.is_game_over() {
                 self.state = ArenaState::GameOver;
 
-                info!("==========================================");
                 if winner_id == 255 {
-                    info!("[Tick {}] 🎮 游戏结束: 平局!", self.world.tick);
+                    self.world.log.push(format!("[{}] 游戏结束: 平局!", self.world.tick));
                 } else {
                     let winner_name = self.world.factions.iter()
                         .find(|f| f.id == winner_id)
                         .map(|f| f.name.as_str())
                         .unwrap_or("未知");
-                    info!("[Tick {}] 🎮 游戏结束: 阵营{} ({}) 获得胜利!",
-                        self.world.tick, winner_id, winner_name);
+                    self.world.log.push(format!("[{}] 游戏结束: 阵营{} ({}) 获胜!",
+                        self.world.tick, winner_id, winner_name));
                 }
-                info!("==========================================");
             }
         }
     }

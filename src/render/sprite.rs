@@ -364,13 +364,34 @@ impl Sprite {
     /// Formula: pixel_pos = cell_pos * sym_size / ratio
     #[cfg(graphics_mode)]
     pub fn set_cell_pos(&mut self, x: u16, y: u16) {
+        self.set_cell_pos_with_tui(x, y, false);
+    }
+
+    /// Set sprite position in cell units with optional TUI height mode.
+    ///
+    /// When `use_tui_height` is true, the Y coordinate is doubled to match
+    /// the TUI character height (32px instead of 16px), consistent with
+    /// `GraphState::set_pixel_size` window sizing.
+    #[cfg(not(graphics_mode))]
+    pub fn set_cell_pos_with_tui(&mut self, x: u16, y: u16, _use_tui_height: bool) {
+        self.set_pos(x, y);
+    }
+
+    /// Set sprite position in cell units with optional TUI height mode.
+    ///
+    /// When `use_tui_height` is true, the Y coordinate is doubled to match
+    /// the TUI character height (32px instead of 16px), consistent with
+    /// `GraphState::set_pixel_size` window sizing.
+    #[cfg(graphics_mode)]
+    pub fn set_cell_pos_with_tui(&mut self, x: u16, y: u16, use_tui_height: bool) {
         let sym_w = PIXEL_SYM_WIDTH.get().copied().unwrap_or(16.0);
         let sym_h = PIXEL_SYM_HEIGHT.get().copied().unwrap_or(16.0);
         let rx = get_ratio_x();
         let ry = get_ratio_y();
+        let tui_mul = if use_tui_height { 2.0 } else { 1.0 };
 
         let pixel_x = (x as f32 * sym_w / rx) as u16;
-        let pixel_y = (y as f32 * sym_h / ry) as u16;
+        let pixel_y = (y as f32 * sym_h * tui_mul / ry) as u16;
         self.set_pos(pixel_x, pixel_y);
     }
 

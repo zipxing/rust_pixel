@@ -677,6 +677,7 @@ pub fn get_ratio_y() -> f32 {
     *PIXEL_RATIO_Y.get().unwrap_or(&1.0)
 }
 
+
 /// Calculate the width of a single symbol (in pixels) based on the full texture width
 ///
 /// # Parameters
