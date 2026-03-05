@@ -8,17 +8,18 @@ use rust_pixel::render::style::Color;
 use rust_pixel::ui::{BorderStyle, Panel, Widget};
 use rust_pixel::util::Rect;
 
-// Layout constants (cell coords in TUI buffer)
-const MAP_W: u16 = 80;
-const MAP_H: u16 = 33;
-const PANEL_W: u16 = 40;
-const PANEL_H: u16 = 16;
-const LOG_H: u16 = 17;
-const STATUS_H: u16 = 7;
+// Layout constants (cell coords in TUI buffer) — doubled for ratio 4.0
+const MAP_W: u16 = 160;
+const MAP_H: u16 = 66;
+const PANEL_W: u16 = 80;
+const PANEL_H: u16 = 32;
+const LOG_H: u16 = 34;
+const STATUS_H: u16 = 14;
 
-// Map sprite: 2x resolution, rendered at 0.5 scale to fit panel content area
-const MAP_GFX_W: u16 = (MAP_W - 2) * 2;   // 156
-const MAP_GFX_H: u16 = (MAP_H - 3) * 2;   // 60
+// Map sprite: W = panel content width, H = panel content height * 2 (TUI行高是sprite的2倍)
+// scale 1.0, no scaling needed
+const MAP_GFX_W: u16 = MAP_W - 2;          // 158
+const MAP_GFX_H: u16 = (MAP_H - 3) * 2;   // 126
 
 // Colors
 const LABEL_COLOR: Color = Color::Indexed(244);
@@ -43,16 +44,16 @@ impl LlmArenaRender {
     pub fn new() -> Self {
         let mut scene = Scene::new();
 
-        // Map graphics sprite: 2x cell resolution, scaled 0.5 to fit panel
-        let mut map_gfx = Sprite::new(0, 0, MAP_GFX_W, MAP_GFX_H);
-        map_gfx.set_scale(0.5);
+        // Map graphics sprite: scale 1.0, W matches TUI width, H = TUI height * 2
+        let map_gfx = Sprite::new(0, 0, MAP_GFX_W, MAP_GFX_H);
         scene.add_sprite(map_gfx, "map_gfx");
 
         // TUI Panels
-        let map_panel = Panel::new()
+        let mut map_panel = Panel::new()
             .with_bounds(Rect::new(0, 0, MAP_W, MAP_H))
             .with_border(BorderStyle::Rounded)
             .with_title(" 战场地图 ");
+        map_panel.enable_canvas(MAP_W - 2, MAP_H - 3);
 
         let mut info_panel = Panel::new()
             .with_bounds(Rect::new(MAP_W, 0, PANEL_W, PANEL_H))
@@ -156,12 +157,16 @@ impl LlmArenaRender {
             }
         }
 
-        // Legend at bottom of map sprite
-        let ly = MAP_GFX_H - 1;
-        buf.set_color_str(1, ly, "食", Color::Yellow, Color::Reset);
-        buf.set_color_str(3, ly, "宝", Color::Gray, Color::Reset);
-        buf.set_color_str(5, ly, "弹", Color::Red, Color::Reset);
-        buf.set_color_str(7, ly, "药", Color::Green, Color::Reset);
+    }
+
+    /// Draw legend to map_panel canvas (TUI layer, supports Chinese text)
+    fn draw_map_legend(&mut self) {
+        self.map_panel.clear_canvas();
+        let ly = MAP_H - 4; // bottom row of canvas
+        self.map_panel.set_str(1, ly, "食", Color::Yellow, Color::Reset);
+        self.map_panel.set_str(3, ly, "宝", Color::Gray, Color::Reset);
+        self.map_panel.set_str(5, ly, "弹", Color::Red, Color::Reset);
+        self.map_panel.set_str(7, ly, "药", Color::Green, Color::Reset);
     }
 
     /// Draw faction info to info_panel canvas
@@ -331,8 +336,8 @@ impl Render for LlmArenaRender {
         context.adapter.init(
             SCREEN_WIDTH,
             SCREEN_HEIGHT,
-            2.0,
-            2.0,
+            4.0,
+            4.0,
             "LLM Arena".to_string(),
         );
         self.scene.init(context);
@@ -349,6 +354,7 @@ impl Render for LlmArenaRender {
 
     fn draw(&mut self, ctx: &mut Context, model: &mut Self::Model, _dt: f32) {
         // 1. Update panel canvases with model data
+        self.draw_map_legend();
         self.draw_info(model);
         self.draw_log(model);
         self.draw_status(model);

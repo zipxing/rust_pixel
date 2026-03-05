@@ -6,13 +6,13 @@ use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-// Map dimensions
-pub const MAP_WIDTH: u16 = 200;
-pub const MAP_HEIGHT: u16 = 100;
+// Map dimensions — matches sprite size (158x126, scale 1.0)
+pub const MAP_WIDTH: u16 = 158;
+pub const MAP_HEIGHT: u16 = 126;
 
-// Screen dimensions
-pub const SCREEN_WIDTH: u16 = 120;
-pub const SCREEN_HEIGHT: u16 = 40;
+// Screen dimensions (doubled for ratio 4.0)
+pub const SCREEN_WIDTH: u16 = 240;
+pub const SCREEN_HEIGHT: u16 = 80;
 
 // Maximum log lines kept in memory
 const MAX_LOG_LINES: usize = 200;
@@ -37,10 +37,10 @@ pub const R_ENCOUNTER: f32 = 5.0;
 
 // Resource system constants
 pub const R_GATHER: f32 = 3.0;           // 采集半径
-pub const SUPPLY_CONSUME_RATE: f32 = 0.001;  // 每tick每兵消耗补给
+pub const SUPPLY_CONSUME_RATE: f32 = 0.005;  // 每tick每兵消耗补给 (5x faster)
 pub const GATHER_RATE: f32 = 2.0;        // 每tick采集量
-pub const STARVE_RATE: f32 = 0.005;      // 补给耗尽时每tick饿死比例
-pub const MORALE_STARVE_DROP: f32 = 0.5; // 饿死时士气下降
+pub const STARVE_RATE: f32 = 0.02;       // 补给耗尽时每tick饿死比例 (4x faster)
+pub const MORALE_STARVE_DROP: f32 = 1.0; // 饿死时士气下降 (2x)
 pub const RESOURCE_MAX: f32 = 500.0;     // 资源点最大容量
 pub const AMMO_CONSUME_RATE: f32 = 0.5;  // 战斗中每tick弹药消耗
 pub const NO_AMMO_PENALTY: f32 = 0.5;    // 无弹药时伤害降低比例
@@ -325,28 +325,38 @@ impl World {
             });
         }
 
-        // Create initial armies
+        // Create initial armies — 3 per faction with randomized stats
         let mut armies = Vec::new();
         let mut army_id = 0u32;
+        let spawn_radius = center.1 * 0.7; // use shorter dimension
         for i in 0..num_factions {
-            // Each faction starts with 2 armies
             let angle = (i as f32) * std::f32::consts::TAU / (num_factions as f32);
-            let spawn_radius = center.0.min(center.1) * 0.6;
-            let x = center.0 + angle.cos() * spawn_radius;
-            let y = center.1 + angle.sin() * spawn_radius;
+            let base_x = center.0 + angle.cos() * spawn_radius;
+            let base_y = center.1 + angle.sin() * spawn_radius;
 
-            armies.push(Army::new(army_id, i, x, y, 500));
-            army_id += 1;
-
-            let x2 = x + rng.random_range(-10.0..10.0);
-            let y2 = y + rng.random_range(-10.0..10.0);
-            armies.push(Army::new(army_id, i, x2, y2, 300));
-            army_id += 1;
+            for j in 0..3 {
+                let x = base_x + rng.random_range(-15.0..15.0);
+                let y = base_y + rng.random_range(-15.0..15.0);
+                let troops = rng.random_range(300..700);
+                let mut army = Army::new(army_id, i, x, y, troops);
+                army.atk = rng.random_range(5.0..20.0);
+                army.def = rng.random_range(5.0..20.0);
+                army.speed = rng.random_range(0.5..1.5);
+                army.supplies = rng.random_range(60.0..150.0);
+                army.ammo = rng.random_range(50.0..150.0);
+                army.morale = rng.random_range(70.0..100.0);
+                // Specialize: first army is main force, others are flankers
+                if j == 0 {
+                    army.troops = rng.random_range(500..800);
+                }
+                armies.push(army);
+                army_id += 1;
+            }
         }
 
-        // Create resource points
+        // Create resource points — more for the larger map
         let mut resource_points = Vec::new();
-        for _ in 0..20 {
+        for _ in 0..40 {
             resource_points.push(ResourcePoint {
                 position: (
                     rng.random_range(10.0..(map_size.0 as f32 - 10.0)),
@@ -366,7 +376,7 @@ impl World {
             armies,
             battles: Vec::new(),
             resource_points,
-            zone: SafeZone::new(center, center.0.min(center.1)),
+            zone: SafeZone::new(center, (center.0 * center.0 + center.1 * center.1).sqrt()),
             rng,
             log: GameLog::default(),
         }
@@ -378,7 +388,7 @@ impl World {
 
         // Move armies (静默移动，不打日志)
         for army in &mut self.armies {
-            if army.engaged_lock == 0 {
+            if army.troops > 0 && army.engaged_lock == 0 {
                 army.move_tick();
             }
         }
@@ -426,6 +436,9 @@ impl World {
                 let a = &self.armies[i];
                 let b = &self.armies[j];
 
+                if a.troops == 0 || b.troops == 0 {
+                    continue;
+                }
                 if a.faction_id == b.faction_id {
                     continue;
                 }
@@ -464,7 +477,7 @@ impl World {
 
             for army in &mut self.armies {
                 if army.id == id_a || army.id == id_b {
-                    army.engaged_lock = 100;
+                    army.engaged_lock = 30;
                     army.current_battle = Some(battle_id);
                     battle.participants.push(BattleParticipant {
                         army_id: army.id,
@@ -507,6 +520,17 @@ impl World {
             battle.phase = BattlePhase::Combat;
 
             if battle.participants.len() >= 2 {
+                // Sync with army state: if army died outside battle (starvation), zero out
+                for p in battle.participants.iter_mut() {
+                    if let Some(army) = self.armies.iter().find(|a| a.id == p.army_id) {
+                        if army.troops == 0 {
+                            p.current_troops = 0;
+                        }
+                        let ammo_factor = *army_ammo_factors.get(&p.army_id).unwrap_or(&1.0);
+                        p.effective_power = p.current_troops as f32 * army.quality_factor() * ammo_factor;
+                    }
+                }
+
                 let total_power: f32 = battle.participants.iter().map(|p| p.effective_power).sum();
                 let mut tick_casualties = Vec::new();
 
@@ -515,8 +539,14 @@ impl World {
                     let enemy_power = total_power - my_power;
                     let army_id = battle.participants[i].army_id;
                     let ammo_factor = *army_ammo_factors.get(&army_id).unwrap_or(&1.0);
-                    let casualty_rate = (enemy_power / (my_power + enemy_power + 1.0)) * 0.01;
-                    let casualties = (battle.participants[i].current_troops as f32 * casualty_rate) as u32;
+                    let casualty_rate = (enemy_power / (my_power + enemy_power + 1.0)) * 0.05;
+                    let raw = battle.participants[i].current_troops as f32 * casualty_rate;
+                    // 至少死1人（有敌人且自己有兵时）
+                    let casualties = if raw > 0.0 && battle.participants[i].current_troops > 0 {
+                        (raw as u32).max(1)
+                    } else {
+                        0
+                    };
 
                     if casualties > 0 {
                         tick_casualties.push((battle.participants[i].faction_id, casualties, ammo_factor < 1.0));
@@ -551,7 +581,7 @@ impl World {
                 .into_iter()
                 .collect();
 
-            if alive_factions.len() <= 1 || battle.duration > 300 {
+            if alive_factions.len() <= 1 || battle.duration > 100 {
                 battle.phase = BattlePhase::Ended;
 
                 let result: Vec<String> = battle.participants.iter()
@@ -678,6 +708,8 @@ impl World {
             .map(|a| (a.id, a.faction_id, a.position, a.supplies < 100.0, a.ammo < 80.0, a.gems < 80.0, a.gems))
             .collect();
 
+        // Collect gather actions first, then apply (avoids borrow conflict)
+        let mut gather_actions: Vec<(u32, u8, usize, u8)> = Vec::new(); // (army_id, faction_id, rp_idx, rp_type)
         for (army_id, faction_id, pos, needs_food, needs_ammo, needs_gems, _current_gems) in &army_positions {
             for (i, rp) in self.resource_points.iter().enumerate() {
                 if rp.amount <= 0.0 {
@@ -689,49 +721,51 @@ impl World {
                 if dist > R_GATHER {
                     continue;
                 }
-
-                let (should_gather, resource_name) = match rp.resource_type {
-                    0 => (*needs_food, "粮"),
-                    1 => (*needs_gems, "宝"),
-                    2 => (*needs_ammo, "弹"),
-                    _ => (false, ""),
+                let should_gather = match rp.resource_type {
+                    0 => *needs_food,
+                    1 => *needs_gems,
+                    2 => *needs_ammo,
+                    _ => false,
                 };
-
-                if !should_gather {
-                    continue;
+                if should_gather {
+                    gather_actions.push((*army_id, *faction_id, i, rp.resource_type));
                 }
+            }
+        }
 
-                let rp = &mut self.resource_points[i];
-                let gather = GATHER_RATE.min(rp.amount);
-                rp.amount -= gather;
+        // Apply gather actions
+        for (army_id, faction_id, rp_idx, rp_type) in &gather_actions {
+            let rp = &mut self.resource_points[*rp_idx];
+            let gather = GATHER_RATE.min(rp.amount);
+            rp.amount -= gather;
 
-                if let Some(army) = self.armies.iter_mut().find(|a| a.id == *army_id) {
-                    match rp.resource_type {
-                        0 => {
-                            army.supplies = (army.supplies + gather).min(150.0);
-                            if tick % 50 == 0 {
-                                log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
-                                    tick, army_id, faction_id, resource_name, gather, army.supplies));
-                            }
+            let resource_name = match rp_type { 0 => "粮", 1 => "宝", 2 => "弹", _ => "" };
+
+            if let Some(army) = self.armies.iter_mut().find(|a| a.id == *army_id) {
+                match rp_type {
+                    0 => {
+                        army.supplies = (army.supplies + gather).min(150.0);
+                        if tick % 50 == 0 {
+                            log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
+                                tick, army_id, faction_id, resource_name, gather, army.supplies));
                         }
-                        1 => {
-                            army.gems = (army.gems + gather).min(100.0);
-                            if tick % 50 == 0 {
-                                log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
-                                    tick, army_id, faction_id, resource_name, gather, army.gems));
-                            }
-                        }
-                        2 => {
-                            army.ammo = (army.ammo + gather).min(100.0);
-                            if tick % 50 == 0 {
-                                log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
-                                    tick, army_id, faction_id, resource_name, gather, army.ammo));
-                            }
-                        }
-                        _ => {}
                     }
+                    1 => {
+                        army.gems = (army.gems + gather).min(100.0);
+                        if tick % 50 == 0 {
+                            log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
+                                tick, army_id, faction_id, resource_name, gather, army.gems));
+                        }
+                    }
+                    2 => {
+                        army.ammo = (army.ammo + gather).min(100.0);
+                        if tick % 50 == 0 {
+                            log_msgs.push(format!("[{}] #{}(F{}) 采{}: +{:.0} 当前{:.0}",
+                                tick, army_id, faction_id, resource_name, gather, army.ammo));
+                        }
+                    }
+                    _ => {}
                 }
-                break;
             }
         }
 
@@ -778,9 +812,12 @@ impl Default for LlmArenaModel {
 
 impl LlmArenaModel {
     pub fn new() -> Self {
-        let seed = 12345u64;
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(12345);
         Self {
-            world: World::new(seed, 2), // Start with 2 factions
+            world: World::new(seed, 5), // 5 factions
             state: ArenaState::Init,
             speed: 1,
             viewport: (MAP_WIDTH as f32 / 2.0, MAP_HEIGHT as f32 / 2.0),
@@ -1028,7 +1065,7 @@ mod tests {
         let world = World::new(12345, 4);
 
         assert_eq!(world.factions.len(), 4, "应有4个阵营");
-        assert_eq!(world.armies.len(), 8, "应有8个军团 (每阵营2个)");
+        assert_eq!(world.armies.len(), 12, "应有12个军团 (每阵营3个)");
         assert_eq!(world.tick, 0, "初始tick应为0");
         assert!(world.battles.is_empty(), "初始应无战斗");
 
@@ -1178,10 +1215,14 @@ mod tests {
             .position(|rp| rp.resource_type == 0)
             .expect("应有食物资源点");
 
-        // 把军团放到该资源点
+        // 把军团放到该资源点，其他军团清零避免干扰
         let rp_pos = world.resource_points[food_rp_idx].position;
+        for i in 1..world.armies.len() {
+            world.armies[i].troops = 0;
+        }
         world.armies[0].position = rp_pos;
         world.armies[0].supplies = 50.0; // 低补给
+        world.armies[0].troops = 100;    // 少量兵力，消耗 < 采集量
         world.armies[0].engaged_lock = 0;
 
         let initial_supply = world.armies[0].supplies;
@@ -1190,7 +1231,7 @@ mod tests {
         // 运行采集
         world.process_supplies();
 
-        // 补给应该增加
+        // 补给应该增加（采集2.0 > 消耗0.5）
         assert!(world.armies[0].supplies > initial_supply, "应该采集到食物资源");
         // 资源点应该减少
         assert!(world.resource_points[food_rp_idx].amount < initial_rp_amount, "食物资源点应该被消耗");
