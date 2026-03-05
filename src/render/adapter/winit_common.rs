@@ -284,136 +284,48 @@ pub fn input_events_from_winit(
                 event: key_event, ..
             } => {
                 if key_event.state == winit::event::ElementState::Pressed {
-                    if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key
-                    {
-                        let kc = match keycode {
-                            winit::keyboard::KeyCode::Space => ' ',
-                            winit::keyboard::KeyCode::KeyA => 'a',
-                            winit::keyboard::KeyCode::KeyB => 'b',
-                            winit::keyboard::KeyCode::KeyC => 'c',
-                            winit::keyboard::KeyCode::KeyD => 'd',
-                            winit::keyboard::KeyCode::KeyE => 'e',
-                            winit::keyboard::KeyCode::KeyF => 'f',
-                            winit::keyboard::KeyCode::KeyG => 'g',
-                            winit::keyboard::KeyCode::KeyH => 'h',
-                            winit::keyboard::KeyCode::KeyI => 'i',
-                            winit::keyboard::KeyCode::KeyJ => 'j',
-                            winit::keyboard::KeyCode::KeyK => 'k',
-                            winit::keyboard::KeyCode::KeyL => 'l',
-                            winit::keyboard::KeyCode::KeyM => 'm',
-                            winit::keyboard::KeyCode::KeyN => 'n',
-                            winit::keyboard::KeyCode::KeyO => 'o',
-                            winit::keyboard::KeyCode::KeyP => 'p',
-                            winit::keyboard::KeyCode::KeyQ => 'q',
-                            winit::keyboard::KeyCode::KeyR => 'r',
-                            winit::keyboard::KeyCode::KeyS => 's',
-                            winit::keyboard::KeyCode::KeyT => 't',
-                            winit::keyboard::KeyCode::KeyU => 'u',
-                            winit::keyboard::KeyCode::KeyV => 'v',
-                            winit::keyboard::KeyCode::KeyW => 'w',
-                            winit::keyboard::KeyCode::KeyX => 'x',
-                            winit::keyboard::KeyCode::KeyY => 'y',
-                            winit::keyboard::KeyCode::KeyZ => 'z',
-                            winit::keyboard::KeyCode::ArrowUp => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Up,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::ArrowDown => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Down,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::ArrowLeft => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Left,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::ArrowRight => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Right,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Enter => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Enter,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Escape => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Esc,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Backspace => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Backspace,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Tab => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Tab,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Delete => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Delete,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Home => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Home,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::End => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::End,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::PageUp => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::PageUp,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::PageDown => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::PageDown,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Insert => {
-                                return Some(Event::Key(KeyEvent::new(
-                                    KeyCode::Insert,
-                                    KeyModifiers::NONE,
-                                )))
-                            }
-                            winit::keyboard::KeyCode::Digit1 => '1',
-                            winit::keyboard::KeyCode::Digit2 => '2',
-                            winit::keyboard::KeyCode::Digit3 => '3',
-                            winit::keyboard::KeyCode::Digit4 => '4',
-                            winit::keyboard::KeyCode::Digit5 => '5',
-                            winit::keyboard::KeyCode::Digit6 => '6',
-                            winit::keyboard::KeyCode::Digit7 => '7',
-                            winit::keyboard::KeyCode::Digit8 => '8',
-                            winit::keyboard::KeyCode::Digit9 => '9',
-                            winit::keyboard::KeyCode::Digit0 => '0',
-                            _ => return None,
+                    // First check for special keys using physical_key
+                    if let winit::keyboard::PhysicalKey::Code(keycode) = key_event.physical_key {
+                        let special_key = match keycode {
+                            winit::keyboard::KeyCode::ArrowUp => Some(KeyCode::Up),
+                            winit::keyboard::KeyCode::ArrowDown => Some(KeyCode::Down),
+                            winit::keyboard::KeyCode::ArrowLeft => Some(KeyCode::Left),
+                            winit::keyboard::KeyCode::ArrowRight => Some(KeyCode::Right),
+                            winit::keyboard::KeyCode::Enter => Some(KeyCode::Enter),
+                            winit::keyboard::KeyCode::Escape => Some(KeyCode::Esc),
+                            winit::keyboard::KeyCode::Backspace => Some(KeyCode::Backspace),
+                            winit::keyboard::KeyCode::Tab => Some(KeyCode::Tab),
+                            winit::keyboard::KeyCode::Delete => Some(KeyCode::Delete),
+                            winit::keyboard::KeyCode::Home => Some(KeyCode::Home),
+                            winit::keyboard::KeyCode::End => Some(KeyCode::End),
+                            winit::keyboard::KeyCode::PageUp => Some(KeyCode::PageUp),
+                            winit::keyboard::KeyCode::PageDown => Some(KeyCode::PageDown),
+                            winit::keyboard::KeyCode::Insert => Some(KeyCode::Insert),
+                            _ => None,
                         };
-                        return Some(Event::Key(KeyEvent::new(
-                            KeyCode::Char(kc),
-                            KeyModifiers::NONE,
-                        )));
+                        if let Some(kc) = special_key {
+                            return Some(Event::Key(KeyEvent::new(kc, KeyModifiers::NONE)));
+                        }
+                    }
+
+                    // Use key_event.text for actual typed character (includes Shift modifiers)
+                    if let Some(text) = &key_event.text {
+                        if let Some(ch) = text.chars().next() {
+                            return Some(Event::Key(KeyEvent::new(
+                                KeyCode::Char(ch),
+                                KeyModifiers::NONE,
+                            )));
+                        }
+                    }
+
+                    // Fallback: use logical_key for characters
+                    if let winit::keyboard::Key::Character(s) = &key_event.logical_key {
+                        if let Some(ch) = s.chars().next() {
+                            return Some(Event::Key(KeyEvent::new(
+                                KeyCode::Char(ch),
+                                KeyModifiers::NONE,
+                            )));
+                        }
                     }
                 }
             }

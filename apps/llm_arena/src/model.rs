@@ -59,6 +59,67 @@ pub enum ArenaState {
     GameOver,
 }
 
+/// Terrain types for map visualization
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Terrain {
+    #[default]
+    Grass,      // 草地
+    Forest,     // 树林
+    Mountain,   // 山脉
+    Water,      // 水域
+    Desert,     // 沙漠
+    Swamp,      // 沼泽
+}
+
+impl Terrain {
+    /// Generate terrain using simple noise-like algorithm
+    pub fn generate_map(width: u16, height: u16, rng: &mut StdRng) -> Vec<Vec<Terrain>> {
+        let mut terrain = vec![vec![Terrain::Grass; width as usize]; height as usize];
+
+        // Generate terrain clusters using random "seed points"
+        let num_features = 20;
+
+        for _ in 0..num_features {
+            let cx = rng.random_range(0..width) as i32;
+            let cy = rng.random_range(0..height) as i32;
+            let radius = rng.random_range(5..20) as i32;
+            let terrain_type = match rng.random_range(0..10) {
+                0..=3 => Terrain::Forest,    // 40% forest
+                4..=5 => Terrain::Mountain,  // 20% mountain
+                6 => Terrain::Water,         // 10% water
+                7 => Terrain::Desert,        // 10% desert
+                _ => Terrain::Swamp,         // 20% swamp
+            };
+
+            // Fill cluster with some randomness
+            for dy in -radius..=radius {
+                for dx in -radius..=radius {
+                    let x = cx + dx;
+                    let y = cy + dy;
+                    if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
+                        let dist = ((dx * dx + dy * dy) as f32).sqrt();
+                        // Probability decreases with distance from center
+                        if dist < radius as f32 && rng.random::<f32>() > dist / (radius as f32 * 1.2) {
+                            terrain[y as usize][x as usize] = terrain_type;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add some scattered trees
+        for y in 0..height as usize {
+            for x in 0..width as usize {
+                if terrain[y][x] == Terrain::Grass && rng.random::<f32>() < 0.05 {
+                    terrain[y][x] = Terrain::Forest;
+                }
+            }
+        }
+
+        terrain
+    }
+}
+
 /// Resource types for each faction
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Resources {
@@ -291,6 +352,7 @@ pub struct World {
     pub battles: Vec<BattleInstance>,
     pub resource_points: Vec<ResourcePoint>,
     pub zone: SafeZone,
+    pub terrain: Vec<Vec<Terrain>>,  // 地形数据 [y][x]
     #[serde(skip, default = "default_rng")]
     pub rng: StdRng,
     #[serde(skip)]
@@ -368,6 +430,9 @@ impl World {
             });
         }
 
+        // Generate terrain
+        let terrain = Terrain::generate_map(map_size.0, map_size.1, &mut rng);
+
         Self {
             seed,
             tick: 0,
@@ -377,6 +442,7 @@ impl World {
             battles: Vec::new(),
             resource_points,
             zone: SafeZone::new(center, (center.0 * center.0 + center.1 * center.1).sqrt()),
+            terrain,
             rng,
             log: GameLog::default(),
         }
@@ -668,8 +734,11 @@ impl World {
                 if starved > 0 {
                     army.troops = army.troops.saturating_sub(starved);
                     army.morale = (army.morale - MORALE_STARVE_DROP).max(0.0);
-                    log_msgs.push(format!("[{}] #{}(F{}) 断粮! 饿死{} 余{} 气{:.0}",
-                        tick, army.id, army.faction_id, starved, army.troops, army.morale));
+                    // 每20 tick打印一次饿死日志，避免刷屏
+                    if tick % 20 == 0 {
+                        log_msgs.push(format!("[{}] #{}(F{}) 断粮! 饿死{} 余{} 气{:.0}",
+                            tick, army.id, army.faction_id, starved, army.troops, army.morale));
+                    }
                 }
             }
         }
@@ -801,7 +870,8 @@ pub struct LlmArenaModel {
     pub world: World,
     pub state: ArenaState,
     pub speed: u32,
-    pub viewport: (f32, f32), // Camera position
+    pub viewport: (f32, f32), // Camera center position
+    pub map_scale: f32,       // Map zoom level (1.0 = normal, 2.0 = 2x zoom)
 }
 
 impl Default for LlmArenaModel {
@@ -821,6 +891,7 @@ impl LlmArenaModel {
             state: ArenaState::Init,
             speed: 1,
             viewport: (MAP_WIDTH as f32 / 2.0, MAP_HEIGHT as f32 / 2.0),
+            map_scale: 1.5, // Default 1.5x zoom for better visibility
         }
     }
 }
@@ -871,6 +942,12 @@ impl Model for LlmArenaModel {
                         }
                         KeyCode::Down => {
                             self.viewport.1 = (self.viewport.1 + 5.0).min(MAP_HEIGHT as f32);
+                        }
+                        KeyCode::Char('[') | KeyCode::Char('{') => {
+                            self.map_scale = (self.map_scale - 0.25).max(0.5);
+                        }
+                        KeyCode::Char(']') | KeyCode::Char('}') => {
+                            self.map_scale = (self.map_scale + 0.25).min(4.0);
                         }
                         _ => {}
                     }

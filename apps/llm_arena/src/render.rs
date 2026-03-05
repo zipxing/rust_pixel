@@ -1,5 +1,5 @@
 #![allow(unused_imports)]
-use crate::model::{ArenaState, LlmArenaModel, MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::model::{ArenaState, LlmArenaModel, Terrain, MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rust_pixel::context::Context;
 use rust_pixel::game::Render;
 use rust_pixel::render::scene::Scene;
@@ -83,80 +83,115 @@ impl LlmArenaRender {
     }
 
     /// Draw map PETSCII graphics to sprite (overlay on map panel)
+    /// Uses map_scale for zoom: higher scale = more zoom (smaller visible area)
     fn draw_map_gfx(&mut self, model: &LlmArenaModel) {
         let gfx = self.scene.get_sprite("map_gfx");
         let buf = &mut gfx.content;
         buf.reset();
 
         let world = &model.world;
-        let vx = model.viewport.0 - (MAP_GFX_W as f32 / 2.0);
-        let vy = model.viewport.1 - (MAP_GFX_H as f32 / 2.0);
+        let scale = model.map_scale;
 
-        // Out-of-bounds
+        // Visible world area (smaller when zoomed in)
+        let visible_w = MAP_GFX_W as f32 / scale;
+        let visible_h = MAP_GFX_H as f32 / scale;
+
+        // World coords of top-left corner of viewport
+        let world_x0 = model.viewport.0 - visible_w / 2.0;
+        let world_y0 = model.viewport.1 - visible_h / 2.0;
+
+        // Helper: convert world coords to sprite coords
+        let to_sprite = |wx: f32, wy: f32| -> (i32, i32) {
+            let sx = ((wx - world_x0) * scale) as i32;
+            let sy = ((wy - world_y0) * scale) as i32;
+            (sx, sy)
+        };
+
+        // Helper: check if sprite coords are in bounds
+        let in_bounds = |sx: i32, sy: i32| -> bool {
+            sx >= 0 && sx < MAP_GFX_W as i32 && sy >= 0 && sy < MAP_GFX_H as i32
+        };
+
+        // Draw terrain and out-of-bounds areas
         for x in 0..MAP_GFX_W {
             for y in 0..MAP_GFX_H {
-                let wx = vx + x as f32;
-                let wy = vy + y as f32;
+                let wx = world_x0 + x as f32 / scale;
+                let wy = world_y0 + y as f32 / scale;
                 if wx < 0.0 || wy < 0.0 || wx >= MAP_WIDTH as f32 || wy >= MAP_HEIGHT as f32 {
                     buf.set_graph_sym(x, y, 0, 102, Color::DarkGray);
+                } else {
+                    // Get terrain at this world position
+                    let tx = wx as usize;
+                    let ty = wy as usize;
+                    if ty < world.terrain.len() && tx < world.terrain[ty].len() {
+                        let (sym, color) = terrain_symbol(world.terrain[ty][tx]);
+                        buf.set_graph_sym(x, y, 0, sym, color);
+                    }
                 }
             }
         }
 
-        // Resource points
+        // Resource points (scaled size)
+        let rp_size = (scale.ceil() as i32).max(1);
         for rp in &world.resource_points {
-            let sx = (rp.position.0 - vx) as i32;
-            let sy = (rp.position.1 - vy) as i32;
-            if sx >= 0 && sx < MAP_GFX_W as i32 && sy >= 0 && sy < MAP_GFX_H as i32 {
-                let (sym, color) = match rp.resource_type {
-                    0 => (89, Color::Yellow),
-                    1 => (90, Color::Gray),
-                    2 => (83, Color::Red),
-                    _ => (88, Color::Green),
-                };
-                buf.set_graph_sym(sx as u16, sy as u16, 0, sym, color);
+            let (sx, sy) = to_sprite(rp.position.0, rp.position.1);
+            let (sym, color) = match rp.resource_type {
+                0 => (89, Color::Yellow),   // Food
+                1 => (90, Color::Cyan),     // Gems
+                2 => (83, Color::Red),      // Ammo
+                _ => (88, Color::Green),
+            };
+            // Draw scaled block
+            for dx in 0..rp_size {
+                for dy in 0..rp_size {
+                    if in_bounds(sx + dx, sy + dy) {
+                        buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, sym, color);
+                    }
+                }
             }
         }
 
-        // Battles
+        // Battles (scaled)
+        let battle_size = (scale.ceil() as i32).max(1);
         for battle in &world.battles {
-            let sx = (battle.position.0 - vx) as i32;
-            let sy = (battle.position.1 - vy) as i32;
-            if sx >= 0 && sx < MAP_GFX_W as i32 && sy >= 0 && sy < MAP_GFX_H as i32 {
-                buf.set_graph_sym(sx as u16, sy as u16, 0, 42, Color::Yellow);
+            let (sx, sy) = to_sprite(battle.position.0, battle.position.1);
+            for dx in 0..battle_size {
+                for dy in 0..battle_size {
+                    if in_bounds(sx + dx, sy + dy) {
+                        buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, 42, Color::Yellow);
+                    }
+                }
             }
         }
 
-        // Armies (2x2 blocks)
+        // Armies (scaled blocks)
+        let army_base_size = 2; // Base 2x2 in world space
+        let army_size = ((army_base_size as f32 * scale).ceil() as i32).max(2);
         for army in &world.armies {
             if army.troops == 0 {
                 continue;
             }
-            let sx = (army.position.0 - vx) as i32;
-            let sy = (army.position.1 - vy) as i32;
-            if sx >= 0 && sx < MAP_GFX_W as i32 - 1 && sy >= 0 && sy < MAP_GFX_H as i32 - 1 {
-                let color = faction_color(army.faction_id);
-                for dx in 0..2i32 {
-                    for dy in 0..2i32 {
-                        buf.set_graph_sym(
-                            (sx + dx) as u16,
-                            (sy + dy) as u16,
-                            0,
-                            160,
-                            color,
-                        );
-                    }
-                }
-                if army.target.is_some() && army.engaged_lock == 0 {
-                    let cx = (sx + 1) as u16;
-                    let cy = sy as u16;
-                    if cx < MAP_GFX_W && cy < MAP_GFX_H {
-                        buf.set_graph_sym(cx, cy, 0, 62, Color::White);
+            let (sx, sy) = to_sprite(army.position.0, army.position.1);
+            let color = faction_color(army.faction_id);
+
+            // Draw scaled army block
+            for dx in 0..army_size {
+                for dy in 0..army_size {
+                    if in_bounds(sx + dx, sy + dy) {
+                        buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, 160, color);
                     }
                 }
             }
-        }
 
+            // Moving indicator (arrow)
+            if army.target.is_some() && army.engaged_lock == 0 {
+                let cx = sx + army_size / 2;
+                let cy = sy;
+                if in_bounds(cx, cy) {
+                    buf.set_graph_sym(cx as u16, cy as u16, 0, 62, Color::White);
+                }
+            }
+        }
     }
 
     /// Draw legend to map_panel canvas (TUI layer, supports Chinese text)
@@ -282,14 +317,14 @@ impl LlmArenaRender {
         };
 
         let line1 = format!(
-            "回合:{} | 速度:{}x | {} | 视角:({:.0},{:.0})",
-            model.world.tick, model.speed, state_name, model.viewport.0, model.viewport.1
+            "回合:{} | 速度:{}x | {} | 缩放:{:.1}x | 视角:({:.0},{:.0})",
+            model.world.tick, model.speed, state_name, model.map_scale, model.viewport.0, model.viewport.1
         );
         self.status_panel.set_str(0, 0, &line1, state_color, Color::Reset);
 
         self.status_panel.set_str(
             0, 2,
-            "[空格]暂停  [+/-]速度  [方向键]平移视角",
+            "[空格]暂停  [+/-]速度  [方向键]平移  [ [/] ]缩放",
             LABEL_COLOR,
             Color::Reset,
         );
@@ -310,6 +345,36 @@ impl LlmArenaRender {
                 let win_msg = format!("胜者: {}", winner_name);
                 self.status_panel.set_str(50, 0, &win_msg, HIGHLIGHT_COLOR, Color::Reset);
             }
+        }
+    }
+}
+
+/// Map terrain type to PETSCII symbol and color
+fn terrain_symbol(terrain: Terrain) -> (u8, Color) {
+    match terrain {
+        Terrain::Grass => {
+            // Use various grass-like symbols: dots, commas
+            (46, Color::Indexed(22))  // '.' dark green
+        }
+        Terrain::Forest => {
+            // Tree symbol (spade or club)
+            (30, Color::Indexed(28))  // dark green tree
+        }
+        Terrain::Mountain => {
+            // Mountain/triangle symbol
+            (30, Color::Indexed(240))  // gray mountain
+        }
+        Terrain::Water => {
+            // Wave-like symbol
+            (126, Color::Indexed(21))  // blue water ~
+        }
+        Terrain::Desert => {
+            // Sandy dots
+            (46, Color::Indexed(220))  // yellow sand
+        }
+        Terrain::Swamp => {
+            // Swampy pattern
+            (126, Color::Indexed(23))  // dark cyan swamp
         }
     }
 }
