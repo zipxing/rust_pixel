@@ -47,6 +47,12 @@ fn main() {
                 .long("font")
                 .help("Path to TUI font file (TTF/OTF)"),
         )
+        .arg(
+            Arg::new("custom")
+                .short('c')
+                .long("custom")
+                .help("Directory containing custom PNG images to slice into sprites (32x32 tiles)"),
+        )
         .get_matches();
 
     generate_symbols(&matches);
@@ -146,8 +152,28 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
     // Load sprites (use Level 0 sprite size as output size)
     println!("\nLoading Sprite symbols...");
     let sprite_output_size = lcfg.sprite.levels[0].width;
-    let all_sprites = sprite::load_all_sprites(&c64_sources, sprite_output_size);
-    println!("  Loaded {} sprites", all_sprites.len());
+    let mut all_sprites = sprite::load_all_sprites(&c64_sources, sprite_output_size);
+    println!("  Loaded {} C64 sprites", all_sprites.len());
+
+    // Load custom sprites if --custom is specified
+    let custom_dir = sub_m.get_one::<String>("custom").map(|s| s.as_str());
+    let custom_sprite_sets = if let Some(custom_path) = custom_dir {
+        let custom_dir_path = Path::new(custom_path);
+        if custom_dir_path.exists() && custom_dir_path.is_dir() {
+            println!("\nLoading custom sprites from {}...", custom_path);
+            let (custom_sprites, sprite_sets) =
+                sprite::load_custom_sprites(custom_dir_path, sprite_output_size, all_sprites.len());
+            println!("  Loaded {} custom sprites from {} images", custom_sprites.len(), sprite_sets.len());
+            all_sprites.extend(custom_sprites);
+            sprite_sets
+        } else {
+            eprintln!("Warning: Custom directory '{}' not found or not a directory", custom_path);
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+    println!("  Total sprites: {}", all_sprites.len());
 
     // Render multi-resolution bitmaps
     println!("\nRendering multi-resolution bitmaps...");
@@ -227,6 +253,18 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
         return;
     }
 
+    // Generate .pix files for custom sprites
+    if !custom_sprite_sets.is_empty() {
+        println!("\nGenerating .pix files for custom sprites...");
+        for sprite_set in &custom_sprite_sets {
+            let pix_path = output_path.join(format!("{}.pix", sprite_set.name));
+            match generate_pix_file(&pix_path, sprite_set) {
+                Ok(_) => println!("  ✓ {}", pix_path.display()),
+                Err(e) => eprintln!("  ✗ {}: {}", pix_path.display(), e),
+            }
+        }
+    }
+
     // Print summary
     println!("\n{}", "=".repeat(70));
     println!("Complete!");
@@ -267,4 +305,40 @@ fn find_symbols_dir() -> Option<std::path::PathBuf> {
     }
 
     None
+}
+
+/// Generate a .pix file for a custom sprite set
+/// PIX format: width=W,height=H,texture=255
+/// Each cell: sym_idx,fg_color,block_idx,bg_color
+fn generate_pix_file(
+    path: &Path,
+    sprite_set: &sprite::CustomSpriteSet,
+) -> Result<(), std::io::Error> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(path)?;
+
+    // Header
+    writeln!(
+        file,
+        "width={},height={},texture=255",
+        sprite_set.width_tiles, sprite_set.height_tiles
+    )?;
+
+    // Each tile references a sprite by (block, sym_idx)
+    // Sprites are indexed globally, we need to convert to (block, sym) format
+    // Block = sprite_index / 256, sym = sprite_index % 256
+    for row in 0..sprite_set.height_tiles {
+        for col in 0..sprite_set.width_tiles {
+            let tile_idx = (row * sprite_set.width_tiles + col) as usize;
+            let sprite_idx = sprite_set.start_index + tile_idx;
+            let block = sprite_idx / 256;
+            let sym = sprite_idx % 256;
+            // Format: sym_idx, fg_color(15=white), block_idx, bg_color(0=black)
+            write!(file, "{},{},{},{} ", sym, 15, block, 0)?;
+        }
+        writeln!(file)?;
+    }
+
+    Ok(())
 }

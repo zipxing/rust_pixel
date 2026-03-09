@@ -8,6 +8,90 @@ use rust_pixel::render::style::Color;
 use rust_pixel::ui::{BorderStyle, Panel, Widget};
 use rust_pixel::util::Rect;
 
+/// 2x2 resource icon: [[top-left, top-right], [bottom-left, bottom-right]]
+/// Each cell is (block, sym_idx)
+type ResourceIcon = [[(u8, u8); 2]; 2];
+
+/// Resource icons loaded from pix files
+struct ResourceIcons {
+    food: ResourceIcon,    // 食物
+    gems: ResourceIcon,    // 宝石
+    ammo: ResourceIcon,    // 弹药 (fire)
+    med: ResourceIcon,     // 医疗 (yaoshui)
+}
+
+impl Default for ResourceIcons {
+    fn default() -> Self {
+        // Fallback: PETSCII patterns
+        Self {
+            food: [[(0, 85), (0, 73)], [(0, 74), (0, 75)]],
+            gems: [[(0, 78), (0, 77)], [(0, 76), (0, 122)]],
+            ammo: [[(0, 81), (0, 82)], [(0, 83), (0, 84)]],
+            med: [[(0, 91), (0, 93)], [(0, 91), (0, 93)]],
+        }
+    }
+}
+
+impl ResourceIcons {
+    /// Load icons from pix files in the project assets directory
+    fn load(project_path: &str) -> Self {
+        let mut icons = Self::default();
+
+        // Try to load each pix file
+        if let Some(icon) = Self::parse_pix(&format!("{}/assets/food.pix", project_path)) {
+            icons.food = icon;
+        }
+        if let Some(icon) = Self::parse_pix(&format!("{}/assets/baoshi.pix", project_path)) {
+            icons.gems = icon;
+        }
+        if let Some(icon) = Self::parse_pix(&format!("{}/assets/fire.pix", project_path)) {
+            icons.ammo = icon;
+        }
+        if let Some(icon) = Self::parse_pix(&format!("{}/assets/yaoshui.pix", project_path)) {
+            icons.med = icon;
+        }
+
+        icons
+    }
+
+    /// Parse a 2x2 pix file and extract (block, sym) for each cell
+    fn parse_pix(path: &str) -> Option<ResourceIcon> {
+        let content = std::fs::read_to_string(path).ok()?;
+        let lines: Vec<&str> = content.lines().collect();
+
+        if lines.len() < 3 {
+            return None;
+        }
+
+        // Skip header, parse 2 data lines
+        let mut icon: ResourceIcon = [[(0, 0); 2]; 2];
+
+        for (row, line) in lines[1..=2].iter().enumerate() {
+            for (col, cell_str) in line.split_whitespace().enumerate().take(2) {
+                // Format: sym,fg,block,bg
+                let parts: Vec<&str> = cell_str.split(',').collect();
+                if parts.len() >= 3 {
+                    let sym = parts[0].parse::<u8>().unwrap_or(0);
+                    let block = parts[2].parse::<u8>().unwrap_or(0);
+                    icon[row][col] = (block, sym);
+                }
+            }
+        }
+
+        Some(icon)
+    }
+
+    /// Get icon for resource type (0=food, 1=gems, 2=ammo, 3=med)
+    fn get(&self, resource_type: u8) -> &ResourceIcon {
+        match resource_type {
+            0 => &self.food,
+            1 => &self.gems,
+            2 => &self.ammo,
+            _ => &self.med,
+        }
+    }
+}
+
 // Layout constants (cell coords in TUI buffer) — doubled for ratio 4.0
 const MAP_W: u16 = 160;
 const MAP_H: u16 = 66;
@@ -23,8 +107,24 @@ const MAP_GFX_H: u16 = (MAP_H - 3) * 2;   // 126
 
 // Colors
 const LABEL_COLOR: Color = Color::Indexed(244);
+const TERRAIN_ALPHA: u8 = 230;  // 地形透明度 (0=透明, 255=不透明)
 const HIGHLIGHT_COLOR: Color = Color::Yellow;
 const LOG_COLOR: Color = Color::Indexed(250);
+
+// Resource icon scale (each tile is rendered at this scale)
+const ICON_SCALE: f32 = 2.0;  // 每个tile放大2倍
+
+// Battle ripple animation constants
+const RIPPLE_MAX_RADIUS: f32 = 15.0;    // 最大扩散半径 (世界坐标)
+const RIPPLE_SPEED: f32 = 0.5;          // 扩散速度
+const RIPPLE_SPAWN_INTERVAL: u32 = 20;  // 每隔多少帧生成新波纹
+
+/// Expanding ripple effect for battles
+struct BattleRipple {
+    center: (f32, f32),    // 世界坐标中心点
+    radius: f32,           // 当前半径
+    battle_id: u32,        // 关联的战斗ID
+}
 
 pub struct LlmArenaRender {
     pub scene: Scene,
@@ -32,6 +132,9 @@ pub struct LlmArenaRender {
     pub info_panel: Panel,
     pub log_panel: Panel,
     pub status_panel: Panel,
+    resource_icons: ResourceIcons,
+    ripples: Vec<BattleRipple>,
+    frame_count: u32,
 }
 
 impl Default for LlmArenaRender {
@@ -47,6 +150,15 @@ impl LlmArenaRender {
         // Map graphics sprite: scale 1.0, W matches TUI width, H = TUI height * 2
         let map_gfx = Sprite::new(0, 0, MAP_GFX_W, MAP_GFX_H);
         scene.add_sprite(map_gfx, "map_gfx");
+
+        // Resource icons sprite: smaller buffer, scaled up to match map_gfx size
+        // Buffer size = map size / scale, so after scaling it matches map_gfx
+        let icons_w = (MAP_GFX_W as f32 / ICON_SCALE).ceil() as u16;
+        let icons_h = (MAP_GFX_H as f32 / ICON_SCALE).ceil() as u16;
+        let mut icons_gfx = Sprite::new(0, 0, icons_w, icons_h);
+        icons_gfx.scale_x = ICON_SCALE;
+        icons_gfx.scale_y = ICON_SCALE;
+        scene.add_sprite(icons_gfx, "icons_gfx");
 
         // TUI Panels
         let mut map_panel = Panel::new()
@@ -79,16 +191,20 @@ impl LlmArenaRender {
             info_panel,
             log_panel,
             status_panel,
+            resource_icons: ResourceIcons::default(),
+            ripples: Vec::new(),
+            frame_count: 0,
         }
+    }
+
+    /// Load resource icons from pix files
+    pub fn load_icons(&mut self, project_path: &str) {
+        self.resource_icons = ResourceIcons::load(project_path);
     }
 
     /// Draw map PETSCII graphics to sprite (overlay on map panel)
     /// Uses map_scale for zoom: higher scale = more zoom (smaller visible area)
     fn draw_map_gfx(&mut self, model: &LlmArenaModel) {
-        let gfx = self.scene.get_sprite("map_gfx");
-        let buf = &mut gfx.content;
-        buf.reset();
-
         let world = &model.world;
         let scale = model.map_scale;
 
@@ -100,110 +216,179 @@ impl LlmArenaRender {
         let world_x0 = model.viewport.0 - visible_w / 2.0;
         let world_y0 = model.viewport.1 - visible_h / 2.0;
 
-        // Helper: convert world coords to sprite coords
+        // Helper: convert world coords to map_gfx sprite coords
         let to_sprite = |wx: f32, wy: f32| -> (i32, i32) {
             let sx = ((wx - world_x0) * scale) as i32;
             let sy = ((wy - world_y0) * scale) as i32;
             (sx, sy)
         };
 
-        // Helper: check if sprite coords are in bounds
+        // Helper: check if sprite coords are in bounds (for map_gfx)
         let in_bounds = |sx: i32, sy: i32| -> bool {
             sx >= 0 && sx < MAP_GFX_W as i32 && sy >= 0 && sy < MAP_GFX_H as i32
         };
 
-        // Draw terrain and out-of-bounds areas
-        for x in 0..MAP_GFX_W {
-            for y in 0..MAP_GFX_H {
-                let wx = world_x0 + x as f32 / scale;
-                let wy = world_y0 + y as f32 / scale;
-                if wx < 0.0 || wy < 0.0 || wx >= MAP_WIDTH as f32 || wy >= MAP_HEIGHT as f32 {
-                    buf.set_graph_sym(x, y, 0, 102, Color::DarkGray);
-                } else {
-                    // Get terrain at this world position
-                    let tx = wx as usize;
-                    let ty = wy as usize;
-                    if ty < world.terrain.len() && tx < world.terrain[ty].len() {
-                        let (sym, color) = terrain_symbol(world.terrain[ty][tx]);
-                        buf.set_graph_sym(x, y, 0, sym, color);
+        // === Draw terrain to map_gfx ===
+        {
+            let gfx = self.scene.get_sprite("map_gfx");
+            let buf = &mut gfx.content;
+            buf.reset();
+
+            for x in 0..MAP_GFX_W {
+                for y in 0..MAP_GFX_H {
+                    let wx = world_x0 + x as f32 / scale;
+                    let wy = world_y0 + y as f32 / scale;
+                    if wx < 0.0 || wy < 0.0 || wx >= MAP_WIDTH as f32 || wy >= MAP_HEIGHT as f32 {
+                        buf.set_graph_sym(x, y, 0, 102, Color::DarkGray);
+                    } else {
+                        let tx = wx as usize;
+                        let ty = wy as usize;
+                        if ty < world.terrain.len() && tx < world.terrain[ty].len() {
+                            let (sym, color) = terrain_symbol(world.terrain[ty][tx]);
+                            buf.set_graph_sym(x, y, 0, sym, color);
+                        }
                     }
                 }
             }
         }
 
-        // Resource points (scaled size)
-        let rp_size = (scale.ceil() as i32).max(1);
-        for rp in &world.resource_points {
-            let (sx, sy) = to_sprite(rp.position.0, rp.position.1);
-            let (sym, color) = match rp.resource_type {
-                0 => (89, Color::Yellow),   // Food
-                1 => (90, Color::Cyan),     // Gems
-                2 => (83, Color::Red),      // Ammo
-                _ => (88, Color::Green),
+        // === Draw resource icons to icons_gfx (separate scaled sprite) ===
+        {
+            let icons_gfx = self.scene.get_sprite("icons_gfx");
+            let icons_buf = &mut icons_gfx.content;
+            icons_buf.reset();
+
+            let icons_w = icons_buf.area.width as i32;
+            let icons_h = icons_buf.area.height as i32;
+
+            // Helper: check bounds for icons buffer
+            let in_icons_bounds = |sx: i32, sy: i32| -> bool {
+                sx >= 0 && sx < icons_w && sy >= 0 && sy < icons_h
             };
-            // Draw scaled block
-            for dx in 0..rp_size {
-                for dy in 0..rp_size {
-                    if in_bounds(sx + dx, sy + dy) {
-                        buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, sym, color);
+
+            for rp in &world.resource_points {
+                let (sx, sy) = to_sprite(rp.position.0, rp.position.1);
+                // Convert to icons_gfx coords (divide by ICON_SCALE since sprite is scaled)
+                let ix = (sx as f32 / ICON_SCALE) as i32;
+                let iy = (sy as f32 / ICON_SCALE) as i32;
+
+                let icon = self.resource_icons.get(rp.resource_type);
+                // Draw 2x2 icon
+                for row in 0..2 {
+                    for col in 0..2 {
+                        let px = ix + col as i32;
+                        let py = iy + row as i32;
+                        if in_icons_bounds(px, py) {
+                            let (block, sym) = icon[row][col];
+                            icons_buf.set_graph_sym(px as u16, py as u16, block, sym, Color::White);
+                        }
                     }
                 }
             }
         }
 
-        // Battles (scaled)
-        let battle_size = (scale.ceil() as i32).max(1);
-        for battle in &world.battles {
-            let (sx, sy) = to_sprite(battle.position.0, battle.position.1);
-            for dx in 0..battle_size {
-                for dy in 0..battle_size {
-                    if in_bounds(sx + dx, sy + dy) {
-                        buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, 42, Color::Yellow);
-                    }
-                }
+        // === Update battle ripples ===
+        self.frame_count = self.frame_count.wrapping_add(1);
+
+        // Spawn new ripples for active battles
+        if self.frame_count % RIPPLE_SPAWN_INTERVAL == 0 {
+            for battle in &world.battles {
+                self.ripples.push(BattleRipple {
+                    center: battle.position,
+                    radius: 0.0,
+                    battle_id: battle.id,
+                });
             }
         }
 
-        // Armies (scaled blocks)
-        let army_base_size = 2; // Base 2x2 in world space
-        let army_size = ((army_base_size as f32 * scale).ceil() as i32).max(2);
-        for army in &world.armies {
-            if army.troops == 0 {
-                continue;
-            }
-            let (sx, sy) = to_sprite(army.position.0, army.position.1);
-            let color = faction_color(army.faction_id);
+        // Update existing ripples
+        for ripple in &mut self.ripples {
+            ripple.radius += RIPPLE_SPEED;
+        }
 
-            // Draw scaled army block
-            for dx in 0..army_size {
-                for dy in 0..army_size {
-                    if in_bounds(sx + dx, sy + dy) {
-                        buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, 160, color);
+        // Remove ripples that exceeded max radius OR whose battle ended
+        let active_battle_ids: Vec<u32> = world.battles.iter().map(|b| b.id).collect();
+        self.ripples.retain(|r| {
+            r.radius < RIPPLE_MAX_RADIUS && active_battle_ids.contains(&r.battle_id)
+        });
+
+        // === Draw battles, armies, safe zone to map_gfx ===
+        {
+            let gfx = self.scene.get_sprite("map_gfx");
+            let buf = &mut gfx.content;
+
+            // Draw battle ripples (expanding circles)
+            for ripple in &self.ripples {
+                let num_points = ((ripple.radius * 8.0) as i32).max(16);
+                // Alpha fades as ripple expands
+                let alpha = ((1.0 - ripple.radius / RIPPLE_MAX_RADIUS) * 200.0) as u8;
+                let color = Color::Rgba(255, 200, 0, alpha); // Orange-yellow
+
+                for i in 0..num_points {
+                    let angle = (i as f32) * std::f32::consts::TAU / (num_points as f32);
+                    let wx = ripple.center.0 + angle.cos() * ripple.radius;
+                    let wy = ripple.center.1 + angle.sin() * ripple.radius;
+                    let (sx, sy) = to_sprite(wx, wy);
+                    if in_bounds(sx, sy) {
+                        buf.set_graph_sym(sx as u16, sy as u16, 0, 42, color); // '*' symbol
                     }
                 }
             }
 
-            // Moving indicator (arrow)
-            if army.target.is_some() && army.engaged_lock == 0 {
-                let cx = sx + army_size / 2;
-                let cy = sy;
-                if in_bounds(cx, cy) {
-                    buf.set_graph_sym(cx as u16, cy as u16, 0, 62, Color::White);
+            // Battles (scaled) - center marker
+            let battle_size = (scale.ceil() as i32).max(1);
+            for battle in &world.battles {
+                let (sx, sy) = to_sprite(battle.position.0, battle.position.1);
+                for dx in 0..battle_size {
+                    for dy in 0..battle_size {
+                        if in_bounds(sx + dx, sy + dy) {
+                            buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, 42, Color::Yellow);
+                        }
+                    }
                 }
             }
-        }
 
-        // Draw safe zone boundary (circle)
-        let zone = &world.zone;
-        let num_points = 120; // Points to draw the circle
-        for i in 0..num_points {
-            let angle = (i as f32) * std::f32::consts::TAU / (num_points as f32);
-            let wx = zone.center.0 + angle.cos() * zone.radius;
-            let wy = zone.center.1 + angle.sin() * zone.radius;
-            let (sx, sy) = to_sprite(wx, wy);
-            if in_bounds(sx, sy) {
-                // Red warning color for zone boundary
-                buf.set_graph_sym(sx as u16, sy as u16, 0, 42, Color::Red); // '*' symbol
+            // Armies (scaled blocks)
+            let army_base_size = 2; // Base 2x2 in world space
+            let army_size = ((army_base_size as f32 * scale).ceil() as i32).max(2);
+            for army in &world.armies {
+                if army.troops == 0 {
+                    continue;
+                }
+                let (sx, sy) = to_sprite(army.position.0, army.position.1);
+                let color = faction_color(army.faction_id);
+
+                // Draw scaled army block
+                for dx in 0..army_size {
+                    for dy in 0..army_size {
+                        if in_bounds(sx + dx, sy + dy) {
+                            buf.set_graph_sym((sx + dx) as u16, (sy + dy) as u16, 0, 160, color);
+                        }
+                    }
+                }
+
+                // Moving indicator (arrow)
+                if army.target.is_some() && army.engaged_lock == 0 {
+                    let cx = sx + army_size / 2;
+                    let cy = sy;
+                    if in_bounds(cx, cy) {
+                        buf.set_graph_sym(cx as u16, cy as u16, 0, 62, Color::White);
+                    }
+                }
+            }
+
+            // Draw safe zone boundary (circle)
+            let zone = &world.zone;
+            let num_points = 120; // Points to draw the circle
+            for i in 0..num_points {
+                let angle = (i as f32) * std::f32::consts::TAU / (num_points as f32);
+                let wx = zone.center.0 + angle.cos() * zone.radius;
+                let wy = zone.center.1 + angle.sin() * zone.radius;
+                let (sx, sy) = to_sprite(wx, wy);
+                if in_bounds(sx, sy) {
+                    // Red warning color for zone boundary
+                    buf.set_graph_sym(sx as u16, sy as u16, 0, 42, Color::Red); // '*' symbol
+                }
             }
         }
     }
@@ -363,33 +548,16 @@ impl LlmArenaRender {
     }
 }
 
-/// Map terrain type to PETSCII symbol and color
+/// Map terrain type to PETSCII symbol and color (with alpha transparency)
 fn terrain_symbol(terrain: Terrain) -> (u8, Color) {
+    let a = TERRAIN_ALPHA;
     match terrain {
-        Terrain::Grass => {
-            // Use various grass-like symbols: dots, commas
-            (46, Color::Indexed(22))  // '.' dark green
-        }
-        Terrain::Forest => {
-            // Tree symbol (spade or club)
-            (30, Color::Indexed(28))  // dark green tree
-        }
-        Terrain::Mountain => {
-            // Mountain/triangle symbol
-            (30, Color::Indexed(240))  // gray mountain
-        }
-        Terrain::Water => {
-            // Wave-like symbol
-            (126, Color::Indexed(21))  // blue water ~
-        }
-        Terrain::Desert => {
-            // Sandy dots
-            (46, Color::Indexed(220))  // yellow sand
-        }
-        Terrain::Swamp => {
-            // Swampy pattern
-            (126, Color::Indexed(23))  // dark cyan swamp
-        }
+        Terrain::Grass => (46, Color::Rgba(0, 100, 0, a)),       // 深绿色草地
+        Terrain::Forest => (30, Color::Rgba(0, 80, 0, a)),      // 更深绿色森林
+        Terrain::Mountain => (30, Color::Rgba(128, 128, 128, a)), // 灰色山脉
+        Terrain::Water => (126, Color::Rgba(0, 100, 180, a)),    // 蓝色水域
+        Terrain::Desert => (46, Color::Rgba(180, 150, 80, a)),   // 黄褐色沙漠
+        Terrain::Swamp => (126, Color::Rgba(60, 100, 80, a)),    // 暗绿色沼泽
     }
 }
 
@@ -425,6 +593,15 @@ impl Render for LlmArenaRender {
         self.scene
             .get_sprite("map_gfx")
             .set_cell_pos_with_tui(1, 2, true);
+
+        // Position icons_gfx sprite at same location
+        self.scene
+            .get_sprite("icons_gfx")
+            .set_cell_pos_with_tui(1, 2, true);
+
+        // Load resource icons from pix files
+        let project_path = &rust_pixel::get_game_config().project_path;
+        self.load_icons(project_path);
     }
 
     fn handle_event(&mut self, _context: &mut Context, _model: &mut Self::Model, _dt: f32) {}

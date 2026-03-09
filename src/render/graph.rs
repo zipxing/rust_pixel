@@ -1607,19 +1607,21 @@ pub fn render_buffer_to_cells<F>(
             y: offset_y as i32,
         };
 
-        // Apply alpha to colors
+        // Apply alpha to colors: multiply cell's alpha with overall alpha
         // For pre-rendered Emoji in TUI mode, use white (no color modulation)
         let fc = if use_tui && tile.is_emoji {
             (255, 255, 255, alpha)
         } else {
             let mut rgba = fg.get_rgba();
-            rgba.3 = alpha;
+            // Multiply cell's alpha with overall alpha (both 0-255 range)
+            rgba.3 = ((rgba.3 as u16 * alpha as u16) / 255) as u8;
             rgba
         };
 
         let bc = if bg != Color::Reset {
             let mut brgba = bg.get_rgba();
-            brgba.3 = alpha;
+            // Multiply cell's alpha with overall alpha
+            brgba.3 = ((brgba.3 as u16 * alpha as u16) / 255) as u8;
             Some(brgba)
         } else {
             None

@@ -8,7 +8,6 @@
 /// cargo pixel run snake wgpu
 /// cargo pixel creat games mygame
 /// cargo pixel build snake web
-/// cargo pixel asset input_folder output_folder
 /// cargo pixel edit term .
 /// cargo pixel edit wg . file.pix
 /// cargo pixel petii image.png 40 25
@@ -20,7 +19,6 @@
 /// cargo pixel r snake t
 /// cargo pixel r snake wg
 /// cargo pixel r snake w
-/// cargo pixel asset ./sprites ./output
 /// cargo pixel edit t .
 /// cargo pixel edit wg . file.pix
 /// cargo pixel p image.png 40 25
@@ -79,23 +77,6 @@ fn build_app() -> Command {
                 .arg(Arg::new("width").required(true))
                 .arg(Arg::new("height").required(true)),
         ))
-        .subcommand(
-            Command::new("asset")
-                .alias("a")
-                .about("Pack images into texture atlas and generate .pix files")
-                .arg(
-                    Arg::new("input_folder")
-                        .help("Folder containing images to pack")
-                        .required(false)
-                        .index(1),
-                )
-                .arg(
-                    Arg::new("output_folder")
-                        .help("Folder where output files will be written")
-                        .required(false)
-                        .index(2),
-                ),
-        )
         .subcommand(
             Command::new("edit")
                 .alias("e")
@@ -305,6 +286,12 @@ fn build_app() -> Command {
                         .short('f')
                         .long("font")
                         .help("Path to TUI font file (TTF/OTF)"),
+                )
+                .arg(
+                    Arg::new("custom")
+                        .short('c')
+                        .long("custom")
+                        .help("Directory containing custom PNG images to slice into sprites (32x32 tiles)"),
                 ),
         )
 }

@@ -8,7 +8,6 @@
 /// cargo pixel run snake sdl
 /// cargo pixel creat games mygame
 /// cargo pixel build snake web
-/// cargo pixel asset input_folder output_folder
 /// cargo pixel edit term .
 /// cargo pixel edit wg . file.pix
 /// cargo pixel petii image.png 40 25
@@ -22,7 +21,6 @@
 /// cargo pixel r snake t
 /// cargo pixel r snake s
 /// cargo pixel r snake w
-/// cargo pixel asset ./sprites ./output     # equivalent to: cargo pixel r asset t -r ./sprites ./output
 /// cargo pixel edit t .                     # equivalent to: cargo pixel r edit t -r .
 /// cargo pixel edit wg . apps/demo/file.pix # equivalent to: cargo pixel r edit wg -r . apps/demo/file.pix
 /// cargo pixel p image.png 40 25            # equivalent to: cargo pixel r petii t -r image.png 40 25
@@ -270,50 +268,6 @@ fn capitalize(s: &str) -> String {
     match c.next() {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
-}
-
-/// Handle the asset subcommand by converting it to a run command
-/// cargo pixel asset input_folder output_folder -> cargo pixel r asset t -r input_folder output_folder
-fn pixel_asset(ctx: &PixelContext, sub_m: &ArgMatches) {
-    println!("🎨 Running RustPixel Asset Packer...");
-    
-    // Build argument list for the run command
-    let mut run_args = vec![
-        "run",
-        "asset",
-        "t",         // terminal mode (fastest for tools)
-        "-r",        // release mode
-    ];
-    
-    // Add all provided arguments
-    if let Some(input_folder) = sub_m.get_one::<String>("input_folder") {
-        run_args.push(input_folder.as_str());
-    }
-    if let Some(output_folder) = sub_m.get_one::<String>("output_folder") {
-        run_args.push(output_folder.as_str());
-    }
-    
-    println!("   Running: cargo pixel r asset t -r {}", run_args[4..].join(" "));
-    println!();
-    
-    // Create a simulated ArgMatches for the run command
-    use clap::{Command, Arg, ArgAction};
-    let run_app = Command::new("run")
-        .arg(Arg::new("mod_name"))
-        .arg(Arg::new("build_type"))
-        .arg(Arg::new("other").action(ArgAction::Append))
-        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
-    
-    let run_matches = run_app.try_get_matches_from(run_args);
-    
-    match run_matches {
-        Ok(matches) => {
-            pixel_run(ctx, &matches);
-        }
-        Err(e) => {
-            eprintln!("Error: Failed to set up asset command: {}", e);
-        }
     }
 }
 
@@ -617,6 +571,10 @@ fn pixel_symbols(ctx: &PixelContext, sub_m: &ArgMatches) {
         extra_args.push("--font".to_string());
         extra_args.push(font.clone());
     }
+    if let Some(custom) = sub_m.get_one::<String>("custom") {
+        extra_args.push("--custom".to_string());
+        extra_args.push(custom.clone());
+    }
 
     // Build argument list for the run command
     // Use "--" to separate run args from symbols-specific args (which have --flags)
@@ -700,7 +658,6 @@ fn main() {
         Some(("build", sub_m)) => pixel_build(&ctx, sub_m),
         Some(("creat", sub_m)) => pixel_creat(&ctx, sub_m),
         Some(("convert_gif", sub_m)) => pixel_convert_gif(&ctx, sub_m),
-        Some(("asset", sub_m)) => pixel_asset(&ctx, sub_m),
         Some(("edit", sub_m)) => pixel_edit(&ctx, sub_m),
         Some(("petii", sub_m)) => pixel_petii(&ctx, sub_m),
         Some(("ssf", sub_m)) => pixel_ssf(&ctx, sub_m),

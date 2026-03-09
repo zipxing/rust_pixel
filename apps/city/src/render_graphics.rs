@@ -55,6 +55,13 @@ impl CityRender {
                 &format!("cc{}", i),
             );
         }
+        // Text overlay sprites (transparent, on top of background)
+        for i in 0..NCOL * NROW {
+            t.add_sprite(
+                Sprite::new(0, 0, CELLW as u16, CELLH as u16),
+                &format!("tt{}", i),
+            );
+        }
 
         event_register("redraw_grid", "draw_grid");
         Self { scene: t }
@@ -106,9 +113,14 @@ impl CityRender {
             asset2sprite!(l, ctx, "pix/cc16.pix");
         }
         l.set_pos(x, y);
-        l.set_color_str(1, 2, msg, COLORS[msg_color as usize], Color::Reset);
+
+        // Text on separate sprite to preserve background image
+        let t = self.scene.get_sprite(&format!("tt{}", id));
+        t.set_pos(x, y);
+        t.content.reset();
+        t.set_petscii_str(1, 2, msg, COLORS[msg_color as usize], Color::Reset);
         if is_del {
-            l.set_color_str(0, 0, "DEL?", COLORS[7], Color::Reset);
+            t.set_petscii_str(0, 0, "DEL?", COLORS[7], Color::Reset);
         }
     }
 
@@ -156,16 +168,16 @@ impl CityRender {
                 let sx = nx * CELLW as f32 + ADJX as f32;
                 let sy = ny * CELLH as f32 + ADJY as f32;
                 if sx >= 0.0 && sy >= 0.0 {
-                    let usx = (sx * 16.0) as u16;
-                    let usy = (sy * 16.0) as u16;
+                    let usx = (sx * 32.0) as u16;
+                    let usy = (sy * 32.0) as u16;
 
                     self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
                 }
             } else {
                 let sx = x * CELLW + ADJX;
                 let sy = y * CELLH + ADJY;
-                let usx = (sx * 16) as u16;
-                let usy = (sy * 16) as u16;
+                let usx = (sx * 32) as u16;
+                let usy = (sy * 32) as u16;
                 self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
             }
         }
@@ -200,8 +212,8 @@ impl CityRender {
                 msgcol = 3u32;
             }
 
-            let usx = (sx * 16) as u16;
-            let usy = (sy * 16) as u16;
+            let usx = (sx * 32) as u16;
+            let usy = (sy * 32) as u16;
 
             self.draw_cell(
                 ctx,
