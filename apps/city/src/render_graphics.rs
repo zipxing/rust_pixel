@@ -30,7 +30,7 @@ const COLORS: [Color; 8] = [
 const TOWER_COLOR: i8 = 6;
 const WONDER_COLOR: i8 = 7;
 
-pub fn level_info(l: i16) -> String {
+fn level_info(l: i16) -> String {
     let mut msg = format!("{}", l);
     if l == 30 {
         msg = "T".to_string();

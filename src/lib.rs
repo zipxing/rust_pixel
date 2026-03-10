@@ -4,7 +4,7 @@
 //! **RustPixel** is a lightweight, tile-based 2D game engine and rapid-prototyping toolkit.
 //!
 //! It provides a unified abstraction for both **terminal** and **graphic** rendering modes
-//! (including WebAssembly), allowing developers to build pixel-style games, tools, and
+//! (including WebAssembly), allowing developers to build pixel-style games, TUI-tools, and
 //! simulation prototypes with minimal boilerplate.
 //!
 //! RustPixel supports **TUI both with and without a real terminal environment**, thanks to its
@@ -48,7 +48,7 @@ pub mod init;
 // Re-export commonly used items from init module
 #[cfg(not(feature = "base"))]
 pub use init::{
-    get_game_config, init_game_config, GameConfig,
+    get_game_config, init_game_config, GameConfig, WindowMode,
     GAME_CONFIG,
     get_pixel_layer_data, PixelLayerData, PIXEL_LAYER_DATA,
 };

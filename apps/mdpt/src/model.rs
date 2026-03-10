@@ -99,7 +99,7 @@ impl MdptModel {
             // Fullscreen defaults to hidden; --status forces it on, --no-status forces it off
             let show = if explicit_yes {
                 true
-            } else if explicit_no || rust_pixel::init::get_game_config().fullscreen {
+            } else if explicit_no || rust_pixel::init::get_game_config().window_mode.is_fullscreen() {
                 false
             } else {
                 true

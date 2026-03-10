@@ -35,7 +35,7 @@ impl Render for MdptRender {
         let h = data.presentation.front_matter.height;
 
         #[cfg(graphics_mode)]
-        let scale = if rust_pixel::init::get_game_config().fullscreen {
+        let scale = if rust_pixel::init::get_game_config().window_mode.is_fullscreen() {
             1.0
         } else {
             2.5

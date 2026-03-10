@@ -23,34 +23,22 @@ pub use particle::*;
 mod rand;
 pub use rand::*;
 
-/// Check if fullscreen mode is requested via command line arguments.
+/// Parse window mode from command line arguments.
 ///
-/// Looks for `-f` or `--fullscreen` in command line arguments.
-///
-/// # Returns
-/// `true` if fullscreen flag is present, `false` otherwise.
-///
-/// # Examples
-/// ```
-/// // When run with: my_app -f
-/// // Returns: true
-///
-/// // When run with: my_app --fullscreen
-/// // Returns: true
-///
-/// // When run with: my_app
-/// // Returns: false
-/// ```
-pub fn is_fullscreen_requested() -> bool {
-    std::env::args().any(|arg| arg == "-f" || arg == "--fullscreen" || arg == "-tf" || arg == "-ft")
-}
-
-/// Check if fullscreen-fit mode is requested via command line arguments.
-///
-/// Looks for `-tf` or `-ft` in command line arguments. This enables fullscreen mode
-/// with preserved aspect ratio (letterboxing with black borders).
-pub fn is_fullscreen_fit_requested() -> bool {
-    std::env::args().any(|arg| arg == "-tf" || arg == "-ft")
+/// - `-tf` or `-ft`: FullscreenFit (fullscreen with preserved aspect ratio)
+/// - `-f` or `--fullscreen`: Fullscreen (stretched)
+/// - otherwise: Window (normal windowed mode)
+pub fn parse_window_mode() -> crate::init::WindowMode {
+    use crate::init::WindowMode;
+    let has_fit = std::env::args().any(|arg| arg == "-tf" || arg == "-ft");
+    if has_fit {
+        return WindowMode::FullscreenFit;
+    }
+    let has_fs = std::env::args().any(|arg| arg == "-f" || arg == "--fullscreen");
+    if has_fs {
+        return WindowMode::Fullscreen;
+    }
+    WindowMode::Window
 }
 
 /// Intelligently determines the project path based on command line arguments and environment variables.

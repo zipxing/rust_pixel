@@ -622,7 +622,7 @@ static LETTERBOXING_OVERRIDE: std::sync::atomic::AtomicBool =
 ///
 /// 通过 -tf 命令行参数启用，或运行时最大化/全屏时自动启用
 pub fn is_letterboxing_enabled() -> bool {
-    crate::get_game_config().fullscreen_fit
+    crate::get_game_config().window_mode.is_fit()
         || LETTERBOXING_OVERRIDE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
@@ -1138,7 +1138,7 @@ impl Graph {
     /// - `rx`: X-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratiox(&mut self, rx: f32) {
         // Force ratio to 1.0 in fullscreen mode (fullscreen handles scaling)
-        let rx = if crate::get_game_config().fullscreen { 1.0 } else { rx };
+        let rx = if crate::get_game_config().window_mode.is_fullscreen() { 1.0 } else { rx };
         self.ratio_x = rx;
         let _ = PIXEL_RATIO_X.set(rx);
     }
@@ -1153,7 +1153,7 @@ impl Graph {
     /// - `ry`: Y-axis scaling ratio (1.0 for standard ratio)
     pub fn set_ratioy(&mut self, ry: f32) {
         // Force ratio to 1.0 in fullscreen mode (fullscreen handles scaling)
-        let ry = if crate::get_game_config().fullscreen { 1.0 } else { ry };
+        let ry = if crate::get_game_config().window_mode.is_fullscreen() { 1.0 } else { ry };
         self.ratio_y = ry;
         let _ = PIXEL_RATIO_Y.set(ry);
     }
@@ -1847,7 +1847,15 @@ where
 
     let rx = srx * 1.0;
     let ry = sry * 1.0;
-    let scale = PIXEL_LOGO_SCALE;
+
+    // Dynamically calculate logo scale to fit within the window
+    let symw_base = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx;
+    let symh_base = PIXEL_SYM_HEIGHT.get().expect("lazylock init") / ry;
+    let logo_raw_w = PIXEL_LOGO_WIDTH as f32 * symw_base;
+    let logo_raw_h = PIXEL_LOGO_HEIGHT as f32 * symh_base;
+    let scale_x = spw as f32 * 0.9 / logo_raw_w;
+    let scale_y = sph as f32 * 0.9 / logo_raw_h;
+    let scale = scale_x.min(scale_y).min(PIXEL_LOGO_SCALE);
 
     // Calculate symbol size after DPI and scale
     let symw = PIXEL_SYM_WIDTH.get().expect("lazylock init") / rx * scale;

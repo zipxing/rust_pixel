@@ -440,7 +440,7 @@ impl WinitWgpuAdapter {
 
         // Check if fullscreen mode is requested from GameConfig
         let game_config = crate::get_game_config();
-        let fullscreen = if game_config.fullscreen {
+        let fullscreen = if game_config.window_mode.is_fullscreen() {
             Some(Fullscreen::Borderless(None))
         } else {
             None
@@ -484,16 +484,15 @@ impl WinitWgpuAdapter {
         let orig_ratio_y = self.base.gr.ratio_y;
 
         log::info!("=== Window/Display Size Debug ===");
-        log::info!("  game_config.fullscreen = {}", game_config.fullscreen);
-        log::info!("  game_config.fullscreen_fit = {}", game_config.fullscreen_fit);
+        log::info!("  game_config.window_mode = {:?}", game_config.window_mode);
         log::info!("  logical (pixel_w/h before override) = {}x{}", logical_w, logical_h);
         log::info!("  physical (window inner_size) = {}x{}", phys_w, phys_h);
         log::info!("  scale_factor = {:.2}", scale_factor);
         log::info!("  original ratio_x={:.4}, ratio_y={:.4}", orig_ratio_x, orig_ratio_y);
         log::info!("  logical_content saved = {}x{}", self.logical_content_w, self.logical_content_h);
 
-        let (canvas_w, canvas_h, ratio_x, ratio_y, render_scale) = if game_config.fullscreen {
-            if game_config.fullscreen_fit {
+        let (canvas_w, canvas_h, ratio_x, ratio_y, render_scale) = if game_config.window_mode.is_fullscreen() {
+            if game_config.window_mode.is_fit() {
                 // Fullscreen-fit mode: preserve aspect ratio (isotropic rendering).
                 // Use a canvas that matches the game's aspect ratio at max resolution.
                 // Letterboxing in the composition stage maps this to the physical screen.

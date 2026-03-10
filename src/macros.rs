@@ -15,7 +15,7 @@
 macro_rules! app_body {
     ($name:ident) => {
         use rust_pixel::game::Game;
-        use rust_pixel::util::{get_project_path, is_fullscreen_requested, is_fullscreen_fit_requested};
+        use rust_pixel::util::{get_project_path, parse_window_mode};
 
         #[cfg(wgpu_web_backend)]
         use rust_pixel::render::adapter::wgpu_web_adapter::{input_events_from_web, WgpuWebAdapter};
@@ -66,12 +66,11 @@ macro_rules! app_body {
 
             pub fn init_game() -> [<$name Game>] {
                 #[cfg(target_arch = "wasm32")]
-                web_sys::console::log_1(&"[init_game] start".into());
+                log::info!("[init_game] start");
 
                 let pp = get_project_path();
-                let fullscreen = is_fullscreen_requested();
-                let fullscreen_fit = is_fullscreen_fit_requested();
-                println!("asset path : {:?}, fullscreen: {}, fullscreen_fit: {}", pp, fullscreen, fullscreen_fit);
+                let window_mode = parse_window_mode();
+                println!("asset path : {:?}, window_mode: {:?}", pp, window_mode);
 
                 // Initialize assets based on mode:
                 // - Graphics mode (native): load layered texture + symbol_map
@@ -79,43 +78,43 @@ macro_rules! app_body {
                 // - WASM mode: JS already called wasm_init_pixel_assets before this
                 #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
                 {
-                    rust_pixel::init_layered_pixel_assets(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit)
+                    rust_pixel::init_layered_pixel_assets(stringify!([<$name:lower>]), &pp, window_mode)
                         .expect("Failed to initialize layered pixel assets");
                 }
 
                 #[cfg(not(graphics_mode))]
                 {
                     // Terminal mode: only need game config, no texture
-                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, fullscreen, fullscreen_fit);
+                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, window_mode);
                 }
 
                 #[cfg(target_arch = "wasm32")]
                 {
                     // WASM mode: JS should have already called wasm_init_pixel_assets
                     // Just set game config if not already set
-                    web_sys::console::log_1(&"[init_game] calling init_game_config for wasm".into());
-                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, true, false);
+                    log::info!("[init_game] calling init_game_config for wasm");
+                    rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, rust_pixel::WindowMode::Fullscreen);
                 }
 
                 // Now create Model and Render (they can safely use symbol_map functions)
                 #[cfg(target_arch = "wasm32")]
-                web_sys::console::log_1(&"[init_game] creating Model...".into());
+                log::info!("[init_game] creating Model...");
                 let m = [<$name Model>]::new();
 
                 #[cfg(target_arch = "wasm32")]
-                web_sys::console::log_1(&"[init_game] creating Render...".into());
+                log::info!("[init_game] creating Render...");
                 let r = [<$name Render>]::new();
 
                 #[cfg(target_arch = "wasm32")]
-                web_sys::console::log_1(&"[init_game] creating Game...".into());
+                log::info!("[init_game] creating Game...");
                 let mut g = Game::new(m, r);
 
                 #[cfg(target_arch = "wasm32")]
-                web_sys::console::log_1(&"[init_game] calling g.init()...".into());
+                log::info!("[init_game] calling g.init()...");
                 g.init();
 
                 #[cfg(target_arch = "wasm32")]
-                web_sys::console::log_1(&"[init_game] done!".into());
+                log::info!("[init_game] done!");
                 [<$name Game>] { g }
             }
 
