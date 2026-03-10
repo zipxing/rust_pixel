@@ -134,35 +134,32 @@ pub struct PixelLayerData {
     pub layers: Vec<Vec<u8>>,
 }
 
-/// Global cached layer data (temporary, cleared after GPU upload to save memory)
-pub static PIXEL_LAYER_DATA: OnceLock<std::sync::Mutex<PixelLayerData>> = OnceLock::new();
+/// Cached layer data (temporary, cleared after GPU upload to save memory).
+/// Uses thread_local since the game loop is single-threaded.
+use std::cell::RefCell;
+thread_local! {
+    static PIXEL_LAYER_DATA: RefCell<Option<PixelLayerData>> = const { RefCell::new(None) };
+}
 
-/// Access the cached layer data under a lock.
-/// Calls the closure with the data if initialized and not yet cleared.
-/// Returns None if not initialized, already cleared, or lock poisoned.
+/// Access the cached layer data via closure.
+/// Returns None if not yet initialized or already cleared.
 pub fn with_pixel_layer_data<R>(f: impl FnOnce(&PixelLayerData) -> R) -> Option<R> {
-    PIXEL_LAYER_DATA.get().and_then(|m| {
-        let data = m.lock().ok()?;
-        if data.layers.is_empty() {
-            None
-        } else {
-            Some(f(&data))
-        }
+    PIXEL_LAYER_DATA.with(|cell| {
+        cell.borrow().as_ref().map(f)
     })
 }
 
 /// Release the cached layer data to free CPU memory after GPU upload.
 pub fn clear_pixel_layer_data() {
-    if let Some(m) = PIXEL_LAYER_DATA.get() {
-        if let Ok(mut data) = m.lock() {
+    PIXEL_LAYER_DATA.with(|cell| {
+        if let Some(data) = cell.borrow_mut().take() {
             let total_bytes: usize = data.layers.iter().map(|l| l.len()).sum();
-            data.layers.clear();
             log::info!(
                 "Cleared PIXEL_LAYER_DATA: freed ~{:.1} MB of CPU memory",
                 total_bytes as f64 / (1024.0 * 1024.0)
             );
         }
-    }
+    });
 }
 
 // ============================================================================
@@ -191,9 +188,9 @@ fn init_pixel_assets_inner(
     let layer_count = layers.len();
 
     // Cache layer data
-    PIXEL_LAYER_DATA
-        .set(std::sync::Mutex::new(PixelLayerData { layer_size, layers }))
-        .map_err(|_| "PIXEL_LAYER_DATA already initialized".to_string())?;
+    PIXEL_LAYER_DATA.with(|cell| {
+        *cell.borrow_mut() = Some(PixelLayerData { layer_size, layers });
+    });
 
     log::info!(
         "Layered pixel assets initialized: {} layers ({}x{}), {} symbols",
