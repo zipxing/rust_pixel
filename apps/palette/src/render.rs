@@ -23,10 +23,10 @@ impl Render for PaletteRender {
     type Model = PaletteModel;
 
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         context.adapter.get_base().gr.set_use_tui_height(true);
 
-        let (sx, sy) = if cfg!(graphics_mode) { (3.0, 3.0) } else { (1.0, 1.0) };
+        let (sx, sy) = if cfg!(any(feature = "wgpu", target_arch = "wasm32")) { (3.0, 3.0) } else { (1.0, 1.0) };
         context
             .adapter
             .init(PALETTEW + 2, PALETTEH, sx, sy, "palette".to_string());

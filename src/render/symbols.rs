@@ -8,10 +8,10 @@
 
 use crate::render::style::ANSI_COLOR_RGB;
 use deltae::*;
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgb};
 use lab::Lab;
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +60,7 @@ pub struct BinarizationConfig {
 /// 
 /// # Returns
 /// Tuple of (background_gray_value, background_rgb_color)
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn find_background_color(
     img: &DynamicImage,
     image: &ImageBuffer<Luma<u8>, Vec<u8>>,
@@ -188,7 +188,7 @@ pub struct Symbol {
     pub binary_data: Vec<Vec<u8>>,
 }
 
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 impl Symbol {
     pub fn new(width: u8, height: u8, is_binary: bool, img: &DynamicImage) -> Self {
         let mut data = vec![];
@@ -548,7 +548,7 @@ pub fn find_optimal_threshold(brightnesses: &[u8]) -> Option<u8> {
 ///
 /// # Returns
 /// 2D array of RGB pixels
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) -> Vec<Vec<RGB>> {
     extract_image_block_rect(img, x, y, block_size, block_size)
 }
@@ -564,7 +564,7 @@ pub fn extract_image_block(img: &DynamicImage, x: u32, y: u32, block_size: u32) 
 ///
 /// # Returns
 /// 2D array of RGB pixels
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn extract_image_block_rect(img: &DynamicImage, x: u32, y: u32, block_width: u32, block_height: u32) -> Vec<Vec<RGB>> {
     let mut block = vec![vec![RGB { r: 0, g: 0, b: 0 }; block_width as usize]; block_height as usize];
 
@@ -588,7 +588,7 @@ pub fn extract_image_block_rect(img: &DynamicImage, x: u32, y: u32, block_width:
 }
 
 /// Convert image RGB to symbols RGB
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 impl From<Rgb<u8>> for RGB {
     fn from(rgb: Rgb<u8>) -> Self {
         RGB {
@@ -600,7 +600,7 @@ impl From<Rgb<u8>> for RGB {
 }
 
 /// Convert symbols RGB to image RGB  
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 impl From<RGB> for Rgb<u8> {
     fn from(rgb: RGB) -> Self {
         Rgb([rgb.r, rgb.g, rgb.b])
@@ -642,7 +642,7 @@ pub type BlockGrayImage = Vec<Vec<u8>>;
 /// Each character is defined by 8 bytes representing 8 rows of 8 bits each.
 /// The original 8x8 pattern is scaled to the target block dimensions.
 /// Bits are processed right-to-left to match C64 character orientation.
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::needless_range_loop)]
 pub fn gen_charset_images(
     low_up: bool, 
@@ -709,7 +709,7 @@ pub fn gen_charset_images(
 /// The returned block uses [row][column] indexing where:
 /// - First index (0..block_height-1) represents vertical position (Y)
 /// - Second index (0..block_width-1) represents horizontal position (X)
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_grayscale_block_at(
     image: &ImageBuffer<Luma<u8>, Vec<u8>>, 
     x: u32, 
@@ -1030,7 +1030,7 @@ pub fn find_best_match(
 /// 
 /// # Error Handling:
 /// Prints "ERROR!!!" or "ERROR2!!!" for invalid color configurations and returns (0,0)
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_petii_block_color(
     image: &DynamicImage,
     _img: &ImageBuffer<Luma<u8>, Vec<u8>>,
@@ -1172,7 +1172,7 @@ pub fn get_petii_block_color(
 /// # Use Case:
 /// In ASCII mode, each character position gets a single color determined by this average.
 /// The resulting color is then matched to the closest ANSI terminal color for display.
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_block_color(
     image: &DynamicImage, 
     x: u32, 

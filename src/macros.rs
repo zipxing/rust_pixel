@@ -17,11 +17,11 @@ macro_rules! app_body {
         use rust_pixel::game::Game;
         use rust_pixel::util::{get_project_path, parse_window_mode};
 
-        #[cfg(wgpu_web_backend)]
+        #[cfg(target_arch = "wasm32")]
         use rust_pixel::render::adapter::wgpu_web_adapter::{input_events_from_web, WgpuWebAdapter};
         #[cfg(target_arch = "wasm32")]
         use wasm_bindgen::prelude::*;
-        #[cfg(wgpu_web_backend)]
+        #[cfg(target_arch = "wasm32")]
         use log::info;
 
         rust_pixel::paste::paste! {
@@ -76,13 +76,13 @@ macro_rules! app_body {
                 // - Graphics mode (native): load layered texture + symbol_map
                 // - Terminal mode: only set game config (no texture needed)
                 // - WASM mode: JS already called wasm_init_pixel_assets before this
-                #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
+                #[cfg(feature = "wgpu")]
                 {
                     rust_pixel::init_layered_pixel_assets(stringify!([<$name:lower>]), &pp, window_mode)
                         .expect("Failed to initialize layered pixel assets");
                 }
 
-                #[cfg(not(graphics_mode))]
+                #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
                 {
                     // Terminal mode: only need game config, no texture
                     rust_pixel::init_game_config(stringify!([<$name:lower>]), &pp, window_mode);
@@ -118,7 +118,7 @@ macro_rules! app_body {
                 [<$name Game>] { g }
             }
 
-            #[cfg(wgpu_web_backend)]
+            #[cfg(target_arch = "wasm32")]
             #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
             impl [<$name Game>] {
                 pub fn new() -> Self {
@@ -237,7 +237,7 @@ macro_rules! app_body {
 macro_rules! app {
     // Graphics-only mode: only compiles in graphics mode, error in term mode
     ($name:ident, graphics_only) => {
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         compile_error!(concat!(
             stringify!($name),
             " only supports graphics mode. Use: cargo pixel r ",
@@ -245,18 +245,18 @@ macro_rules! app {
             " g"
         ));
 
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         mod model;
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         mod render;
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         use crate::{model::*, render::*};
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         $crate::app_body!($name);
     };
     // Terminal-only mode: only compiles in terminal mode, error in graphics mode
     ($name:ident, terminal_only) => {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         compile_error!(concat!(
             stringify!($name),
             " only supports terminal mode. Use: cargo pixel r ",
@@ -264,26 +264,26 @@ macro_rules! app {
             " t"
         ));
 
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         mod model;
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         mod render;
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         use crate::{model::*, render::*};
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         $crate::app_body!($name);
     };
     // Dual-file render mode: separate render_terminal.rs + render_graphics.rs
     ($name:ident, dual) => {
         mod model;
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         mod render_terminal;
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         mod render_graphics;
 
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         use crate::{model::*, render_terminal::*};
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         use crate::{model::*, render_graphics::*};
         $crate::app_body!($name);
     };

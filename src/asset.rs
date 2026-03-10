@@ -5,19 +5,19 @@
 //! It supports async loading. It calls JavaScript methods to load resources asynchronously when running in WASM mode.
 //! https://www.reddit.com/r/rust/comments/8ymzwg/common_data_and_behavior/
 
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::util::get_abs_path;
 use crate::{
     render::buffer::Buffer,
     render::image::{EscAsset, PixAsset, SeqFrameAsset},
     render::sprite::Sprite,
 };
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 use log::info;
 use std::collections::HashMap;
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 // ============================================================================
@@ -30,14 +30,14 @@ use wasm_bindgen::prelude::*;
 //   - tick() drains queue → calls asset_manager.set_data() synchronously
 // ============================================================================
 
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 thread_local! {
     static ASSET_QUEUE: RefCell<Vec<(String, Vec<u8>)>> = RefCell::new(Vec::new());
 }
 
 /// Push asset data to the global queue (called from JS via wasm_on_asset_loaded).
 /// This is a free function — no &mut self on Game, so no borrow conflict.
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 pub fn wasm_queue_asset_data(url: &str, data: &[u8]) {
     ASSET_QUEUE.with(|q| {
         q.borrow_mut().push((url.to_string(), data.to_vec()));
@@ -45,7 +45,7 @@ pub fn wasm_queue_asset_data(url: &str, data: &[u8]) {
 }
 
 /// Drain all queued asset data. Called at the start of tick().
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 pub fn drain_asset_queue() -> Vec<(String, Vec<u8>)> {
     ASSET_QUEUE.with(|q| {
         std::mem::take(&mut *q.borrow_mut())
@@ -155,11 +155,11 @@ impl AssetManager {
             Some(_) => {}
             None => {
                 let mut ab = AssetBase::new(t, loc);
-                #[cfg(wasm)]
+                #[cfg(target_arch = "wasm32")]
                 {
                     js_load_asset(loc);
                 }
-                #[cfg(not(wasm))]
+                #[cfg(not(target_arch = "wasm32"))]
                 {}
                 let mut ast: Box<dyn Asset> = match t {
                     AssetType::ImgPix => Box::new(PixAsset::new(ab)),
@@ -168,7 +168,7 @@ impl AssetManager {
                 };
                 self.assets.push(ast);
                 self.assets_index.insert(loc.to_string(), self.assets.len());
-                #[cfg(not(wasm))]
+                #[cfg(not(target_arch = "wasm32"))]
                 {
                     let fpstr = get_abs_path(loc);
                     let fdata = std::fs::read(fpstr.clone()).unwrap_or_else(|_| panic!("read file {} error", fpstr.clone()));
@@ -200,7 +200,7 @@ impl AssetManager {
 
     /// Drain the global asset queue and process all pending assets.
     /// Called at the start of each tick() in WASM mode.
-    #[cfg(wasm)]
+    #[cfg(target_arch = "wasm32")]
     pub fn process_queued_assets(&mut self) {
         let queued = drain_asset_queue();
         for (url, data) in queued {
@@ -210,7 +210,7 @@ impl AssetManager {
 }
 
 // refer to rust-pixel/web-templates/index.js
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(raw_module = "/index.js")]
 extern "C" {
     fn js_load_asset(url: &str);

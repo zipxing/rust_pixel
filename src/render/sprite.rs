@@ -11,7 +11,7 @@ use crate::{
     render::buffer::Buffer,
     util::{PointF32, Rect},
 };
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 use crate::render::graph::{get_ratio_x, get_ratio_y, PIXEL_SYM_HEIGHT, PIXEL_SYM_WIDTH};
 use std::ops::{Deref, DerefMut};
 
@@ -350,7 +350,7 @@ impl Sprite {
     /// sprite.set_cell_pos(10, 5);  // Cell position (10, 5)
     /// // In graphics mode: converted to pixel position (10 * sym_w / rx, 5 * sym_h / ry)
     /// ```
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     pub fn set_cell_pos(&mut self, x: u16, y: u16) {
         self.set_pos(x, y);
     }
@@ -362,7 +362,7 @@ impl Sprite {
     /// - PIXEL_RATIO_X/Y: DPI scaling ratios
     ///
     /// Formula: pixel_pos = cell_pos * sym_size / ratio
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn set_cell_pos(&mut self, x: u16, y: u16) {
         self.set_cell_pos_with_tui(x, y, false);
     }
@@ -372,7 +372,7 @@ impl Sprite {
     /// When `use_tui_height` is true, the Y coordinate is doubled to match
     /// the TUI character height (32px instead of 16px), consistent with
     /// `GraphState::set_pixel_size` window sizing.
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     pub fn set_cell_pos_with_tui(&mut self, x: u16, y: u16, _use_tui_height: bool) {
         self.set_pos(x, y);
     }
@@ -382,7 +382,7 @@ impl Sprite {
     /// When `use_tui_height` is true, the Y coordinate is doubled to match
     /// the TUI character height (32px instead of 16px), consistent with
     /// `GraphState::set_pixel_size` window sizing.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn set_cell_pos_with_tui(&mut self, x: u16, y: u16, use_tui_height: bool) {
         let sym_w = PIXEL_SYM_WIDTH.get().copied().unwrap_or(16.0);
         let sym_h = PIXEL_SYM_HEIGHT.get().copied().unwrap_or(16.0);

@@ -446,7 +446,7 @@ pub fn build_slide_page(
                 log::info!("[mdpt] AnimatedText: calling set_string for marker");
                 buf.set_string(x_start, y, DEFAULT_MARKERS[0], default_marker_style());
                 // GPU: emoji(2) + space(1) = 3; Terminal: symbol(1) + space(1) = 2
-                let marker_offset: u16 = if cfg!(graphics_mode) { 3 } else { 2 };
+                let marker_offset: u16 = if cfg!(any(feature = "wgpu", target_arch = "wasm32")) { 3 } else { 2 };
                 let label_x = x_start + marker_offset;
                 let label_w = w.saturating_sub(marker_offset);
                 let bounds = Rect::new(label_x, y, label_w, 1);
@@ -670,7 +670,7 @@ pub fn build_cover_page(
         let mut title_style = Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD);
-        if cfg!(graphics_mode) {
+        if cfg!(any(feature = "wgpu", target_arch = "wasm32")) {
             title_style = title_style.scale(1.8, 1.8);
         }
         let mut label = Label::new(&front_matter.title)
@@ -686,7 +686,7 @@ pub fn build_cover_page(
         let mut author_style = Style::default()
             .fg(Color::Rgba(140, 200, 160, 255))
             .add_modifier(Modifier::ITALIC);
-        if cfg!(graphics_mode) {
+        if cfg!(any(feature = "wgpu", target_arch = "wasm32")) {
             author_style = author_style.scale(0.95, 0.95);
         }
         let mut label = Label::new(&front_matter.author)
@@ -709,7 +709,7 @@ pub fn build_cover_page(
         front_matter.theme, front_matter.transition, front_matter.code_theme
     );
     let mut info_style = Style::default().fg(Color::Rgba(90, 95, 100, 255));
-    if cfg!(graphics_mode) {
+    if cfg!(any(feature = "wgpu", target_arch = "wasm32")) {
         info_style = info_style.scale(0.85, 0.85);
     }
     let info_x = cx + (content_width.saturating_sub(info.len() as u16)) / 2;
@@ -718,7 +718,7 @@ pub fn build_cover_page(
     // ── Hint ──
     let hint = "Press Space to begin →";
     let mut hint_style = Style::default().fg(Color::Rgba(80, 85, 90, 255));
-    if cfg!(graphics_mode) {
+    if cfg!(any(feature = "wgpu", target_arch = "wasm32")) {
         hint_style = hint_style.scale(0.85, 0.85);
     }
     let hint_x = cx + (content_width.saturating_sub(hint.len() as u16)) / 2;

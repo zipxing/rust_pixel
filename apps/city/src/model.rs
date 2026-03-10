@@ -14,21 +14,21 @@ use std::fmt;
 
 pub const NROW: usize = 5;
 pub const NCOL: usize = 5;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const CELLW: usize = 4;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const CELLW: usize = 10;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const CELLH: usize = 4;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const CELLH: usize = 5;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const ADJX: usize = 5;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const ADJY: usize = 5;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const ADJX: usize = 3;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const ADJY: usize = 8;
 
 //四种基本颜色 + Tower

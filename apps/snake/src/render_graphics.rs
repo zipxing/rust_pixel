@@ -1,5 +1,5 @@
 use crate::model::{SnakeModel, SNAKEH, SNAKEW};
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 use rust_pixel::{asset::AssetType, asset2sprite};
 use rust_pixel::{
     context::Context,
@@ -38,7 +38,7 @@ impl SnakeRender {
         let mut t = Scene::new();
 
         // Test pixel sprite scaling in graphic mode...
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             // 原始正常尺寸的sprite
             let mut pl1 = Sprite::new(50, 5, 1, 1);
@@ -141,23 +141,23 @@ impl SnakeRender {
                         l.set_color_str(j as u16, i as u16, " ", Color::Reset, Color::Reset);
                     }
                     1 => {
-                        #[cfg(not(graphics_mode))]
+                        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
                         l.set_color_str(j as u16, i as u16, "▇", Color::LightGreen, Color::Reset);
-                        #[cfg(graphics_mode)]
+                        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
                         l.set_graph_sym(j as u16, i as u16, 1, 0, Color::LightGreen);
                     }
                     10000 => {
                         let c = COLORS[(context.stage / 5) as usize % COLORS.len()];
-                        #[cfg(not(graphics_mode))]
+                        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
                         l.set_color_str(j as u16, i as u16, "∙", c, Color::Reset);
-                        #[cfg(graphics_mode)]
+                        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
                         l.set_graph_sym(j as u16, i as u16, 1, 83, c);
                     }
                     _ => {
                         let c = COLORS[gv as usize % COLORS.len()];
-                        #[cfg(not(graphics_mode))]
+                        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
                         l.set_color_str(j as u16, i as u16, "▒", c, Color::Reset);
-                        #[cfg(graphics_mode)]
+                        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
                         l.set_graph_sym(j as u16, i as u16, 1, 102, c);
                     }
                 }
@@ -203,7 +203,7 @@ impl Render for SnakeRender {
 
     #[allow(unused_variables)]
     fn draw(&mut self, context: &mut Context, model: &mut Self::Model, _dt: f32) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             let ss = &mut self.scene.get_sprite("SNAKE-BORDER");
             asset2sprite!(

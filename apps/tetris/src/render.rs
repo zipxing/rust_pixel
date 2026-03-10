@@ -452,7 +452,7 @@ impl Render for TetrisRender {
     type Model = TetrisModel;
 
     fn init(&mut self, context: &mut Context, _data: &mut Self::Model) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         context.adapter.get_base().gr.set_use_tui_height(true);
 
         context

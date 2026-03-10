@@ -21,9 +21,9 @@ pub mod adapter;
 pub mod buffer;
 pub mod cell;
 pub mod effect;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub mod graph;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 mod logo_data;
 pub mod image;
 pub mod scene;
@@ -40,7 +40,7 @@ pub use cell::{
     TuiCharType, detect_tui_char_type, is_tui_char, is_cjk,
     PUA_BASE, PUA_END, PUA_BLOCK_SIZE,
 };
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub use graph::{
     init_sym_height, init_sym_width, push_render_buffer, render_logo,
     render_main_buffer, render_layers, RenderCell, PIXEL_LOGO_HEIGHT,

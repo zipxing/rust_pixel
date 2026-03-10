@@ -217,7 +217,7 @@ impl Scene {
             // Terminal mode: all sprite layers merge to buffer for diff rendering
             // Graphics mode: sprites are handled separately in generate_render_buffer,
             //                only tui_buffers content (from Widget.render()) goes to RT
-            #[cfg(not(graphics_mode))]
+            #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
             {
                 self.update_render_index();
                 for idx in &self.render_index {
@@ -255,7 +255,7 @@ impl Scene {
         self.draw_to_rt(ctx)?;
 
         // Graphics mode: present RT2 & RT3 to screen
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         ctx.adapter.present_default();
 
         Ok(())

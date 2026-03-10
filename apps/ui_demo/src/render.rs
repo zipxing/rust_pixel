@@ -25,7 +25,7 @@ impl Render for UiDemoRender {
         info!("UI Demo render initialized");
 
         // Enable TUI character height mode for UI components (graphics mode only)
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         ctx.adapter.get_base().gr.set_use_tui_height(true);
 
         ctx.adapter.init(

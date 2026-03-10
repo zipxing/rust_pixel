@@ -14,13 +14,13 @@
 
 use crate::{asset::AssetManager, event::Event, render::adapter::Adapter, util::Rand};
 
-#[cfg(cross_backend)]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 use crate::render::adapter::cross_adapter::CrosstermAdapter;
 
-#[cfg(wgpu_backend)]
+#[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
 use crate::render::adapter::winit_wgpu_adapter::WinitWgpuAdapter;
 
-#[cfg(wgpu_web_backend)]
+#[cfg(target_arch = "wasm32")]
 use crate::render::adapter::wgpu_web_adapter::WgpuWebAdapter;
 
 pub struct Context {
@@ -46,27 +46,27 @@ impl Context {
             rand: Rand::new(),
             asset_manager: AssetManager::new(),
             input_events: vec![],
-            #[cfg(wgpu_web_backend)]
+            #[cfg(target_arch = "wasm32")]
             adapter: Box::new(WgpuWebAdapter::new()),
-            #[cfg(wgpu_backend)]
+            #[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
             adapter: Box::new(WinitWgpuAdapter::new()),
-            #[cfg(cross_backend)]
+            #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
             adapter: Box::new(CrosstermAdapter::new()),
         }
     }
 
     pub fn cell_width(&mut self) -> f32 {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         let ret = self.adapter.get_base().gr.cell_width();
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         let ret = 0.0f32;
         ret
     }
 
     pub fn cell_height(&mut self) -> f32 {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         let ret = self.adapter.get_base().gr.cell_height();
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         let ret = 0.0f32;
         ret
     }
@@ -107,7 +107,7 @@ impl Context {
     ///     RtComposite::with_viewport(3, vp),
     /// ]);
     /// ```
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn centered_viewport(&mut self, cell_w: u16, cell_h: u16) -> crate::util::ARect {
         use crate::render::adapter::{PIXEL_SYM_WIDTH, PIXEL_SYM_HEIGHT};
 
@@ -142,7 +142,7 @@ impl Context {
     ///     ctx.centered_rt(3, 40, 25),
     /// ]);
     /// ```
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn centered_rt(&mut self, rt: usize, cell_w: u16, cell_h: u16) -> crate::render::adapter::RtComposite {
         use crate::render::adapter::RtComposite;
 
@@ -153,7 +153,7 @@ impl Context {
     /// Get current canvas size in pixels
     ///
     /// Returns (width, height) of the rendering canvas.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn canvas_size(&mut self) -> (u32, u32) {
         let gr = &self.adapter.get_base().gr;
         (gr.pixel_w, gr.pixel_h)
@@ -162,7 +162,7 @@ impl Context {
     /// Get current DPI scaling ratios
     ///
     /// Returns (ratio_x, ratio_y) for high-DPI display support.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn ratio(&mut self) -> (f32, f32) {
         let gr = &self.adapter.get_base().gr;
         (gr.ratio_x, gr.ratio_y)

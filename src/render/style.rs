@@ -4,10 +4,10 @@
 //! Defines styles such as color, bold or italics.
 //! Only foreground color is supported in Graphics mode, as background color is used for texture.
 
-#[cfg(not(any(graphics_backend, mobile, wasm)))]
+#[cfg(not(any(feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crate::render::image::io_error;
 use bitflags::bitflags;
-#[cfg(not(any(graphics_backend, mobile, wasm)))]
+#[cfg(not(any(feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use crossterm::{
     queue,
     style::{Attribute as CAttribute, SetAttribute},
@@ -136,13 +136,13 @@ impl Style {
 }
 
 #[derive(Debug)]
-#[cfg(not(any(graphics_backend, mobile, wasm)))]
+#[cfg(not(any(feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 pub struct ModifierDiff {
     pub from: Modifier,
     pub to: Modifier,
 }
 
-#[cfg(not(any(graphics_backend, mobile, wasm)))]
+#[cfg(not(any(feature = "wgpu", target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 impl ModifierDiff {
     pub fn queue<W>(&self, mut w: W) -> std::io::Result<()>
     where

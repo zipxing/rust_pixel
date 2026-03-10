@@ -9,9 +9,6 @@ repository = ""
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
-[build-dependencies]
-cfg_aliases = { workspace = true }
-
 [dependencies]
 log = "0.4.29"
 wasm-bindgen = "0.2.114"

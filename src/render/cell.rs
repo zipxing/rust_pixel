@@ -13,7 +13,7 @@
 //! Symbol mappings are loaded from layered_symbol_map.json via the LayeredSymbolMap.
 
 use crate::render::style::{Color, Modifier, Style};
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 use crate::render::symbol_map::{Tile, get_layered_symbol_map};
 use serde::{Deserialize, Serialize};
 
@@ -162,13 +162,13 @@ pub fn is_prerendered_emoji(symbol: &str) -> bool {
             || (0x2B00..=0x2BFF).contains(&cp);
 
         if is_emoji_range {
-            #[cfg(graphics_mode)]
+            #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
             {
                 return get_layered_symbol_map()
                     .map(|m| m.contains(symbol))
                     .unwrap_or(false);
             }
-            #[cfg(not(graphics_mode))]
+            #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
             {
                 return true; // Assume emoji is renderable in text mode
             }
@@ -201,7 +201,7 @@ pub struct Cell {
     /// Cached tile info (graphics mode only).
     /// Resolved from LayeredSymbolMap when symbol is set.
     /// Contains cell dimensions and 3 mipmap levels of UV + layer data.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     #[serde(skip)]
     tile: Tile,
 }
@@ -210,7 +210,7 @@ impl Cell {
     pub fn set_symbol(&mut self, symbol: &str) -> &mut Cell {
         self.symbol.clear();
         self.symbol.push_str(symbol);
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             self.tile = self.compute_tile();
         }
@@ -219,7 +219,7 @@ impl Cell {
 
     /// Compute tile from symbol (graphics mode only).
     /// Resolves the symbol string in LayeredSymbolMap to get UV + layer data.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn compute_tile(&self) -> Tile {
         get_layered_symbol_map()
             .map(|m| *m.resolve(&self.symbol))
@@ -230,7 +230,7 @@ impl Cell {
     ///
     /// Returns (symbol_index, block_index, fg, bg, modifier).
     /// Block/idx are computed on-demand from the symbol string for .pix serialization.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn get_cell_info(&self) -> CellInfo {
         let (block, idx) = self.compute_block_idx();
         (idx, block, self.fg, self.bg, self.modifier)
@@ -240,14 +240,14 @@ impl Cell {
     ///
     /// Returns the Tile resolved from LayeredSymbolMap when symbol was set.
     /// Contains cell_w, cell_h, and 3 mipmap levels of UV + layer data.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn get_tile(&self) -> Tile {
         self.tile
     }
 
     /// Compute (block, idx) from symbol string (for .pix serialization).
     /// This is NOT on the hot render path — only called for file I/O.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn compute_block_idx(&self) -> (u8, u8) {
         // 1. Check PUA (Sprite symbols)
         if let Some(ch) = self.symbol.chars().next() {
@@ -266,7 +266,7 @@ impl Cell {
 
     /// Get cell rendering information (non-graphics mode fallback).
     /// Computes block/idx on the fly. Only used for serialization.
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     pub fn get_cell_info(&self) -> CellInfo {
         let (block, idx) = self.compute_block_idx_fallback();
         (idx, block, self.fg, self.bg, self.modifier)
@@ -274,7 +274,7 @@ impl Cell {
 
     /// Compute block/idx without symbol_map (non-graphics mode fallback).
     /// Only handles PUA decoding, returns default for other symbols.
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     fn compute_block_idx_fallback(&self) -> (u8, u8) {
         if let Some(ch) = self.symbol.chars().next() {
             if let Some((block, idx)) = decode_pua(ch) {
@@ -287,7 +287,7 @@ impl Cell {
     pub fn set_char(&mut self, ch: char) -> &mut Cell {
         self.symbol.clear();
         self.symbol.push(ch);
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             self.tile = self.compute_tile();
         }
@@ -298,7 +298,7 @@ impl Cell {
     ///
     /// This updates the symbol to PUA encoding with the given block.
     /// The symbol index is preserved from the current PUA symbol.
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn set_texture(&mut self, block: u8) -> &mut Cell {
         // Get current idx from PUA symbol
         let idx = self.symbol.chars().next()
@@ -373,7 +373,7 @@ impl Cell {
         self.modifier = Modifier::empty();
         self.scale_x = 1.0;
         self.scale_y = 1.0;
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             self.tile = self.compute_tile();
         }
@@ -389,7 +389,7 @@ impl Cell {
         self.modifier = Modifier::empty();
         self.scale_x = 1.0;
         self.scale_y = 1.0;
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             self.tile = self.compute_tile();
         }
@@ -400,7 +400,7 @@ impl Cell {
     /// A cell is considered blank if:
     /// - Symbol is space (" " or PUA space in block 0-1)
     /// - Background is Reset (transparent)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub fn is_blank(&self) -> bool {
         let is_space = self.symbol == " " || {
             if let Some(ch) = self.symbol.chars().next() {
@@ -416,14 +416,14 @@ impl Cell {
         is_space && self.bg == Color::Reset
     }
 
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     pub fn is_blank(&self) -> bool {
         self.symbol == " " && self.fg == Color::Reset && self.bg == Color::Reset
     }
 }
 
 impl Default for Cell {
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn default() -> Cell {
         Cell {
             symbol: " ".into(),
@@ -436,7 +436,7 @@ impl Default for Cell {
         }
     }
 
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     fn default() -> Cell {
         Cell {
             symbol: " ".into(),

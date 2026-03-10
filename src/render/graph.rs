@@ -150,7 +150,7 @@ fn get_logo_cells() -> &'static Vec<(u8, u8, u8, u8)> {
 // ============================================================================
 
 /// RT size strategy
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 #[derive(Clone, Debug, Default)]
 pub enum RtSize {
     /// Follow window size (default)
@@ -161,14 +161,14 @@ pub enum RtSize {
 }
 
 /// RT configuration
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 #[derive(Clone, Debug)]
 pub struct RtConfig {
     /// Size strategy
     pub size: RtSize,
 }
 
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 impl Default for RtConfig {
     fn default() -> Self {
         Self {
@@ -178,7 +178,7 @@ impl Default for RtConfig {
 }
 
 /// Blend mode for RT composition
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 #[derive(Clone, Copy, Debug, Default)]
 pub enum BlendMode {
     /// Normal alpha blending (default)
@@ -228,7 +228,7 @@ pub enum BlendMode {
 ///
 /// Note: Uses ARect instead of Rect because Rect has automatic clipping
 /// when width*height > u16::MAX, which is inappropriate for viewport dimensions.
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 #[derive(Clone, Debug)]
 pub struct RtComposite {
     /// RT 纹理索引 (0-3)
@@ -260,7 +260,7 @@ pub struct RtComposite {
     pub transform: Option<UnifiedTransform>,
 }
 
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 impl RtComposite {
     /// Create a fullscreen composite with default settings
     pub fn fullscreen(rt: usize) -> Self {
@@ -2071,7 +2071,7 @@ pub fn generate_render_buffer(
     let ry = base.gr.ratio_y;
 
     // Custom border rendering - use OS window decoration instead
-    // #[cfg(graphics_backend)]
+    // #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     // render_border(base.cell_w, base.cell_h, rx, ry, &mut rfunc);
 
     // Rendering order (back to front):

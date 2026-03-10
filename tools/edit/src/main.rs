@@ -63,11 +63,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         2 => {
             apath = &args[1];
-            #[cfg(not(graphics_mode))]
+            #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
             {
                 escfile = "assets/tmp/tedit.txt";
             }
-            #[cfg(graphics_mode)]
+            #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
             {
                 escfile = "assets/tmp/tedit.pix";
             }

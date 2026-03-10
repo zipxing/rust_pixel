@@ -6,11 +6,11 @@
 //! https://docs.rs/log4rs
 
 
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::util::get_abs_path;
 use log::LevelFilter;
 
-#[cfg(not(wasm))]
+#[cfg(not(target_arch = "wasm32"))]
 use log4rs::{
     append::file::FileAppender,
     config::{Appender, Config, Root},
@@ -21,11 +21,11 @@ use log4rs::{
 /// init logs system
 #[allow(unused)]
 pub fn init_log(level: LevelFilter, file_path: &str) {
-    #[cfg(wasm)]
+    #[cfg(target_arch = "wasm32")]
     {
         wasm_logger::init(wasm_logger::Config::default());
     }
-    #[cfg(not(wasm))]
+    #[cfg(not(target_arch = "wasm32"))]
     {
         let fpstr = get_abs_path(file_path);
         let logfile = FileAppender::builder()

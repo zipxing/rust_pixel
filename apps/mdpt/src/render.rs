@@ -6,10 +6,10 @@ use rust_pixel::{
     render::style::Color,
 };
 
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 use rust_pixel::{asset::AssetType, asset2sprite, render::sprite::Sprite};
 
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 const IMAGE_TAG: &str = "mdpt_image";
 
 pub struct MdptRender {
@@ -28,19 +28,19 @@ impl Render for MdptRender {
     type Model = MdptModel;
 
     fn init(&mut self, context: &mut Context, data: &mut Self::Model) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         context.adapter.get_base().gr.set_use_tui_height(true);
 
         let w = data.presentation.front_matter.width;
         let h = data.presentation.front_matter.height;
 
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         let scale = if rust_pixel::init::get_game_config().window_mode.is_fullscreen() {
             1.0
         } else {
             2.5
         };
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         let scale = 0.5;
 
         context
@@ -48,7 +48,7 @@ impl Render for MdptRender {
             .init(w, h, scale, scale, "mdpt".to_string());
         self.scene.init(context);
 
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             // Pre-create image sprite (hidden by default)
             let mut sprite = Sprite::new(0, 0, w, 50u16.max(h));
@@ -62,7 +62,7 @@ impl Render for MdptRender {
     fn handle_timer(&mut self, _context: &mut Context, _data: &mut Self::Model, _dt: f32) {}
 
     fn draw(&mut self, ctx: &mut Context, data: &mut Self::Model, _dt: f32) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             if data.transition.active && data.use_gpu_transition {
                 self.draw_gpu_transition(ctx, data);
@@ -76,7 +76,7 @@ impl Render for MdptRender {
 impl MdptRender {
     /// Normal rendering: current page → tui_buffer → scene.draw()
     fn draw_normal(&mut self, ctx: &mut Context, data: &mut MdptModel) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         ctx.adapter.set_rt_visible(3, false);
 
         let source_buffer = data.get_rendered_buffer();
@@ -94,7 +94,7 @@ impl MdptRender {
         }
 
         // Handle image sprite (graphics mode only)
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         {
             let sprite = self.scene.get_sprite(IMAGE_TAG);
             if let Some(placement) = data.image_placements.first() {
@@ -111,7 +111,7 @@ impl MdptRender {
     }
 
     /// GPU transition rendering (graphics mode only)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn draw_gpu_transition(&mut self, ctx: &mut Context, data: &mut MdptModel) {
         ctx.adapter.set_rt_visible(3, false);
 

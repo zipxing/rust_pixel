@@ -10,24 +10,24 @@
 //! audio provides playing music and sound effect, reference
 //! https://docs.rs/rodio
 
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use rodio::{Decoder, OutputStreamBuilder, Source};
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use std::fs::File;
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use std::io::BufReader;
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use std::sync::{Arc, Mutex, OnceLock};
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use std::thread;
 
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 type AudioStreamHandle = Box<dyn std::any::Any + Send>;
 
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 static GLOBAL_AUDIO_HANDLE: OnceLock<Arc<Mutex<Option<AudioStreamHandle>>>> = OnceLock::new();
 
-#[cfg(audio_support)]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 fn get_or_create_audio_handle() -> Arc<Mutex<Option<AudioStreamHandle>>> {
     GLOBAL_AUDIO_HANDLE
         .get_or_init(|| Arc::new(Mutex::new(None)))
@@ -47,9 +47,9 @@ impl Audio {
         Self {}
     }
 
-    #[cfg(audio_support)]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
     pub fn play_file(&self, fpath: &str, is_loop: bool) {
-        #[cfg(audio_support)]
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
         {
             // Use global GAME_CONFIG for project path
             let project_path = &crate::get_game_config().project_path;
@@ -111,7 +111,7 @@ impl Audio {
             });
         }
 
-        #[cfg(not(audio_support))]
+        #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
         {
             log::info!("Audio playback not supported on this platform: {}", fpath);
         }

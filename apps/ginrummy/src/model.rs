@@ -4,9 +4,9 @@ use rust_pixel::event::Event;
 use rust_pixel::{context::Context, event::event_emit, game::Model, util::Rand};
 
 pub const CARDW: usize = 7;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const CARDH: usize = 7;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const CARDH: usize = 5;
 
 // enum GinRummyState {

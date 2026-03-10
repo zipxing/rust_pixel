@@ -50,14 +50,14 @@ impl PresentListItem {
 
 /// Emoji markers used for unordered list bullets at different depths.
 /// In terminal mode, use single-width Unicode symbols instead of emoji.
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const DEFAULT_MARKERS: [&str; 3] = ["🟢", "🔵", "🟡"];
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const DEFAULT_MARKERS: [&str; 3] = ["◆", "●", "◇"];
 
 /// Default marker style (half-scale emoji in GPU mode, normal in terminal).
 pub fn default_marker_style() -> Style {
-    if cfg!(graphics_mode) {
+    if cfg!(any(feature = "wgpu", target_arch = "wasm32")) {
         Style::default().fg(Color::Cyan).scale(0.5, 0.5)
     } else {
         Style::default().fg(Color::Cyan)
@@ -142,7 +142,7 @@ impl PresentList {
             buf.set_string(x + indent_width, y, marker, self.marker_style);
             // GPU: emoji(2 cells) + space(1 cell) = 3
             // Terminal: symbol(1 cell) + space(1 cell) = 2
-            let marker_offset: u16 = if cfg!(graphics_mode) { 3 } else { 2 };
+            let marker_offset: u16 = if cfg!(any(feature = "wgpu", target_arch = "wasm32")) { 3 } else { 2 };
             buf.set_string(x + indent_width + marker_offset, y, &item.text, self.text_style);
         }
     }

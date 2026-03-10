@@ -109,7 +109,7 @@ impl TetrisModel {
 impl Model for TetrisModel {
     fn init(&mut self, _context: &mut Context) {
         self.reset();
-        #[cfg(audio_support)]
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
         {
             log::info!("Starting tetris background music...");
             self.audio.play_file("back.mp3", true);

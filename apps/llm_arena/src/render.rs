@@ -577,7 +577,7 @@ impl Render for LlmArenaRender {
     type Model = LlmArenaModel;
 
     fn init(&mut self, context: &mut Context, _model: &mut Self::Model) {
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         context.adapter.get_base().gr.set_use_tui_height(true);
 
         context.adapter.init(

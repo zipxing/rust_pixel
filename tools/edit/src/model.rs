@@ -1,5 +1,5 @@
 use rust_pixel::event::{Event, KeyCode, MouseButton, MouseEventKind::*};
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 use crate::render_graphics::{SYMBOL_SDL, SYMBOL_SDL_LOW};
 use rust_pixel::{context::Context, event::event_emit, game::Model};
 
@@ -7,13 +7,13 @@ pub const COLORW: u16 = 18;
 pub const COLORH: u16 = 15;
 pub const SYMW: u16 = 18;
 pub const SYMH: u16 = 18;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const EDITW: u16 = 80;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const EDITW: u16 = 64;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub const EDITH: u16 = 35;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub const EDITH: u16 = 64;  // Match EDITW for square edit area in graphics mode
 
 //画笔类型
@@ -45,9 +45,9 @@ pub struct TeditModel {
 
 impl TeditModel {
     pub fn new() -> Self {
-        #[cfg(not(graphics_mode))]
+        #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
         let stc = 3;
-        #[cfg(graphics_mode)]
+        #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         let stc = 4u8;
 
         Self {
@@ -115,11 +115,11 @@ impl Model for TeditModel {
                         }
                         Some(TeditArea::SYMBOL(idx)) => {
                             if mou.kind == Up(MouseButton::Left) {
-                                #[cfg(not(graphics_mode))]
+                                #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
                                 {
                                     self.curpen = TeditPen::SYMBOL(idx);
                                 }
-                                #[cfg(graphics_mode)]
+                                #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
                                 {
                                     let sym;
                                     if self.sym_tab_idx == 0 {
@@ -159,7 +159,7 @@ impl Model for TeditModel {
                         }
                         Some(TeditArea::ButtonNextColor) =>
                         {
-                            #[cfg(not(graphics_mode))]
+                            #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
                             if mou.kind == Up(MouseButton::Left) {
                                 if self.color_tab_idx == 0 {
                                     self.color_tab_idx = 1;

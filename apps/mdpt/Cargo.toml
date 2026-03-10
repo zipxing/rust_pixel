@@ -8,9 +8,6 @@ default-run = "mdpt"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
-[build-dependencies]
-cfg_aliases = { workspace = true }
-
 [dependencies]
 rust_pixel = { path = "../..", default-features = false }
 comrak = { version = "0.36", default-features = false }

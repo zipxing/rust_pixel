@@ -150,7 +150,7 @@ pub fn get_pixel_layer_data() -> Option<&'static PixelLayerData> {
 ///
 /// Both native and WASM paths call this after preparing the symbol map JSON
 /// and raw layer data.
-#[cfg(any(graphics_mode, target_arch = "wasm32"))]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 fn init_pixel_assets_inner(
     layer_size: u32,
     layers: Vec<Vec<u8>>,
@@ -193,7 +193,7 @@ fn init_pixel_assets_inner(
 /// - `get_game_config()` returns the game configuration
 /// - `get_pixel_layer_data()` returns the layer images
 /// - `get_layered_symbol_map()` returns the layered symbol mapping
-#[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
+#[cfg(feature = "wgpu")]
 pub fn init_layered_pixel_assets(
     game_name: &str,
     project_path: &str,

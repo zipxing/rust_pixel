@@ -131,7 +131,7 @@
 //!
 
 #![allow(unused_variables)]
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 use crate::render::graph::render_buffer_to_cells;
 use crate::{
     event::Event,
@@ -144,32 +144,32 @@ use std::time::Duration;
 // use log::info;
 
 // Re-export RT types from graph module for backward compatibility
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub use crate::render::graph::{BlendMode, RtComposite, RtConfig, RtSize};
 
 /// WGPU rendering subsystem - modern GPU API for cross-platform rendering
 /// Used by both desktop (via winit) and web (via wasm) adapters
-#[cfg(any(wgpu_backend, wgpu_web_backend))]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub mod wgpu;
 
 /// WGPU Web adapter module - WGPU browser rendering with WebGPU/WebGL2 fallback
-#[cfg(wgpu_web_backend)]
+#[cfg(target_arch = "wasm32")]
 pub mod wgpu_web_adapter;
 
 /// Winit common module - Shared code for winit_wgpu adapter
-#[cfg(wgpu_backend)]
+#[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
 pub mod winit_common;
 
 /// Winit + WGPU adapter module - Modern GPU backend with winit window management
-#[cfg(wgpu_backend)]
+#[cfg(all(feature = "wgpu", not(target_arch = "wasm32")))]
 pub mod winit_wgpu_adapter;
 
 /// Crossterm adapter module - Terminal-based text mode rendering
-#[cfg(cross_backend)]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub mod cross_adapter;
 
 // Re-export graph rendering functions and data structures
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub use crate::render::graph::{
     generate_render_buffer,
     get_ratio_x,
@@ -227,7 +227,7 @@ pub struct AdapterBase {
     pub rd: Rand,
 
     /// Datas using by graph mode
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     pub gr: Graph,
 }
 
@@ -244,7 +244,7 @@ impl AdapterBase {
             cell_w: 0,
             cell_h: 0,
             rd: Rand::new(),
-            #[cfg(graphics_mode)]
+            #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
             gr: Graph::new(),
         }
     }
@@ -408,7 +408,7 @@ pub trait Adapter {
     /// ## Rendering Modes
     /// - **rflag=true**: Normal rendering directly to screen
     /// - **rflag=false**: Buffered mode - stores render data for external access (FFI/WASM)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn draw_all_graph(
         &mut self,
         current_buffer: &Buffer,
@@ -439,7 +439,7 @@ pub trait Adapter {
     }
 
     // draw buffer to render texture - unified for both OpenGL and WGPU
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn buf2rt(&mut self, buf: &Buffer, rtidx: usize) {
         let mut rbuf = vec![];
         // Use default transformation (no scale, no rotation, full opacity)
@@ -476,7 +476,7 @@ pub trait Adapter {
     /// - `alpha`: Overall transparency (0=transparent, 255=opaque)
     /// - `scale_x`, `scale_y`: Overall scale factors (1.0 = no scaling)
     /// - `angle`: Overall rotation angle in degrees (0.0 = no rotation)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn buf2rbuf(
         &mut self,
         buffer: &Buffer,
@@ -514,12 +514,12 @@ pub trait Adapter {
     /// - `rbuf`: Array of RenderCell data (from buf2rbuf)
     /// - `rt`: Target render texture index (0-3)
     /// - `debug`: Enable debug mode (colored backgrounds for debugging)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn rbuf2rt(&mut self, rbuf: &[RenderCell], rtidx: usize, debug: bool);
 
     // Primitives 3 (blend_rts) and 4 (present) are defined above in the RT section
 
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn only_render_buffer(&mut self) {
         self.get_base().gr.rflag = false;
     }
@@ -536,7 +536,7 @@ pub trait Adapter {
     /// # Parameters
     /// - `texture_index`: Render texture index (0-3, typically 2=main, 3=effects)
     /// - `visible`: Whether the texture should be visible
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn set_rt_visible(&mut self, texture_index: usize, visible: bool);
 
     /// Get canvas size for advanced rendering calculations
@@ -546,7 +546,7 @@ pub trait Adapter {
     ///
     /// # Returns
     /// (width, height) tuple in pixels
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn get_canvas_size(&self) -> (u32, u32);
 
     /// Setup buffer transition rendering
@@ -557,7 +557,7 @@ pub trait Adapter {
     ///
     /// # Parameters
     /// - `target_texture`: Target render texture index for transition effects
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn setup_buffer_transition(&mut self, target_texture: usize);
 
     /// Copy one render texture to another
@@ -574,7 +574,7 @@ pub trait Adapter {
     /// - Displaying static transition results without shader overhead
     /// - Preparing render textures for subsequent operations
     /// - Swapping/copying render texture contents
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn copy_rt(&mut self, src_index: usize, dst_index: usize);
 
     // ========================================================================
@@ -589,7 +589,7 @@ pub trait Adapter {
     /// # Parameters
     /// - `rt`: RT index (0-3)
     /// - `config`: RT configuration
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn configure_rt(&mut self, rt: usize, config: RtConfig) {
         // Default implementation - store config for later use
         // Graphics adapters can override with optimized implementations
@@ -603,7 +603,7 @@ pub trait Adapter {
     /// - `rt`: RT index (0-3)
     /// - `width`: New width in pixels
     /// - `height`: New height in pixels
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn resize_rt(&mut self, rt: usize, width: u32, height: u32) {
         // Default implementation - no-op
         // Graphics adapters should override with actual resize logic
@@ -615,7 +615,7 @@ pub trait Adapter {
     ///
     /// # Parameters
     /// - `rt`: RT index (0-3)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn clear_rt(&mut self, rt: usize) {
         // Default implementation - no-op
         // Graphics adapters should override
@@ -631,7 +631,7 @@ pub trait Adapter {
     /// - `target`: Target RT index
     /// - `effect`: Effect type (0=Mosaic, 1=Heart, etc.)
     /// - `progress`: Transition progress (0.0-1.0)
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn blend_rts(&mut self, src1: usize, src2: usize, target: usize, effect: usize, progress: f32);
 
     /// Present RT composite chain to screen
@@ -653,14 +653,14 @@ pub trait Adapter {
     ///     RtComposite::fullscreen(2).alpha(200),
     /// ]);
     /// ```
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn present(&mut self, composites: &[RtComposite]);
 
     /// Present with default settings (RT2 fullscreen)
     ///
     /// Convenience method for simple cases - just renders RT2 to screen.
     /// This maintains backward compatibility with Scene.draw().
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn present_default(&mut self) {
         self.present(&[RtComposite::fullscreen(2)]);
     }
@@ -673,7 +673,7 @@ pub trait Adapter {
     ///
     /// # Parameters
     /// - `sharpness`: 0.0 = off, 0.5 = moderate, 1.0 = maximum
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn set_sharpness(&mut self, _sharpness: f32) {
         // Default no-op; WGPU adapters override this
     }
@@ -689,7 +689,7 @@ pub trait Adapter {
     ///
     /// # Parameters
     /// - `enabled`: true to enable MSDF rendering, false for bitmap-only
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     fn set_msdf_enabled(&mut self, _enabled: bool) {
         // Default no-op; WGPU adapters override this
     }

@@ -132,7 +132,7 @@ pub fn init_layered_symbol_map_from_json(json: &str) -> Result<(), String> {
 }
 
 /// Initialize the global layered symbol map from file path
-#[cfg(all(not(target_arch = "wasm32"), graphics_mode))]
+#[cfg(feature = "wgpu")]
 pub fn init_layered_symbol_map_from_file(path: &str) -> Result<(), String> {
     let map = LayeredSymbolMap::load(path)?;
     GLOBAL_LAYERED_SYMBOL_MAP

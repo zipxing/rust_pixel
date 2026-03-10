@@ -4,14 +4,14 @@
 //! Supports both terminal-based and graphical editing modes.
 
 pub mod model;
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub mod render_terminal;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub mod render_graphics;
 
-#[cfg(not(graphics_mode))]
+#[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
 pub use render_terminal::TeditRender;
-#[cfg(graphics_mode)]
+#[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
 pub use render_graphics::TeditRender;
 
 pub use model::TeditModel;
@@ -23,12 +23,12 @@ use log::info;
 /// Run the editor with a specific file path
 pub fn run_with_file(work_dir: &str, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize assets based on mode
-    #[cfg(all(graphics_mode, not(target_arch = "wasm32")))]
+    #[cfg(feature = "wgpu")]
     {
         let _ = rust_pixel::init_pixel_assets("pixel_edit", work_dir, false, false);
     }
 
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     {
         rust_pixel::init_game_config("pixel_edit", work_dir, false, false);
     }
@@ -48,9 +48,9 @@ pub fn run_with_file(work_dir: &str, file_path: &str) -> Result<(), Box<dyn std:
 /// Run the editor with default file
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let pp = get_project_path();
-    #[cfg(not(graphics_mode))]
+    #[cfg(not(any(feature = "wgpu", target_arch = "wasm32")))]
     let default_file = "assets/tmp/tedit.txt";
-    #[cfg(graphics_mode)]
+    #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
     let default_file = "assets/tmp/tedit.pix";
 
     run_with_file(&pp, default_file)
