@@ -627,6 +627,16 @@ impl WgpuPixelRender {
         Ok(())
     }
 
+    /// Set an existing texture array (reuse across render core rebuilds).
+    pub fn set_symbol_texture_array(&mut self, tex_array: texture::WgpuTextureArray) {
+        self.symbol_texture_array = Some(tex_array);
+    }
+
+    /// Take ownership of the texture array (for reuse before dropping this renderer).
+    pub fn take_symbol_texture_array(&mut self) -> Option<texture::WgpuTextureArray> {
+        self.symbol_texture_array.take()
+    }
+
     /// Create bind group for texture and uniform buffer (Texture2DArray mode).
     pub fn create_bind_group(&mut self, device: &wgpu::Device) {
         let bind_group_layout = match &self.bind_group_layout {

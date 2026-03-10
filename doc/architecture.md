@@ -213,16 +213,203 @@ Three custom formats + standard image/audio:
 - `.ssf` — PETSCII animations (frame sequences)
 - `.esc` — Terminal escape-sequence graphics
 
-Loading flow:
-```
-AssetManager
-├── Native: file I/O (sync)
-└── Web: JavaScript fetch (async)
+### Asset Loading: Native vs WASM
 
-States: Loading → Parsing → Ready
+| Aspect | Native (Desktop WGPU) | WASM (Web) |
+|--------|----------------------|-------------|
+| Entry point | `main()` → `run()` | JS `import("./pkg/pixel.js")` |
+| File I/O | `std::fs::read` (sync) | `fetch()` (async) |
+| Texture layers | Rust `image::open()` directly | JS decodes PNG → extracts RGBA → copies into WASM memory |
+| Symbol map | Rust reads JSON file | JS fetches JSON text → passes into WASM |
+| App content (e.g., MD) | `std::fs::read_to_string()` | URL param `?data=` → JS fetch → `WASM_APP_DATA` |
+| WGPU init | Synchronous (`pollster::block_on`) | **Async** (`await init_from_cache_async()`) |
+| Runtime assets (.pix/.ssf) | Sync `fs::read` | JS fetch → global queue → drained per tick |
+
+### WASM Loading Timeline
+
+The entire flow is **orchestrated by JavaScript**; the Rust/WASM side passively receives data.
+
+```
+index.js                                      Rust (WASM)
+────────                                      ───────────
+1. import("./pkg/pixel.js")
+   └─ Load compiled .wasm module
+
+2. fetch("assets/pix/layered_symbol_map.json")
+   └─ Get JSON text, parse to obtain layer_files[]
+
+3. Promise.all(layer_files.map(fetch))
+   ├─ fetch("assets/pix/layers/layer_0.png")
+   ├─ fetch("assets/pix/layers/layer_1.png")     Parallel download
+   └─ ...
+
+   For each PNG:
+   ├─ createImageBitmap(blob)
+   ├─ OffscreenCanvas.drawImage(bitmap)
+   └─ getImageData() → Uint8Array (RGBA)
+
+4. Concatenate all layers into one buffer:
+   allLayerData = concat(layer0, layer1, ...)
+
+5. wasm_init_pixel_assets(                    ──→  init_pixel_assets_from_wasm()
+     "app_name",                                    ├─ Parse symbol_map JSON
+     layer_size,                                     ├─ Split concatenated buffer
+     layer_count,                                    │   by bytes_per_layer → Vec<Vec<u8>>
+     allLayerData,   // concatenated RGBA            ├─ init_layered_symbol_map_from_json()
+     symbolMapJson   // JSON string                  └─ init_pixel_assets_inner()
+   )                                                     → cache in PIXEL_LAYER_DATA global
+
+6. fetch(urlParams.get("data"))               ──→  wasm_set_app_data(text)
+   // e.g., ?data=assets/demo.md                    → WASM_APP_DATA.set(text)
+
+7. PixelGame.new()                            ──→  init_game()
+                                                     ├─ [SKIP] init_layered_pixel_assets
+                                                     │   (already done by JS in step 5)
+                                                     ├─ Model::new() + model.init()
+                                                     └─ Render::new()
+
+8. await sg.init_from_cache()                 ──→  WgpuWebAdapter::init_wgpu_from_cache_async()
+                                                     ├─ Get <canvas> element
+                                                     ├─ wgpu::Instance::new(WEBGPU | GL)
+                                                     ├─ await request_adapter()
+                                                     ├─ await request_device()
+                                                     ├─ surface.configure()
+                                                     ├─ with_pixel_layer_data() → build_layered()
+                                                     │   └─ Texture2DArray upload
+                                                     └─ clear_pixel_layer_data()
+
+9. requestAnimationFrame loop                 ──→  sg.tick(dt)
+     60 FPS                                          ├─ process_queued_assets()  // drain queue
+                                                     └─ game.on_tick(dt)
 ```
 
-### Pix Resource Loading (Texture2DArray)
+### Base Texture Loading
+
+**Native** (`src/init.rs` — `init_layered_pixel_assets()`):
+
+1. Locate pix directory (try `{project_path}/assets/pix/`, fall back to `./assets/pix/`).
+2. Read `layered_symbol_map.json` via `std::fs::read_to_string()`.
+3. For each layer PNG in `layer_files`, call `image::open()` → `.to_rgba8()` → `.into_raw()`.
+4. Cache the raw RGBA `Vec<Vec<u8>>` into the `PIXEL_LAYER_DATA` global.
+
+**WASM** (`web-templates/index.js` → `src/init.rs` — `init_pixel_assets_from_wasm()`):
+
+1. JS fetches `layered_symbol_map.json` and parses it to obtain `layer_files`.
+2. JS fetches all layer PNGs **in parallel** using `Promise.all`.
+3. For each PNG, JS decodes via `createImageBitmap()` + `OffscreenCanvas`, then calls `getImageData()` to extract raw RGBA pixels.
+4. All layer pixel data is **concatenated** into a single `Uint8Array` and passed across the JS/WASM boundary in one call.
+5. On the Rust side, the concatenated buffer is split back into per-layer `Vec<Vec<u8>>` by `bytes_per_layer = layer_size * layer_size * 4`.
+6. The result is cached in the same `PIXEL_LAYER_DATA` global.
+
+**Why concatenate then split?** A single `Uint8Array` crossing the JS/WASM boundary is far more efficient than multiple transfers (only one memory copy).
+
+### GPU Initialization and Texture Upload
+
+**Native** (`src/render/adapter/winit_wgpu_adapter.rs`):
+
+Everything is synchronous. `pollster::block_on()` drives the async WGPU calls:
+
+```rust
+fn create_wgpu_window_and_resources(&mut self) {
+    let adapter = pollster::block_on(instance.request_adapter(...));
+    let (device, queue) = pollster::block_on(adapter.request_device(...));
+    with_pixel_layer_data(|data| {
+        builder.build_layered(device, queue, data.layer_size, &layer_refs)
+    });
+    clear_pixel_layer_data();  // free CPU memory
+}
+```
+
+**WASM** (`src/render/adapter/wgpu_web_adapter.rs`):
+
+Browser APIs are inherently async. The Game object is created **before** the GPU is ready:
+
+```rust
+pub async fn init_wgpu_from_cache_async(&mut self) {
+    let adapter = instance.request_adapter(&opts).await?;
+    let (device, queue) = adapter.request_device(&desc).await?;
+    with_pixel_layer_data(|data| {
+        builder.build_layered(device, queue, data.layer_size, &layer_refs)
+    });
+    clear_pixel_layer_data();  // free CPU memory
+}
+```
+
+JS awaits this: `await sg.init_from_cache()`. The inverted ordering (Game created → GPU initialized later) is the opposite of native mode.
+
+Both paths converge at `WgpuRenderCoreBuilder::build_layered()` which calls `WgpuTextureArray::from_layers()` to upload layers into a GPU Texture2DArray via `queue.write_texture()` per layer.
+
+### CPU-Side Layer Data Lifecycle
+
+Both native and WASM paths cache raw RGBA layer data in `PIXEL_LAYER_DATA` (a global `OnceLock<Mutex<PixelLayerData>>`) before the GPU is ready. For a 4096×4096×6-layer texture set, this is ~384 MB of CPU memory — only needed during the one-time GPU upload.
+
+```
+Phase 1: Cache layer data
+  ├─ Native: image::open() → Vec<Vec<u8>> → PIXEL_LAYER_DATA
+  └─ WASM:   JS fetch + decode → wasm_init_pixel_assets() → PIXEL_LAYER_DATA
+
+Phase 3: GPU upload + immediate release
+  ├─ with_pixel_layer_data(|data| { build_layered(...) })
+  │   └─ WgpuTextureArray::from_layers() uploads to GPU while lock is held
+  └─ clear_pixel_layer_data()
+      └─ Clears Vec<Vec<u8>> inside the Mutex → frees ~384 MB CPU memory
+
+Resize: Texture reuse (no CPU data needed)
+  ├─ old_core.take_symbol_texture_array() → extracts WgpuTextureArray
+  └─ builder.build_with_texture(device, queue, tex_array) → reuses GPU texture
+      └─ Only pipelines, buffers, and render textures are recreated
+```
+
+Key API:
+
+- **`with_pixel_layer_data(closure)`**: Accesses the cached data under a `Mutex` lock. Returns `None` if already cleared.
+- **`clear_pixel_layer_data()`**: Called immediately after the first GPU upload. Clears the inner `Vec` while the `OnceLock` shell remains.
+- **`build_with_texture()`**: `WgpuRenderCoreBuilder` method that accepts an existing `WgpuTextureArray`. Used by `rebuild_render_core()` during window resize/maximize/fullscreen toggle.
+- **`take_symbol_texture_array()`**: Extracts the `WgpuTextureArray` from the old `WgpuRenderCore` before it is dropped, so the GPU texture survives the rebuild.
+
+### Runtime Asset Loading (.pix / .ssf / .esc)
+
+**Native**: Fully synchronous, ready in the same frame:
+
+```rust
+let data = std::fs::read(&path)?;
+asset.set_data(&data);
+asset.parse()?;  // immediately available
+```
+
+**WASM**: Asynchronous with a global queue to avoid borrow conflicts:
+
+```
+Request:    asset_manager.load("image.pix")
+              ↓  triggers JS fetch
+            fetch("assets/image.pix")
+              ↓  callback fires
+            wasm_on_asset_loaded(url, data)  ──→  ASSET_QUEUE.push((url, data))
+              ↓  next tick()
+            process_queued_assets()
+              ↓
+            asset.set_data() + parse()       ← resource ready (1+ frames later)
+```
+
+The queue mechanism (`src/asset.rs`):
+
+```rust
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static ASSET_QUEUE: RefCell<Vec<(String, Vec<u8>)>> = RefCell::new(Vec::new());
+}
+```
+
+Drained every frame in `tick()`:
+
+```rust
+#[cfg(target_arch = "wasm32")]
+self.g.context.asset_manager.process_queued_assets();
+```
+
+**Key implication**: Runtime-loaded assets in WASM are **not available on the same frame** they are requested. There is at least a 1-frame delay (typically more, depending on network latency).
+
+### Pix Resource Search Path
 
 The `assets/pix/` directory contains the layered texture files (`layers/*.png`) and symbol map (`layered_symbol_map.json`). The engine uses a fallback mechanism to support both workspace apps and standalone projects.
 

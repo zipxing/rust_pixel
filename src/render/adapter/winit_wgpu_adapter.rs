@@ -649,12 +649,15 @@ impl WinitWgpuAdapter {
         .with_ratio(ratio_x, ratio_y)
         .with_render_scale(render_scale);
 
-        let layer_data = crate::get_pixel_layer_data()
-            .expect("Layer data not loaded");
-        let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
-        let render_core = builder
-            .build_layered(device, queue, layer_data.layer_size, &layer_refs)
-            .expect("Failed to build render core");
+        let render_core = crate::with_pixel_layer_data(|layer_data| {
+            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
+            builder
+                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                .expect("Failed to build render core")
+        }).expect("Layer data not loaded");
+
+        // Free CPU-side layer data now that textures are on the GPU
+        crate::clear_pixel_layer_data();
 
         self.wgpu_instance = Some(wgpu_instance);
         self.wgpu_surface = Some(wgpu_surface);
@@ -716,9 +719,11 @@ impl WinitWgpuAdapter {
     }
 
     /// Rebuild render core with current pixel_w/pixel_h and ratio settings.
-    /// Extracts device/queue from old core, builds new core, reconfigures surface.
+    /// Extracts device/queue/texture from old core, builds new core reusing the texture.
     fn rebuild_render_core(&mut self) {
-        if let Some(old_core) = self.render_core.take() {
+        if let Some(mut old_core) = self.render_core.take() {
+            let tex_array = old_core.take_symbol_texture_array()
+                .expect("Old render core has no texture array");
             let device = old_core.device;
             let queue = old_core.queue;
             let format = self.wgpu_surface_config.as_ref().unwrap().format;
@@ -730,15 +735,12 @@ impl WinitWgpuAdapter {
             )
             .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y);
 
-            let layer_data = crate::get_pixel_layer_data()
-                .expect("Layer data not loaded");
-            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|v| v.as_slice()).collect();
             let new_core = builder
-                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                .build_with_texture(device, queue, tex_array)
                 .expect("Failed to rebuild render core");
 
             info!(
-                "Render core rebuilt: {}x{}, ratio: ({}, {})",
+                "Render core rebuilt (texture reused): {}x{}, ratio: ({}, {})",
                 self.base.gr.pixel_w, self.base.gr.pixel_h,
                 self.base.gr.ratio_x, self.base.gr.ratio_y
             );

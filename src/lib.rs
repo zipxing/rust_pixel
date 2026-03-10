@@ -50,7 +50,7 @@ pub mod init;
 pub use init::{
     get_game_config, init_game_config, GameConfig, WindowMode,
     GAME_CONFIG,
-    get_pixel_layer_data, PixelLayerData, PIXEL_LAYER_DATA,
+    with_pixel_layer_data, clear_pixel_layer_data, PixelLayerData, PIXEL_LAYER_DATA,
 };
 
 #[cfg(feature = "wgpu")]

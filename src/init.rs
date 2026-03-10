@@ -134,12 +134,35 @@ pub struct PixelLayerData {
     pub layers: Vec<Vec<u8>>,
 }
 
-/// Global cached layer data
-pub static PIXEL_LAYER_DATA: OnceLock<PixelLayerData> = OnceLock::new();
+/// Global cached layer data (temporary, cleared after GPU upload to save memory)
+pub static PIXEL_LAYER_DATA: OnceLock<std::sync::Mutex<PixelLayerData>> = OnceLock::new();
 
-/// Get the cached layer data, if loaded
-pub fn get_pixel_layer_data() -> Option<&'static PixelLayerData> {
-    PIXEL_LAYER_DATA.get()
+/// Access the cached layer data under a lock.
+/// Calls the closure with the data if initialized and not yet cleared.
+/// Returns None if not initialized, already cleared, or lock poisoned.
+pub fn with_pixel_layer_data<R>(f: impl FnOnce(&PixelLayerData) -> R) -> Option<R> {
+    PIXEL_LAYER_DATA.get().and_then(|m| {
+        let data = m.lock().ok()?;
+        if data.layers.is_empty() {
+            None
+        } else {
+            Some(f(&data))
+        }
+    })
+}
+
+/// Release the cached layer data to free CPU memory after GPU upload.
+pub fn clear_pixel_layer_data() {
+    if let Some(m) = PIXEL_LAYER_DATA.get() {
+        if let Ok(mut data) = m.lock() {
+            let total_bytes: usize = data.layers.iter().map(|l| l.len()).sum();
+            data.layers.clear();
+            log::info!(
+                "Cleared PIXEL_LAYER_DATA: freed ~{:.1} MB of CPU memory",
+                total_bytes as f64 / (1024.0 * 1024.0)
+            );
+        }
+    }
 }
 
 // ============================================================================
@@ -169,7 +192,7 @@ fn init_pixel_assets_inner(
 
     // Cache layer data
     PIXEL_LAYER_DATA
-        .set(PixelLayerData { layer_size, layers })
+        .set(std::sync::Mutex::new(PixelLayerData { layer_size, layers }))
         .map_err(|_| "PIXEL_LAYER_DATA already initialized".to_string())?;
 
     log::info!(

@@ -75,6 +75,12 @@ impl WgpuRenderCore {
         (self.pixel_renderer.canvas_width, self.pixel_renderer.canvas_height)
     }
 
+    /// Take ownership of the symbol texture array for reuse in a new render core.
+    /// This should be called before dropping this core during rebuild.
+    pub fn take_symbol_texture_array(&mut self) -> Option<super::texture::WgpuTextureArray> {
+        self.pixel_renderer.take_symbol_texture_array()
+    }
+
     /// Set viewport scale factor for mipmap selection.
     /// Should be called before rbuf2rt() each frame.
     pub fn set_viewport_scale(&mut self, scale: f32) {
@@ -337,6 +343,43 @@ impl WgpuRenderCoreBuilder {
 
         // Load Texture2DArray
         pixel_renderer.load_symbol_texture_array(&device, &queue, layer_size, layers)?;
+
+        pixel_renderer.create_shader(&device);
+        pixel_renderer.create_buffer(&device);
+        pixel_renderer.create_bind_group(&device);
+
+        pixel_renderer.init_render_textures(&device, &queue)?;
+
+        pixel_renderer.init_general2d_renderer(&device);
+        pixel_renderer.init_transition_renderer(&device);
+        pixel_renderer.set_ratio(self.ratio_x, self.ratio_y);
+        pixel_renderer.set_render_scale(self.render_scale);
+
+        let mut core = WgpuRenderCore::new(
+            device,
+            queue,
+            pixel_renderer,
+            self.ratio_x,
+            self.ratio_y,
+        );
+        core.render_scale = self.render_scale;
+        Ok(core)
+    }
+
+    /// Build the render core reusing an existing Texture2DArray (avoids re-upload).
+    pub fn build_with_texture(
+        self,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        tex_array: super::texture::WgpuTextureArray,
+    ) -> Result<WgpuRenderCore, String> {
+        let mut pixel_renderer = WgpuPixelRender::new_with_format(
+            self.canvas_width,
+            self.canvas_height,
+            self.surface_format,
+        );
+
+        pixel_renderer.set_symbol_texture_array(tex_array);
 
         pixel_renderer.create_shader(&device);
         pixel_renderer.create_buffer(&device);

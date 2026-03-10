@@ -55,8 +55,7 @@ impl WgpuWebAdapter {
     ///
     /// Note: This is an async function that must be awaited from JavaScript.
     pub async fn init_wgpu_from_cache_async(&mut self) {
-        let layer_data = crate::get_pixel_layer_data()
-            .expect("Layer data not loaded - call wasm_init_pixel_assets first");
+        // layer_data will be accessed via with_pixel_layer_data() when building render core
 
         self.base.gr.set_pixel_size(self.base.cell_w, self.base.cell_h);
 
@@ -145,28 +144,31 @@ impl WgpuWebAdapter {
         surface.configure(&device, &config);
 
         // Build render core using the shared builder (Texture2DArray mode)
-        let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|l| l.as_slice()).collect();
-        let render_core = WgpuRenderCoreBuilder::new(
-            self.base.gr.pixel_w as u32,
-            self.base.gr.pixel_h as u32,
-            surface_format,
-        )
-        .with_ratio(self.base.gr.ratio_x, self.base.gr.ratio_y)
-        .build_layered(
-            device,
-            queue,
-            layer_data.layer_size,
-            &layer_refs,
-        )
-        .expect("Failed to build render core");
+        let pixel_w = self.base.gr.pixel_w as u32;
+        let pixel_h = self.base.gr.pixel_h as u32;
+        let ratio_x = self.base.gr.ratio_x;
+        let ratio_y = self.base.gr.ratio_y;
+        let render_core = crate::with_pixel_layer_data(|layer_data| {
+            let layer_refs: Vec<&[u8]> = layer_data.layers.iter().map(|l| l.as_slice()).collect();
+            let core = WgpuRenderCoreBuilder::new(pixel_w, pixel_h, surface_format)
+                .with_ratio(ratio_x, ratio_y)
+                .build_layered(device, queue, layer_data.layer_size, &layer_refs)
+                .expect("Failed to build render core");
+            info!(
+                "WGPU Web initialized: {} layers ({}x{})",
+                layer_refs.len(), layer_data.layer_size, layer_data.layer_size
+            );
+            core
+        }).expect("Layer data not loaded - call wasm_init_pixel_assets first");
+
+        // Free CPU-side layer data now that textures are on the GPU
+        crate::clear_pixel_layer_data();
 
         // Store everything
         self.wgpu_instance = Some(instance);
         self.wgpu_surface = Some(surface);
         self.wgpu_surface_config = Some(config);
         self.render_core = Some(render_core);
-
-        info!("WGPU Web initialized: {} layers ({}x{})", layer_refs.len(), layer_data.layer_size, layer_data.layer_size);
     }
 }
 

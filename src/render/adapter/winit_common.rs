@@ -453,15 +453,16 @@ where
 
     // 1. Get texture info (Texture2DArray mode)
     let project_path = &crate::get_game_config().project_path;
-    let layer_data = crate::get_pixel_layer_data().expect("Layer data not loaded");
     let texture_path = format!(
         "{}{}assets/pix/layered_symbol_map.json",
         project_path, std::path::MAIN_SEPARATOR,
     );
-    info!(
-        "Using layered texture: {} layers ({}x{})",
-        layer_data.layers.len(), layer_data.layer_size, layer_data.layer_size
-    );
+    crate::with_pixel_layer_data(|layer_data| {
+        info!(
+            "Using layered texture: {} layers ({}x{})",
+            layer_data.layers.len(), layer_data.layer_size, layer_data.layer_size
+        );
+    });
 
     info!(
         "Symbol dimensions: {}x{}",
