@@ -53,6 +53,26 @@ fn main() {
                 .long("custom")
                 .help("Directory containing custom PNG images to slice into sprites (32x32 tiles)"),
         )
+        .arg(
+            Arg::new("extract")
+                .short('e')
+                .long("extract")
+                .help("Extract sprites from image(s) with adaptive binarization and deduplication. Accepts a single image file or a directory of PNGs."),
+        )
+        .arg(
+            Arg::new("tile-size")
+                .short('t')
+                .long("tile-size")
+                .help("Tile size for --extract mode (default: 8)")
+                .default_value("8"),
+        )
+        .arg(
+            Arg::new("dedup-threshold")
+                .short('d')
+                .long("dedup-threshold")
+                .help("Hamming distance threshold for deduplication in --extract mode (default: 2). 0=exact match, 1-2=strict, 3-5=moderate, 6+=aggressive")
+                .default_value("2"),
+        )
         .get_matches();
 
     generate_symbols(&matches);
@@ -173,6 +193,75 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
     } else {
         Vec::new()
     };
+
+    // Extract sprites from image(s) with deduplication if --extract is specified
+    let extract_path = sub_m.get_one::<String>("extract").map(|s| s.as_str());
+    let tile_size: u32 = sub_m
+        .get_one::<String>("tile-size")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8);
+    let dedup_threshold: u32 = sub_m
+        .get_one::<String>("dedup-threshold")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2);
+
+    let extracted_sprite_sets = if let Some(extract_src) = extract_path {
+        let extract_path = Path::new(extract_src);
+        let mut image_files: Vec<std::path::PathBuf> = Vec::new();
+
+        if extract_path.is_file() {
+            image_files.push(extract_path.to_path_buf());
+        } else if extract_path.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(extract_path) {
+                let mut files: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| ext.to_ascii_lowercase() == "png")
+                            .unwrap_or(false)
+                    })
+                    .collect();
+                files.sort_by_key(|e| e.path());
+                image_files.extend(files.into_iter().map(|e| e.path()));
+            }
+        } else {
+            eprintln!("Warning: Extract path '{}' not found", extract_src);
+        }
+
+        if !image_files.is_empty() {
+            println!(
+                "\nExtracting sprites (tile={}x{}, dedup threshold={})...",
+                tile_size, tile_size, dedup_threshold
+            );
+        }
+
+        let mut sets = Vec::new();
+        for img_path in &image_files {
+            if let Some((sprites, sprite_set)) = sprite::load_extracted_sprites(
+                img_path,
+                tile_size,
+                dedup_threshold,
+                sprite_output_size,
+                all_sprites.len(),
+            ) {
+                all_sprites.extend(sprites);
+                sets.push(sprite_set);
+            }
+        }
+        if !sets.is_empty() {
+            let total_unique: usize = sets.iter().map(|s| s.unique_count).sum();
+            let total_orig: usize = sets.iter().map(|s| s.original_count).sum();
+            println!(
+                "  Extracted {} unique sprites from {} total tiles across {} images",
+                total_unique, total_orig, sets.len()
+            );
+        }
+        sets
+    } else {
+        Vec::new()
+    };
+
     println!("  Total sprites: {}", all_sprites.len());
 
     // Render multi-resolution bitmaps
@@ -265,6 +354,18 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
         }
     }
 
+    // Generate .pix files for extracted sprites (with dedup tile_map)
+    if !extracted_sprite_sets.is_empty() {
+        println!("\nGenerating .pix files for extracted sprites...");
+        for sprite_set in &extracted_sprite_sets {
+            let pix_path = output_path.join(format!("{}.pix", sprite_set.name));
+            match generate_extracted_pix_file(&pix_path, sprite_set) {
+                Ok(_) => println!("  ✓ {} ({} unique / {} total)", pix_path.display(), sprite_set.unique_count, sprite_set.original_count),
+                Err(e) => eprintln!("  ✗ {}: {}", pix_path.display(), e),
+            }
+        }
+    }
+
     // Print summary
     println!("\n{}", "=".repeat(70));
     println!("Complete!");
@@ -273,6 +374,11 @@ fn generate_symbols(sub_m: &clap::ArgMatches) {
     println!("Total layers: {}", pack_result.layers.len());
     println!("Total symbols: {}", pack_result.symbol_count);
     println!("  Sprites: {}", all_sprites.len());
+    if !extracted_sprite_sets.is_empty() {
+        let total_unique: usize = extracted_sprite_sets.iter().map(|s| s.unique_count).sum();
+        let total_orig: usize = extracted_sprite_sets.iter().map(|s| s.original_count).sum();
+        println!("    (including {} extracted, {} unique / {} deduped)", extracted_sprite_sets.len(), total_unique, total_orig);
+    }
     println!("  TUI: {}", tui_bitmaps.len());
     println!("  Emoji: {}", emoji_bitmaps.len());
     println!("  CJK: {}", cjk_bitmaps.len());
@@ -335,6 +441,37 @@ fn generate_pix_file(
             let block = sprite_idx / 256;
             let sym = sprite_idx % 256;
             // Format: sym_idx, fg_color(15=white), block_idx, bg_color(0=black)
+            write!(file, "{},{},{},{} ", sym, 15, block, 0)?;
+        }
+        writeln!(file)?;
+    }
+
+    Ok(())
+}
+
+/// Generate a .pix file for an extracted sprite set (with dedup tile_map)
+/// Uses the tile_map to reference deduplicated sprites correctly
+fn generate_extracted_pix_file(
+    path: &Path,
+    sprite_set: &sprite::ExtractedSpriteSet,
+) -> Result<(), std::io::Error> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(path)?;
+
+    // Header
+    writeln!(
+        file,
+        "width={},height={},texture=255",
+        sprite_set.width_tiles, sprite_set.height_tiles
+    )?;
+
+    // Use tile_map for correct dedup mapping
+    for row in &sprite_set.tile_map {
+        for &local_idx in row {
+            let sprite_idx = sprite_set.start_index + local_idx;
+            let block = sprite_idx / 256;
+            let sym = sprite_idx % 256;
             write!(file, "{},{},{},{} ", sym, 15, block, 0)?;
         }
         writeln!(file)?;

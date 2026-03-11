@@ -292,6 +292,26 @@ fn build_app() -> Command {
                         .short('c')
                         .long("custom")
                         .help("Directory containing custom PNG images to slice into sprites (32x32 tiles)"),
+                )
+                .arg(
+                    Arg::new("extract")
+                        .short('e')
+                        .long("extract")
+                        .help("Extract sprites from image(s) with adaptive binarization and deduplication. Accepts a single image file or a directory of PNGs."),
+                )
+                .arg(
+                    Arg::new("tile-size")
+                        .short('t')
+                        .long("tile-size")
+                        .help("Tile size for --extract mode (default: 8)")
+                        .default_value("8"),
+                )
+                .arg(
+                    Arg::new("dedup-threshold")
+                        .short('d')
+                        .long("dedup-threshold")
+                        .help("Hamming distance threshold for deduplication (default: 2). 0=exact, 1-2=strict, 3-5=moderate, 6+=aggressive")
+                        .default_value("2"),
                 ),
         )
 }

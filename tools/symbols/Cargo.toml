@@ -10,6 +10,7 @@ image = "0.25.9"
 serde_json = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 fontdue = "0.9"
+rust_pixel = { path = "../.." }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-text = "20"
@@ -18,5 +19,5 @@ core-foundation = "0.9"
 
 # Features for compatibility with cargo-pixel run infrastructure
 [features]
-term = []
-wgpu = []
+term = ["rust_pixel/term"]
+wgpu = ["rust_pixel/wgpu"]

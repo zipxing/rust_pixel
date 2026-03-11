@@ -575,6 +575,18 @@ fn pixel_symbols(ctx: &PixelContext, sub_m: &ArgMatches) {
         extra_args.push("--custom".to_string());
         extra_args.push(custom.clone());
     }
+    if let Some(extract) = sub_m.get_one::<String>("extract") {
+        extra_args.push("--extract".to_string());
+        extra_args.push(extract.clone());
+    }
+    if let Some(tile_size) = sub_m.get_one::<String>("tile-size") {
+        extra_args.push("--tile-size".to_string());
+        extra_args.push(tile_size.clone());
+    }
+    if let Some(dedup) = sub_m.get_one::<String>("dedup-threshold") {
+        extra_args.push("--dedup-threshold".to_string());
+        extra_args.push(dedup.clone());
+    }
 
     // Build argument list for the run command
     // Use "--" to separate run args from symbols-specific args (which have --flags)
