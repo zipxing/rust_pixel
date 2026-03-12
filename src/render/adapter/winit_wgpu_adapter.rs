@@ -30,7 +30,7 @@ use crate::render::{
         Adapter, AdapterBase, RtComposite,
     },
     buffer::Buffer,
-    graph::{UnifiedTransform, is_letterboxing_enabled, set_letterboxing_override},
+    graph::{UnifiedTransform, is_letterboxing_enabled, set_letterboxing_override, set_global_ratio_x, set_global_ratio_y},
     sprite::Layer,
 };
 
@@ -210,6 +210,8 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                             adapter.original_ratio_y = adapter.base.gr.ratio_y;
                             adapter.base.gr.ratio_x = 1.0;
                             adapter.base.gr.ratio_y = 1.0;
+                            set_global_ratio_x(1.0);
+                            set_global_ratio_y(1.0);
                             adapter.base.gr.set_pixel_size(
                                 adapter.base.cell_w, adapter.base.cell_h,
                             );
@@ -219,6 +221,8 @@ impl ApplicationHandler for WinitWgpuAppHandler {
                         } else if !is_max && !is_fullscreen && adapter.ratio_overridden {
                             adapter.base.gr.ratio_x = adapter.original_ratio_x;
                             adapter.base.gr.ratio_y = adapter.original_ratio_y;
+                            set_global_ratio_x(adapter.original_ratio_x);
+                            set_global_ratio_y(adapter.original_ratio_y);
                             adapter.base.gr.set_pixel_size(
                                 adapter.base.cell_w, adapter.base.cell_h,
                             );
@@ -520,6 +524,8 @@ impl WinitWgpuAdapter {
 
                 self.base.gr.ratio_x = uniform_ratio;
                 self.base.gr.ratio_y = uniform_ratio;
+                set_global_ratio_x(uniform_ratio);
+                set_global_ratio_y(uniform_ratio);
                 self.base.gr.pixel_w = cw;
                 self.base.gr.pixel_h = ch;
 
@@ -540,6 +546,8 @@ impl WinitWgpuAdapter {
 
                 self.base.gr.ratio_x = new_ratio_x;
                 self.base.gr.ratio_y = new_ratio_y;
+                set_global_ratio_x(new_ratio_x);
+                set_global_ratio_y(new_ratio_y);
                 self.base.gr.pixel_w = physical_size.width;
                 self.base.gr.pixel_h = physical_size.height;
 

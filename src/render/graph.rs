@@ -87,6 +87,7 @@ use crate::{
 };
 // use log::info;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 // ============================================================================
 // Logo Data (embedded in logo_data.rs)
@@ -653,28 +654,38 @@ pub static PIXEL_SYM_WIDTH: OnceLock<f32> = OnceLock::new();
 /// - Layered mode: `PIXEL_SYMBOL_SIZE * 2` = 32.0
 pub static PIXEL_SYM_HEIGHT: OnceLock<f32> = OnceLock::new();
 
-/// X-axis DPI scaling ratio for coordinate conversion
+/// X-axis DPI scaling ratio for coordinate conversion (stored as f32 bits in AtomicU32).
 ///
 /// Used to convert cell coordinates to pixel coordinates in graphics mode.
-/// Typically set during adapter initialization.
-/// Default value is 1.0 if not explicitly set.
-pub static PIXEL_RATIO_X: OnceLock<f32> = OnceLock::new();
+/// Updated at runtime when ratio changes (e.g., fullscreen mode).
+/// Default value is 1.0.
+pub static PIXEL_RATIO_X: AtomicU32 = AtomicU32::new(0x3F800000); // 1.0f32.to_bits()
 
-/// Y-axis DPI scaling ratio for coordinate conversion
+/// Y-axis DPI scaling ratio for coordinate conversion (stored as f32 bits in AtomicU32).
 ///
 /// Used to convert cell coordinates to pixel coordinates in graphics mode.
-/// Typically set during adapter initialization.
-/// Default value is 1.0 if not explicitly set.
-pub static PIXEL_RATIO_Y: OnceLock<f32> = OnceLock::new();
+/// Updated at runtime when ratio changes (e.g., fullscreen mode).
+/// Default value is 1.0.
+pub static PIXEL_RATIO_Y: AtomicU32 = AtomicU32::new(0x3F800000); // 1.0f32.to_bits()
 
-/// Get X-axis ratio with default value of 1.0 if not set
+/// Get X-axis ratio (always returns the current runtime value)
 pub fn get_ratio_x() -> f32 {
-    *PIXEL_RATIO_X.get().unwrap_or(&1.0)
+    f32::from_bits(PIXEL_RATIO_X.load(Ordering::Relaxed))
 }
 
-/// Get Y-axis ratio with default value of 1.0 if not set
+/// Get Y-axis ratio (always returns the current runtime value)
 pub fn get_ratio_y() -> f32 {
-    *PIXEL_RATIO_Y.get().unwrap_or(&1.0)
+    f32::from_bits(PIXEL_RATIO_Y.load(Ordering::Relaxed))
+}
+
+/// Update the global X-axis ratio
+pub fn set_global_ratio_x(rx: f32) {
+    PIXEL_RATIO_X.store(rx.to_bits(), Ordering::Relaxed);
+}
+
+/// Update the global Y-axis ratio
+pub fn set_global_ratio_y(ry: f32) {
+    PIXEL_RATIO_Y.store(ry.to_bits(), Ordering::Relaxed);
 }
 
 
@@ -1140,14 +1151,14 @@ impl Graph {
         // Force ratio to 1.0 in fullscreen mode (fullscreen handles scaling)
         let rx = if crate::get_game_config().window_mode.is_fullscreen() { 1.0 } else { rx };
         self.ratio_x = rx;
-        let _ = PIXEL_RATIO_X.set(rx);
+        set_global_ratio_x(rx);
     }
 
     /// Set Y-axis scaling ratio
     ///
     /// Used for handling scaling adaptation for different DPI displays.
     /// This value affects pixel height calculation and rendering coordinate conversion.
-    /// Also sets the global PIXEL_RATIO_Y for use in Sprite coordinate conversion.
+    /// Also updates the global PIXEL_RATIO_Y for use in Sprite coordinate conversion.
     ///
     /// # Parameters
     /// - `ry`: Y-axis scaling ratio (1.0 for standard ratio)
@@ -1155,7 +1166,7 @@ impl Graph {
         // Force ratio to 1.0 in fullscreen mode (fullscreen handles scaling)
         let ry = if crate::get_game_config().window_mode.is_fullscreen() { 1.0 } else { ry };
         self.ratio_y = ry;
-        let _ = PIXEL_RATIO_Y.set(ry);
+        set_global_ratio_y(ry);
     }
 
     /// Set whether to use TUI character height mode

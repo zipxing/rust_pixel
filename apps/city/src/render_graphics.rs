@@ -40,6 +40,16 @@ fn level_info(l: i16) -> String {
     msg
 }
 
+/// Get the pixel size per cell unit based on current sym size and runtime ratio.
+fn cell_pixel_size() -> (f32, f32) {
+    use rust_pixel::render::adapter::PIXEL_SYM_WIDTH;
+    use rust_pixel::render::adapter::PIXEL_SYM_HEIGHT;
+    use rust_pixel::render::graph::{get_ratio_x, get_ratio_y};
+    let sym_w = PIXEL_SYM_WIDTH.get().copied().unwrap_or(32.0);
+    let sym_h = PIXEL_SYM_HEIGHT.get().copied().unwrap_or(32.0);
+    (sym_w / get_ratio_x(), sym_h / get_ratio_y())
+}
+
 pub struct CityRender {
     pub scene: Scene,
 }
@@ -168,16 +178,18 @@ impl CityRender {
                 let sx = nx * CELLW as f32 + ADJX as f32;
                 let sy = ny * CELLH as f32 + ADJY as f32;
                 if sx >= 0.0 && sy >= 0.0 {
-                    let usx = (sx * 32.0) as u16;
-                    let usy = (sy * 32.0) as u16;
+                    let (cpw, cph) = cell_pixel_size();
+                    let usx = (sx * cpw) as u16;
+                    let usy = (sy * cph) as u16;
 
                     self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
                 }
             } else {
                 let sx = x * CELLW + ADJX;
                 let sy = y * CELLH + ADJY;
-                let usx = (sx * 32) as u16;
-                let usy = (sy * 32) as u16;
+                let (cpw, cph) = cell_pixel_size();
+                let usx = (sx as f32 * cpw) as u16;
+                let usy = (sy as f32 * cph) as u16;
                 self.draw_cell(ctx, *cid, usx, usy, ctype, dc.color, &msg, 3, false);
             }
         }
@@ -212,8 +224,9 @@ impl CityRender {
                 msgcol = 3u32;
             }
 
-            let usx = (sx * 32) as u16;
-            let usy = (sy * 32) as u16;
+            let (cpw, cph) = cell_pixel_size();
+            let usx = (sx as f32 * cpw) as u16;
+            let usy = (sy as f32 * cph) as u16;
 
             self.draw_cell(
                 ctx,
