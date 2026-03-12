@@ -12,7 +12,6 @@
 /// cargo pixel edit wg . file.pix
 /// cargo pixel petii image.png 40 25
 /// cargo pixel ssf t . dance.ssf
-/// cargo pixel symbol image.png 8
 /// cargo pixel ttf font.ttf output.png 8
 /// cargo pixel gen "Rust语言入门"
 /// cargo pixel gen "Rust语言入门" --img
@@ -25,7 +24,6 @@
 /// cargo pixel edit wg . apps/demo/file.pix # equivalent to: cargo pixel r edit wg -r . apps/demo/file.pix
 /// cargo pixel p image.png 40 25            # equivalent to: cargo pixel r petii t -r image.png 40 25
 /// cargo pixel sf t . dance.ssf             # equivalent to: cargo pixel r ssf t -r . dance.ssf
-/// cargo pixel sy image.png 8               # equivalent to: cargo pixel r symbol t -r image.png 8
 /// cargo pixel tf font.ttf output.png 8    # equivalent to: cargo pixel r ttf t -r font.ttf output.png 8
 /// cargo pixel g "Rust语言入门"             # equivalent to: cargo run -p mdpt --features wgpu --bin gen -- "topic"
 /// cargo pixel g "topic" --img              # also generate images for each slide
@@ -444,61 +442,6 @@ fn pixel_ssf(ctx: &PixelContext, sub_m: &ArgMatches) {
     }
 }
 
-/// Handle the symbol subcommand by converting it to a run command
-fn pixel_symbol(ctx: &PixelContext, sub_m: &ArgMatches) {
-    println!("🎨 Running RustPixel Symbol Extractor...");
-    
-    // Build argument list for the run command
-    let mut run_args = vec![
-        "run",
-        "symbol",
-        "t",        // terminal mode (only mode supported)
-        "-r",       // release mode
-    ];
-    
-    // Add all provided arguments in order
-    if let Some(image_file) = sub_m.get_one::<String>("image_file") {
-        run_args.push(image_file.as_str());
-    }
-    if let Some(symsize) = sub_m.get_one::<String>("symsize") {
-        run_args.push(symsize.as_str());
-    }
-    if let Some(start_x) = sub_m.get_one::<String>("start_x") {
-        run_args.push(start_x.as_str());
-    }
-    if let Some(start_y) = sub_m.get_one::<String>("start_y") {
-        run_args.push(start_y.as_str());
-    }
-    if let Some(width) = sub_m.get_one::<String>("width") {
-        run_args.push(width.as_str());
-    }
-    if let Some(height) = sub_m.get_one::<String>("height") {
-        run_args.push(height.as_str());
-    }
-    
-    println!("   Running: cargo pixel r symbol t -r {}", run_args[4..].join(" "));
-    println!();
-    
-    // Create and execute the run command
-    use clap::{Command, Arg, ArgAction};
-    let run_app = Command::new("run")
-        .arg(Arg::new("mod_name"))
-        .arg(Arg::new("build_type"))
-        .arg(Arg::new("other").action(ArgAction::Append))
-        .arg(Arg::new("release").short('r').long("release").action(ArgAction::SetTrue));
-    
-    let run_matches = run_app.try_get_matches_from(run_args);
-    
-    match run_matches {
-        Ok(matches) => {
-            pixel_run(ctx, &matches);
-        }
-        Err(e) => {
-            eprintln!("Error: Failed to set up symbol command: {}", e);
-        }
-    }
-}
-
 /// Handle the ttf subcommand by converting it to a run command
 fn pixel_ttf(ctx: &PixelContext, sub_m: &ArgMatches) {
     println!("🎨 Running RustPixel TTF to PNG Converter...");
@@ -673,7 +616,6 @@ fn main() {
         Some(("edit", sub_m)) => pixel_edit(&ctx, sub_m),
         Some(("petii", sub_m)) => pixel_petii(&ctx, sub_m),
         Some(("ssf", sub_m)) => pixel_ssf(&ctx, sub_m),
-        Some(("symbol", sub_m)) => pixel_symbol(&ctx, sub_m),
         Some(("ttf", sub_m)) => pixel_ttf(&ctx, sub_m),
         Some(("gen", sub_m)) => pixel_gen(&ctx, sub_m),
         Some(("symbols", sub_m)) => pixel_symbols(&ctx, sub_m),
