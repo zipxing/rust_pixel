@@ -183,13 +183,24 @@ fn assign_layers(graph: &MermaidGraph) -> Vec<Vec<usize>> {
         .map(|(i, n)| (n.id.as_str(), i))
         .collect();
 
-    let mut in_degree = vec![0usize; n];
     let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
 
     for edge in &graph.edges {
         if let (Some(&from), Some(&to)) = (id_to_idx.get(edge.from.as_str()), id_to_idx.get(edge.to.as_str())) {
             adj[from].push(to);
-            in_degree[to] += 1;
+        }
+    }
+
+    // Detect and remove back-edges using DFS to break cycles
+    let back_edges = find_back_edges(n, &adj);
+    let mut dag_adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut in_degree = vec![0usize; n];
+    for (from, tos) in adj.iter().enumerate() {
+        for &to in tos {
+            if !back_edges.contains(&(from, to)) {
+                dag_adj[from].push(to);
+                in_degree[to] += 1;
+            }
         }
     }
 
@@ -205,7 +216,7 @@ fn assign_layers(graph: &MermaidGraph) -> Vec<Vec<usize>> {
 
         let mut next = Vec::new();
         for &idx in &queue {
-            for &child in &adj[idx] {
+            for &child in &dag_adj[idx] {
                 in_degree[child] -= 1;
                 if in_degree[child] == 0 && !assigned[child] {
                     next.push(child);
@@ -221,6 +232,39 @@ fn assign_layers(graph: &MermaidGraph) -> Vec<Vec<usize>> {
     }
 
     layers
+}
+
+/// Find back-edges in a directed graph using DFS.
+/// Back-edges are those that point to an ancestor in the DFS tree, causing cycles.
+fn find_back_edges(n: usize, adj: &[Vec<usize>]) -> Vec<(usize, usize)> {
+    let mut back_edges = Vec::new();
+    // 0 = unvisited, 1 = in current DFS path, 2 = fully processed
+    let mut state = vec![0u8; n];
+
+    fn dfs(
+        u: usize,
+        adj: &[Vec<usize>],
+        state: &mut Vec<u8>,
+        back_edges: &mut Vec<(usize, usize)>,
+    ) {
+        state[u] = 1;
+        for &v in &adj[u] {
+            if state[v] == 1 {
+                // v is an ancestor in the current DFS path → back-edge
+                back_edges.push((u, v));
+            } else if state[v] == 0 {
+                dfs(v, adj, state, back_edges);
+            }
+        }
+        state[u] = 2;
+    }
+
+    for i in 0..n {
+        if state[i] == 0 {
+            dfs(i, adj, &mut state, &mut back_edges);
+        }
+    }
+    back_edges
 }
 
 fn render_td(
@@ -313,7 +357,6 @@ fn render_lr(
         .map(|n| n.label.width() as u16 + 4)
         .collect();
 
-    let layer_w = w / n_layers as u16;
     let node_h: u16 = 3;
 
     let id_to_idx: HashMap<&str, usize> = graph
@@ -323,10 +366,26 @@ fn render_lr(
         .map(|(i, n)| (n.id.as_str(), i))
         .collect();
 
+    // Calculate max node width per layer for proportional distribution
+    let layer_max_widths: Vec<u16> = layers
+        .iter()
+        .map(|layer| layer.iter().map(|&i| node_widths[i]).max().unwrap_or(6))
+        .collect();
+    let total_node_w: u16 = layer_max_widths.iter().sum();
+    // Distribute remaining space as gaps between layers
+    let min_gap: u16 = 3;
+    let total_gap = w.saturating_sub(total_node_w);
+    let gap = if n_layers > 1 {
+        (total_gap / n_layers as u16).max(min_gap)
+    } else {
+        0
+    };
+
     let mut positions: Vec<(u16, u16)> = vec![(0, 0); graph.nodes.len()];
 
+    // Position layers using actual widths + gap
+    let mut layer_x = x;
     for (li, layer) in layers.iter().enumerate() {
-        let layer_x = x + li as u16 * layer_w;
         let total_h = layer.len() as u16 * (node_h + 1);
         let mut ny = y + h.saturating_sub(total_h) / 2;
 
@@ -334,7 +393,15 @@ fn render_lr(
             positions[idx] = (layer_x, ny);
             ny += node_h + 1;
         }
+        layer_x += layer_max_widths[li] + gap;
     }
+
+    // Find max bottom y across all nodes (for back-edge routing)
+    let max_bottom_y = positions
+        .iter()
+        .map(|&(_, ny)| ny + node_h)
+        .max()
+        .unwrap_or(y + h);
 
     for (idx, node) in graph.nodes.iter().enumerate() {
         let (nx, ny) = positions[idx];
@@ -356,7 +423,7 @@ fn render_lr(
         let to_x = tx;
         let to_y = ty + 1;
 
-        draw_horizontal_edge(buf, from_x, from_y, to_x, to_y, &edge.label);
+        draw_horizontal_edge(buf, from_x, from_y, to_x, to_y, &edge.label, max_bottom_y);
     }
 }
 
@@ -479,6 +546,7 @@ fn draw_horizontal_edge(
     tx: u16,
     ty: u16,
     label: &Option<String>,
+    max_bottom_y: u16,
 ) {
     let area = buf.area();
     let bx = area.x + area.width;
@@ -486,11 +554,66 @@ fn draw_horizontal_edge(
     let axis_style = Style::default().fg(AXIS_COLOR);
     let label_style = Style::default().fg(LABEL_COLOR);
 
-    if fx >= tx {
+    if fx == tx {
         return;
     }
 
-    if fy == ty {
+    // Determine if this is a back-edge (right-to-left)
+    let is_back_edge = fx > tx;
+
+    if is_back_edge {
+        // Back-edge: route below ALL nodes to avoid overlap
+        // Route: fx → down → left → up → tx
+        let route_y = max_bottom_y + 1;
+
+        // Vertical down from source
+        if fx < bx {
+            for row in fy + 1..=route_y {
+                if row < by {
+                    buf.set_string(fx, row, "│", axis_style);
+                }
+            }
+            // Corner: source side
+            if route_y < by {
+                buf.set_string(fx, route_y, "┘", axis_style);
+            }
+        }
+
+        // Horizontal line at route_y (right to left)
+        if route_y < by {
+            for col in tx + 1..fx {
+                if col < bx {
+                    buf.set_string(col, route_y, "─", axis_style);
+                }
+            }
+            // Corner: target side
+            if tx < bx {
+                buf.set_string(tx, route_y, "└", axis_style);
+            }
+        }
+
+        // Vertical up to target
+        if tx < bx {
+            for row in ty + 1..route_y {
+                if row < by {
+                    buf.set_string(tx, row, "│", axis_style);
+                }
+            }
+            // Arrow pointing up at the target
+            if ty < by {
+                buf.set_string(tx, ty + 1, "↑", axis_style);
+            }
+        }
+
+        // Label on the horizontal segment
+        if let Some(ref lbl) = label {
+            let mid_x = (tx + fx) / 2;
+            let label_y = if route_y > 0 { route_y - 1 } else { route_y };
+            if mid_x < bx && label_y < by {
+                buf.set_string(mid_x, label_y, lbl, label_style);
+            }
+        }
+    } else if fy == ty {
         for col in fx..tx {
             if col >= bx || fy >= by {
                 continue;
@@ -501,6 +624,12 @@ fn draw_horizontal_edge(
                 buf.set_string(col, fy, "─", axis_style);
             }
         }
+        if let Some(ref lbl) = label {
+            let mid_x = (fx + tx) / 2;
+            if mid_x < bx && fy < by {
+                buf.set_string(mid_x, fy, lbl, label_style);
+            }
+        }
     } else {
         let mid_x = (fx + tx) / 2;
         for col in fx..mid_x {
@@ -509,9 +638,23 @@ fn draw_horizontal_edge(
             }
         }
         let (top_y, bot_y) = if fy < ty { (fy, ty) } else { (ty, fy) };
-        for row in top_y..=bot_y {
+        if mid_x < bx && fy < by {
+            if fy < ty {
+                buf.set_string(mid_x, fy, "┐", axis_style);
+            } else {
+                buf.set_string(mid_x, fy, "┘", axis_style);
+            }
+        }
+        for row in top_y + 1..bot_y {
             if mid_x < bx && row < by {
                 buf.set_string(mid_x, row, "│", axis_style);
+            }
+        }
+        if mid_x < bx && ty < by {
+            if fy < ty {
+                buf.set_string(mid_x, ty, "└", axis_style);
+            } else {
+                buf.set_string(mid_x, ty, "┌", axis_style);
             }
         }
         for col in mid_x + 1..tx {
@@ -524,13 +667,12 @@ fn draw_horizontal_edge(
                 buf.set_string(col, ty, "─", axis_style);
             }
         }
-    }
-
-    if let Some(ref lbl) = label {
-        let mid_x = (fx + tx) / 2;
-        let ly = fy.min(ty);
-        if mid_x + 1 < bx && ly < by {
-            buf.set_string(mid_x + 1, ly, lbl, label_style);
+        if let Some(ref lbl) = label {
+            let label_mid = (fx + tx) / 2;
+            let ly = fy.min(ty);
+            if label_mid + 1 < bx && ly < by {
+                buf.set_string(label_mid + 1, ly, lbl, label_style);
+            }
         }
     }
 }

@@ -48,7 +48,7 @@ pub mod init;
 // Re-export commonly used items from init module
 #[cfg(not(feature = "base"))]
 pub use init::{
-    get_game_config, init_game_config, GameConfig, WindowMode,
+    get_game_config, init_game_config, GameConfig, RunMode, WindowMode,
     GAME_CONFIG,
     with_pixel_layer_data, clear_pixel_layer_data, PixelLayerData,
 };

@@ -52,6 +52,16 @@ impl WindowMode {
     }
 }
 
+/// High-level runtime mode for an application.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RunMode {
+    /// Existing 2D/TUI runtime.
+    #[default]
+    TwoD,
+    /// New voxel-oriented 3D runtime.
+    ThreeD,
+}
+
 // ============================================================================
 // Game Configuration
 // ============================================================================
@@ -68,6 +78,8 @@ pub struct GameConfig {
     pub project_path: String,
     /// Window display mode
     pub window_mode: WindowMode,
+    /// High-level render/runtime mode
+    pub run_mode: RunMode,
 }
 
 /// Global static game configuration
@@ -81,6 +93,7 @@ pub fn init_game_config(game_name: &str, project_path: &str, window_mode: Window
         game_name: game_name.to_string(),
         project_path: project_path.to_string(),
         window_mode,
+        run_mode: crate::util::parse_run_mode(),
     });
 }
 
@@ -95,6 +108,7 @@ pub fn get_game_config() -> &'static GameConfig {
             game_name: String::new(),
             project_path: ".".to_string(),
             window_mode: WindowMode::Window,
+            run_mode: RunMode::TwoD,
         }
     })
 }

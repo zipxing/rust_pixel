@@ -31,6 +31,8 @@ pub mod sprite;
 pub mod style;
 pub mod symbol_map;
 pub mod symbols;
+#[cfg(feature = "voxel")]
+pub mod voxel;
 
 // re-export
 pub use adapter::{Adapter, AdapterBase};
@@ -58,4 +60,6 @@ pub use scene::Scene;
 pub use sprite::Layer;
 pub use style::{Color, Style};
 pub use symbol_map::ascii_to_petscii;
+#[cfg(feature = "voxel")]
+pub use voxel::{BlockId, Camera3D, Chunk, ChunkCoord, ChunkMesh, VoxelMaterial, VoxelRenderer, VoxelWorld};
 

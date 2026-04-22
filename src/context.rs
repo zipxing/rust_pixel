@@ -55,6 +55,10 @@ impl Context {
         }
     }
 
+    pub fn is_3d_mode(&self) -> bool {
+        matches!(crate::get_game_config().run_mode, crate::RunMode::ThreeD)
+    }
+
     pub fn cell_width(&mut self) -> f32 {
         #[cfg(any(feature = "wgpu", target_arch = "wasm32"))]
         let ret = self.adapter.get_base().gr.cell_width();

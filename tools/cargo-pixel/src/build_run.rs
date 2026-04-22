@@ -80,6 +80,15 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
     } else {
         format!("-- {}", other_args.join(" "))
     };
+    let voxel_other_part = if subcmd == "run" {
+        if other_args.is_empty() {
+            "-- --render-3d".to_string()
+        } else {
+            format!("-- --render-3d {}", other_args.join(" "))
+        }
+    } else {
+        String::new()
+    };
 
     match build_type.as_str() {
         "term" | "t" => cmds.push(format!(
@@ -89,6 +98,10 @@ fn get_cmds(ctx: &PixelContext, args: &ArgMatches, subcmd: &str) -> Vec<String> 
         "wgpu" | "wg" | "g" => cmds.push(format!(
             "cargo {} -p {} --features wgpu {} {}",
             subcmd, mod_name, release, other_part
+        )),
+        "3d" | "voxel" => cmds.push(format!(
+            "cargo {} -p {} --features voxel {} {}",
+            subcmd, mod_name, release, voxel_other_part
         )),
         "web" | "w" => {
             let mut crate_path = "".to_string();

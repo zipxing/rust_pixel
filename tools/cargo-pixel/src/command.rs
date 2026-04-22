@@ -45,7 +45,7 @@ fn build_app() -> Command {
                 .arg(
                     Arg::new("build_type")
                         .required(true)
-                        .value_parser(["t", "w", "g", "wg", "term", "web", "wgpu"]),
+                        .value_parser(["t", "w", "g", "wg", "3d", "term", "web", "wgpu", "voxel"]),
                 )
                 .arg(Arg::new("other").action(ArgAction::Append)),
         ))
@@ -57,7 +57,7 @@ fn build_app() -> Command {
                 .arg(
                     Arg::new("build_type")
                         .required(true)
-                        .value_parser(["t", "w", "g", "wg", "term", "web", "wgpu"]),
+                        .value_parser(["t", "w", "g", "wg", "3d", "term", "web", "wgpu", "voxel"]),
                 ),
         ))
         .subcommand(common_arg(

@@ -108,6 +108,7 @@ web = ["image"]
 term = ["log4rs", "crossterm", "rodio", "image"]
 # Native wgpu mode with winit window management
 wgpu = ["log4rs", "rodio", "dep:wgpu", "dep:bytemuck", "dep:pollster", "dep:winit", "dep:glutin", "dep:glutin-winit", "dep:raw-window-handle", "image"]
+voxel = ["wgpu"]
 base = ["log4rs"]
 
 [profile.release]

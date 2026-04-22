@@ -605,26 +605,38 @@ fn pixel_gen(ctx: &PixelContext, sub_m: &ArgMatches) {
 }
 
 fn main() {
-    let ctx = check_pixel_env();
-    // println!("{:?}", ctx);
     let args = make_parser();
+
+    // Commands that don't need the repo — use lightweight check only
+    match args.subcommand() {
+        None => {
+            let _ctx = check_pixel_env_light();
+            use crate::command::make_parser_app;
+            let mut app = make_parser_app();
+            let _ = app.print_help();
+            println!();
+            return;
+        }
+        Some(("convert_gif", sub_m)) => {
+            let ctx = check_pixel_env_light();
+            pixel_convert_gif(&ctx, sub_m);
+            return;
+        }
+        _ => {}
+    }
+
+    // All other commands need the repo
+    let ctx = check_pixel_env();
     match args.subcommand() {
         Some(("run", sub_m)) => pixel_run(&ctx, sub_m),
         Some(("build", sub_m)) => pixel_build(&ctx, sub_m),
         Some(("creat", sub_m)) => pixel_creat(&ctx, sub_m),
-        Some(("convert_gif", sub_m)) => pixel_convert_gif(&ctx, sub_m),
         Some(("edit", sub_m)) => pixel_edit(&ctx, sub_m),
         Some(("petii", sub_m)) => pixel_petii(&ctx, sub_m),
         Some(("ssf", sub_m)) => pixel_ssf(&ctx, sub_m),
         Some(("ttf", sub_m)) => pixel_ttf(&ctx, sub_m),
         Some(("gen", sub_m)) => pixel_gen(&ctx, sub_m),
         Some(("symbols", sub_m)) => pixel_symbols(&ctx, sub_m),
-        _ => {
-            // No subcommand provided, show help
-            use crate::command::make_parser_app;
-            let mut app = make_parser_app();
-            let _ = app.print_help();
-            println!(); // Add a newline after help
-        }
+        _ => {}
     }
 }

@@ -41,6 +41,18 @@ pub fn parse_window_mode() -> crate::init::WindowMode {
     WindowMode::Window
 }
 
+/// Parse high-level runtime mode from command line arguments.
+///
+/// `cargo pixel r <app> 3d` forwards `--render-3d` to the app binary.
+pub fn parse_run_mode() -> crate::init::RunMode {
+    use crate::init::RunMode;
+    let has_3d = std::env::args().any(|arg| arg == "--render-3d");
+    if has_3d {
+        return RunMode::ThreeD;
+    }
+    RunMode::TwoD
+}
+
 /// Intelligently determines the project path based on command line arguments and environment variables.
 ///
 /// This function provides a smart way to resolve the working directory for RustPixel applications
@@ -78,7 +90,13 @@ pub fn parse_window_mode() -> crate::init::WindowMode {
 pub fn get_project_path() -> String {
     // Filter out flags like -f and --fullscreen
     let args: Vec<String> = std::env::args()
-        .filter(|arg| arg != "-f" && arg != "--fullscreen" && arg != "-tf" && arg != "-ft")
+        .filter(|arg| {
+            arg != "-f"
+                && arg != "--fullscreen"
+                && arg != "-tf"
+                && arg != "-ft"
+                && arg != "--render-3d"
+        })
         .collect();
     match args.len() {
         0 => ".".to_string(),
