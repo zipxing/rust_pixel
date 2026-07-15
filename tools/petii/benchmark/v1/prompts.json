@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "grid": [40, 25],
+  "artifact_format": {
+    "baseline": "baseline.pix",
+    "candidate": "candidate.pix",
+    "baseline_preview": "baseline.png",
+    "candidate_preview": "candidate.png",
+    "metrics": "metrics.json"
+  },
+  "prompts": [
+    {"id": "portrait-witch", "category": "portrait", "prompt": "A moon witch in a pointed hat, strong silhouette, dark background"},
+    {"id": "object-airship", "category": "object", "prompt": "A compact fantasy airship viewed from the side"},
+    {"id": "scene-forest", "category": "scene", "prompt": "A moonlit forest clearing with a small cabin"},
+    {"id": "architecture-castle", "category": "architecture", "prompt": "A tall ruined castle above a cliff"},
+    {"id": "action-dragon", "category": "action", "prompt": "A tiny knight facing a large fire-breathing dragon"}
+  ]
+}

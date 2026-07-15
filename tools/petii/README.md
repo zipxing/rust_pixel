@@ -1,0 +1,83 @@
+# petii
+
+`petii` turns an image—or experimentally, one natural-language prompt—into a
+fixed-character-set PETSCII grid. The final asset contains only PETSCII glyph
+IDs and palette indices. Generated reference images are temporary guidance;
+they never become custom runtime tiles.
+
+## Deterministic conversion
+
+The historical positional interface remains supported:
+
+```sh
+cargo run -p petii -- input.png 40 25 1
+```
+
+Add deterministic whole-image optimization and a CPU-rendered preview with:
+
+```sh
+cargo run -p petii -- input.png 40 25 1 \
+  --optimize --top-k 6 --preview preview.png > output.pix
+```
+
+Modes are `0` (PETSCII color), `1` (exact two-color PETSCII), and `2`
+(PETSCII without letters/digits).
+
+## Experimental AI loop
+
+Prompt-only mode generates a deliberately simple reference image, builds a
+bounded PETSCII candidate pool, asks a multimodal critic to select and repair
+it, and always keeps the best valid result seen so far:
+
+```sh
+export PETII_AI_API_KEY=...
+cargo run -p petii -- ai "a moon witch above a ruined observatory" \
+  --output-dir tmp/moon-witch
+```
+
+Use a supplied reference to skip image generation:
+
+```sh
+cargo run -p petii -- ai "a readable moon witch silhouette" \
+  --input reference.png --output-dir tmp/moon-witch
+```
+
+Use the deterministic pipeline without any provider call:
+
+```sh
+cargo run -p petii -- ai "offline study" --input reference.png \
+  --offline --output-dir tmp/offline-study
+```
+
+Options include `--width`, `--height`, `--top-k`, `--candidates`,
+`--iterations`, `--seed`, and `--output-dir`. The default width is 40; when
+`--height` is omitted, rows are calculated from the actual reference-image
+aspect ratio (a square reference becomes 40×40). Supplying `--height` overrides
+automatic aspect preservation. Other defaults are six glyph alternatives, four
+candidates, and four loop iterations.
+
+Provider configuration is read only from the environment:
+
+- `PETII_AI_API_KEY` (required for live mode)
+- `PETII_AI_API_BASE` (default `https://api.openai.com/v1`)
+- `PETII_AI_IMAGE_MODEL` (default `gpt-image-2`)
+- `PETII_AI_VISION_MODEL` (default `gpt-4.1-mini`)
+
+The adapter expects OpenAI-compatible image-generation and chat-completions
+response shapes. Keys are never written to output or logged.
+
+Each run emits `final.pix`, `final.png`, `reference.png`, individual candidate
+`.pix`/PNG files, `gallery.png`, `critique.json`, and a redacted
+`manifest.json`. Given the same input image and conversion settings, the Rust
+candidate/optimizer path is deterministic. Live reference generation and
+critic behavior can still vary by provider; recorded-response replay is not
+implemented yet.
+
+## Current limitations
+
+- This milestone targets static PETSCII scenes, not animation or game code.
+- AI repair is restricted to validated regions, palette roles, density,
+  contrast, silhouette protection, and individual cells. Crop repair is
+  validated but deferred because it requires rebuilding the candidate pool.
+- Deterministic scores measure reconstruction and PETSCII structure; they do
+  not replace blinded human evaluation of artistic quality.
