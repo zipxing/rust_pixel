@@ -1,305 +1,162 @@
-// RustPixel
-// copyright zipxing@hotmail.com 2022～2026
+//! PETSCII converter CLI. Historical positional arguments remain compatible.
 
-//! PETSCII Converter Tool
-//!
-//! This tool converts images to PETSCII format using character pattern matching.
-//! It supports configurable block dimensions and provides high-quality character matching
-//! using feature-based algorithms rather than simple pixel comparison.
+mod ai_cli;
 
-use rust_pixel::render::symbols::{
-    find_background_color, 
-    gen_charset_images, 
-    get_grayscale_block_at, 
-    binarize_grayscale_block, 
-    find_best_match, 
-    get_petii_block_color, 
-    get_block_color,
-    find_best_color,
-    BlockGrayImage
-};
-mod c64;
-use c64::{C64LOW, C64UP};
-use std::env;
-use std::path::Path;
-use std::fs;
+use petii::{convert_image, optimize_grid, render_grid, ConversionConfig, OptimizationWeights};
+use std::{env, fs, path::Path};
 
-/// Displays comprehensive usage information for the PETSCII converter tool
-/// 
-/// This function prints detailed help text including:
-/// - Command syntax and available arguments
-/// - Parameter descriptions and default values
-/// - Usage examples for different scenarios
-/// - Feature descriptions and technical notes
-/// 
-/// Called when user requests help with --help, -h, or help arguments,
-/// or when invalid arguments are provided
-fn print_petii_usage() {
-    println!("PETSCII Converter Tool v2.0");
-    println!("Converts images to PETSCII format with configurable block dimensions");
+fn print_usage() {
+    println!("PETSCII Converter Tool v2.1");
+    println!("Converts images to fixed-character-set PETSCII art.");
     println!();
     println!("USAGE:");
-    println!("    petii <IMAGE_FILE> [WIDTH] [HEIGHT] [IS_PETSCII] [CROP_X] [CROP_Y] [CROP_WIDTH] [CROP_HEIGHT]");
+    println!("  petii <IMAGE_FILE> [WIDTH] [HEIGHT] [MODE] [CROP_X CROP_Y CROP_W CROP_H]");
+    println!("        [--optimize] [--top-k N] [--preview FILE.png]");
     println!();
-    println!("ARGUMENTS:");
-    println!("    IMAGE_FILE      Path to input image file (required)");
-    println!("    WIDTH           Output width in characters (default: 40)");
-    println!("    HEIGHT          Output height in characters (default: 25)");
-    println!("    IS_PETSCII      Character set mode: 0=PETSCII, 1=ExactPETSCII, 2=PETSCII without letters/digits (default: 0)");
-    println!("    CROP_X          Crop starting X position in pixels (optional)");
-    println!("    CROP_Y          Crop starting Y position in pixels (optional)");
-    println!("    CROP_WIDTH      Crop width in pixels (optional)");
-    println!("    CROP_HEIGHT     Crop height in pixels (optional)");
+    println!("MODE: 0=PETSCII, 1=ExactPETSCII, 2=PETSCII without letters/digits");
+    println!("Defaults: WIDTH=40 HEIGHT=25 MODE=0 TOP_K=4 when optimizing");
     println!();
-    println!("EXAMPLES:");
-    println!("    petii image.jpg                     # Convert with defaults (40x25, PETSCII)");
-    println!("    petii image.jpg 80 50               # Convert to 80x50 characters");
-    println!("    petii image.jpg 40 25 1             # Use PETSCII character set Exact match");
-    println!("    petii image.jpg 40 25 2             # Use PETSCII without letters/digits");
-    println!("    petii image.jpg 40 25 0 100 100 400 300  # Crop and convert");
-    println!();
-    println!("OUTPUT FORMAT:");
-    println!("    PETSCII mode: symbol,foreground,texture,background");
-    println!();
-    println!("    First line contains metadata: width=W,height=H,texture=255");
-    println!("    Following lines contain character data in row-major order");
-    println!();
-    println!("FEATURES:");
-    println!("    - Feature-based character matching for superior quality");
-    println!("    - Delta E 2000 color matching for perceptual accuracy");
-    println!("    - Configurable block dimensions (currently 8x8)");
-    println!("    - Optional image cropping before conversion");
-    println!("    - Automatic background color detection for PETSCII mode");
-    println!();
-    println!("TECHNICAL NOTES:");
-    println!("    - Images are resized to WIDTH*8 x HEIGHT*8 pixels before processing");
-    println!("    - Each character block represents an 8x8 pixel area");
-    println!("    - PETSCII mode supports 2 colors per character (foreground/background)");
-    println!("    - Color indices refer to the standard 256-color ANSI palette");
+    println!("EXPERIMENTAL:");
+    println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--output-dir DIRECTORY]");
 }
 
-/// Generates character images excluding alphanumeric characters (letters and digits)
-/// 
-/// This is a modified version of gen_charset_images that filters out characters
-/// typically representing letters (A-Z, a-z) and digits (0-9) from the character set.
-/// This is useful for artistic ASCII conversion where only symbols and special 
-/// characters are desired.
-/// 
-/// # Character Exclusion:
-/// - ASCII letters: A-Z (65-90), a-z (97-122)  
-/// - ASCII digits: 0-9 (48-57)
-/// - Based on standard C64 character mapping
-/// 
-/// # Arguments:
-/// Same as gen_charset_images
-/// 
-/// # Returns:
-/// Vec<BlockGrayImage> with alphanumeric characters replaced by empty/transparent blocks
-fn gen_charset_images_no_alphanumeric(
-    low_up: bool,
-    block_width: usize,
-    block_height: usize,
-    c64low_data: &[[u8; 8]; 128],
-    c64up_data: &[[u8; 8]; 128],
-) -> Vec<BlockGrayImage> {
-    let data = if low_up { c64low_data } else { c64up_data };
-    let mut vcs = vec![vec![vec![0u8; block_width]; block_height]; 256];
+fn value_after(args: &[String], flag: &str) -> Option<String> {
+    args.iter()
+        .position(|arg| arg == flag)
+        .and_then(|index| args.get(index + 1))
+        .cloned()
+}
 
-    // Scale factors for converting from 8x8 to target dimensions
-    let scale_x = block_width as f32 / 8.0;
-    let scale_y = block_height as f32 / 8.0;
-
-    // Define ranges to exclude (letters and digits in C64 character set)
-    let exclude_ranges = if low_up {
-        // C64LOW: lowercase letters and digits
-        vec![(1, 26), (48, 57)] // a-z (1-26), 0-9 (48-57)
-    } else {
-        // C64UP: uppercase letters and digits  
-        vec![(1, 26), (48, 57)] // A-Z (1-26), 0-9 (48-57)
-    };
-
-    for i in 0..128 {
-        // Check if character should be excluded (is alphanumeric)
-        let should_exclude = exclude_ranges.iter().any(|(start, end)| i >= *start && i <= *end);
-        
-        if should_exclude {
-            // Create empty blocks for excluded characters
-            for y in 0..block_height {
-                for x in 0..block_width {
-                    vcs[i][y][x] = 0;        // Normal version: empty
-                    vcs[128 + i][y][x] = 0;  // Inverted version: empty
-                }
-            }
-        } else {
-            // Generate normal character blocks for non-alphanumeric characters
-            for y in 0..block_height {
-                for x in 0..block_width {
-                    // Map target coordinates back to original 8x8 pattern
-                    let orig_x = (x as f32 / scale_x) as usize;
-                    let orig_y = (y as f32 / scale_y) as usize;
-                    let orig_x = orig_x.min(7);
-                    let orig_y = orig_y.min(7);
-                    
-                    // Extract bit from original pattern
-                    let bit = 7 - orig_x; // Right-to-left bit order
-                    if data[i][orig_y] >> bit & 1 == 1 {
-                        vcs[i][y][x] = 255;
-                        vcs[128 + i][y][x] = 0;
-                    } else {
-                        vcs[i][y][x] = 0;
-                        vcs[128 + i][y][x] = 255;
-                    }
-                }
-            }
+fn positional(args: &[String]) -> Vec<&str> {
+    let value_flags = ["--top-k", "--preview"];
+    let mut output = Vec::new();
+    let mut skip_next = false;
+    for arg in args.iter().skip(1) {
+        if skip_next {
+            skip_next = false;
+            continue;
         }
+        if value_flags.contains(&arg.as_str()) {
+            skip_next = true;
+            continue;
+        }
+        if arg.starts_with("--") {
+            continue;
+        }
+        output.push(arg.as_str());
     }
-    vcs
+    output
 }
 
-/// Main entry point for the PETSCII converter tool
-/// 
-/// This function handles the complete image-to-PETSCII conversion pipeline:
-/// 
-/// # Process Flow:
-/// 1. **Argument parsing**: Validates command line arguments for image path, dimensions, and options
-/// 2. **Image loading**: Opens and optionally crops the input image
-/// 3. **Image preprocessing**: Resizes image to match target character grid (8px per character)
-/// 4. **Background detection**: Analyzes image to determine background color for PETSCII mode
-/// 5. **Character generation**: Creates character set images for matching
-/// 6. **Block processing**: Converts each 8x8 pixel block to the best matching character
-/// 7. **Output generation**: Prints formatted character data with color information
-/// 
-/// # Arguments:
-/// - `IMAGE_FILE`: Path to input image file (required)
-/// - `WIDTH`: Output width in characters (default: 40)
-/// - `HEIGHT`: Output height in characters (default: 25)
-/// - `IS_PETSCII`: Whether to use PETSCII character set (default: false)
-/// - `CROP_X, CROP_Y, CROP_WIDTH, CROP_HEIGHT`: Optional cropping parameters
-/// 
-/// # Output Format:
-/// - For ASCII mode: `symbol,color,texture `
-/// - For PETSCII mode: `symbol,foreground,texture,background `
-/// 
-/// The output begins with metadata: `width={width},height={height},texture=255`
-/// followed by character data for each position in row-major order.
+fn parse_u32(value: Option<&&str>, default: u32, name: &str) -> u32 {
+    value.map_or(default, |raw| {
+        raw.parse().unwrap_or_else(|_| {
+            eprintln!("Error: invalid {} '{}'", name, raw);
+            std::process::exit(1);
+        })
+    })
+}
+
 fn main() {
-    let input_image_path;
-    let mut width: u32 = 40;
-    let mut height: u32 = 25;
-    let mut is_petii: u32 = 0;
-    
-    // Character block dimensions (configurable, default 8x8 for compatibility)
-    let block_width: u32 = 8;
-    let block_height: u32 = 8;
-
     let args: Vec<String> = env::args().collect();
-
-    // Check for help argument
-    if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
-        print_petii_usage();
+    if args.get(1).is_some_and(|argument| argument == "ai") {
+        if let Err(error) = ai_cli::run(&args[2..]) {
+            eprintln!("Error: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if args.len() < 2
+        || args
+            .iter()
+            .any(|arg| arg == "--help" || arg == "-h" || arg == "help")
+    {
+        print_usage();
+        if args.len() < 2 {
+            std::process::exit(1);
+        }
         return;
     }
 
-    if args.len() < 2 {
-        eprintln!("Error: Missing required IMAGE_FILE argument");
-        eprintln!();
-        print_petii_usage();
+    let pos = positional(&args);
+    if pos.is_empty() {
+        eprintln!("Error: an input image file is required");
         std::process::exit(1);
     }
-
-    input_image_path = &args[1];
-    if !Path::new(input_image_path).exists() {
-        eprintln!("Error: Image file '{}' does not exist", input_image_path);
+    let input = pos[0];
+    if !Path::new(input).is_file() {
+        eprintln!("Error: image file '{}' does not exist", input);
         std::process::exit(1);
     }
+    let width = parse_u32(pos.get(1), 40, "width");
+    let height = parse_u32(pos.get(2), 25, "height");
+    let mode = parse_u32(pos.get(3), 0, "mode") as u8;
+    let optimize = args.iter().any(|arg| arg == "--optimize");
+    let top_k = value_after(&args, "--top-k")
+        .map(|raw| {
+            raw.parse::<usize>().unwrap_or_else(|_| {
+                eprintln!("Error: invalid top-k '{}'", raw);
+                std::process::exit(1);
+            })
+        })
+        .unwrap_or(if optimize { 4 } else { 1 });
 
-    if args.len() > 2 {
-        width = args[2].parse().unwrap_or_else(|_| {
-            eprintln!("Error: Invalid WIDTH value '{}'", args[2]);
+    let mut image = image::open(input).unwrap_or_else(|error| {
+        eprintln!("Error: failed to open '{}': {}", input, error);
+        std::process::exit(1);
+    });
+    if pos.len() >= 8 {
+        let crop_x = parse_u32(pos.get(4), 0, "crop x");
+        let crop_y = parse_u32(pos.get(5), 0, "crop y");
+        let crop_w = parse_u32(pos.get(6), image.width(), "crop width");
+        let crop_h = parse_u32(pos.get(7), image.height(), "crop height");
+        image = image.crop_imm(crop_x, crop_y, crop_w, crop_h);
+    }
+
+    let config = ConversionConfig {
+        width,
+        height,
+        mode,
+        top_k,
+        contrast: 0.0,
+    };
+    let result = convert_image(&image, &config).unwrap_or_else(|error| {
+        eprintln!("Error: {}", error);
+        std::process::exit(1);
+    });
+    let (grid, score) = if optimize {
+        optimize_grid(
+            &result.grid,
+            &result.alternatives,
+            &result.reference,
+            OptimizationWeights::default(),
+        )
+        .unwrap_or_else(|error| {
+            eprintln!("Error: optimization failed: {}", error);
             std::process::exit(1);
-        });
-    }
-    if args.len() > 3 {
-        height = args[3].parse().unwrap_or_else(|_| {
-            eprintln!("Error: Invalid HEIGHT value '{}'", args[3]);
-            std::process::exit(1);
-        });
-    }
-    if args.len() > 4 {
-        is_petii = args[4].parse().unwrap_or_else(|_| {
-            eprintln!("Error: Invalid IS_PETSCII value '{}' (use 0, 1, or 2)", args[4]);
-            std::process::exit(1);
-        });
-        if is_petii > 2 {
-            eprintln!("Error: IS_PETSCII value must be 0, 1, or 2");
-            std::process::exit(1);
-        }
-    }
-
-    // Load and optionally crop the image
-    let mut img = image::open(input_image_path).expect("Failed to open image");
-
-    // Create tmp directory if it doesn't exist
-    if let Err(e) = fs::create_dir_all("tmp") {
-        eprintln!("Warning: Failed to create tmp directory: {}", e);
-    }
-
-    // Handle optional cropping
-    if args.len() > 8 {
-        let cx: u32 = args[5].parse().expect("Invalid CROP_X");
-        let cy: u32 = args[6].parse().expect("Invalid CROP_Y");
-        let cw: u32 = args[7].parse().expect("Invalid CROP_WIDTH");
-        let ch: u32 = args[8].parse().expect("Invalid CROP_HEIGHT");
-        img = img.crop(cx, cy, cw, ch);
-        img.save("tmp/out0.png").expect("save tmp/out0.png error");
-    }
-
-    let resized_img =
-        img.resize_exact(width * block_width, height * block_height, image::imageops::FilterType::Lanczos3);
-    resized_img
-        .save("tmp/out1.png")
-        .expect("save tmp/out1.png error");
-    let gray_img = resized_img.clone().into_luma8();
-    gray_img
-        .save("tmp/out2.png")
-        .expect("save tmp/out2.png error");
-
-    // get character images based on mode...
-    let vcs = if is_petii == 2 {
-        gen_charset_images_no_alphanumeric(false, block_width as usize, block_height as usize, &C64LOW, &C64UP)
+        })
     } else {
-        gen_charset_images(false, block_width as usize, block_height as usize, &C64LOW, &C64UP)
+        (result.grid, Default::default())
     };
 
-    // find background color...
-    let bret = find_background_color(&resized_img, &gray_img, width * block_width, height * block_height);
-    let back_gray = bret.0;
-    let back_rgb = bret.1;
-
-    println!("width={},height={},texture=255", width, height);
-    for i in 0..height {
-        for j in 0..width {
-            let block_at = get_grayscale_block_at(&gray_img, j, i, block_width, block_height);
-
-            // Apply binarization for PETSCII mode before character matching
-            let processed_block = if is_petii == 1 {
-                binarize_grayscale_block(&block_at, back_gray, block_width as usize, block_height as usize)
-            } else {
-                block_at
-            };
-
-            let bm = find_best_match(&processed_block, &vcs, block_width as usize, block_height as usize);
-
-            if is_petii == 1 {
-                let bc = get_petii_block_color(&resized_img, &gray_img, j, i, back_rgb, block_width, block_height);
-                // sym, fg, tex, bg
-                print!("{},{},1,{} ", bm, bc.1, bc.0);
-            } else {
-                let block_color = get_block_color(&resized_img, j, i, block_width, block_height);
-                let bc = find_best_color(block_color);
-                print!("{},{},1 ", bm, bc,);
-            }
-        }
-        println!("");
+    if let Some(path) = value_after(&args, "--preview") {
+        let preview = render_grid(&grid, 2).unwrap_or_else(|error| {
+            eprintln!("Error: preview failed: {}", error);
+            std::process::exit(1);
+        });
+        preview.save(&path).unwrap_or_else(|error| {
+            eprintln!("Error: failed to save '{}': {}", path, error);
+            std::process::exit(1);
+        });
     }
+
+    if optimize {
+        eprintln!("optimized_score={:.6}", score.total);
+    }
+    if let Err(error) = fs::create_dir_all("tmp") {
+        eprintln!("Warning: failed to create tmp directory: {}", error);
+    }
+    let _ = result.reference.save("tmp/out1.png");
+    let _ = result.reference.to_luma8().save("tmp/out2.png");
+    print!("{}", grid.to_legacy_string(mode));
 }

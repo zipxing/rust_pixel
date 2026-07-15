@@ -24,3 +24,6 @@ dist
 AGENTS.md
 CLAUDE.md
 .aikey
+
+key.txt
+.agents

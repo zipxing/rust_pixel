@@ -11,6 +11,10 @@ log4rs = "1.4.0"
 image = "0.25.9"
 lab = "0.11.0"
 deltae = "0.3.2"
+base64 = "0.22"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = { version = "2", features = ["json"] }
 rust_pixel = { path = "../.." }
 
 [features]

@@ -785,7 +785,9 @@ pub fn binarize_grayscale_block(
                 }
             } else {
                 // No background color present, use threshold
-                let threshold = (min + max) / 2;
+                // Widen before addition: high-contrast blocks commonly have
+                // min + max > u8::MAX in debug builds.
+                let threshold = ((min as u16 + max as u16) / 2) as u8;
                 if iyx > threshold {
                     255
                 } else {
@@ -1135,8 +1137,10 @@ pub fn get_petii_block_color(
                 ret = Some((*ccv[1].0, *ccv[0].0));
             }
         } else {
-            println!("ERROR2!!!");
-            ret = Some((0, 0));
+            // Degenerate low-contrast block after perceptual color merging:
+            // treat it as a single-color cell without polluting converter stdout.
+            let color = ccv.first().map(|entry| *entry.0).unwrap_or(back_rgb);
+            ret = Some((color, color));
         }
         // println!("ccv = {:?}", ccv);
     }
