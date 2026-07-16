@@ -15,6 +15,13 @@ The system SHALL generate artwork exclusively from glyphs in the configured PETS
 - **THEN** the directive is rejected or clamped according to the validated schema
 - **AND** no arbitrary custom Tile is added to the output
 
+#### Scenario: Workflow-specific default modes
+- **WHEN** the user starts direct conversion without selecting a mode
+- **THEN** the system uses mode 0 nearest-glyph conversion for general images
+- **WHEN** the user starts AI iteration or offline optimization without selecting a mode
+- **THEN** the system uses mode 2 nearest-glyph conversion without letters or digits
+- **AND** mode 1 remains explicitly selectable for extracting sources already composed as exact PETSCII
+
 ### Requirement: Natural-Language Art Intent
 
 The system SHALL accept a natural-language prompt describing the intended static PETSCII artwork.
@@ -41,6 +48,20 @@ The system SHALL generate multiple bounded PETSCII candidates and render each ca
 #### Scenario: Headless preview
 - **WHEN** a PETSCII candidate is evaluated
 - **THEN** the system renders it to PNG without requiring a terminal, desktop window, or WGPU device
+
+#### Scenario: Direct baseline generation
+- **WHEN** the user selects direct mode
+- **THEN** the system performs exactly one top-1 legacy PETSCII conversion
+- **AND** does not run top-K optimization or submit candidates to a multimodal critic
+- **AND** still emits the standard final `.pix`, PNG, and manifest artifacts
+
+#### Scenario: Edge-aware graphic glyph matching
+- **WHEN** a non-flat Mode 2 cell contains a strong Sobel edge
+- **THEN** the system derives foreground and background fill sides for that cell
+- **AND** ranks allowed graphic glyphs by fill-mask error and edge overlap
+- **AND** removes weak edge components that are not connected to a meaningful strong contour
+- **AND** selects among bounded top candidates using neighboring border continuity and dangling-spur penalties
+- **AND** keeps flat background and foreground cells on their space or solid-block paths
 
 ### Requirement: Aspect-Preserving Grid Dimensions
 

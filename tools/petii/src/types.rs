@@ -6,7 +6,10 @@ use std::fmt::Write;
 pub struct ConversionConfig {
     pub width: u32,
     pub height: u32,
-    /// 0=PETSCII color, 1=exact two-color PETSCII, 2=exclude letters/digits.
+    /// Conversion strategy:
+    /// - 0: find the nearest PETSCII glyph for a general image and assign one cell color;
+    /// - 1: extract an image already composed as exact PETSCII, including per-cell fg/bg;
+    /// - 2: use mode 0 while excluding letter and digit glyphs.
     pub mode: u8,
     /// Number of glyph alternatives retained for deterministic optimization.
     pub top_k: usize,

@@ -13,7 +13,10 @@ fn print_usage() {
     println!("  petii <IMAGE_FILE> [WIDTH] [HEIGHT] [MODE] [CROP_X CROP_Y CROP_W CROP_H]");
     println!("        [--optimize] [--top-k N] [--preview FILE.png]");
     println!();
-    println!("MODE: 0=PETSCII, 1=ExactPETSCII, 2=PETSCII without letters/digits");
+    println!("MODE:");
+    println!("  0=nearest PETSCII glyph for general images (single foreground color)");
+    println!("  1=extract artwork already composed as exact PETSCII (per-cell fg/bg)");
+    println!("  2=mode 0 without letters or digits");
     println!("Defaults: WIDTH=40 HEIGHT=25 MODE=0 TOP_K=4 when optimizing");
     println!();
     println!("EXPERIMENTAL:");

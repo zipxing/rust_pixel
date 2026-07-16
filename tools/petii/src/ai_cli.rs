@@ -1,10 +1,11 @@
 use image::{DynamicImage, RgbaImage};
 use petii::{
     ai::{
-        run_with_reference, AiLoopBudget, ArtPlan, CandidateArtifact, Critique, CritiqueScores,
-        MultimodalCritic, OpenAiCompatibleProvider, ReferenceGenerator, RunManifest,
+        run_with_reference, AiLoopBudget, AiLoopCandidate, AiLoopResult, ArtPlan,
+        CandidateArtifact, Critique, CritiqueScores, MultimodalCritic, OpenAiCompatibleProvider,
+        ReferenceGenerator, RunManifest,
     },
-    ConversionConfig,
+    convert_image, render_grid, score_grid, ConversionConfig, OptimizationWeights,
 };
 use serde_json::json;
 use std::{fs, path::PathBuf, time::SystemTime};
@@ -21,11 +22,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let width = parse_value(args, "--width", 40_u32)?;
     let explicit_height = parse_optional_value(args, "--height")?;
+    let explicit_mode = parse_optional_value(args, "--mode")?;
     let top_k = parse_value(args, "--top-k", 6_usize)?;
     let max_iterations = parse_value(args, "--iterations", 4_usize)?;
     let max_candidates = parse_value(args, "--candidates", 4_usize)?;
     let seed = parse_value(args, "--seed", 0_u64)?;
     let offline = has_flag(args, "--offline");
+    let direct = has_flag(args, "--direct");
+    let mode = resolve_mode(explicit_mode, direct);
     let input = value_after(args, "--input");
     if offline && input.is_none() {
         return Err(
@@ -40,11 +44,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
         allowed_colors: (0..16).collect(),
     };
 
-    let (plan, reference, config, result) = if offline {
+    let effective_top_k = if direct { 1 } else { top_k };
+    let (plan, reference, config, result) = if offline || (direct && input.is_some()) {
         let reference = open_input(input.as_deref().unwrap())?;
         let plan = input_plan(prompt);
-        let config = aspect_preserving_config(&reference, width, explicit_height, top_k)?;
-        let result = run_with_reference(prompt, &reference, &config, &OfflineCritic, &budget)?;
+        let config =
+            aspect_preserving_config(&reference, width, explicit_height, effective_top_k, mode)?;
+        let result = if direct {
+            run_direct(&reference, &config)?
+        } else {
+            run_with_reference(prompt, &reference, &config, &OfflineCritic, &budget)?
+        };
         (plan, reference, config, result)
     } else {
         let provider = OpenAiCompatibleProvider::from_env()?;
@@ -52,8 +62,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
             Some(path) => (input_plan(prompt), open_input(&path)?),
             None => provider.generate_reference(prompt, width, explicit_height.unwrap_or(width))?,
         };
-        let config = aspect_preserving_config(&reference, width, explicit_height, top_k)?;
-        let result = run_with_reference(prompt, &reference, &config, &provider, &budget)?;
+        let config =
+            aspect_preserving_config(&reference, width, explicit_height, effective_top_k, mode)?;
+        let result = if direct {
+            run_direct(&reference, &config)?
+        } else {
+            run_with_reference(prompt, &reference, &config, &provider, &budget)?
+        };
         (plan, reference, config, result)
     };
 
@@ -86,8 +101,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 fn print_usage() {
     println!("EXPERIMENTAL AI MODE:");
-    println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline]");
-    println!("        [--width 40] [--height ROWS] [--top-k 6]");
+    println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--direct]");
+    println!("        [--width 40] [--height ROWS] [--mode 0|1|2] [--top-k 6]");
     println!("        [--iterations 4] [--candidates 4] [--seed 0]");
     println!("        [--output-dir DIRECTORY]");
     println!();
@@ -95,6 +110,9 @@ fn print_usage() {
     println!("PETII_AI_IMAGE_MODEL, and PETII_AI_VISION_MODEL.");
     println!("Without --height, rows are derived from the reference-image aspect ratio.");
     println!("Offline mode requires --input and runs only the deterministic pipeline.");
+    println!("Direct mode performs one legacy top-1 conversion without optimization or critique.");
+    println!("Direct defaults to mode 0; iterative/offline optimization defaults to mode 2.");
+    println!("Mode 1 is for extracting artwork that is already exact PETSCII.");
 }
 
 fn value_after(args: &[String], flag: &str) -> Option<String> {
@@ -134,6 +152,10 @@ fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
+fn resolve_mode(explicit_mode: Option<u8>, direct: bool) -> u8 {
+    explicit_mode.unwrap_or(if direct { 0 } else { 2 })
+}
+
 fn open_input(path: &str) -> Result<DynamicImage, String> {
     image::open(path).map_err(|error| format!("failed to open input image '{path}': {error}"))
 }
@@ -143,6 +165,7 @@ fn aspect_preserving_config(
     width: u32,
     explicit_height: Option<u32>,
     top_k: usize,
+    mode: u8,
 ) -> Result<ConversionConfig, String> {
     if reference.width() == 0 || reference.height() == 0 {
         return Err("reference image dimensions must be non-zero".to_string());
@@ -155,12 +178,39 @@ fn aspect_preserving_config(
     let config = ConversionConfig {
         width,
         height,
-        mode: 1,
+        mode,
         top_k,
         contrast: 0.0,
     };
     config.validate()?;
     Ok(config)
+}
+
+fn run_direct(reference: &DynamicImage, config: &ConversionConfig) -> Result<AiLoopResult, String> {
+    let conversion = convert_image(reference, config)?;
+    let score = score_grid(
+        &conversion.grid,
+        &conversion.reference,
+        OptimizationWeights::default(),
+    )?;
+    let preview = DynamicImage::ImageRgba8(render_grid(&conversion.grid, 2)?);
+    let grid = conversion.grid;
+    Ok(AiLoopResult {
+        grid: grid.clone(),
+        deterministic_score: score,
+        critic: offline_critique(
+            "Direct legacy top-1 conversion; no optimizer or AI critic was called.",
+        ),
+        iterations: 0,
+        submitted_candidates: 1,
+        candidates: vec![AiLoopCandidate {
+            grid,
+            deterministic_score: score,
+            preview,
+            selected: true,
+        }],
+        warnings: Vec::new(),
+    })
 }
 
 fn input_plan(prompt: &str) -> ArtPlan {
@@ -294,20 +344,26 @@ impl MultimodalCritic for OfflineCritic {
         _grid_height: u32,
         _allowed_colors: &[u8],
     ) -> Result<Critique, String> {
-        Ok(Critique {
-            selected_candidate: 0,
-            scores: CritiqueScores {
-                semantic_fidelity: 0.0,
-                subject_readability: 0.0,
-                composition: 0.0,
-                palette_coherence: 0.0,
-                contour_continuity: 0.0,
-                petscii_authenticity: 0.0,
-            },
-            regions: Vec::new(),
-            repairs: Vec::new(),
-            explanation: "Offline deterministic selection; no AI critic was called.".to_string(),
-        })
+        Ok(offline_critique(
+            "Offline deterministic selection; no AI critic was called.",
+        ))
+    }
+}
+
+fn offline_critique(explanation: &str) -> Critique {
+    Critique {
+        selected_candidate: 0,
+        scores: CritiqueScores {
+            semantic_fidelity: 0.0,
+            subject_readability: 0.0,
+            composition: 0.0,
+            palette_coherence: 0.0,
+            contour_continuity: 0.0,
+            petscii_authenticity: 0.0,
+        },
+        regions: Vec::new(),
+        repairs: Vec::new(),
+        explanation: explanation.to_string(),
     }
 }
 
@@ -318,7 +374,7 @@ mod tests {
     #[test]
     fn square_reference_produces_square_grid() {
         let reference = DynamicImage::new_rgba8(1024, 1024);
-        let config = aspect_preserving_config(&reference, 40, None, 4).unwrap();
+        let config = aspect_preserving_config(&reference, 40, None, 4, 0).unwrap();
         assert_eq!((config.width, config.height), (40, 40));
     }
 
@@ -327,13 +383,13 @@ mod tests {
         let landscape = DynamicImage::new_rgba8(1600, 900);
         let portrait = DynamicImage::new_rgba8(800, 1200);
         assert_eq!(
-            aspect_preserving_config(&landscape, 40, None, 4)
+            aspect_preserving_config(&landscape, 40, None, 4, 0)
                 .unwrap()
                 .height,
             23
         );
         assert_eq!(
-            aspect_preserving_config(&portrait, 40, None, 4)
+            aspect_preserving_config(&portrait, 40, None, 4, 0)
                 .unwrap()
                 .height,
             60
@@ -343,7 +399,26 @@ mod tests {
     #[test]
     fn explicit_height_overrides_reference_aspect() {
         let reference = DynamicImage::new_rgba8(1024, 1024);
-        let config = aspect_preserving_config(&reference, 40, Some(25), 4).unwrap();
+        let config = aspect_preserving_config(&reference, 40, Some(25), 4, 0).unwrap();
         assert_eq!((config.width, config.height), (40, 25));
+    }
+
+    #[test]
+    fn direct_mode_is_single_top_one_conversion() {
+        let reference = DynamicImage::new_rgba8(16, 16);
+        let config = aspect_preserving_config(&reference, 2, None, 1, 0).unwrap();
+        let result = run_direct(&reference, &config).unwrap();
+        assert_eq!(result.iterations, 0);
+        assert_eq!(result.submitted_candidates, 1);
+        assert_eq!(result.candidates.len(), 1);
+        assert!(result.candidates[0].selected);
+    }
+
+    #[test]
+    fn mode_defaults_separate_direct_and_iterative_workflows() {
+        assert_eq!(resolve_mode(None, true), 0);
+        assert_eq!(resolve_mode(None, false), 2);
+        assert_eq!(resolve_mode(Some(1), true), 1);
+        assert_eq!(resolve_mode(Some(0), false), 0);
     }
 }
