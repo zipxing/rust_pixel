@@ -10,6 +10,7 @@ const CONNECTED: Rgba<u8> = Rgba([45, 220, 105, 255]);
 const BROKEN: Rgba<u8> = Rgba([245, 55, 65, 255]);
 const EDITED: Rgba<u8> = Rgba([255, 155, 35, 255]);
 const SPUR: Rgba<u8> = Rgba([245, 220, 45, 255]);
+const ORPHAN: Rgba<u8> = Rgba([255, 70, 190, 255]);
 const JUNCTION: Rgba<u8> = Rgba([190, 70, 235, 255]);
 
 pub fn render_edge_debug(data: &EdgeDebugData, scale: u32) -> Result<RgbaImage, String> {
@@ -34,8 +35,11 @@ pub fn render_edge_debug(data: &EdgeDebugData, scale: u32) -> Result<RgbaImage, 
         if data.spur_cells[index] {
             draw_rect_inset(&mut image, left, top, cell_size, SPUR, 2);
         }
+        if data.orphan_cells[index] {
+            draw_rect_inset(&mut image, left, top, cell_size, ORPHAN, 3);
+        }
         if data.junctions.binary_search(&index).is_ok() {
-            draw_rect_inset(&mut image, left, top, cell_size, JUNCTION, 3);
+            draw_rect_inset(&mut image, left, top, cell_size, JUNCTION, 4);
         }
         let Some(target) = data.target_topologies[index] else {
             continue;
@@ -216,6 +220,7 @@ mod tests {
             final_topologies: vec![shifted, aligned],
             edited_cells: vec![true, false],
             spur_cells: vec![false, true],
+            orphan_cells: vec![true, false],
             connections: vec![(0, 1, Side::Right)],
             junctions: vec![],
         };
@@ -225,6 +230,7 @@ mod tests {
         assert_eq!(first, second);
         assert!(first.pixels().any(|pixel| *pixel == EDITED));
         assert!(first.pixels().any(|pixel| *pixel == SPUR));
+        assert!(first.pixels().any(|pixel| *pixel == ORPHAN));
         assert!(first.pixels().any(|pixel| *pixel == BROKEN));
     }
 }

@@ -19,6 +19,8 @@
 - [x] 2.10 Detect strong Sobel edges and match Mode 2 glyphs by fill-side mask and edge overlap.
 - [x] 2.11 Clean weak edge components and select edge glyphs using cross-cell border continuity and dangling-spur penalties.
 - [x] 2.12 Use local two-color quantization for Mode 2 cells, filter approved text-like noise glyphs, and remove superseded shape-specific cleanup passes.
+- [x] 2.13 Optimize contour chains with PETSCII edge-port topology, then remove high-confidence orphan strokes using blank/solid fallbacks and reference-budget-preserving edit swaps.
+- [x] 2.14 Repaint the final Mode 2 glyph grid from reference-image color regions using RustPixel's CIEDE2000 visual distance, and smooth only output color jumps unsupported by the reference.
 
 ## 3. AI Schemas and Replay
 

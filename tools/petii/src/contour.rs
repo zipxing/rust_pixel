@@ -156,6 +156,14 @@ impl ContourGraph {
         &self.adjacency[index]
     }
 
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.adjacency.len() as u32 / self.width
+    }
+
     pub fn connections(&self) -> Vec<(usize, usize, Side)> {
         let mut connections = Vec::new();
         for first in 0..self.adjacency.len() {

@@ -268,3 +268,64 @@ openspec/changes/add-ai-petscii-generation-loop/tasks.md
 3. 若仍有文本形噪声，统计实际 glyph 分布，再评估 mode 2 图形字符白名单；避免逐个追加标点黑名单。
 4. 将少量固定 reference 和期望统计沉淀到版本化 benchmark，减少依赖 `tmp` 和人工截图。
 5. 等确定性转换稳定后，再继续 AI critic/repair loop，避免 AI 层掩盖底层转换问题。
+
+## 11. 轮廓语法与保守去噪进展（同日续）
+
+在提交 `965e1e1` 之后，mode 2 已加入独立于单字符近似的轮廓语法层：
+
+- 从参考边缘构建 cell 级 contour graph，区分 open chain、closed loop 和 junction；
+- 为字符建立四边 edge-port topology，并按人工作品统计采用 ±1 像素端口容差；
+- 通过链动态规划、junction 协调、连续性细化和 pair repair 优化跨 cell 轮廓；
+- 全局参考误差最多允许比 Top-1 基线增加 5%；
+- 输出 `edge-metrics.json` 和 `edge-debug.png`，用于同时检查外观、断裂、意外端点、spur 和 orphan excursion。
+
+当前进一步加入保守 orphan cleanup：只允许用 Blank/Solid 候选删除孤立笔画，不允许把一种噪音换成另一种标点；删除候选与当前字符的 reference distance 差必须不超过 `0.04`。若 5% 预算已经耗尽，清理器通过回滚别处价值最低的轮廓编辑腾出预算，而不是重新裁剪整幅图。
+
+固定输入 `tmp/lion.png` 的当前审核候选：
+
+```text
+tmp/lion-mode2-edge-v26-conservative-denoise-60x60/final.png
+tmp/lion-mode2-edge-v26-conservative-denoise-60x60/final.pix
+```
+
+v26 相对 Top-1 基线的主要指标：
+
+```text
+shared_port_break_rate: 0.4874 -> 0.3838
+unexpected_endpoint_rate: 0.4190 -> 0.3209
+spur_cell_count: 83 -> 57
+orphan_excursion_count: 338 -> 269
+reference_loss: 0.16622 -> 0.17406（+4.72%，在 5% 预算内）
+```
+
+这版已删除狮子口鼻处和背景中的多处高置信短笔画，但断裂率比纯轮廓版约高 4.5 个百分点。下一步应以人工审核决定是否接受这一视觉/连续性权衡；不要再放宽删除阈值。若继续优化，应研究局部“替换为正确 corner/straight glyph”的平滑策略，而不是扩大 Blank/Solid 删除范围。
+
+## 12. 参考图约束的最终重涂色（同日续）
+
+v26 暴露出颜色与 glyph 决策次序的问题：cell 的前景/背景色在候选生成时确定，但轮廓优化和去噪可能随后换掉 glyph。最终 glyph 的前景/背景像素归属改变后，继续沿用旧颜色会产生视觉缺口或突兀色块。
+
+v27 在 Mode 2 的所有 glyph 决策结束后增加 `reference-repaint`：
+
+1. 固定最终 glyph，不再修改字符与拓扑；
+2. 按 glyph bitmap 将每格分成 foreground/background 两个实际区域；
+3. 分别从参考图重新拟合调色板颜色；
+4. 用两遍确定性局部协调抑制邻格突色；
+5. 只有当输出边界色差明显大于参考图同位置色差时才施加连续性惩罚，因此原图已有的硬边仍保留。
+
+审核产物：
+
+```text
+tmp/lion-mode2-edge-v27-reference-repaint-60x60/final.png
+tmp/lion-mode2-edge-v27-reference-repaint-60x60/final.pix
+```
+
+相对 v26，3600 个 glyph 全部保持不变；769 格前景色和 1915 格背景色被重新拟合。release 模式的最终重建 score 从 `0.009748` 降至 `0.007457`，改善约 23.5%；重涂阶段耗时约 `0.065s`。
+
+随后人工审核指出 v27 的主背景偏灰紫。根因是 RGB 欧氏距离把 `[95,95,135]` 视为接近低饱和蓝灰，但人眼会明显感到色相漂移。最终 v30 删除自定义 HSV 实验，直接复用 RustPixel `color_distance_rgb`（Lab + CIEDE2000）对调色板候选排序：
+
+```text
+tmp/lion-mode2-edge-v30-ciede2000-repaint-60x60/final.png
+tmp/lion-mode2-edge-v30-ciede2000-repaint-60x60/final.pix
+```
+
+v30 保持 3600 个 glyph 不变，相对 v26 仅调整 563 格前景色和 344 格背景色；天空恢复为明确蓝色，近黑主体不再被色相模型污染。最终 score 为 `0.007625`，相对 v26 改善约 21.8%。失败的 v28/v29 仅是本地实验产物，不应作为恢复基线。

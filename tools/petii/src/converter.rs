@@ -1,13 +1,13 @@
 use crate::c64::{C64LOW, C64UP};
 use crate::contour::ContourGraph;
-use crate::glyph_topology::{build_topology_catalog, GlyphTopology, Side};
+use crate::glyph_topology::{build_topology_catalog, GlyphRole, GlyphTopology, Side};
 use crate::types::{ConversionConfig, GlyphCandidate, PetsciiGrid};
 use image::{DynamicImage, GrayImage, Luma};
 use rust_pixel::render::style::ANSI_COLOR_RGB;
 use rust_pixel::render::symbols::{
-    binarize_grayscale_block, calculate_mse, find_background_color, find_best_color,
-    find_best_color_u32, gen_charset_images, get_block_color, get_grayscale_block_at,
-    get_petii_block_color, BlockGrayImage,
+    binarize_grayscale_block, calculate_mse, color_distance_rgb, find_background_color,
+    find_best_color, find_best_color_u32, gen_charset_images, get_block_color,
+    get_grayscale_block_at, get_petii_block_color, BlockGrayImage, RGB,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -23,9 +23,10 @@ const EDGE_WEAK_THRESHOLD: u8 = 32;
 const EDGE_STRONG_THRESHOLD: u8 = 96;
 const EDGE_MIN_COMPONENT_PIXELS: usize = 8;
 const EDGE_CONTINUITY_CANDIDATES: usize = 16;
-const EDGE_APPEARANCE_CANDIDATES: usize = 8;
+const EDGE_APPEARANCE_CANDIDATES: usize = 6;
 const EDGE_TOPOLOGY_CANDIDATES: usize = 4;
 const EDGE_PARETO_CANDIDATES: usize = 4;
+const EDGE_QUIET_CANDIDATES: usize = 2;
 const EDGE_CHAIN_CANDIDATES: usize = 6;
 const EDGE_LOOP_CANDIDATES: usize = 4;
 const EDGE_JUNCTION_PASSES: usize = 2;
@@ -37,9 +38,18 @@ const EDGE_TARGET_CONNECTION_WEIGHT: f64 = 0.58;
 const EDGE_BUDGET_SIDE_WEIGHT: f64 = 6.5;
 const EDGE_BUDGET_BREAK_WEIGHT: f64 = 2.0;
 const EDGE_PAIR_REPAIR_PASSES: usize = 2;
+const EDGE_ORPHAN_WEIGHT: f64 = 0.8;
+const EDGE_ORPHAN_BREAK_WEIGHT: f64 = 0.25;
+const EDGE_ORPHAN_ROLLBACK_WEIGHT: f64 = 0.1;
+const EDGE_ORPHAN_PASSES: usize = 1;
+const EDGE_ORPHAN_MAX_REFERENCE_DELTA: f64 = 0.04;
 const EDGE_SPUR_WEIGHT: f64 = 0.3;
 const EDGE_NEIGHBORHOOD_SPUR_WEIGHT: f64 = 0.22;
 const EDGE_CONTINUITY_PASSES: usize = 4;
+const REPAINT_PALETTE_CANDIDATES: usize = 4;
+const REPAINT_PASSES: usize = 2;
+const REPAINT_CONTINUITY_WEIGHT: f64 = 0.32;
+const REPAINT_REFERENCE_EDGE_TOLERANCE: f64 = 0.04;
 const MODE2_EXCLUDED_PUNCTUATION: [u8; 3] = [33, 37, 38];
 
 #[derive(Debug, Clone)]
@@ -72,6 +82,7 @@ pub struct EdgeGrammarMetrics {
     pub contour_coverage: f64,
     pub false_junction_count: usize,
     pub spur_cell_count: usize,
+    pub orphan_excursion_count: usize,
     pub edited_cells: usize,
     pub edited_ratio: f64,
 }
@@ -98,6 +109,7 @@ pub struct EdgeDebugData {
     pub final_topologies: Vec<GlyphTopology>,
     pub edited_cells: Vec<bool>,
     pub spur_cells: Vec<bool>,
+    pub orphan_cells: Vec<bool>,
     pub connections: Vec<(usize, usize, Side)>,
     pub junctions: Vec<usize>,
 }
@@ -293,7 +305,7 @@ pub fn convert_image(
         &topology_catalog,
     );
     profile_stage("reference-budget", &mut profile_mark);
-    let proposed = repair_target_connection_pairs(
+    let connected_proposed = repair_target_connection_pairs(
         &contour_graph,
         &alternatives,
         &edge_cells,
@@ -303,11 +315,24 @@ pub fn convert_image(
         &topology_catalog,
     );
     profile_stage("pair-repair", &mut profile_mark);
+    let proposed = cleanup_orphan_excursions(
+        config.width,
+        config.height,
+        &contour_graph,
+        &alternatives,
+        &edge_cells,
+        &target_topologies,
+        &connected_proposed,
+        &charset,
+        &topology_catalog,
+    );
+    profile_stage("orphan-cleanup", &mut profile_mark);
     let edge_enabled = target_topologies.iter().any(Option::is_some);
     let (selected, edge_grammar, edge_debug) = if edge_enabled {
         let baseline_score = edge_grammar_objective(
             config.width,
             config.height,
+            &contour_graph,
             &alternatives,
             &edge_cells,
             &target_topologies,
@@ -318,6 +343,7 @@ pub fn convert_image(
         let proposed_score = edge_grammar_objective(
             config.width,
             config.height,
+            &contour_graph,
             &alternatives,
             &edge_cells,
             &target_topologies,
@@ -401,6 +427,20 @@ pub fn convert_image(
                     bitmap_spur_penalty(&charset[candidate.glyph as usize]) > 0.0
                 })
                 .collect(),
+            orphan_cells: selected
+                .iter()
+                .enumerate()
+                .map(|(index, selected)| {
+                    let candidate = alternatives[index][*selected];
+                    orphan_excursion_penalty(
+                        index,
+                        topology_catalog[candidate.glyph as usize],
+                        &contour_graph,
+                        config.width,
+                        config.height,
+                    ) > 0.0
+                })
+                .collect(),
             connections: contour_graph.connections(),
             junctions: contour_graph.junction_cells(),
         };
@@ -423,6 +463,18 @@ pub fn convert_image(
         )
     };
     profile_stage("metrics+gate", &mut profile_mark);
+
+    if config.mode == 2 {
+        repaint_selected_colors(
+            &reference,
+            config.width,
+            config.height,
+            &selected,
+            &mut alternatives,
+            &charset,
+        );
+        profile_stage("reference-repaint", &mut profile_mark);
+    }
 
     // 4. Materialize the selected grid and keep the selected candidate first.
     let mut cells = Vec::with_capacity(capacity);
@@ -450,6 +502,306 @@ fn profile_stage(name: &str, mark: &mut Instant) {
         eprintln!("petii-profile {name}: {:.3}s", mark.elapsed().as_secs_f64());
     }
     *mark = Instant::now();
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct RepaintRegionStats {
+    count: u64,
+    sum: [u64; 3],
+}
+
+impl RepaintRegionStats {
+    fn add(&mut self, rgb: [u8; 3]) {
+        self.count += 1;
+        for channel in 0..3 {
+            let value = rgb[channel] as u64;
+            self.sum[channel] += value;
+        }
+    }
+
+    fn error(self, color_index: u8) -> f64 {
+        if self.count == 0 {
+            return 0.0;
+        }
+        let color = ANSI_COLOR_RGB[color_index as usize];
+        let mean = RGB {
+            r: (self.sum[0] / self.count) as u8,
+            g: (self.sum[1] / self.count) as u8,
+            b: (self.sum[2] / self.count) as u8,
+        };
+        let candidate = RGB {
+            r: color[0],
+            g: color[1],
+            b: color[2],
+        };
+        color_distance_rgb(&mean, &candidate) as f64 / 100.0
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RepaintCellStats {
+    foreground: RepaintRegionStats,
+    background: RepaintRegionStats,
+    foreground_candidates: Vec<u8>,
+    background_candidates: Vec<u8>,
+}
+
+fn repaint_selected_colors(
+    reference: &DynamicImage,
+    width: u32,
+    height: u32,
+    selected: &[usize],
+    alternatives: &mut [Vec<GlyphCandidate>],
+    charset: &[BlockGrayImage],
+) {
+    let reference = reference.to_rgb8();
+    let mut stats = Vec::with_capacity(selected.len());
+    let mut painted = Vec::with_capacity(selected.len());
+
+    for (index, selected_index) in selected.iter().copied().enumerate() {
+        let mut candidate = alternatives[index][selected_index];
+        let bitmap = &charset[candidate.glyph as usize];
+        let cell_x = index as u32 % width;
+        let cell_y = index as u32 / width;
+        let mut foreground = RepaintRegionStats::default();
+        let mut background = RepaintRegionStats::default();
+        for pixel_y in 0..GLYPH_HEIGHT as usize {
+            for pixel_x in 0..GLYPH_WIDTH as usize {
+                let pixel = reference.get_pixel(
+                    cell_x * GLYPH_WIDTH + pixel_x as u32,
+                    cell_y * GLYPH_HEIGHT + pixel_y as u32,
+                );
+                let rgb = pixel.0;
+                if bitmap[pixel_y][pixel_x] >= 128 {
+                    foreground.add(rgb);
+                } else {
+                    background.add(rgb);
+                }
+            }
+        }
+        let foreground_candidates = repaint_palette_candidates(foreground, candidate.fg);
+        let background_candidates = repaint_palette_candidates(background, candidate.bg);
+        if foreground.count > 0 {
+            candidate.fg = foreground_candidates[0];
+        }
+        if background.count > 0 {
+            candidate.bg = background_candidates[0];
+        }
+        stats.push(RepaintCellStats {
+            foreground,
+            background,
+            foreground_candidates,
+            background_candidates,
+        });
+        painted.push(candidate);
+    }
+
+    for pass in 0..REPAINT_PASSES {
+        for step in 0..painted.len() {
+            let index = if pass % 2 == 0 {
+                step
+            } else {
+                painted.len() - 1 - step
+            };
+            let mut foreground_candidates = stats[index].foreground_candidates.clone();
+            let mut background_candidates = stats[index].background_candidates.clone();
+            for neighbor in grid_neighbors(index, width, height) {
+                push_unique_color(&mut foreground_candidates, painted[neighbor].fg);
+                push_unique_color(&mut foreground_candidates, painted[neighbor].bg);
+                push_unique_color(&mut background_candidates, painted[neighbor].fg);
+                push_unique_color(&mut background_candidates, painted[neighbor].bg);
+            }
+            if stats[index].foreground.count == 0 {
+                foreground_candidates.clear();
+                foreground_candidates.push(painted[index].fg);
+            }
+            if stats[index].background.count == 0 {
+                background_candidates.clear();
+                background_candidates.push(painted[index].bg);
+            }
+
+            let mut best = painted[index];
+            let mut best_score = repaint_local_score(
+                index, best, width, height, &stats, &painted, &reference, charset,
+            );
+            for foreground in foreground_candidates.iter().copied() {
+                for background in background_candidates.iter().copied() {
+                    let trial = GlyphCandidate {
+                        fg: foreground,
+                        bg: background,
+                        ..painted[index]
+                    };
+                    let score = repaint_local_score(
+                        index, trial, width, height, &stats, &painted, &reference, charset,
+                    );
+                    if score < best_score
+                        || (score == best_score && (foreground, background) < (best.fg, best.bg))
+                    {
+                        best = trial;
+                        best_score = score;
+                    }
+                }
+            }
+            painted[index] = best;
+        }
+    }
+
+    for (index, selected_index) in selected.iter().copied().enumerate() {
+        alternatives[index][selected_index] = painted[index];
+    }
+}
+
+fn repaint_palette_candidates(stats: RepaintRegionStats, fallback: u8) -> Vec<u8> {
+    if stats.count == 0 {
+        return vec![fallback];
+    }
+    let mut ranked: Vec<_> = (0..ANSI_COLOR_RGB.len())
+        .map(|color| (stats.error(color as u8), color as u8))
+        .collect();
+    ranked.sort_by(|first, second| {
+        first
+            .0
+            .total_cmp(&second.0)
+            .then_with(|| first.1.cmp(&second.1))
+    });
+    ranked
+        .into_iter()
+        .take(REPAINT_PALETTE_CANDIDATES)
+        .map(|(_, color)| color)
+        .collect()
+}
+
+fn push_unique_color(colors: &mut Vec<u8>, color: u8) {
+    if !colors.contains(&color) {
+        colors.push(color);
+    }
+}
+
+fn grid_neighbors(index: usize, width: u32, height: u32) -> Vec<usize> {
+    let x = index as u32 % width;
+    let y = index as u32 / width;
+    let mut neighbors = Vec::with_capacity(4);
+    if y > 0 {
+        neighbors.push(index - width as usize);
+    }
+    if x + 1 < width {
+        neighbors.push(index + 1);
+    }
+    if y + 1 < height {
+        neighbors.push(index + width as usize);
+    }
+    if x > 0 {
+        neighbors.push(index - 1);
+    }
+    neighbors
+}
+
+#[allow(clippy::too_many_arguments)]
+fn repaint_local_score(
+    index: usize,
+    candidate: GlyphCandidate,
+    width: u32,
+    height: u32,
+    stats: &[RepaintCellStats],
+    painted: &[GlyphCandidate],
+    reference: &image::RgbImage,
+    charset: &[BlockGrayImage],
+) -> f64 {
+    let reference_error = stats[index].foreground.error(candidate.fg)
+        * stats[index].foreground.count as f64
+        / (GLYPH_WIDTH * GLYPH_HEIGHT) as f64
+        + stats[index].background.error(candidate.bg) * stats[index].background.count as f64
+            / (GLYPH_WIDTH * GLYPH_HEIGHT) as f64;
+    let mut continuity = 0.0;
+    let mut boundary_count = 0usize;
+    for neighbor in grid_neighbors(index, width, height) {
+        continuity += repaint_boundary_excess(
+            index,
+            candidate,
+            neighbor,
+            painted[neighbor],
+            width,
+            reference,
+            charset,
+        );
+        boundary_count += 1;
+    }
+    reference_error + REPAINT_CONTINUITY_WEIGHT * continuity / boundary_count.max(1) as f64
+}
+
+fn repaint_boundary_excess(
+    first_index: usize,
+    first: GlyphCandidate,
+    second_index: usize,
+    second: GlyphCandidate,
+    width: u32,
+    reference: &image::RgbImage,
+    charset: &[BlockGrayImage],
+) -> f64 {
+    let first_x = first_index as u32 % width;
+    let first_y = first_index as u32 / width;
+    let second_x = second_index as u32 % width;
+    let second_y = second_index as u32 / width;
+    let (first_side, second_side) = if first_x + 1 == second_x {
+        (Side::Right, Side::Left)
+    } else if second_x + 1 == first_x {
+        (Side::Left, Side::Right)
+    } else if first_y + 1 == second_y {
+        (Side::Bottom, Side::Top)
+    } else {
+        (Side::Top, Side::Bottom)
+    };
+    let mut excess = 0.0;
+    for offset in 0..GLYPH_WIDTH as usize {
+        let (first_pixel_x, first_pixel_y) = side_pixel(first_side, offset);
+        let (second_pixel_x, second_pixel_y) = side_pixel(second_side, offset);
+        let first_output = rendered_pixel_rgb(first, first_pixel_x, first_pixel_y, charset);
+        let second_output = rendered_pixel_rgb(second, second_pixel_x, second_pixel_y, charset);
+        let first_reference = reference
+            .get_pixel(
+                first_x * GLYPH_WIDTH + first_pixel_x as u32,
+                first_y * GLYPH_HEIGHT + first_pixel_y as u32,
+            )
+            .0;
+        let second_reference = reference
+            .get_pixel(
+                second_x * GLYPH_WIDTH + second_pixel_x as u32,
+                second_y * GLYPH_HEIGHT + second_pixel_y as u32,
+            )
+            .0;
+        let output_delta = rgb_delta(first_output, second_output);
+        let reference_delta = rgb_delta(first_reference, second_reference);
+        excess += (output_delta - reference_delta - REPAINT_REFERENCE_EDGE_TOLERANCE).max(0.0);
+    }
+    excess / GLYPH_WIDTH as f64
+}
+
+fn side_pixel(side: Side, offset: usize) -> (usize, usize) {
+    match side {
+        Side::Top => (offset, 0),
+        Side::Right => (GLYPH_WIDTH as usize - 1, offset),
+        Side::Bottom => (offset, GLYPH_HEIGHT as usize - 1),
+        Side::Left => (0, offset),
+    }
+}
+
+fn rendered_pixel_rgb(
+    candidate: GlyphCandidate,
+    x: usize,
+    y: usize,
+    charset: &[BlockGrayImage],
+) -> [u8; 3] {
+    let color = rendered_color_index(candidate, &charset[candidate.glyph as usize], x, y);
+    ANSI_COLOR_RGB[color as usize]
+}
+
+fn rgb_delta(first: [u8; 3], second: [u8; 3]) -> f64 {
+    first
+        .iter()
+        .zip(second)
+        .map(|(first, second)| (*first as f64 - second as f64).abs())
+        .sum::<f64>()
+        / (3.0 * 255.0)
 }
 
 fn prepare_reference(
@@ -605,9 +957,24 @@ fn rank_glyphs(
             pareto_ranked.truncate(EDGE_PARETO_CANDIDATES);
         }
     }
+    let quiet_ranked: Vec<_> = ranked
+        .iter()
+        .copied()
+        .filter(|candidate| {
+            matches!(
+                topology_catalog[candidate.glyph as usize].role(),
+                GlyphRole::Blank | GlyphRole::Solid
+            )
+        })
+        .take(EDGE_QUIET_CANDIDATES)
+        .collect();
 
     let mut retained = ranked[..baseline_count.min(EDGE_APPEARANCE_CANDIDATES)].to_vec();
-    for candidate in topology_ranked.into_iter().chain(pareto_ranked) {
+    for candidate in topology_ranked
+        .into_iter()
+        .chain(pareto_ranked)
+        .chain(quiet_ranked)
+    {
         if !retained
             .iter()
             .any(|existing| existing.glyph == candidate.glyph)
@@ -1488,6 +1855,293 @@ fn pair_target_structure_cost(
     cost
 }
 
+#[allow(clippy::too_many_arguments)]
+fn cleanup_orphan_excursions(
+    width: u32,
+    height: u32,
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    initial_selected: &[usize],
+    charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
+) -> Vec<usize> {
+    let baseline_loss: f64 = alternatives
+        .iter()
+        .zip(edge_cells)
+        .filter(|(_, edge)| **edge)
+        .map(|(candidates, _)| candidates[0].distance)
+        .sum();
+    let reference_limit = baseline_loss * 1.05 + f64::EPSILON;
+    let spur_catalog: Vec<_> = charset.iter().map(bitmap_spur_penalty).collect();
+    let mut selected = initial_selected.to_vec();
+    let mut current_loss: f64 = alternatives
+        .iter()
+        .zip(edge_cells)
+        .enumerate()
+        .filter(|(_, (_, edge))| **edge)
+        .map(|(index, (candidates, _))| candidates[selected[index]].distance)
+        .sum();
+
+    for pass in 0..EDGE_ORPHAN_PASSES {
+        for step in 0..alternatives.len() {
+            let index = if pass % 2 == 0 {
+                step
+            } else {
+                alternatives.len() - 1 - step
+            };
+            if !edge_cells[index] || alternatives[index].len() < 2 {
+                continue;
+            }
+            let current_candidate = alternatives[index][selected[index]];
+            let current_topology = topology_catalog[current_candidate.glyph as usize];
+            let current_orphan =
+                orphan_excursion_penalty(index, current_topology, graph, width, height);
+            if current_orphan == 0.0 {
+                continue;
+            }
+            let current_breaks = incident_break_count(
+                index,
+                selected[index],
+                graph,
+                alternatives,
+                &selected,
+                topology_catalog,
+            );
+            let current_score = orphan_candidate_score(
+                current_candidate,
+                current_topology,
+                target_topologies[index],
+                current_orphan,
+                spur_catalog[current_candidate.glyph as usize],
+                current_breaks,
+            );
+            let mut best_choice = selected[index];
+            let mut best_score = current_score;
+            let mut best_selected = None;
+            let mut best_loss = current_loss;
+            for (candidate_index, candidate) in alternatives[index].iter().enumerate() {
+                let topology = topology_catalog[candidate.glyph as usize];
+                if !matches!(topology.role(), GlyphRole::Blank | GlyphRole::Solid) {
+                    continue;
+                }
+                if candidate.distance > current_candidate.distance + EDGE_ORPHAN_MAX_REFERENCE_DELTA
+                {
+                    continue;
+                }
+                let orphan = orphan_excursion_penalty(index, topology, graph, width, height);
+                let breaks = incident_break_count(
+                    index,
+                    candidate_index,
+                    graph,
+                    alternatives,
+                    &selected,
+                    topology_catalog,
+                );
+                if orphan >= current_orphan {
+                    continue;
+                }
+                let mut trial_selected = selected.clone();
+                trial_selected[index] = candidate_index;
+                let mut trial_loss = current_loss - current_candidate.distance + candidate.distance;
+                let Some(rollback_penalty) = make_reference_room(
+                    index,
+                    reference_limit,
+                    &mut trial_loss,
+                    graph,
+                    alternatives,
+                    edge_cells,
+                    target_topologies,
+                    &spur_catalog,
+                    topology_catalog,
+                    &mut trial_selected,
+                ) else {
+                    continue;
+                };
+                let score = orphan_candidate_score(
+                    *candidate,
+                    topology,
+                    target_topologies[index],
+                    orphan,
+                    spur_catalog[candidate.glyph as usize],
+                    breaks,
+                ) + EDGE_ORPHAN_ROLLBACK_WEIGHT * rollback_penalty;
+                if score < best_score
+                    || (score == best_score
+                        && (candidate.glyph, candidate_index)
+                            < (alternatives[index][best_choice].glyph, best_choice))
+                {
+                    best_choice = candidate_index;
+                    best_score = score;
+                    best_selected = Some(trial_selected);
+                    best_loss = trial_loss;
+                }
+            }
+            if let Some(best_selected) = best_selected {
+                selected = best_selected;
+                current_loss = best_loss;
+            }
+        }
+    }
+    selected
+}
+
+#[allow(clippy::too_many_arguments)]
+fn make_reference_room(
+    protected_index: usize,
+    reference_limit: f64,
+    current_loss: &mut f64,
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    spur_catalog: &[f64],
+    topology_catalog: &[GlyphTopology],
+    selected: &mut [usize],
+) -> Option<f64> {
+    let mut total_penalty = 0.0;
+    while *current_loss > reference_limit {
+        let mut best: Option<(f64, f64, usize)> = None;
+        for donor in 0..selected.len() {
+            if donor == protected_index || !edge_cells[donor] || selected[donor] == 0 {
+                continue;
+            }
+            let saving =
+                alternatives[donor][selected[donor]].distance - alternatives[donor][0].distance;
+            if saving <= f64::EPSILON {
+                continue;
+            }
+            let current_cost = local_target_structure_cost(
+                donor,
+                selected[donor],
+                graph,
+                alternatives,
+                target_topologies,
+                selected,
+                spur_catalog,
+                topology_catalog,
+            );
+            let rollback_cost = local_target_structure_cost(
+                donor,
+                0,
+                graph,
+                alternatives,
+                target_topologies,
+                selected,
+                spur_catalog,
+                topology_catalog,
+            );
+            let penalty = (rollback_cost - current_cost).max(0.0);
+            let candidate = (penalty / saving, penalty, donor);
+            if best.as_ref().map_or(true, |best| {
+                candidate
+                    .0
+                    .total_cmp(&best.0)
+                    .then_with(|| candidate.1.total_cmp(&best.1))
+                    .then_with(|| candidate.2.cmp(&best.2))
+                    .is_lt()
+            }) {
+                best = Some(candidate);
+            }
+        }
+        let Some((_, penalty, donor)) = best else {
+            return None;
+        };
+        let saving =
+            alternatives[donor][selected[donor]].distance - alternatives[donor][0].distance;
+        selected[donor] = 0;
+        *current_loss -= saving;
+        total_penalty += penalty;
+    }
+    Some(total_penalty)
+}
+
+fn orphan_candidate_score(
+    candidate: GlyphCandidate,
+    topology: GlyphTopology,
+    target: Option<GlyphTopology>,
+    orphan: f64,
+    spur: f64,
+    breaks: usize,
+) -> f64 {
+    candidate.distance
+        + EDGE_TARGET_TOPOLOGY_WEIGHT
+            * target
+                .map(|target| topology.target_distance(target))
+                .unwrap_or(0.0)
+        + EDGE_SPUR_WEIGHT * spur
+        + EDGE_ORPHAN_WEIGHT * orphan
+        + EDGE_ORPHAN_BREAK_WEIGHT * breaks as f64
+}
+
+fn incident_break_count(
+    index: usize,
+    candidate_index: usize,
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    selected: &[usize],
+    topology_catalog: &[GlyphTopology],
+) -> usize {
+    let topology = topology_catalog[alternatives[index][candidate_index].glyph as usize];
+    graph
+        .neighbors(index)
+        .iter()
+        .filter(|neighbor| {
+            let side = graph
+                .side_between(index, **neighbor)
+                .expect("contour graph neighbors must be adjacent");
+            let neighbor_candidate = alternatives[**neighbor][selected[**neighbor]];
+            topology.shared_port_mismatch_tolerant(
+                side,
+                topology_catalog[neighbor_candidate.glyph as usize],
+            ) > 0.0
+        })
+        .count()
+}
+
+fn orphan_excursion_penalty(
+    index: usize,
+    topology: GlyphTopology,
+    graph: &ContourGraph,
+    width: u32,
+    height: u32,
+) -> f64 {
+    let active_sides: Vec<_> = Side::ALL
+        .into_iter()
+        .filter(|side| topology.edge_ports(*side) != 0)
+        .collect();
+    if active_sides.is_empty() {
+        return 0.0;
+    }
+    let x = index as u32 % width;
+    let y = index as u32 / width;
+    let unsupported = active_sides
+        .iter()
+        .filter(|side| {
+            let border = match side {
+                Side::Top => y == 0,
+                Side::Right => x + 1 == width,
+                Side::Bottom => y + 1 == height,
+                Side::Left => x == 0,
+            };
+            if border {
+                return false;
+            }
+            !graph
+                .neighbors(index)
+                .iter()
+                .any(|neighbor| graph.side_between(index, *neighbor) == Some(**side))
+        })
+        .count();
+    let unsupported_ratio = unsupported as f64 / active_sides.len() as f64;
+    if active_sides.len() == 1 && unsupported == 1 {
+        1.0
+    } else {
+        unsupported_ratio
+    }
+}
+
 fn refine_edge_continuity(
     width: u32,
     height: u32,
@@ -1651,6 +2305,7 @@ fn measure_edge_grammar(
     let mut side_errors = 0usize;
     let mut false_junction_count = 0usize;
     let mut spur_cell_count = 0usize;
+    let mut orphan_excursion_count = 0usize;
     let mut edited_cells = 0usize;
 
     for index in 0..alternatives.len() {
@@ -1673,6 +2328,9 @@ fn measure_edge_grammar(
         false_junction_count +=
             (topology.active_sides() >= 3 && target.active_sides() < 3) as usize;
         spur_cell_count += (bitmap_spur_penalty(&charset[candidate.glyph as usize]) > 0.0) as usize;
+        orphan_excursion_count +=
+            (orphan_excursion_penalty(index, topology, graph, graph.width(), graph.height()) > 0.0)
+                as usize;
     }
 
     let connections = graph.connections();
@@ -1697,6 +2355,7 @@ fn measure_edge_grammar(
         contour_coverage: covered_sides as f64 / target_sides.max(1) as f64,
         false_junction_count,
         spur_cell_count,
+        orphan_excursion_count,
         edited_cells,
         edited_ratio: edited_cells as f64 / edited_denominator,
     }
@@ -1706,6 +2365,7 @@ fn measure_edge_grammar(
 fn edge_grammar_objective(
     width: u32,
     height: u32,
+    graph: &ContourGraph,
     alternatives: &[Vec<GlyphCandidate>],
     edge_cells: &[bool],
     target_topologies: &[Option<GlyphTopology>],
@@ -1717,6 +2377,7 @@ fn edge_grammar_objective(
     let mut target_loss = 0.0;
     let mut spur_loss = 0.0;
     let mut neighborhood_spur_loss = 0.0;
+    let mut orphan_loss = 0.0;
     let mut edge_count = 0usize;
     let mut color_continuity = 0.0;
     let mut port_continuity = 0.0;
@@ -1743,6 +2404,7 @@ fn edge_grammar_objective(
             selected,
             charset,
         );
+        orphan_loss += orphan_excursion_penalty(index, topology, graph, width, height);
     }
 
     for y in 0..height {
@@ -1788,6 +2450,7 @@ fn edge_grammar_objective(
     target_loss /= edge_denominator;
     spur_loss /= edge_denominator;
     neighborhood_spur_loss /= edge_denominator;
+    orphan_loss /= edge_denominator;
     color_continuity /= pair_denominator;
     port_continuity /= pair_denominator;
     let total = reference_loss
@@ -1795,7 +2458,8 @@ fn edge_grammar_objective(
         + EDGE_CONTINUITY_WEIGHT * color_continuity
         + EDGE_PORT_CONTINUITY_WEIGHT * port_continuity
         + EDGE_SPUR_WEIGHT * spur_loss
-        + EDGE_NEIGHBORHOOD_SPUR_WEIGHT * neighborhood_spur_loss;
+        + EDGE_NEIGHBORHOOD_SPUR_WEIGHT * neighborhood_spur_loss
+        + EDGE_ORPHAN_WEIGHT * orphan_loss;
     EdgeGrammarObjective {
         total,
         reference_loss,
@@ -2703,6 +3367,226 @@ mod tests {
             selected_first.shared_port_mismatch_tolerant(Side::Right, selected_second),
             0.0
         );
+    }
+
+    #[test]
+    fn orphan_cleanup_removes_an_unsupported_single_side_stroke() {
+        let blank = vec![vec![0u8; 8]; 8];
+        let mut endpoint = blank.clone();
+        for row in endpoint.iter_mut().take(5) {
+            row[3..5].fill(255);
+        }
+        let charset = vec![blank, endpoint];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 0,
+            texture: 1,
+        };
+        let fallback = vec![candidate(0, 0.0)];
+        let mut alternatives = vec![fallback; 9];
+        alternatives[4] = vec![candidate(1, 0.1), candidate(0, 0.102)];
+        let mut edge_cells = vec![false; 9];
+        edge_cells[4] = true;
+        let mut targets = vec![None; 9];
+        targets[4] = Some(topology_catalog[1]);
+        let graph = ContourGraph::from_targets(3, 3, &targets);
+
+        let first = cleanup_orphan_excursions(
+            3,
+            3,
+            &graph,
+            &alternatives,
+            &edge_cells,
+            &targets,
+            &[0; 9],
+            &charset,
+            &topology_catalog,
+        );
+        let second = cleanup_orphan_excursions(
+            3,
+            3,
+            &graph,
+            &alternatives,
+            &edge_cells,
+            &targets,
+            &[0; 9],
+            &charset,
+            &topology_catalog,
+        );
+
+        assert_eq!(first[4], 1);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn orphan_cleanup_swaps_low_value_edits_to_stay_within_reference_budget() {
+        let blank = vec![vec![0u8; 8]; 8];
+        let mut endpoint = blank.clone();
+        for row in endpoint.iter_mut().take(5) {
+            row[3..5].fill(255);
+        }
+        let charset = vec![blank, endpoint];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 0,
+            texture: 1,
+        };
+        let mut alternatives = vec![vec![candidate(0, 0.1)]; 12];
+        alternatives[5] = vec![candidate(1, 0.1), candidate(0, 0.13)];
+        alternatives[10] = vec![candidate(0, 0.1), candidate(1, 0.13)];
+        alternatives[11] = vec![candidate(0, 0.1), candidate(1, 0.12)];
+        let edge_cells = vec![true; 12];
+        let mut targets = vec![None; 12];
+        targets[5] = Some(topology_catalog[1]);
+        let graph = ContourGraph::from_targets(4, 3, &targets);
+
+        let selected = cleanup_orphan_excursions(
+            4,
+            3,
+            &graph,
+            &alternatives,
+            &edge_cells,
+            &targets,
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+            &charset,
+            &topology_catalog,
+        );
+        let reference_loss: f64 = alternatives
+            .iter()
+            .zip(&edge_cells)
+            .enumerate()
+            .filter(|(_, (_, edge))| **edge)
+            .map(|(index, (candidates, _))| candidates[selected[index]].distance)
+            .sum();
+
+        assert_eq!(selected, vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+        assert!(reference_loss <= 1.26 + f64::EPSILON);
+    }
+
+    #[test]
+    fn orphan_cleanup_preserves_a_real_edge_when_blank_is_too_distant() {
+        let blank = vec![vec![0u8; 8]; 8];
+        let mut endpoint = blank.clone();
+        for row in endpoint.iter_mut().take(5) {
+            row[3..5].fill(255);
+        }
+        let charset = vec![blank, endpoint];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 0,
+            texture: 1,
+        };
+        let alternatives = vec![vec![candidate(1, 0.1), candidate(0, 0.15)]];
+        let targets = vec![Some(topology_catalog[1])];
+        let graph = ContourGraph::from_targets(1, 1, &targets);
+
+        let selected = cleanup_orphan_excursions(
+            1,
+            1,
+            &graph,
+            &alternatives,
+            &[true],
+            &targets,
+            &[0],
+            &charset,
+            &topology_catalog,
+        );
+
+        assert_eq!(selected, vec![0]);
+    }
+
+    #[test]
+    fn reference_repaint_recomputes_color_for_the_final_glyph_regions() {
+        let charset = vec![vec![vec![0u8; 8]; 8]];
+        let target_rgb = ANSI_COLOR_RGB[254];
+        let reference =
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(8, 8, image::Rgb(target_rgb)));
+        let mut alternatives = vec![vec![GlyphCandidate {
+            glyph: 0,
+            distance: 0.0,
+            fg: 1,
+            bg: 25,
+            texture: 1,
+        }]];
+
+        repaint_selected_colors(&reference, 1, 1, &[0], &mut alternatives, &charset);
+
+        assert_eq!(ANSI_COLOR_RGB[alternatives[0][0].bg as usize], target_rgb);
+    }
+
+    #[test]
+    fn reference_repaint_preserves_a_color_jump_present_in_the_reference() {
+        let charset = vec![vec![vec![0u8; 8]; 8]];
+        let left_rgb = ANSI_COLOR_RGB[25];
+        let right_rgb = ANSI_COLOR_RGB[254];
+        let mut reference = image::RgbImage::new(16, 8);
+        for y in 0..8 {
+            for x in 0..16 {
+                reference.put_pixel(x, y, image::Rgb(if x < 8 { left_rgb } else { right_rgb }));
+            }
+        }
+        let reference = DynamicImage::ImageRgb8(reference);
+        let candidate = GlyphCandidate {
+            glyph: 0,
+            distance: 0.0,
+            fg: 1,
+            bg: 1,
+            texture: 1,
+        };
+        let mut alternatives = vec![vec![candidate], vec![candidate]];
+
+        repaint_selected_colors(&reference, 2, 1, &[0, 0], &mut alternatives, &charset);
+
+        assert_eq!(ANSI_COLOR_RGB[alternatives[0][0].bg as usize], left_rgb);
+        assert_eq!(ANSI_COLOR_RGB[alternatives[1][0].bg as usize], right_rgb);
+    }
+
+    #[test]
+    fn reference_repaint_uses_ciede2000_instead_of_rgb_nearest() {
+        let charset = vec![vec![vec![0u8; 8]; 8]];
+        let sky_rgb = [65, 101, 150];
+        let reference =
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(8, 8, image::Rgb(sky_rgb)));
+        let mut alternatives = vec![vec![GlyphCandidate {
+            glyph: 0,
+            distance: 0.0,
+            fg: 1,
+            bg: 60,
+            texture: 1,
+        }]];
+
+        repaint_selected_colors(&reference, 1, 1, &[0], &mut alternatives, &charset);
+
+        let selected = ANSI_COLOR_RGB[alternatives[0][0].bg as usize];
+        let reference = RGB {
+            r: sky_rgb[0],
+            g: sky_rgb[1],
+            b: sky_rgb[2],
+        };
+        let selected = RGB {
+            r: selected[0],
+            g: selected[1],
+            b: selected[2],
+        };
+        let gray_purple = RGB {
+            r: ANSI_COLOR_RGB[60][0],
+            g: ANSI_COLOR_RGB[60][1],
+            b: ANSI_COLOR_RGB[60][2],
+        };
+        assert!(
+            color_distance_rgb(&reference, &selected)
+                < color_distance_rgb(&reference, &gray_purple)
+        );
+        assert_ne!(alternatives[0][0].bg, 60);
     }
 
     #[test]

@@ -65,6 +65,46 @@ The system SHALL generate multiple bounded PETSCII candidates and render each ca
 - **AND** does not require scene-specific or shape-specific repair passes
 - **AND** keeps flat background and foreground cells on their space or solid-block paths
 
+### Requirement: Contour-Aware PETSCII Grammar
+
+Mode 2 SHALL combine single-cell appearance matching with bounded contour grammar optimization and SHALL conservatively remove unsupported visual excursions without exceeding the accepted reference-loss budget.
+
+#### Scenario: Connected contour crosses multiple cells
+- **WHEN** cleaned reference edges form an open chain, closed loop, or junction across PETSCII cells
+- **THEN** the system selects from bounded appearance and topology candidates
+- **AND** prefers tolerant edge-port alignment across adjacent cells
+- **AND** coordinates junction cells without replacing the deterministic single-cell baseline outside edge regions
+
+#### Scenario: High-confidence orphan stroke
+- **WHEN** a selected edge glyph introduces an unsupported stroke into a neighboring background region
+- **AND** a blank or solid fallback has nearly equal single-cell reference error
+- **THEN** the system may delete the stroke instead of replacing it with another decorative glyph
+- **AND** rolls back lower-value contour edits when necessary to remain within the global reference-loss budget
+
+#### Scenario: Real boundary would be damaged
+- **WHEN** deleting a stroke requires a materially worse single-cell approximation
+- **THEN** the system preserves the boundary glyph
+- **AND** exposes contour, endpoint, spur, and orphan metrics for visual regression review
+
+### Requirement: Reference-Constrained Final Repaint
+
+After Mode 2 selects its final glyphs, the system SHALL recompute their foreground and background colors from the corresponding reference-image regions and SHALL reduce palette discontinuities only where the reference does not support them.
+
+#### Scenario: Glyph selection changes pixel ownership
+- **WHEN** contour optimization changes which pixels of a cell use its foreground or background color
+- **THEN** the final repaint independently fits both regions to the reference image
+- **AND** ranks fixed-palette colors using RustPixel's Lab-based CIEDE2000 visual distance
+- **AND** does not reuse stale colors derived for the previous glyph
+
+#### Scenario: Unsupported palette jump
+- **WHEN** adjacent output cells have a stronger boundary color jump than the same boundary in the reference image
+- **THEN** the repaint stage may select a nearby palette color with lower combined reference and continuity error
+
+#### Scenario: Reference contains a sharp color boundary
+- **WHEN** the reference image itself contains a strong color jump across adjacent cells
+- **THEN** the repaint stage preserves that jump
+- **AND** does not alter the selected glyphs or contour topology
+
 ### Requirement: Aspect-Preserving Grid Dimensions
 
 The AI-assisted workflow SHALL preserve the reference-image aspect ratio by default instead of forcing a 40×25 grid.
