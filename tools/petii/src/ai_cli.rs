@@ -5,7 +5,8 @@ use petii::{
         CandidateArtifact, Critique, CritiqueScores, MultimodalCritic, OpenAiCompatibleProvider,
         ReferenceGenerator, RunManifest,
     },
-    convert_image, render_grid, score_grid, ConversionConfig, OptimizationWeights,
+    convert_image, render_edge_debug, render_grid, score_grid, ConversionConfig,
+    OptimizationWeights,
 };
 use serde_json::json;
 use std::{fs, path::PathBuf, time::SystemTime};
@@ -188,6 +189,8 @@ fn aspect_preserving_config(
 
 fn run_direct(reference: &DynamicImage, config: &ConversionConfig) -> Result<AiLoopResult, String> {
     let conversion = convert_image(reference, config)?;
+    let edge_grammar = conversion.edge_grammar.clone();
+    let edge_debug = conversion.edge_debug.clone();
     let score = score_grid(
         &conversion.grid,
         &conversion.reference,
@@ -210,6 +213,8 @@ fn run_direct(reference: &DynamicImage, config: &ConversionConfig) -> Result<AiL
             selected: true,
         }],
         warnings: Vec::new(),
+        edge_grammar,
+        edge_debug,
     })
 }
 
@@ -294,6 +299,16 @@ fn save_run(
         serde_json::to_vec_pretty(&summary).map_err(|error| error.to_string())?,
     )
     .map_err(|error| format!("failed to save critique.json: {error}"))?;
+    fs::write(
+        output_dir.join("edge-metrics.json"),
+        serde_json::to_vec_pretty(&result.edge_grammar).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| format!("failed to save edge-metrics.json: {error}"))?;
+    if let Some(debug) = &result.edge_debug {
+        render_edge_debug(debug, 2)?
+            .save(output_dir.join("edge-debug.png"))
+            .map_err(|error| format!("failed to save edge-debug.png: {error}"))?;
+    }
 
     RunManifest {
         version: 1,

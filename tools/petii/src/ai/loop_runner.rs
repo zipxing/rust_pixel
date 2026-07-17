@@ -1,7 +1,8 @@
 use crate::{
     ai::{schema::NormalizedRegion, Critique, MultimodalCritic, RepairDirective},
     convert_image, generate_config_variants, optimize_grid, render_grid, score_grid,
-    ConversionConfig, ConversionResult, OptimizationWeights, PetsciiGrid, ScoreBreakdown,
+    ConversionConfig, ConversionResult, EdgeDebugData, EdgeGrammarReport, OptimizationWeights,
+    PetsciiGrid, ScoreBreakdown,
 };
 use image::DynamicImage;
 use rust_pixel::render::style::ANSI_COLOR_RGB;
@@ -52,6 +53,8 @@ pub struct AiLoopResult {
     pub submitted_candidates: usize,
     pub candidates: Vec<AiLoopCandidate>,
     pub warnings: Vec<String>,
+    pub edge_grammar: EdgeGrammarReport,
+    pub edge_debug: Option<EdgeDebugData>,
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +138,8 @@ pub fn run_with_reference(
         }
     };
     let selected = initial.selected_candidate;
+    let edge_grammar = states[selected].conversion.edge_grammar.clone();
+    let edge_debug = states[selected].conversion.edge_debug.clone();
     let mut best_grid = states[selected].grid.clone();
     let mut best_score = states[selected].score;
     let mut best_critique = initial;
@@ -219,6 +224,8 @@ pub fn run_with_reference(
         submitted_candidates,
         candidates,
         warnings,
+        edge_grammar,
+        edge_debug,
     })
 }
 

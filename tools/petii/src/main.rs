@@ -2,7 +2,10 @@
 
 mod ai_cli;
 
-use petii::{convert_image, optimize_grid, render_grid, ConversionConfig, OptimizationWeights};
+use petii::{
+    analyze_pix_corpus, convert_image, optimize_grid, render_grid, ConversionConfig,
+    OptimizationWeights,
+};
 use std::{env, fs, path::Path};
 
 fn print_usage() {
@@ -21,6 +24,7 @@ fn print_usage() {
     println!();
     println!("EXPERIMENTAL:");
     println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--output-dir DIRECTORY]");
+    println!("  petii corpus DIRECTORY [--output report.json]");
 }
 
 fn value_after(args: &[String], flag: &str) -> Option<String> {
@@ -66,6 +70,26 @@ fn main() {
         if let Err(error) = ai_cli::run(&args[2..]) {
             eprintln!("Error: {error}");
             std::process::exit(1);
+        }
+        return;
+    }
+    if args.get(1).is_some_and(|argument| argument == "corpus") {
+        let Some(directory) = args.get(2) else {
+            eprintln!("Error: corpus directory is required");
+            std::process::exit(1);
+        };
+        let report = analyze_pix_corpus(Path::new(directory)).unwrap_or_else(|error| {
+            eprintln!("Error: {error}");
+            std::process::exit(1);
+        });
+        let json = serde_json::to_string_pretty(&report).unwrap();
+        if let Some(path) = value_after(&args, "--output") {
+            fs::write(&path, format!("{json}\n")).unwrap_or_else(|error| {
+                eprintln!("Error: failed to save '{}': {error}", path);
+                std::process::exit(1);
+            });
+        } else {
+            println!("{json}");
         }
         return;
     }

@@ -1,4 +1,6 @@
 use crate::c64::{C64LOW, C64UP};
+use crate::contour::ContourGraph;
+use crate::glyph_topology::{build_topology_catalog, GlyphTopology, Side};
 use crate::types::{ConversionConfig, GlyphCandidate, PetsciiGrid};
 use image::{DynamicImage, GrayImage, Luma};
 use rust_pixel::render::style::ANSI_COLOR_RGB;
@@ -7,6 +9,8 @@ use rust_pixel::render::symbols::{
     find_best_color_u32, gen_charset_images, get_block_color, get_grayscale_block_at,
     get_petii_block_color, BlockGrayImage,
 };
+use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 pub const GLYPH_WIDTH: u32 = 8;
 pub const GLYPH_HEIGHT: u32 = 8;
@@ -19,7 +23,20 @@ const EDGE_WEAK_THRESHOLD: u8 = 32;
 const EDGE_STRONG_THRESHOLD: u8 = 96;
 const EDGE_MIN_COMPONENT_PIXELS: usize = 8;
 const EDGE_CONTINUITY_CANDIDATES: usize = 16;
+const EDGE_APPEARANCE_CANDIDATES: usize = 8;
+const EDGE_TOPOLOGY_CANDIDATES: usize = 4;
+const EDGE_PARETO_CANDIDATES: usize = 4;
+const EDGE_CHAIN_CANDIDATES: usize = 6;
+const EDGE_LOOP_CANDIDATES: usize = 4;
+const EDGE_JUNCTION_PASSES: usize = 2;
 const EDGE_CONTINUITY_WEIGHT: f64 = 0.28;
+const EDGE_PORT_CONTINUITY_WEIGHT: f64 = 0.32;
+const EDGE_TARGET_TOPOLOGY_WEIGHT: f64 = 0.24;
+const EDGE_TARGET_SIDE_WEIGHT: f64 = 0.22;
+const EDGE_TARGET_CONNECTION_WEIGHT: f64 = 0.58;
+const EDGE_BUDGET_SIDE_WEIGHT: f64 = 6.5;
+const EDGE_BUDGET_BREAK_WEIGHT: f64 = 2.0;
+const EDGE_PAIR_REPAIR_PASSES: usize = 2;
 const EDGE_SPUR_WEIGHT: f64 = 0.3;
 const EDGE_NEIGHBORHOOD_SPUR_WEIGHT: f64 = 0.22;
 const EDGE_CONTINUITY_PASSES: usize = 4;
@@ -32,11 +49,63 @@ pub struct ConversionResult {
     pub alternatives: Vec<Vec<GlyphCandidate>>,
     /// Exact preprocessed image used by candidate generation and scoring.
     pub reference: DynamicImage,
+    pub edge_grammar: EdgeGrammarReport,
+    pub edge_debug: Option<EdgeDebugData>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EdgeGateDecision {
+    Disabled,
+    Accepted,
+    RejectedObjective,
+    RejectedReferenceLoss,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct EdgeGrammarMetrics {
+    pub objective: f64,
+    pub reference_loss: f64,
+    pub target_port_loss: f64,
+    pub shared_port_break_rate: f64,
+    pub unexpected_endpoint_rate: f64,
+    pub contour_coverage: f64,
+    pub false_junction_count: usize,
+    pub spur_cell_count: usize,
+    pub edited_cells: usize,
+    pub edited_ratio: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EdgeGrammarReport {
+    pub decision: EdgeGateDecision,
+    pub edge_cells: usize,
+    pub contour_connections: usize,
+    pub open_chains: usize,
+    pub closed_loops: usize,
+    pub junctions: usize,
+    pub baseline: EdgeGrammarMetrics,
+    pub proposed: EdgeGrammarMetrics,
+    pub final_metrics: EdgeGrammarMetrics,
+}
+
+#[derive(Debug, Clone)]
+pub struct EdgeDebugData {
+    pub width: u32,
+    pub height: u32,
+    pub target_topologies: Vec<Option<GlyphTopology>>,
+    pub baseline_topologies: Vec<GlyphTopology>,
+    pub final_topologies: Vec<GlyphTopology>,
+    pub edited_cells: Vec<bool>,
+    pub spur_cells: Vec<bool>,
+    pub connections: Vec<(usize, usize, Side)>,
+    pub junctions: Vec<usize>,
 }
 
 struct CellCandidates {
     ranked: Vec<GlyphCandidate>,
     edge_aware: bool,
+    target_topology: Option<GlyphTopology>,
 }
 
 struct CandidateGenerator<'a> {
@@ -45,6 +114,7 @@ struct CandidateGenerator<'a> {
     gray: &'a GrayImage,
     edge_image: &'a GrayImage,
     charset: &'a [BlockGrayImage],
+    topology_catalog: &'a [GlyphTopology],
     background_gray: u8,
     background_rgb: u32,
     background_color: u8,
@@ -68,6 +138,10 @@ impl CandidateGenerator<'_> {
             self.background_rgb,
         );
         let edge_target = edge_aware.then(|| EdgeTarget::new(&raw_block, fg, bg));
+        let target_topology = (self.config.mode == 2)
+            .then(|| edge_target.as_ref())
+            .flatten()
+            .map(|target| GlyphTopology::from_bitmap(&target.mask));
         // Exact extraction binarizes known PETSCII artwork. General-image
         // modes retain grayscale structure for nearest-glyph matching.
         let match_block = if self.config.mode == 1 {
@@ -95,6 +169,7 @@ impl CandidateGenerator<'_> {
             None => rank_glyphs(
                 &match_block,
                 self.charset,
+                self.topology_catalog,
                 self.config.mode,
                 if edge_aware {
                     self.config.top_k.max(EDGE_CONTINUITY_CANDIDATES)
@@ -107,7 +182,11 @@ impl CandidateGenerator<'_> {
             ),
         };
 
-        CellCandidates { ranked, edge_aware }
+        CellCandidates {
+            ranked,
+            edge_aware,
+            target_topology,
+        }
     }
 }
 
@@ -130,6 +209,7 @@ pub fn convert_image(
     config: &ConversionConfig,
 ) -> Result<ConversionResult, String> {
     config.validate()?;
+    let mut profile_mark = Instant::now();
 
     // 1. Normalize the source once for every downstream scoring stage.
     let (reference, gray, edge_image) = prepare_reference(image, config);
@@ -140,6 +220,8 @@ pub fn convert_image(
         &C64LOW,
         &C64UP,
     );
+    let topology_catalog = build_topology_catalog(&charset);
+    profile_stage("reference+catalog", &mut profile_mark);
 
     let (background_gray, background_rgb) =
         find_background_color(&reference, &gray, reference.width(), reference.height());
@@ -152,6 +234,7 @@ pub fn convert_image(
         gray: &gray,
         edge_image: &edge_image,
         charset: &charset,
+        topology_catalog: &topology_catalog,
         background_gray,
         background_rgb,
         background_color,
@@ -159,23 +242,187 @@ pub fn convert_image(
     let capacity = (config.width * config.height) as usize;
     let mut alternatives = Vec::with_capacity(capacity);
     let mut edge_cells = Vec::with_capacity(capacity);
+    let mut target_topologies = Vec::with_capacity(capacity);
 
     for y in 0..config.height {
         for x in 0..config.width {
             let candidates = generator.generate(x, y);
             alternatives.push(candidates.ranked);
             edge_cells.push(candidates.edge_aware);
+            target_topologies.push(candidates.target_topology);
         }
     }
+    profile_stage("candidate-generation", &mut profile_mark);
 
     // 3. Re-rank only edge cells using generic cross-cell coherence losses.
-    let selected = refine_edge_continuity(
+    let contour_graph = ContourGraph::from_targets(config.width, config.height, &target_topologies);
+    let mut chain_selected = optimize_contour_chains(
+        &contour_graph,
+        &alternatives,
+        &target_topologies,
+        &topology_catalog,
+    );
+    coordinate_junctions(
+        &contour_graph,
+        &alternatives,
+        &target_topologies,
+        &topology_catalog,
+        &mut chain_selected,
+    );
+    profile_stage("chain+junction", &mut profile_mark);
+    let baseline = vec![0usize; alternatives.len()];
+    let unconstrained_proposed = refine_edge_continuity(
         config.width,
         config.height,
+        &contour_graph,
         &alternatives,
         &edge_cells,
+        &target_topologies,
+        &chain_selected,
         &charset,
+        &topology_catalog,
     );
+    profile_stage("continuity-refine", &mut profile_mark);
+    let budgeted_proposed = constrain_reference_loss(
+        &contour_graph,
+        &alternatives,
+        &edge_cells,
+        &target_topologies,
+        &unconstrained_proposed,
+        &charset,
+        &topology_catalog,
+    );
+    profile_stage("reference-budget", &mut profile_mark);
+    let proposed = repair_target_connection_pairs(
+        &contour_graph,
+        &alternatives,
+        &edge_cells,
+        &target_topologies,
+        &budgeted_proposed,
+        &charset,
+        &topology_catalog,
+    );
+    profile_stage("pair-repair", &mut profile_mark);
+    let edge_enabled = target_topologies.iter().any(Option::is_some);
+    let (selected, edge_grammar, edge_debug) = if edge_enabled {
+        let baseline_score = edge_grammar_objective(
+            config.width,
+            config.height,
+            &alternatives,
+            &edge_cells,
+            &target_topologies,
+            &baseline,
+            &charset,
+            &topology_catalog,
+        );
+        let proposed_score = edge_grammar_objective(
+            config.width,
+            config.height,
+            &alternatives,
+            &edge_cells,
+            &target_topologies,
+            &proposed,
+            &charset,
+            &topology_catalog,
+        );
+        let reference_limit = baseline_score.reference_loss * 1.05 + f64::EPSILON;
+        let decision = edge_gate_decision(baseline_score, proposed_score, reference_limit);
+        let selected = if decision == EdgeGateDecision::Accepted {
+            proposed.clone()
+        } else {
+            baseline.clone()
+        };
+        let baseline_metrics = measure_edge_grammar(
+            &contour_graph,
+            &alternatives,
+            &edge_cells,
+            &target_topologies,
+            &baseline,
+            &charset,
+            &topology_catalog,
+            baseline_score,
+        );
+        let proposed_metrics = measure_edge_grammar(
+            &contour_graph,
+            &alternatives,
+            &edge_cells,
+            &target_topologies,
+            &proposed,
+            &charset,
+            &topology_catalog,
+            proposed_score,
+        );
+        let final_metrics = if decision == EdgeGateDecision::Accepted {
+            proposed_metrics.clone()
+        } else {
+            baseline_metrics.clone()
+        };
+        let report = EdgeGrammarReport {
+            decision,
+            edge_cells: target_topologies
+                .iter()
+                .filter(|target| target.is_some())
+                .count(),
+            contour_connections: contour_graph.connections().len(),
+            open_chains: contour_graph.open_chains().len(),
+            closed_loops: contour_graph.closed_loops().len(),
+            junctions: contour_graph.junction_cells().len(),
+            baseline: baseline_metrics,
+            proposed: proposed_metrics,
+            final_metrics,
+        };
+        let debug = EdgeDebugData {
+            width: config.width,
+            height: config.height,
+            target_topologies: target_topologies.clone(),
+            baseline_topologies: alternatives
+                .iter()
+                .map(|candidates| topology_catalog[candidates[0].glyph as usize])
+                .collect(),
+            final_topologies: selected
+                .iter()
+                .enumerate()
+                .map(|(index, selected)| {
+                    topology_catalog[alternatives[index][*selected].glyph as usize]
+                })
+                .collect(),
+            edited_cells: selected
+                .iter()
+                .enumerate()
+                .map(|(index, selected)| {
+                    alternatives[index][*selected].glyph != alternatives[index][0].glyph
+                })
+                .collect(),
+            spur_cells: selected
+                .iter()
+                .enumerate()
+                .map(|(index, selected)| {
+                    let candidate = alternatives[index][*selected];
+                    bitmap_spur_penalty(&charset[candidate.glyph as usize]) > 0.0
+                })
+                .collect(),
+            connections: contour_graph.connections(),
+            junctions: contour_graph.junction_cells(),
+        };
+        (selected, report, Some(debug))
+    } else {
+        (
+            proposed,
+            EdgeGrammarReport {
+                decision: EdgeGateDecision::Disabled,
+                edge_cells: 0,
+                contour_connections: 0,
+                open_chains: 0,
+                closed_loops: 0,
+                junctions: 0,
+                baseline: EdgeGrammarMetrics::default(),
+                proposed: EdgeGrammarMetrics::default(),
+                final_metrics: EdgeGrammarMetrics::default(),
+            },
+            None,
+        )
+    };
+    profile_stage("metrics+gate", &mut profile_mark);
 
     // 4. Materialize the selected grid and keep the selected candidate first.
     let mut cells = Vec::with_capacity(capacity);
@@ -187,12 +434,22 @@ pub fn convert_image(
         }
         alternatives[index].truncate(config.top_k);
     }
+    profile_stage("materialize", &mut profile_mark);
 
     Ok(ConversionResult {
         grid: PetsciiGrid::new(config.width, config.height, cells)?,
         alternatives,
         reference,
+        edge_grammar,
+        edge_debug,
     })
+}
+
+fn profile_stage(name: &str, mark: &mut Instant) {
+    if std::env::var_os("PETII_PROFILE").is_some() {
+        eprintln!("petii-profile {name}: {:.3}s", mark.elapsed().as_secs_f64());
+    }
+    *mark = Instant::now();
 }
 
 fn prepare_reference(
@@ -249,6 +506,7 @@ fn select_cell_colors(
 fn rank_glyphs(
     input: &BlockGrayImage,
     charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
     mode: u8,
     top_k: usize,
     fg: u8,
@@ -278,8 +536,122 @@ fn rank_glyphs(
             .total_cmp(&b.distance)
             .then_with(|| a.glyph.cmp(&b.glyph))
     });
-    ranked.truncate(top_k.min(ranked.len()));
-    ranked
+    let baseline_count = top_k.min(ranked.len());
+    let Some(edge_target) = edge_target else {
+        ranked.truncate(baseline_count);
+        return ranked;
+    };
+
+    // Keep the unchanged appearance Top-1 at index zero, then admit a small,
+    // bounded set of topology-compatible glyphs before chain optimization.
+    // A useful PETSCII corner or diagonal can otherwise sit outside appearance
+    // Top-16 even though it is the only candidate with the required ports.
+    let target_topology = GlyphTopology::from_bitmap(&edge_target.mask);
+    let topology_scores: Vec<_> = topology_catalog
+        .iter()
+        .map(|topology| topology_candidate_cost(*topology, target_topology))
+        .collect();
+    let selection_scores: Vec<_> = topology_catalog
+        .iter()
+        .map(|topology| {
+            EDGE_TARGET_TOPOLOGY_WEIGHT * topology.target_distance(target_topology)
+                + EDGE_TARGET_SIDE_WEIGHT * target_side_mismatch(*topology, target_topology)
+        })
+        .collect();
+    let baseline = ranked[0];
+    let topology_order = |first: &GlyphCandidate, second: &GlyphCandidate| {
+        topology_scores[first.glyph as usize]
+            .total_cmp(&topology_scores[second.glyph as usize])
+            .then_with(|| first.distance.total_cmp(&second.distance))
+            .then_with(|| first.glyph.cmp(&second.glyph))
+    };
+    let mut topology_ranked = Vec::with_capacity(EDGE_TOPOLOGY_CANDIDATES);
+    for candidate in ranked.iter().copied() {
+        let insert_at = topology_ranked
+            .binary_search_by(|existing| topology_order(existing, &candidate))
+            .unwrap_or_else(|index| index);
+        if insert_at < EDGE_TOPOLOGY_CANDIDATES {
+            topology_ranked.insert(insert_at, candidate);
+            topology_ranked.truncate(EDGE_TOPOLOGY_CANDIDATES);
+        }
+    }
+    let baseline_topology_score = topology_scores[baseline.glyph as usize];
+    let pareto_order = |first: &GlyphCandidate, second: &GlyphCandidate| {
+        let score = |candidate: &GlyphCandidate| {
+            let topology_improvement =
+                baseline_topology_score - topology_scores[candidate.glyph as usize];
+            if topology_improvement > f64::EPSILON {
+                (candidate.distance - baseline.distance).max(0.0) / topology_improvement
+            } else {
+                f64::INFINITY
+            }
+        };
+        score(first)
+            .total_cmp(&score(second))
+            .then_with(|| {
+                topology_scores[first.glyph as usize]
+                    .total_cmp(&topology_scores[second.glyph as usize])
+            })
+            .then_with(|| first.distance.total_cmp(&second.distance))
+            .then_with(|| first.glyph.cmp(&second.glyph))
+    };
+    let mut pareto_ranked = Vec::with_capacity(EDGE_PARETO_CANDIDATES);
+    for candidate in ranked.iter().copied() {
+        let insert_at = pareto_ranked
+            .binary_search_by(|existing| pareto_order(existing, &candidate))
+            .unwrap_or_else(|index| index);
+        if insert_at < EDGE_PARETO_CANDIDATES {
+            pareto_ranked.insert(insert_at, candidate);
+            pareto_ranked.truncate(EDGE_PARETO_CANDIDATES);
+        }
+    }
+
+    let mut retained = ranked[..baseline_count.min(EDGE_APPEARANCE_CANDIDATES)].to_vec();
+    for candidate in topology_ranked.into_iter().chain(pareto_ranked) {
+        if !retained
+            .iter()
+            .any(|existing| existing.glyph == candidate.glyph)
+        {
+            retained.push(candidate);
+        }
+    }
+    let mut pool = ranked.clone();
+    pool.sort_by(|first, second| {
+        (first.distance + selection_scores[first.glyph as usize])
+            .total_cmp(&(second.distance + selection_scores[second.glyph as usize]))
+            .then_with(|| first.glyph.cmp(&second.glyph))
+    });
+    for candidate in pool {
+        if retained.len() >= baseline_count {
+            break;
+        }
+        if !retained
+            .iter()
+            .any(|existing| existing.glyph == candidate.glyph)
+        {
+            retained.push(candidate);
+        }
+    }
+    retained[1..].sort_by(|first, second| {
+        (first.distance + selection_scores[first.glyph as usize])
+            .total_cmp(&(second.distance + selection_scores[second.glyph as usize]))
+            .then_with(|| first.glyph.cmp(&second.glyph))
+    });
+    debug_assert_eq!(retained[0], baseline);
+    debug_assert!(retained.len() <= baseline_count);
+    retained
+}
+
+fn topology_candidate_cost(candidate: GlyphTopology, target: GlyphTopology) -> f64 {
+    candidate.target_distance(target) + target_side_mismatch(candidate, target)
+}
+
+fn target_side_mismatch(candidate: GlyphTopology, target: GlyphTopology) -> f64 {
+    Side::ALL
+        .iter()
+        .filter(|side| (candidate.edge_ports(**side) != 0) != (target.edge_ports(**side) != 0))
+        .count() as f64
+        / Side::ALL.len() as f64
 }
 
 fn glyph_allowed(mode: u8, glyph: u8) -> bool {
@@ -477,14 +849,657 @@ enum Border {
     Left,
 }
 
+fn optimize_contour_chains(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    target_topologies: &[Option<GlyphTopology>],
+    topology_catalog: &[GlyphTopology],
+) -> Vec<usize> {
+    let mut selected = vec![0usize; alternatives.len()];
+    for chain in graph.open_chains() {
+        if chain.cells.len() < 2 {
+            continue;
+        }
+        let mut costs: Vec<Vec<f64>> = Vec::with_capacity(chain.cells.len());
+        let mut parents: Vec<Vec<usize>> = Vec::with_capacity(chain.cells.len());
+        let first = chain.cells[0];
+        let first_candidate_count = alternatives[first].len().min(EDGE_CHAIN_CANDIDATES);
+        costs.push(
+            alternatives[first]
+                .iter()
+                .take(first_candidate_count)
+                .map(|candidate| {
+                    chain_unary_cost(*candidate, target_topologies[first], topology_catalog)
+                })
+                .collect(),
+        );
+        parents.push(vec![usize::MAX; first_candidate_count]);
+
+        for position in 1..chain.cells.len() {
+            let previous_cell = chain.cells[position - 1];
+            let current_cell = chain.cells[position];
+            let side = graph
+                .side_between(previous_cell, current_cell)
+                .expect("contour chain cells must be adjacent");
+            let current_candidate_count =
+                alternatives[current_cell].len().min(EDGE_CHAIN_CANDIDATES);
+            let previous_candidate_count =
+                alternatives[previous_cell].len().min(EDGE_CHAIN_CANDIDATES);
+            let mut current_costs = vec![f64::INFINITY; current_candidate_count];
+            let mut current_parents = vec![0usize; current_candidate_count];
+            for (current_index, current) in alternatives[current_cell]
+                .iter()
+                .take(current_candidate_count)
+                .enumerate()
+            {
+                let unary =
+                    chain_unary_cost(*current, target_topologies[current_cell], topology_catalog);
+                for (previous_index, previous) in alternatives[previous_cell]
+                    .iter()
+                    .take(previous_candidate_count)
+                    .enumerate()
+                {
+                    let score = costs[position - 1][previous_index]
+                        + chain_pair_cost(*previous, *current, side, topology_catalog)
+                        + unary;
+                    let best_previous = current_parents[current_index];
+                    if score < current_costs[current_index]
+                        || (score == current_costs[current_index]
+                            && (previous.glyph, previous_index)
+                                < (
+                                    alternatives[previous_cell][best_previous].glyph,
+                                    best_previous,
+                                ))
+                    {
+                        current_costs[current_index] = score;
+                        current_parents[current_index] = previous_index;
+                    }
+                }
+            }
+            costs.push(current_costs);
+            parents.push(current_parents);
+        }
+
+        let final_cell = *chain.cells.last().unwrap();
+        let final_candidate_count = alternatives[final_cell].len().min(EDGE_CHAIN_CANDIDATES);
+        let mut candidate_index = (0..final_candidate_count)
+            .min_by(|first, second| {
+                costs.last().unwrap()[*first]
+                    .total_cmp(&costs.last().unwrap()[*second])
+                    .then_with(|| {
+                        alternatives[final_cell][*first]
+                            .glyph
+                            .cmp(&alternatives[final_cell][*second].glyph)
+                    })
+                    .then_with(|| first.cmp(second))
+            })
+            .unwrap_or(0);
+        for position in (0..chain.cells.len()).rev() {
+            selected[chain.cells[position]] = candidate_index;
+            if position > 0 {
+                candidate_index = parents[position][candidate_index];
+            }
+        }
+    }
+    optimize_closed_loops(
+        &graph,
+        alternatives,
+        target_topologies,
+        topology_catalog,
+        &mut selected,
+    );
+    selected
+}
+
+fn optimize_closed_loops(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    target_topologies: &[Option<GlyphTopology>],
+    topology_catalog: &[GlyphTopology],
+    selected: &mut [usize],
+) {
+    for contour_loop in graph.closed_loops() {
+        let cells = &contour_loop.cells;
+        let first_cell = cells[0];
+        let first_candidate_count = alternatives[first_cell].len().min(EDGE_LOOP_CANDIDATES);
+        let closing_side = graph
+            .side_between(*cells.last().unwrap(), first_cell)
+            .expect("closed contour endpoints must be adjacent");
+        let mut best_score = f64::INFINITY;
+        let mut best_sequence: Option<Vec<usize>> = None;
+
+        for first_choice in 0..first_candidate_count {
+            let mut costs: Vec<Vec<f64>> = Vec::with_capacity(cells.len());
+            let mut parents: Vec<Vec<usize>> = Vec::with_capacity(cells.len());
+            let mut first_costs = vec![f64::INFINITY; first_candidate_count];
+            first_costs[first_choice] = chain_unary_cost(
+                alternatives[first_cell][first_choice],
+                target_topologies[first_cell],
+                topology_catalog,
+            );
+            costs.push(first_costs);
+            parents.push(vec![usize::MAX; first_candidate_count]);
+
+            for position in 1..cells.len() {
+                let previous_cell = cells[position - 1];
+                let current_cell = cells[position];
+                let side = graph
+                    .side_between(previous_cell, current_cell)
+                    .expect("contour loop cells must be adjacent");
+                let previous_count = alternatives[previous_cell].len().min(EDGE_LOOP_CANDIDATES);
+                let current_count = alternatives[current_cell].len().min(EDGE_LOOP_CANDIDATES);
+                let mut current_costs = vec![f64::INFINITY; current_count];
+                let mut current_parents = vec![0usize; current_count];
+                for (current_index, current) in alternatives[current_cell]
+                    .iter()
+                    .take(current_count)
+                    .enumerate()
+                {
+                    let unary = chain_unary_cost(
+                        *current,
+                        target_topologies[current_cell],
+                        topology_catalog,
+                    );
+                    for (previous_index, previous) in alternatives[previous_cell]
+                        .iter()
+                        .take(previous_count)
+                        .enumerate()
+                    {
+                        let score = costs[position - 1][previous_index]
+                            + chain_pair_cost(*previous, *current, side, topology_catalog)
+                            + unary;
+                        let best_parent = current_parents[current_index];
+                        if score < current_costs[current_index]
+                            || (score == current_costs[current_index]
+                                && (previous.glyph, previous_index)
+                                    < (alternatives[previous_cell][best_parent].glyph, best_parent))
+                        {
+                            current_costs[current_index] = score;
+                            current_parents[current_index] = previous_index;
+                        }
+                    }
+                }
+                costs.push(current_costs);
+                parents.push(current_parents);
+            }
+
+            let last_cell = *cells.last().unwrap();
+            let last_count = alternatives[last_cell].len().min(EDGE_LOOP_CANDIDATES);
+            for last_choice in 0..last_count {
+                let score = costs.last().unwrap()[last_choice]
+                    + chain_pair_cost(
+                        alternatives[last_cell][last_choice],
+                        alternatives[first_cell][first_choice],
+                        closing_side,
+                        topology_catalog,
+                    );
+                let mut sequence = vec![0usize; cells.len()];
+                sequence[cells.len() - 1] = last_choice;
+                for position in (1..cells.len()).rev() {
+                    sequence[position - 1] = parents[position][sequence[position]];
+                }
+                let sequence_key: Vec<_> = cells
+                    .iter()
+                    .zip(sequence.iter())
+                    .map(|(cell, candidate)| (alternatives[*cell][*candidate].glyph, *candidate))
+                    .collect();
+                let best_key = best_sequence.as_ref().map(|best| {
+                    cells
+                        .iter()
+                        .zip(best.iter())
+                        .map(|(cell, candidate)| {
+                            (alternatives[*cell][*candidate].glyph, *candidate)
+                        })
+                        .collect::<Vec<_>>()
+                });
+                if score < best_score
+                    || (score == best_score
+                        && best_key
+                            .as_ref()
+                            .map_or(true, |best_key| sequence_key < *best_key))
+                {
+                    best_score = score;
+                    best_sequence = Some(sequence);
+                }
+            }
+        }
+
+        if let Some(sequence) = best_sequence {
+            for (cell, candidate) in cells.iter().zip(sequence) {
+                selected[*cell] = candidate;
+            }
+        }
+    }
+}
+
+fn coordinate_junctions(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    target_topologies: &[Option<GlyphTopology>],
+    topology_catalog: &[GlyphTopology],
+    selected: &mut [usize],
+) {
+    for pass in 0..EDGE_JUNCTION_PASSES {
+        let junctions = graph.junction_cells();
+        for step in 0..junctions.len() {
+            let junction = if pass % 2 == 0 {
+                junctions[step]
+            } else {
+                junctions[junctions.len() - 1 - step]
+            };
+            let mut best = selected[junction];
+            let mut best_score = f64::INFINITY;
+            for (candidate_index, candidate) in alternatives[junction]
+                .iter()
+                .take(EDGE_CONTINUITY_CANDIDATES)
+                .enumerate()
+            {
+                let mut score =
+                    chain_unary_cost(*candidate, target_topologies[junction], topology_catalog);
+                for &neighbor in graph.neighbors(junction) {
+                    let side = graph
+                        .side_between(junction, neighbor)
+                        .expect("junction neighbors must be adjacent");
+                    score += chain_pair_cost(
+                        *candidate,
+                        alternatives[neighbor][selected[neighbor]],
+                        side,
+                        topology_catalog,
+                    ) / graph.neighbors(junction).len() as f64;
+                }
+                if score < best_score
+                    || (score == best_score
+                        && (candidate.glyph, candidate_index)
+                            < (alternatives[junction][best].glyph, best))
+                {
+                    best = candidate_index;
+                    best_score = score;
+                }
+            }
+            selected[junction] = best;
+        }
+    }
+}
+
+fn chain_unary_cost(
+    candidate: GlyphCandidate,
+    target: Option<GlyphTopology>,
+    topology_catalog: &[GlyphTopology],
+) -> f64 {
+    let topology = topology_catalog[candidate.glyph as usize];
+    candidate.distance
+        + EDGE_TARGET_TOPOLOGY_WEIGHT
+            * target
+                .map(|target| topology.target_distance(target))
+                .unwrap_or(0.0)
+        + EDGE_TARGET_SIDE_WEIGHT
+            * target
+                .map(|target| target_side_mismatch(topology, target))
+                .unwrap_or(0.0)
+}
+
+fn chain_pair_cost(
+    first: GlyphCandidate,
+    second: GlyphCandidate,
+    side: Side,
+    topology_catalog: &[GlyphTopology],
+) -> f64 {
+    EDGE_PORT_CONTINUITY_WEIGHT
+        * topology_catalog[first.glyph as usize]
+            .shared_port_mismatch_tolerant(side, topology_catalog[second.glyph as usize])
+}
+
+#[allow(clippy::too_many_arguments)]
+fn constrain_reference_loss(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    proposed: &[usize],
+    charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
+) -> Vec<usize> {
+    let baseline_loss: f64 = alternatives
+        .iter()
+        .zip(edge_cells)
+        .filter(|(_, edge)| **edge)
+        .map(|(candidates, _)| candidates[0].distance)
+        .sum();
+    let reference_limit = baseline_loss * 1.05 + f64::EPSILON;
+    let spur_catalog: Vec<_> = charset.iter().map(bitmap_spur_penalty).collect();
+    let mut selected = proposed.to_vec();
+    let mut current_loss: f64 = alternatives
+        .iter()
+        .zip(edge_cells)
+        .enumerate()
+        .filter(|(_, (_, edge))| **edge)
+        .map(|(index, (candidates, _))| candidates[selected[index]].distance)
+        .sum();
+
+    while current_loss > reference_limit {
+        let mut best_rollback: Option<(f64, f64, usize, usize)> = None;
+        for index in 0..alternatives.len() {
+            if !edge_cells[index] || selected[index] == 0 {
+                continue;
+            }
+            let selected_cost = local_target_structure_cost(
+                index,
+                selected[index],
+                graph,
+                alternatives,
+                target_topologies,
+                &selected,
+                &spur_catalog,
+                topology_catalog,
+            );
+            for candidate_index in 0..alternatives[index].len() {
+                let reference_saving = alternatives[index][selected[index]].distance
+                    - alternatives[index][candidate_index].distance;
+                if reference_saving <= f64::EPSILON {
+                    continue;
+                }
+                let rollback_cost = local_target_structure_cost(
+                    index,
+                    candidate_index,
+                    graph,
+                    alternatives,
+                    target_topologies,
+                    &selected,
+                    &spur_catalog,
+                    topology_catalog,
+                );
+                let structure_benefit = rollback_cost - selected_cost;
+                let benefit_per_loss = structure_benefit / reference_saving;
+                let rollback = (benefit_per_loss, structure_benefit, index, candidate_index);
+                if best_rollback.as_ref().map_or(true, |best| {
+                    rollback
+                        .0
+                        .total_cmp(&best.0)
+                        .then_with(|| rollback.1.total_cmp(&best.1))
+                        .then_with(|| rollback.2.cmp(&best.2))
+                        .then_with(|| {
+                            alternatives[index][rollback.3]
+                                .glyph
+                                .cmp(&alternatives[index][best.3].glyph)
+                        })
+                        .then_with(|| rollback.3.cmp(&best.3))
+                        .is_lt()
+                }) {
+                    best_rollback = Some(rollback);
+                }
+            }
+        }
+        let Some((_, _, index, candidate_index)) = best_rollback else {
+            break;
+        };
+        current_loss -= alternatives[index][selected[index]].distance
+            - alternatives[index][candidate_index].distance;
+        selected[index] = candidate_index;
+    }
+    selected
+}
+
+#[allow(clippy::too_many_arguments)]
+fn local_target_structure_cost(
+    index: usize,
+    candidate_index: usize,
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    target_topologies: &[Option<GlyphTopology>],
+    selected: &[usize],
+    spur_catalog: &[f64],
+    topology_catalog: &[GlyphTopology],
+) -> f64 {
+    let candidate = alternatives[index][candidate_index];
+    let topology = topology_catalog[candidate.glyph as usize];
+    let target_cost = target_topologies[index].map_or(0.0, |target| {
+        EDGE_TARGET_TOPOLOGY_WEIGHT * topology.target_distance(target)
+            + EDGE_BUDGET_SIDE_WEIGHT * target_side_mismatch(topology, target)
+    });
+    let neighbors = graph.neighbors(index);
+    let (connection_cost, broken_connections) =
+        neighbors
+            .iter()
+            .fold((0.0, 0usize), |(mismatch, breaks), neighbor| {
+                let side = graph
+                    .side_between(index, *neighbor)
+                    .expect("contour graph neighbors must be adjacent");
+                let neighbor_candidate = alternatives[*neighbor][selected[*neighbor]];
+                let pair_mismatch = topology.shared_port_mismatch_tolerant(
+                    side,
+                    topology_catalog[neighbor_candidate.glyph as usize],
+                );
+                (
+                    mismatch + pair_mismatch,
+                    breaks + (pair_mismatch > 0.0) as usize,
+                )
+            });
+    let neighbor_denominator = neighbors.len().max(1) as f64;
+    target_cost
+        + EDGE_TARGET_CONNECTION_WEIGHT * connection_cost / neighbor_denominator
+        + EDGE_BUDGET_BREAK_WEIGHT * broken_connections as f64 / neighbor_denominator
+        + EDGE_SPUR_WEIGHT * spur_catalog[candidate.glyph as usize]
+}
+
+#[allow(clippy::too_many_arguments)]
+fn repair_target_connection_pairs(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    initial_selected: &[usize],
+    charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
+) -> Vec<usize> {
+    let baseline_loss: f64 = alternatives
+        .iter()
+        .zip(edge_cells)
+        .filter(|(_, edge)| **edge)
+        .map(|(candidates, _)| candidates[0].distance)
+        .sum();
+    let reference_limit = baseline_loss * 1.05 + f64::EPSILON;
+    let spur_catalog: Vec<_> = charset.iter().map(bitmap_spur_penalty).collect();
+    let mut selected = initial_selected.to_vec();
+    let mut current_loss: f64 = alternatives
+        .iter()
+        .zip(edge_cells)
+        .enumerate()
+        .filter(|(_, (_, edge))| **edge)
+        .map(|(index, (candidates, _))| candidates[selected[index]].distance)
+        .sum();
+
+    for pass in 0..EDGE_PAIR_REPAIR_PASSES {
+        let connections = graph.connections();
+        for step in 0..connections.len() {
+            let (first, second, side) = if pass % 2 == 0 {
+                connections[step]
+            } else {
+                connections[connections.len() - 1 - step]
+            };
+            let first_topology =
+                topology_catalog[alternatives[first][selected[first]].glyph as usize];
+            let second_topology =
+                topology_catalog[alternatives[second][selected[second]].glyph as usize];
+            if first_topology.shared_port_mismatch_tolerant(side, second_topology) == 0.0 {
+                continue;
+            }
+
+            let current_cost = pair_target_structure_cost(
+                first,
+                selected[first],
+                second,
+                selected[second],
+                graph,
+                alternatives,
+                target_topologies,
+                &selected,
+                &spur_catalog,
+                topology_catalog,
+            );
+            let current_pair_reference = alternatives[first][selected[first]].distance
+                + alternatives[second][selected[second]].distance;
+            let current_side_error = [first, second]
+                .into_iter()
+                .map(|index| {
+                    target_topologies[index].map_or(0.0, |target| {
+                        let candidate = alternatives[index][selected[index]];
+                        target_side_mismatch(topology_catalog[candidate.glyph as usize], target)
+                    })
+                })
+                .sum::<f64>();
+            let mut best = (selected[first], selected[second]);
+            let mut best_cost = current_cost;
+            let mut best_reference = current_pair_reference;
+
+            for first_candidate in 0..alternatives[first].len() {
+                for second_candidate in 0..alternatives[second].len() {
+                    let first_candidate_topology =
+                        topology_catalog[alternatives[first][first_candidate].glyph as usize];
+                    let second_candidate_topology =
+                        topology_catalog[alternatives[second][second_candidate].glyph as usize];
+                    if first_candidate_topology
+                        .shared_port_mismatch_tolerant(side, second_candidate_topology)
+                        > 0.0
+                    {
+                        continue;
+                    }
+                    let candidate_side_error = [
+                        (first, first_candidate, first_candidate_topology),
+                        (second, second_candidate, second_candidate_topology),
+                    ]
+                    .into_iter()
+                    .map(|(index, _, topology)| {
+                        target_topologies[index]
+                            .map_or(0.0, |target| target_side_mismatch(topology, target))
+                    })
+                    .sum::<f64>();
+                    if candidate_side_error > current_side_error {
+                        continue;
+                    }
+                    let pair_reference = alternatives[first][first_candidate].distance
+                        + alternatives[second][second_candidate].distance;
+                    let proposed_loss = current_loss - current_pair_reference + pair_reference;
+                    if proposed_loss > reference_limit {
+                        continue;
+                    }
+                    let score = pair_target_structure_cost(
+                        first,
+                        first_candidate,
+                        second,
+                        second_candidate,
+                        graph,
+                        alternatives,
+                        target_topologies,
+                        &selected,
+                        &spur_catalog,
+                        topology_catalog,
+                    );
+                    let key = (
+                        alternatives[first][first_candidate].glyph,
+                        alternatives[second][second_candidate].glyph,
+                        first_candidate,
+                        second_candidate,
+                    );
+                    let best_key = (
+                        alternatives[first][best.0].glyph,
+                        alternatives[second][best.1].glyph,
+                        best.0,
+                        best.1,
+                    );
+                    if score < best_cost
+                        || (score == best_cost
+                            && (pair_reference < best_reference
+                                || (pair_reference == best_reference && key < best_key)))
+                    {
+                        best = (first_candidate, second_candidate);
+                        best_cost = score;
+                        best_reference = pair_reference;
+                    }
+                }
+            }
+            if best_cost + f64::EPSILON < current_cost {
+                current_loss = current_loss - current_pair_reference + best_reference;
+                selected[first] = best.0;
+                selected[second] = best.1;
+            }
+        }
+    }
+    selected
+}
+
+#[allow(clippy::too_many_arguments)]
+fn pair_target_structure_cost(
+    first: usize,
+    first_candidate: usize,
+    second: usize,
+    second_candidate: usize,
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    target_topologies: &[Option<GlyphTopology>],
+    selected: &[usize],
+    spur_catalog: &[f64],
+    topology_catalog: &[GlyphTopology],
+) -> f64 {
+    let choice = |index: usize| {
+        if index == first {
+            first_candidate
+        } else if index == second {
+            second_candidate
+        } else {
+            selected[index]
+        }
+    };
+    let mut cost = 0.0;
+    for index in [first, second] {
+        let candidate = alternatives[index][choice(index)];
+        let topology = topology_catalog[candidate.glyph as usize];
+        if let Some(target) = target_topologies[index] {
+            cost += EDGE_TARGET_TOPOLOGY_WEIGHT * topology.target_distance(target)
+                + EDGE_BUDGET_SIDE_WEIGHT * target_side_mismatch(topology, target);
+        }
+        cost += EDGE_SPUR_WEIGHT * spur_catalog[candidate.glyph as usize];
+    }
+
+    let mut incident_connections = Vec::new();
+    for index in [first, second] {
+        for &neighbor in graph.neighbors(index) {
+            let connection = if index < neighbor {
+                (index, neighbor)
+            } else {
+                (neighbor, index)
+            };
+            if !incident_connections.contains(&connection) {
+                incident_connections.push(connection);
+            }
+        }
+    }
+    incident_connections.sort_unstable();
+    for (left, right) in incident_connections {
+        let side = graph
+            .side_between(left, right)
+            .expect("contour graph neighbors must be adjacent");
+        let left_candidate = alternatives[left][choice(left)];
+        let right_candidate = alternatives[right][choice(right)];
+        let mismatch = topology_catalog[left_candidate.glyph as usize]
+            .shared_port_mismatch_tolerant(side, topology_catalog[right_candidate.glyph as usize]);
+        cost += EDGE_TARGET_CONNECTION_WEIGHT * mismatch
+            + EDGE_BUDGET_BREAK_WEIGHT * (mismatch > 0.0) as u8 as f64;
+    }
+    cost
+}
+
 fn refine_edge_continuity(
     width: u32,
     height: u32,
+    graph: &ContourGraph,
     alternatives: &[Vec<GlyphCandidate>],
     edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    initial_selected: &[usize],
     charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
 ) -> Vec<usize> {
-    let mut selected = vec![0usize; alternatives.len()];
+    let mut selected = initial_selected.to_vec();
     for pass in 0..EDGE_CONTINUITY_PASSES {
         let reverse = pass % 2 == 1;
         for step in 0..alternatives.len() {
@@ -502,27 +1517,35 @@ fn refine_edge_continuity(
             let mut best_score = f64::INFINITY;
             for (candidate_index, candidate) in alternatives[index].iter().enumerate() {
                 let mut continuity = 0.0;
+                let mut port_continuity = 0.0;
                 let mut neighbor_count = 0usize;
-                for (neighbor_index, own_border, neighbor_border) in [
+                let mut target_connection = 0.0;
+                let mut target_neighbor_count = 0usize;
+                let candidate_topology = topology_catalog[candidate.glyph as usize];
+                for (neighbor_index, own_border, neighbor_border, own_side) in [
                     (
                         y.checked_sub(1).map(|ny| (ny * width + x) as usize),
                         Border::Top,
                         Border::Bottom,
+                        Side::Top,
                     ),
                     (
                         (x + 1 < width).then(|| (y * width + x + 1) as usize),
                         Border::Right,
                         Border::Left,
+                        Side::Right,
                     ),
                     (
                         (y + 1 < height).then(|| ((y + 1) * width + x) as usize),
                         Border::Bottom,
                         Border::Top,
+                        Side::Bottom,
                     ),
                     (
                         x.checked_sub(1).map(|nx| (y * width + nx) as usize),
                         Border::Left,
                         Border::Right,
+                        Side::Left,
                     ),
                 ] {
                     if let Some(neighbor_index) = neighbor_index {
@@ -534,10 +1557,30 @@ fn refine_edge_continuity(
                             neighbor_border,
                             charset,
                         );
+                        let neighbor_topology = topology_catalog[neighbor.glyph as usize];
+                        port_continuity += candidate_topology
+                            .shared_port_mismatch_tolerant(own_side, neighbor_topology);
                         neighbor_count += 1;
+                        if graph
+                            .neighbors(index)
+                            .binary_search(&neighbor_index)
+                            .is_ok()
+                        {
+                            target_connection += candidate_topology
+                                .shared_port_mismatch_tolerant(own_side, neighbor_topology);
+                            target_neighbor_count += 1;
+                        }
                     }
                 }
                 let continuity = continuity / neighbor_count.max(1) as f64;
+                let port_continuity = port_continuity / neighbor_count.max(1) as f64;
+                let target_connection = target_connection / target_neighbor_count.max(1) as f64;
+                let target_topology = target_topologies[index]
+                    .map(|target| candidate_topology.target_distance(target))
+                    .unwrap_or(0.0);
+                let target_sides = target_topologies[index]
+                    .map(|target| target_side_mismatch(candidate_topology, target))
+                    .unwrap_or(0.0);
                 let spur = bitmap_spur_penalty(&charset[candidate.glyph as usize]);
                 let neighborhood_spur = neighborhood_artifact_penalty(
                     index,
@@ -550,6 +1593,10 @@ fn refine_edge_continuity(
                 );
                 let score = candidate.distance
                     + EDGE_CONTINUITY_WEIGHT * continuity
+                    + EDGE_PORT_CONTINUITY_WEIGHT * port_continuity
+                    + EDGE_TARGET_TOPOLOGY_WEIGHT * target_topology
+                    + EDGE_TARGET_SIDE_WEIGHT * target_sides
+                    + EDGE_TARGET_CONNECTION_WEIGHT * target_connection
                     + EDGE_SPUR_WEIGHT * spur
                     + EDGE_NEIGHBORHOOD_SPUR_WEIGHT * neighborhood_spur;
                 if score < best_score
@@ -563,6 +1610,196 @@ fn refine_edge_continuity(
         }
     }
     selected
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EdgeGrammarObjective {
+    total: f64,
+    reference_loss: f64,
+}
+
+fn edge_gate_decision(
+    baseline: EdgeGrammarObjective,
+    proposed: EdgeGrammarObjective,
+    reference_limit: f64,
+) -> EdgeGateDecision {
+    if proposed.reference_loss > reference_limit {
+        EdgeGateDecision::RejectedReferenceLoss
+    } else if proposed.total > baseline.total {
+        EdgeGateDecision::RejectedObjective
+    } else {
+        EdgeGateDecision::Accepted
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn measure_edge_grammar(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    selected: &[usize],
+    charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
+    objective: EdgeGrammarObjective,
+) -> EdgeGrammarMetrics {
+    let mut target_port_loss = 0.0;
+    let mut target_cell_count = 0usize;
+    let mut target_sides = 0usize;
+    let mut covered_sides = 0usize;
+    let mut side_union = 0usize;
+    let mut side_errors = 0usize;
+    let mut false_junction_count = 0usize;
+    let mut spur_cell_count = 0usize;
+    let mut edited_cells = 0usize;
+
+    for index in 0..alternatives.len() {
+        edited_cells += (selected[index] != 0) as usize;
+        let Some(target) = target_topologies[index] else {
+            continue;
+        };
+        target_cell_count += 1;
+        let candidate = alternatives[index][selected[index]];
+        let topology = topology_catalog[candidate.glyph as usize];
+        target_port_loss += topology.port_distance(target);
+        for side in Side::ALL {
+            let target_active = target.edge_ports(side) != 0;
+            let candidate_active = topology.edge_ports(side) != 0;
+            target_sides += target_active as usize;
+            side_union += (target_active || candidate_active) as usize;
+            covered_sides += (target_active && candidate_active) as usize;
+            side_errors += (target_active != candidate_active) as usize;
+        }
+        false_junction_count +=
+            (topology.active_sides() >= 3 && target.active_sides() < 3) as usize;
+        spur_cell_count += (bitmap_spur_penalty(&charset[candidate.glyph as usize]) > 0.0) as usize;
+    }
+
+    let connections = graph.connections();
+    let broken_connections = connections
+        .iter()
+        .filter(|(first, second, side)| {
+            let first_candidate = alternatives[*first][selected[*first]];
+            let second_candidate = alternatives[*second][selected[*second]];
+            topology_catalog[first_candidate.glyph as usize].shared_port_mismatch_tolerant(
+                *side,
+                topology_catalog[second_candidate.glyph as usize],
+            ) > 0.0
+        })
+        .count();
+    let edited_denominator = edge_cells.iter().filter(|edge| **edge).count().max(1) as f64;
+    EdgeGrammarMetrics {
+        objective: objective.total,
+        reference_loss: objective.reference_loss,
+        target_port_loss: target_port_loss / target_cell_count.max(1) as f64,
+        shared_port_break_rate: broken_connections as f64 / connections.len().max(1) as f64,
+        unexpected_endpoint_rate: side_errors as f64 / side_union.max(1) as f64,
+        contour_coverage: covered_sides as f64 / target_sides.max(1) as f64,
+        false_junction_count,
+        spur_cell_count,
+        edited_cells,
+        edited_ratio: edited_cells as f64 / edited_denominator,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn edge_grammar_objective(
+    width: u32,
+    height: u32,
+    alternatives: &[Vec<GlyphCandidate>],
+    edge_cells: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    selected: &[usize],
+    charset: &[BlockGrayImage],
+    topology_catalog: &[GlyphTopology],
+) -> EdgeGrammarObjective {
+    let mut reference_loss = 0.0;
+    let mut target_loss = 0.0;
+    let mut spur_loss = 0.0;
+    let mut neighborhood_spur_loss = 0.0;
+    let mut edge_count = 0usize;
+    let mut color_continuity = 0.0;
+    let mut port_continuity = 0.0;
+    let mut pair_count = 0usize;
+
+    for index in 0..alternatives.len() {
+        if !edge_cells[index] {
+            continue;
+        }
+        edge_count += 1;
+        let candidate = alternatives[index][selected[index]];
+        let topology = topology_catalog[candidate.glyph as usize];
+        reference_loss += candidate.distance;
+        target_loss += target_topologies[index]
+            .map(|target| topology.target_distance(target))
+            .unwrap_or(0.0);
+        spur_loss += bitmap_spur_penalty(&charset[candidate.glyph as usize]);
+        neighborhood_spur_loss += neighborhood_artifact_penalty(
+            index,
+            candidate,
+            width,
+            height,
+            alternatives,
+            selected,
+            charset,
+        );
+    }
+
+    for y in 0..height {
+        for x in 0..width {
+            let index = (y * width + x) as usize;
+            for (neighbor_index, own_border, neighbor_border, own_side) in [
+                (
+                    (x + 1 < width).then(|| index + 1),
+                    Border::Right,
+                    Border::Left,
+                    Side::Right,
+                ),
+                (
+                    (y + 1 < height).then(|| index + width as usize),
+                    Border::Bottom,
+                    Border::Top,
+                    Side::Bottom,
+                ),
+            ] {
+                let Some(neighbor_index) = neighbor_index else {
+                    continue;
+                };
+                if !edge_cells[index] && !edge_cells[neighbor_index] {
+                    continue;
+                }
+                let candidate = alternatives[index][selected[index]];
+                let neighbor = alternatives[neighbor_index][selected[neighbor_index]];
+                color_continuity +=
+                    border_mismatch(candidate, own_border, neighbor, neighbor_border, charset);
+                port_continuity += topology_catalog[candidate.glyph as usize]
+                    .shared_port_mismatch_tolerant(
+                        own_side,
+                        topology_catalog[neighbor.glyph as usize],
+                    );
+                pair_count += 1;
+            }
+        }
+    }
+
+    let edge_denominator = edge_count.max(1) as f64;
+    let pair_denominator = pair_count.max(1) as f64;
+    reference_loss /= edge_denominator;
+    target_loss /= edge_denominator;
+    spur_loss /= edge_denominator;
+    neighborhood_spur_loss /= edge_denominator;
+    color_continuity /= pair_denominator;
+    port_continuity /= pair_denominator;
+    let total = reference_loss
+        + EDGE_TARGET_TOPOLOGY_WEIGHT * target_loss
+        + EDGE_CONTINUITY_WEIGHT * color_continuity
+        + EDGE_PORT_CONTINUITY_WEIGHT * port_continuity
+        + EDGE_SPUR_WEIGHT * spur_loss
+        + EDGE_NEIGHBORHOOD_SPUR_WEIGHT * neighborhood_spur_loss;
+    EdgeGrammarObjective {
+        total,
+        reference_loss,
+    }
 }
 
 fn neighborhood_artifact_penalty(
@@ -679,7 +1916,7 @@ fn neighborhood_artifact_penalty(
 /// Penalize a tiny foreground stroke or background notch that enters from at
 /// most one cell side. Shapes crossing the cell or turning through a corner
 /// touch at least two sides and remain available for genuine thin contours.
-fn bitmap_spur_penalty(bitmap: &BlockGrayImage) -> f64 {
+pub(crate) fn bitmap_spur_penalty(bitmap: &BlockGrayImage) -> f64 {
     let foreground = bitmap
         .iter()
         .flatten()
@@ -1113,8 +2350,488 @@ mod tests {
             vec![dangling, continuous],
             vec![blue_space],
         ];
-        let selected = refine_edge_continuity(3, 1, &alternatives, &[false, true, false], &charset);
+        let topology_catalog = build_topology_catalog(&charset);
+        let graph = ContourGraph::from_targets(3, 1, &[None, None, None]);
+        let selected = refine_edge_continuity(
+            3,
+            1,
+            &graph,
+            &alternatives,
+            &[false, true, false],
+            &[None, None, None],
+            &[0, 0, 0],
+            &charset,
+            &topology_catalog,
+        );
         assert_eq!(selected[1], 1);
+    }
+
+    #[test]
+    fn topology_selection_aligns_ports_even_when_rendered_colors_are_equal() {
+        let horizontal_half = |start_y: usize| {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            for row in bitmap.iter_mut().skip(start_y) {
+                row.fill(255);
+            }
+            bitmap
+        };
+        let charset = vec![horizontal_half(4), horizontal_half(6)];
+        let topology_catalog = build_topology_catalog(&charset);
+        let aligned = GlyphCandidate {
+            glyph: 0,
+            distance: 0.02,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let shifted = GlyphCandidate {
+            glyph: 1,
+            distance: 0.0,
+            ..aligned
+        };
+        let alternatives = vec![vec![aligned], vec![shifted, aligned], vec![aligned]];
+        let graph = ContourGraph::from_targets(3, 1, &[None, None, None]);
+
+        let selected = refine_edge_continuity(
+            3,
+            1,
+            &graph,
+            &alternatives,
+            &[false, true, false],
+            &[None, None, None],
+            &[0, 0, 0],
+            &charset,
+            &topology_catalog,
+        );
+
+        assert_eq!(selected[1], 1);
+    }
+
+    #[test]
+    fn contour_chain_optimizer_selects_one_consistent_sequence() {
+        let horizontal_half = |start_y: usize| {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            for row in bitmap.iter_mut().skip(start_y) {
+                row.fill(255);
+            }
+            bitmap
+        };
+        let charset = vec![horizontal_half(4), horizontal_half(6)];
+        let topology_catalog = build_topology_catalog(&charset);
+        let aligned = GlyphCandidate {
+            glyph: 0,
+            distance: 0.02,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let shifted = GlyphCandidate {
+            glyph: 1,
+            distance: 0.0,
+            ..aligned
+        };
+        let alternatives = vec![vec![aligned], vec![shifted, aligned], vec![aligned]];
+        let target = GlyphTopology::from_bitmap(&charset[0]);
+        let targets = vec![Some(target); 3];
+        let graph = ContourGraph::from_targets(3, 1, &targets);
+
+        let first = optimize_contour_chains(&graph, &alternatives, &targets, &topology_catalog);
+        let second = optimize_contour_chains(&graph, &alternatives, &targets, &topology_catalog);
+
+        assert_eq!(first, vec![0, 1, 0]);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn closed_loop_optimizer_prices_the_closing_seam() {
+        let quadrant = |top: bool, left: bool| {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            let y_range = if top { 0..4 } else { 4..8 };
+            let x_range = if left { 0..4 } else { 4..8 };
+            for y in y_range {
+                for x in x_range.clone() {
+                    bitmap[y][x] = 255;
+                }
+            }
+            bitmap
+        };
+        let charset = vec![
+            quadrant(false, false),
+            quadrant(false, true),
+            quadrant(true, false),
+            quadrant(true, true),
+            vec![vec![0u8; 8]; 8],
+        ];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let alternatives = vec![
+            vec![candidate(0, 0.0)],
+            vec![candidate(1, 0.0)],
+            vec![candidate(4, 0.0), candidate(2, 0.02)],
+            vec![candidate(3, 0.0)],
+        ];
+        let targets: Vec<_> = [0usize, 1, 2, 3]
+            .into_iter()
+            .map(|glyph| Some(topology_catalog[glyph]))
+            .collect();
+        let graph = ContourGraph::from_targets(2, 2, &targets);
+
+        let selected = optimize_contour_chains(&graph, &alternatives, &targets, &topology_catalog);
+
+        assert_eq!(selected, vec![0, 0, 1, 0]);
+    }
+
+    #[test]
+    fn junction_coordination_selects_all_incident_ports() {
+        let vertical = || {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            for row in &mut bitmap {
+                row[3..5].fill(255);
+            }
+            bitmap
+        };
+        let horizontal = || {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            for row in bitmap.iter_mut().skip(3).take(2) {
+                row.fill(255);
+            }
+            bitmap
+        };
+        let mut t_junction = vertical();
+        for row in t_junction.iter_mut().skip(3).take(2) {
+            row[4..].fill(255);
+        }
+        let charset = vec![vertical(), horizontal(), t_junction, vec![vec![0u8; 8]; 8]];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let fallback = vec![candidate(3, 0.0)];
+        let mut alternatives = vec![fallback.clone(); 9];
+        alternatives[1] = vec![candidate(0, 0.0)];
+        alternatives[4] = vec![candidate(3, 0.0), candidate(2, 0.02)];
+        alternatives[5] = vec![candidate(1, 0.0)];
+        alternatives[7] = vec![candidate(0, 0.0)];
+        let mut targets = vec![None; 9];
+        targets[1] = Some(topology_catalog[0]);
+        targets[4] = Some(topology_catalog[2]);
+        targets[5] = Some(topology_catalog[1]);
+        targets[7] = Some(topology_catalog[0]);
+        let graph = ContourGraph::from_targets(3, 3, &targets);
+        let mut first = vec![0usize; 9];
+        let mut second = first.clone();
+
+        coordinate_junctions(
+            &graph,
+            &alternatives,
+            &targets,
+            &topology_catalog,
+            &mut first,
+        );
+        coordinate_junctions(
+            &graph,
+            &alternatives,
+            &targets,
+            &topology_catalog,
+            &mut second,
+        );
+
+        assert_eq!(first[4], 1);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn edge_metrics_distinguish_connected_and_broken_ports() {
+        let horizontal_fill = |start_y: usize| {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            for row in bitmap.iter_mut().skip(start_y) {
+                row.fill(255);
+            }
+            bitmap
+        };
+        let charset = vec![horizontal_fill(4), horizontal_fill(6)];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8| GlyphCandidate {
+            glyph,
+            distance: 0.0,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let alternatives = vec![vec![candidate(0)], vec![candidate(0), candidate(1)]];
+        let targets = vec![Some(topology_catalog[0]); 2];
+        let graph = ContourGraph::from_targets(2, 1, &targets);
+        let objective = EdgeGrammarObjective {
+            total: 0.0,
+            reference_loss: 0.0,
+        };
+        let connected = measure_edge_grammar(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &[0, 0],
+            &charset,
+            &topology_catalog,
+            objective,
+        );
+        let broken = measure_edge_grammar(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &[0, 1],
+            &charset,
+            &topology_catalog,
+            objective,
+        );
+
+        assert_eq!(connected.shared_port_break_rate, 0.0);
+        assert!(broken.shared_port_break_rate > connected.shared_port_break_rate);
+        assert!(broken.target_port_loss > connected.target_port_loss);
+    }
+
+    #[test]
+    fn reference_budget_uses_intermediate_candidates_deterministically() {
+        let mut blank = vec![vec![0u8; 8]; 8];
+        let mut vertical_fill = vec![vec![0u8; 8]; 8];
+        for row in &mut vertical_fill {
+            row[4..].fill(255);
+        }
+        let charset = vec![std::mem::take(&mut blank), vertical_fill];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let alternatives = vec![
+            vec![candidate(0, 0.1), candidate(1, 0.105), candidate(1, 0.2)],
+            vec![candidate(0, 0.1), candidate(1, 0.105), candidate(1, 0.2)],
+        ];
+        let targets = vec![Some(topology_catalog[1]); 2];
+        let graph = ContourGraph::from_targets(1, 2, &targets);
+        let proposed = [2usize, 2];
+        let first = constrain_reference_loss(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &proposed,
+            &charset,
+            &topology_catalog,
+        );
+        let second = constrain_reference_loss(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &proposed,
+            &charset,
+            &topology_catalog,
+        );
+        let reference_loss: f64 = first
+            .iter()
+            .enumerate()
+            .map(|(index, selected)| alternatives[index][*selected].distance)
+            .sum();
+
+        assert_eq!(first, vec![1, 1]);
+        assert_eq!(first, second);
+        assert!(reference_loss <= 0.21 + f64::EPSILON);
+    }
+
+    #[test]
+    fn pair_repair_connects_both_ends_within_reference_budget() {
+        let horizontal_fill = |start_y: usize| {
+            let mut bitmap = vec![vec![0u8; 8]; 8];
+            for row in bitmap.iter_mut().skip(start_y) {
+                row.fill(255);
+            }
+            bitmap
+        };
+        let charset = vec![horizontal_fill(4), horizontal_fill(6)];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8, distance: f64| GlyphCandidate {
+            glyph,
+            distance,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let alternatives = vec![
+            vec![candidate(1, 0.1), candidate(0, 0.11)],
+            vec![candidate(0, 0.1), candidate(1, 0.11)],
+        ];
+        let targets = vec![Some(topology_catalog[0]); 2];
+        let graph = ContourGraph::from_targets(2, 1, &targets);
+        let first = repair_target_connection_pairs(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &[0, 0],
+            &charset,
+            &topology_catalog,
+        );
+        let second = repair_target_connection_pairs(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &[0, 0],
+            &charset,
+            &topology_catalog,
+        );
+        let selected_first = topology_catalog[alternatives[0][first[0]].glyph as usize];
+        let selected_second = topology_catalog[alternatives[1][first[1]].glyph as usize];
+
+        assert_eq!(first, second);
+        assert_eq!(
+            selected_first.shared_port_mismatch_tolerant(Side::Right, selected_second),
+            0.0
+        );
+    }
+
+    #[test]
+    fn edge_metrics_detect_dangling_and_overconnected_glyphs() {
+        let mut straight = vec![vec![0u8; 8]; 8];
+        for row in straight.iter_mut().skip(4) {
+            row.fill(255);
+        }
+        let mut endpoint = vec![vec![0u8; 8]; 8];
+        for row in endpoint.iter_mut().skip(3).take(2) {
+            row[..6].fill(255);
+        }
+        let mut junction = vec![vec![0u8; 8]; 8];
+        for row in &mut junction {
+            row[3..5].fill(255);
+        }
+        for row in junction.iter_mut().skip(3).take(2) {
+            row[..4].fill(255);
+        }
+        let charset = vec![straight, endpoint, junction];
+        let topology_catalog = build_topology_catalog(&charset);
+        let candidate = |glyph: u8| GlyphCandidate {
+            glyph,
+            distance: 0.0,
+            fg: 6,
+            bg: 6,
+            texture: 1,
+        };
+        let alternatives = vec![
+            vec![candidate(0), candidate(1), candidate(2)],
+            vec![candidate(0)],
+        ];
+        let targets = vec![Some(topology_catalog[0]); 2];
+        let graph = ContourGraph::from_targets(2, 1, &targets);
+        let objective = EdgeGrammarObjective {
+            total: 0.0,
+            reference_loss: 0.0,
+        };
+        let dangling = measure_edge_grammar(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &[1, 0],
+            &charset,
+            &topology_catalog,
+            objective,
+        );
+        let overconnected = measure_edge_grammar(
+            &graph,
+            &alternatives,
+            &[true, true],
+            &targets,
+            &[2, 0],
+            &charset,
+            &topology_catalog,
+            objective,
+        );
+
+        assert!(dangling.unexpected_endpoint_rate > 0.0);
+        assert_eq!(overconnected.false_junction_count, 1);
+        assert!(overconnected.unexpected_endpoint_rate > 0.0);
+    }
+
+    #[test]
+    fn edge_gate_reports_acceptance_and_both_fallback_reasons() {
+        let baseline = EdgeGrammarObjective {
+            total: 1.0,
+            reference_loss: 0.5,
+        };
+        assert_eq!(
+            edge_gate_decision(
+                baseline,
+                EdgeGrammarObjective {
+                    total: 0.9,
+                    reference_loss: 0.51,
+                },
+                0.525,
+            ),
+            EdgeGateDecision::Accepted
+        );
+        assert_eq!(
+            edge_gate_decision(
+                baseline,
+                EdgeGrammarObjective {
+                    total: 1.1,
+                    reference_loss: 0.5,
+                },
+                0.525,
+            ),
+            EdgeGateDecision::RejectedObjective
+        );
+        assert_eq!(
+            edge_gate_decision(
+                baseline,
+                EdgeGrammarObjective {
+                    total: 0.8,
+                    reference_loss: 0.53,
+                },
+                0.525,
+            ),
+            EdgeGateDecision::RejectedReferenceLoss
+        );
+    }
+
+    #[test]
+    fn mode_two_edge_report_serializes_deterministically() {
+        let mut image = ImageBuffer::from_pixel(24, 8, Rgba([30, 30, 30, 255]));
+        for y in 4..8 {
+            for x in 0..24 {
+                image.put_pixel(x, y, Rgba([230, 230, 230, 255]));
+            }
+        }
+        let config = ConversionConfig {
+            width: 3,
+            height: 1,
+            mode: 2,
+            top_k: 6,
+            contrast: 0.0,
+        };
+        let first = convert_image(&DynamicImage::ImageRgba8(image.clone()), &config).unwrap();
+        let second = convert_image(&DynamicImage::ImageRgba8(image), &config).unwrap();
+        let first_json = serde_json::to_vec_pretty(&first.edge_grammar).unwrap();
+        let second_json = serde_json::to_vec_pretty(&second.edge_grammar).unwrap();
+
+        assert_ne!(first.edge_grammar.decision, EdgeGateDecision::Disabled);
+        assert!(first.edge_grammar.edge_cells > 0);
+        assert_eq!(first_json, second_json);
+        assert_eq!(first.edge_debug.is_some(), second.edge_debug.is_some());
     }
 
     #[test]

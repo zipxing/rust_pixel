@@ -40,10 +40,12 @@ The image-to-grid path has four stages:
    to space, other uniform cells to a solid block, and rank only internally
    varying cells against the fixed PETSCII charset. Mode 2 uses local two-color
    quantization so dark objects do not inherit the scene background color.
-3. **Refine edge continuity**: for strong-edge cells only, re-rank a bounded
-   top-K set using source reconstruction, neighboring border continuity, and
-   generic dangling-spur penalties. There are no scene-specific or
-   shape-specific repair passes.
+3. **Refine edge continuity**: for strong-edge cells only, merge appearance
+   Top-K with a bounded set of topology-compatible PETSCII glyphs, solve stable
+   contour chains and junctions, then apply generic continuity and spur repair.
+   A deterministic Pareto rollback uses intermediate candidates to keep every
+   accepted result within 5% of its own Top-1 reference loss. There are no
+   scene-specific or shape-specific repair passes.
 4. **Materialize the grid**: place the selected candidate first, truncate saved
    alternatives to the requested top-K bound, validate the typed grid, and emit
    `.pix`/PNG artifacts.
@@ -114,11 +116,21 @@ The adapter expects OpenAI-compatible image-generation and chat-completions
 response shapes. Keys are never written to output or logged.
 
 Each run emits `final.pix`, `final.png`, `reference.png`, individual candidate
-`.pix`/PNG files, `gallery.png`, `critique.json`, and a redacted
-`manifest.json`. Given the same input image and conversion settings, the Rust
-candidate/optimizer path is deterministic. Live reference generation and
-critic behavior can still vary by provider; recorded-response replay is not
-implemented yet.
+`.pix`/PNG files, `gallery.png`, `critique.json`, `edge-metrics.json`, an
+optional `edge-debug.png`, and a redacted `manifest.json`.
+
+`edge-metrics.json` compares the local Top-1 baseline, the edge-grammar
+proposal, and the quality-gated final selection. It records reference loss,
+target-port loss, shared-border breaks, endpoint errors, contour coverage,
+false junctions, spur cells, edits, chain/loop/junction counts, and the gate
+decision. `edge-debug.png` uses cyan for reference ports, green for aligned
+selected ports/connections, red for breaks, orange for edited cells, yellow for
+spur cells, and purple for junction cells.
+
+Given the same input image and conversion settings, the Rust
+candidate/optimizer path and edge diagnostics are deterministic. Live
+reference generation and critic behavior can still vary by provider;
+recorded-response replay is not implemented yet.
 
 ## Current limitations
 
