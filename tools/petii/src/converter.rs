@@ -7,7 +7,6 @@ use rust_pixel::render::symbols::{
     find_best_color_u32, gen_charset_images, get_block_color, get_grayscale_block_at,
     get_petii_block_color, BlockGrayImage,
 };
-use std::collections::BTreeSet;
 
 pub const GLYPH_WIDTH: u32 = 8;
 pub const GLYPH_HEIGHT: u32 = 8;
@@ -24,7 +23,7 @@ const EDGE_CONTINUITY_WEIGHT: f64 = 0.28;
 const EDGE_SPUR_WEIGHT: f64 = 0.3;
 const EDGE_NEIGHBORHOOD_SPUR_WEIGHT: f64 = 0.22;
 const EDGE_CONTINUITY_PASSES: usize = 4;
-const EQUALS_MAX_DISTANCE_REGRESSION: f64 = 0.1;
+const MODE2_EXCLUDED_PUNCTUATION: [u8; 3] = [33, 37, 38];
 
 #[derive(Debug, Clone)]
 pub struct ConversionResult {
@@ -33,6 +32,83 @@ pub struct ConversionResult {
     pub alternatives: Vec<Vec<GlyphCandidate>>,
     /// Exact preprocessed image used by candidate generation and scoring.
     pub reference: DynamicImage,
+}
+
+struct CellCandidates {
+    ranked: Vec<GlyphCandidate>,
+    edge_aware: bool,
+}
+
+struct CandidateGenerator<'a> {
+    config: &'a ConversionConfig,
+    reference: &'a DynamicImage,
+    gray: &'a GrayImage,
+    edge_image: &'a GrayImage,
+    charset: &'a [BlockGrayImage],
+    background_gray: u8,
+    background_rgb: u32,
+    background_color: u8,
+}
+
+impl CandidateGenerator<'_> {
+    fn generate(&self, x: u32, y: u32) -> CellCandidates {
+        let raw_block = get_grayscale_block_at(self.gray, x, y, GLYPH_WIDTH, GLYPH_HEIGHT);
+        let edge_block = get_grayscale_block_at(self.edge_image, x, y, GLYPH_WIDTH, GLYPH_HEIGHT);
+        let flat_mean = (self.config.mode != 1)
+            .then(|| uniform_block_mean(&raw_block))
+            .flatten();
+        let edge_aware = self.config.mode != 1 && flat_mean.is_none() && is_edge_cell(&edge_block);
+        let color_mode = if edge_aware { 1 } else { self.config.mode };
+        let (bg, fg) = select_cell_colors(
+            self.reference,
+            self.gray,
+            x,
+            y,
+            color_mode,
+            self.background_rgb,
+        );
+        let edge_target = edge_aware.then(|| EdgeTarget::new(&raw_block, fg, bg));
+        // Exact extraction binarizes known PETSCII artwork. General-image
+        // modes retain grayscale structure for nearest-glyph matching.
+        let match_block = if self.config.mode == 1 {
+            binarize_grayscale_block(
+                &raw_block,
+                self.background_gray,
+                GLYPH_WIDTH as usize,
+                GLYPH_HEIGHT as usize,
+            )
+        } else {
+            raw_block
+        };
+        let ranked = match flat_mean {
+            Some(mean)
+                if (mean as i16 - self.background_gray as i16).abs()
+                    <= BACKGROUND_MEAN_TOLERANCE =>
+            {
+                vec![solid_candidate(
+                    SPACE_GLYPH,
+                    self.background_color,
+                    self.background_color,
+                )]
+            }
+            Some(_) => vec![solid_candidate(SOLID_GLYPH, fg, bg)],
+            None => rank_glyphs(
+                &match_block,
+                self.charset,
+                self.config.mode,
+                if edge_aware {
+                    self.config.top_k.max(EDGE_CONTINUITY_CANDIDATES)
+                } else {
+                    self.config.top_k
+                },
+                fg,
+                bg,
+                edge_target.as_ref(),
+            ),
+        };
+
+        CellCandidates { ranked, edge_aware }
+    }
 }
 
 /// Generate bounded deterministic preprocessing variants. The first item is always the
@@ -55,18 +131,8 @@ pub fn convert_image(
 ) -> Result<ConversionResult, String> {
     config.validate()?;
 
-    let adjusted = if config.contrast.abs() > f32::EPSILON {
-        image.adjust_contrast(config.contrast)
-    } else {
-        image.clone()
-    };
-    let reference = adjusted.resize_exact(
-        config.width * GLYPH_WIDTH,
-        config.height * GLYPH_HEIGHT,
-        image::imageops::FilterType::Lanczos3,
-    );
-    let gray = reference.clone().into_luma8();
-    let edge_image = clean_edge_image(&sobel_image(&gray));
+    // 1. Normalize the source once for every downstream scoring stage.
+    let (reference, gray, edge_image) = prepare_reference(image, config);
     let charset = gen_charset_images(
         false,
         GLYPH_WIDTH as usize,
@@ -79,82 +145,43 @@ pub fn convert_image(
         find_background_color(&reference, &gray, reference.width(), reference.height());
     let background_color = find_best_color_u32(background_rgb) as u8;
 
-    let mut cells = Vec::with_capacity((config.width * config.height) as usize);
-    let mut alternatives = Vec::with_capacity(cells.capacity());
-    let mut edge_cells = Vec::with_capacity(cells.capacity());
+    // 2. Generate bounded candidates independently for each character cell.
+    let generator = CandidateGenerator {
+        config,
+        reference: &reference,
+        gray: &gray,
+        edge_image: &edge_image,
+        charset: &charset,
+        background_gray,
+        background_rgb,
+        background_color,
+    };
+    let capacity = (config.width * config.height) as usize;
+    let mut alternatives = Vec::with_capacity(capacity);
+    let mut edge_cells = Vec::with_capacity(capacity);
 
     for y in 0..config.height {
         for x in 0..config.width {
-            let raw_block = get_grayscale_block_at(&gray, x, y, GLYPH_WIDTH, GLYPH_HEIGHT);
-            let edge_block = get_grayscale_block_at(&edge_image, x, y, GLYPH_WIDTH, GLYPH_HEIGHT);
-            let flat_mean = (config.mode != 1)
-                .then(|| flat_block_mean(&raw_block))
-                .flatten();
-            let edge_aware = config.mode != 1 && flat_mean.is_none() && is_edge_cell(&edge_block);
-            let color_mode = if edge_aware { 1 } else { config.mode };
-            let (bg, fg) = colors_for_cell(&reference, &gray, x, y, color_mode, background_rgb);
-            let edge_target = edge_aware.then(|| EdgeTarget::new(&raw_block, fg, bg));
-            // Exact extraction binarizes an already-PETSCII cell. General-image
-            // modes retain grayscale structure for nearest-glyph matching.
-            let block = if config.mode == 1 {
-                binarize_grayscale_block(
-                    &raw_block,
-                    background_gray,
-                    GLYPH_WIDTH as usize,
-                    GLYPH_HEIGHT as usize,
-                )
-            } else {
-                raw_block
-            };
-            let ranked = match flat_mean {
-                Some(mean)
-                    if (mean as i16 - background_gray as i16).abs()
-                        <= BACKGROUND_MEAN_TOLERANCE =>
-                {
-                    vec![solid_candidate(
-                        SPACE_GLYPH,
-                        background_color,
-                        background_color,
-                    )]
-                }
-                Some(_) => vec![solid_candidate(SOLID_GLYPH, fg, bg)],
-                None => rank_glyphs(
-                    &block,
-                    &charset,
-                    config.mode,
-                    if edge_aware {
-                        config.top_k.max(EDGE_CONTINUITY_CANDIDATES)
-                    } else {
-                        config.top_k
-                    },
-                    fg,
-                    bg,
-                    edge_target.as_ref(),
-                ),
-            };
-            cells.push(ranked[0].cell());
-            alternatives.push(ranked);
-            edge_cells.push(edge_aware);
+            let candidates = generator.generate(x, y);
+            alternatives.push(candidates.ranked);
+            edge_cells.push(candidates.edge_aware);
         }
     }
 
-    let selected = select_continuous_edges(
+    // 3. Re-rank only edge cells using generic cross-cell coherence losses.
+    let selected = refine_edge_continuity(
         config.width,
         config.height,
         &alternatives,
         &edge_cells,
         &charset,
     );
-    let selected = refine_equals_noise(
-        config.width,
-        config.height,
-        &alternatives,
-        &charset,
-        selected,
-    );
+
+    // 4. Materialize the selected grid and keep the selected candidate first.
+    let mut cells = Vec::with_capacity(capacity);
     for (index, selected_index) in selected.into_iter().enumerate() {
         let selected_candidate = alternatives[index][selected_index];
-        cells[index] = selected_candidate.cell();
+        cells.push(selected_candidate.cell());
         if selected_index != 0 {
             alternatives[index].swap(0, selected_index);
         }
@@ -168,7 +195,30 @@ pub fn convert_image(
     })
 }
 
-fn colors_for_cell(
+fn prepare_reference(
+    image: &DynamicImage,
+    config: &ConversionConfig,
+) -> (DynamicImage, GrayImage, GrayImage) {
+    let adjusted = if config.contrast.abs() > f32::EPSILON {
+        image.adjust_contrast(config.contrast)
+    } else {
+        image.clone()
+    };
+    let reference = adjusted.resize_exact(
+        config.width * GLYPH_WIDTH,
+        config.height * GLYPH_HEIGHT,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let gray = reference.clone().into_luma8();
+    let edge_image = if config.mode == 1 {
+        GrayImage::new(gray.width(), gray.height())
+    } else {
+        clean_edge_image(&sobel_image(&gray))
+    };
+    (reference, gray, edge_image)
+}
+
+fn select_cell_colors(
     reference: &DynamicImage,
     gray: &GrayImage,
     x: u32,
@@ -176,7 +226,7 @@ fn colors_for_cell(
     mode: u8,
     background_rgb: u32,
 ) -> (u8, u8) {
-    if mode == 1 {
+    if mode == 1 || mode == 2 {
         let (bg, fg) = get_petii_block_color(
             reference,
             gray,
@@ -189,7 +239,10 @@ fn colors_for_cell(
         (bg as u8, fg as u8)
     } else {
         let color = get_block_color(reference, x, y, GLYPH_WIDTH, GLYPH_HEIGHT);
-        (0, find_best_color(color) as u8)
+        (
+            find_best_color_u32(background_rgb) as u8,
+            find_best_color(color) as u8,
+        )
     }
 }
 
@@ -234,7 +287,9 @@ fn glyph_allowed(mode: u8, glyph: u8) -> bool {
         return true;
     }
     let base = glyph % 128;
-    !((1..=26).contains(&base) || (48..=57).contains(&base))
+    !((1..=26).contains(&base)
+        || (48..=57).contains(&base)
+        || MODE2_EXCLUDED_PUNCTUATION.contains(&base))
 }
 
 fn solid_candidate(glyph: u8, fg: u8, bg: u8) -> GlyphCandidate {
@@ -247,7 +302,7 @@ fn solid_candidate(glyph: u8, fg: u8, bg: u8) -> GlyphCandidate {
     }
 }
 
-fn flat_block_mean(block: &BlockGrayImage) -> Option<u8> {
+fn uniform_block_mean(block: &BlockGrayImage) -> Option<u8> {
     let mut min = u8::MAX;
     let mut max = u8::MIN;
     let mut sum = 0u32;
@@ -422,7 +477,7 @@ enum Border {
     Left,
 }
 
-fn select_continuous_edges(
+fn refine_edge_continuity(
     width: u32,
     height: u32,
     alternatives: &[Vec<GlyphCandidate>],
@@ -484,7 +539,7 @@ fn select_continuous_edges(
                 }
                 let continuity = continuity / neighbor_count.max(1) as f64;
                 let spur = bitmap_spur_penalty(&charset[candidate.glyph as usize]);
-                let (neighborhood_spur, _) = neighborhood_artifact_penalties(
+                let neighborhood_spur = neighborhood_artifact_penalty(
                     index,
                     *candidate,
                     width,
@@ -510,114 +565,7 @@ fn select_continuous_edges(
     selected
 }
 
-fn refine_equals_noise(
-    width: u32,
-    height: u32,
-    alternatives: &[Vec<GlyphCandidate>],
-    charset: &[BlockGrayImage],
-    mut selected: Vec<usize>,
-) -> Vec<usize> {
-    let mut colors = render_selected_colors(width, height, alternatives, &selected, charset);
-    for _ in 0..2 {
-        let (mut pair_count, targets) = global_equals_targets(&colors, width, height);
-        if pair_count == 0 {
-            break;
-        }
-        let mut changed = false;
-        for index in targets {
-            if alternatives[index].len() < 2 {
-                continue;
-            }
-            let current_index = selected[index];
-            let current = alternatives[index][current_index];
-            let current_fragmentation =
-                bitmap_fragmentation_penalty(&charset[current.glyph as usize]);
-            let mut best = current_index;
-            let mut best_pairs = pair_count;
-            let mut best_distance = current.distance;
-
-            for (candidate_index, candidate) in alternatives[index].iter().enumerate() {
-                if candidate_index == current_index
-                    || candidate.distance > current.distance + EQUALS_MAX_DISTANCE_REGRESSION
-                    || bitmap_fragmentation_penalty(&charset[candidate.glyph as usize])
-                        > current_fragmentation + f64::EPSILON
-                {
-                    continue;
-                }
-                paint_candidate(&mut colors, index, width, *candidate, charset);
-                let candidate_pairs = global_equals_targets(&colors, width, height).0;
-                paint_candidate(&mut colors, index, width, current, charset);
-                if candidate_pairs < best_pairs
-                    || (candidate_pairs == best_pairs && candidate.distance < best_distance)
-                {
-                    best = candidate_index;
-                    best_pairs = candidate_pairs;
-                    best_distance = candidate.distance;
-                }
-            }
-            if best != current_index && best_pairs < pair_count {
-                selected[index] = best;
-                paint_candidate(
-                    &mut colors,
-                    index,
-                    width,
-                    alternatives[index][best],
-                    charset,
-                );
-                pair_count = best_pairs;
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-    selected
-}
-
-fn render_selected_colors(
-    width: u32,
-    height: u32,
-    alternatives: &[Vec<GlyphCandidate>],
-    selected: &[usize],
-    charset: &[BlockGrayImage],
-) -> Vec<Vec<u8>> {
-    let mut colors =
-        vec![vec![0u8; (width * GLYPH_WIDTH) as usize]; (height * GLYPH_HEIGHT) as usize];
-    for index in 0..alternatives.len() {
-        paint_candidate(
-            &mut colors,
-            index,
-            width,
-            alternatives[index][selected[index]],
-            charset,
-        );
-    }
-    colors
-}
-
-fn paint_candidate(
-    colors: &mut [Vec<u8>],
-    index: usize,
-    width: u32,
-    candidate: GlyphCandidate,
-    charset: &[BlockGrayImage],
-) {
-    let cell_x = index as u32 % width;
-    let cell_y = index as u32 / width;
-    let bitmap = &charset[candidate.glyph as usize];
-    for y in 0..GLYPH_HEIGHT as usize {
-        for x in 0..GLYPH_WIDTH as usize {
-            colors[cell_y as usize * 8 + y][cell_x as usize * 8 + x] = if bitmap[y][x] >= 128 {
-                candidate.fg
-            } else {
-                candidate.bg
-            };
-        }
-    }
-}
-
-fn neighborhood_artifact_penalties(
+fn neighborhood_artifact_penalty(
     center_index: usize,
     center: GlyphCandidate,
     width: u32,
@@ -625,9 +573,11 @@ fn neighborhood_artifact_penalties(
     alternatives: &[Vec<GlyphCandidate>],
     selected: &[usize],
     charset: &[BlockGrayImage],
-) -> (f64, f64) {
+) -> f64 {
     const PATCH_CELLS: usize = 3;
     const PATCH_SIZE: usize = PATCH_CELLS * GLYPH_WIDTH as usize;
+    const CENTER_START: usize = GLYPH_WIDTH as usize;
+    const CENTER_END: usize = CENTER_START * 2;
     let center_x = center_index as u32 % width;
     let center_y = center_index as u32 / width;
     let mut colors = vec![vec![center.bg; PATCH_SIZE]; PATCH_SIZE];
@@ -647,11 +597,8 @@ fn neighborhood_artifact_penalties(
             let bitmap = &charset[candidate.glyph as usize];
             for y in 0..GLYPH_HEIGHT as usize {
                 for x in 0..GLYPH_WIDTH as usize {
-                    colors[cell_y * 8 + y][cell_x * 8 + x] = if bitmap[y][x] >= 128 {
-                        candidate.fg
-                    } else {
-                        candidate.bg
-                    };
+                    colors[cell_y * GLYPH_HEIGHT as usize + y][cell_x * GLYPH_WIDTH as usize + x] =
+                        rendered_color_index(candidate, bitmap, x, y);
                 }
             }
         }
@@ -697,7 +644,8 @@ fn neighborhood_artifact_penalties(
             visited[start_y][start_x] = true;
             while let Some((x, y)) = stack.pop() {
                 size += 1;
-                intersects_center |= (8..16).contains(&x) && (8..16).contains(&y);
+                intersects_center |= (CENTER_START..CENTER_END).contains(&x)
+                    && (CENTER_START..CENTER_END).contains(&y);
                 touches_patch_edge |=
                     x == 0 || y == 0 || x + 1 == PATCH_SIZE || y + 1 == PATCH_SIZE;
                 for dy in -1isize..=1 {
@@ -725,286 +673,7 @@ fn neighborhood_artifact_penalties(
             }
         }
     }
-    (penalty, equals_noise_penalty(&colors))
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ThinRun {
-    position: usize,
-    start: usize,
-    end: usize,
-    color: u8,
-}
-
-fn equals_noise_penalty(colors: &[Vec<u8>]) -> f64 {
-    let mut counts = [0usize; 256];
-    for color in colors.iter().flatten() {
-        counts[*color as usize] += 1;
-    }
-    let dominant = counts
-        .iter()
-        .enumerate()
-        .max_by_key(|(_, count)| *count)
-        .map(|(color, _)| color as u8)
-        .unwrap_or(0);
-    let horizontal = collect_thin_runs(colors, false);
-    let vertical = collect_thin_runs(colors, true);
-    parallel_run_pair_penalty(&horizontal, colors, false, dominant)
-        .max(parallel_run_pair_penalty(&vertical, colors, true, dominant))
-}
-
-fn collect_thin_runs(colors: &[Vec<u8>], vertical: bool) -> Vec<ThinRun> {
-    let height = colors.len();
-    let width = colors.first().map_or(0, Vec::len);
-    let positions = if vertical { width } else { height };
-    let along_size = if vertical { height } else { width };
-    let mut runs = Vec::new();
-    for position in 0..positions {
-        let mut start = 0usize;
-        while start < along_size {
-            let (x, y) = if vertical {
-                (position, start)
-            } else {
-                (start, position)
-            };
-            let color = colors[y][x];
-            if !pixel_is_orthogonally_thin(colors, x, y, vertical) {
-                start += 1;
-                continue;
-            }
-            let mut end = start + 1;
-            while end < along_size {
-                let (x, y) = if vertical {
-                    (position, end)
-                } else {
-                    (end, position)
-                };
-                if colors[y][x] != color || !pixel_is_orthogonally_thin(colors, x, y, vertical) {
-                    break;
-                }
-                end += 1;
-            }
-            if end - start >= 6 {
-                runs.push(ThinRun {
-                    position,
-                    start,
-                    end,
-                    color,
-                });
-            }
-            start = end;
-        }
-    }
-    runs
-}
-
-fn pixel_is_orthogonally_thin(colors: &[Vec<u8>], x: usize, y: usize, vertical: bool) -> bool {
-    let height = colors.len();
-    let width = colors.first().map_or(0, Vec::len);
-    let color = colors[y][x];
-    let neighbors = if vertical {
-        [
-            x.checked_sub(1).map(|nx| (nx, y)),
-            (x + 1 < width).then_some((x + 1, y)),
-        ]
-    } else {
-        [
-            y.checked_sub(1).map(|ny| (x, ny)),
-            (y + 1 < height).then_some((x, y + 1)),
-        ]
-    };
-    neighbors
-        .into_iter()
-        .flatten()
-        .filter(|(nx, ny)| colors[*ny][*nx] == color)
-        .count()
-        <= 1
-}
-
-fn parallel_run_pair_penalty(
-    runs: &[ThinRun],
-    colors: &[Vec<u8>],
-    vertical: bool,
-    dominant: u8,
-) -> f64 {
-    const CENTER_START: usize = 8;
-    const CENTER_END: usize = 16;
-    let mut penalty = 0.0f64;
-    for (index, first) in runs.iter().enumerate() {
-        for second in &runs[index + 1..] {
-            if (palette_distance(first.color, dominant) <= 0.22
-                && palette_distance(second.color, dominant) <= 0.22)
-                || palette_distance(first.color, second.color) > 0.28
-            {
-                continue;
-            }
-            let separation = second.position.saturating_sub(first.position);
-            if !(3..=10).contains(&separation) {
-                continue;
-            }
-            let overlap_start = first.start.max(second.start);
-            let overlap_end = first.end.min(second.end);
-            if overlap_end.saturating_sub(overlap_start) < 6 {
-                continue;
-            }
-            let intersects_center = ((CENTER_START..CENTER_END).contains(&first.position)
-                || (CENTER_START..CENTER_END).contains(&second.position))
-                && overlap_start < CENTER_END
-                && overlap_end > CENTER_START;
-            if !intersects_center {
-                continue;
-            }
-
-            let mut gap_pixels = 0usize;
-            let mut different_pixels = 0usize;
-            for position in first.position + 1..second.position {
-                for along in overlap_start..overlap_end {
-                    let (x, y) = if vertical {
-                        (position, along)
-                    } else {
-                        (along, position)
-                    };
-                    gap_pixels += 1;
-                    different_pixels += usize::from(
-                        palette_distance(colors[y][x], first.color) > 0.18
-                            && palette_distance(colors[y][x], second.color) > 0.18,
-                    );
-                }
-            }
-            if gap_pixels == 0 || different_pixels * 10 < gap_pixels * 7 {
-                continue;
-            }
-            let overlap = overlap_end - overlap_start;
-            penalty = penalty.max((overlap.min(12) as f64) / 12.0);
-        }
-    }
     penalty
-}
-
-fn global_equals_targets(
-    colors: &[Vec<u8>],
-    cell_width: u32,
-    cell_height: u32,
-) -> (usize, Vec<usize>) {
-    let mut counts = [0usize; 256];
-    for color in colors.iter().flatten() {
-        counts[*color as usize] += 1;
-    }
-    let dominant = counts
-        .iter()
-        .enumerate()
-        .max_by_key(|(_, count)| *count)
-        .map(|(color, _)| color as u8)
-        .unwrap_or(0);
-    let mut targets = BTreeSet::new();
-    let horizontal = collect_thin_runs(colors, false);
-    let vertical = collect_thin_runs(colors, true);
-    let count = collect_global_parallel_pairs(
-        &horizontal,
-        colors,
-        false,
-        dominant,
-        cell_width,
-        cell_height,
-        &mut targets,
-    ) + collect_global_parallel_pairs(
-        &vertical,
-        colors,
-        true,
-        dominant,
-        cell_width,
-        cell_height,
-        &mut targets,
-    );
-    (count, targets.into_iter().collect())
-}
-
-fn collect_global_parallel_pairs(
-    runs: &[ThinRun],
-    colors: &[Vec<u8>],
-    vertical: bool,
-    dominant: u8,
-    cell_width: u32,
-    cell_height: u32,
-    targets: &mut BTreeSet<usize>,
-) -> usize {
-    let mut pair_count = 0usize;
-    for (index, first) in runs.iter().enumerate() {
-        for second in &runs[index + 1..] {
-            let separation = second.position.saturating_sub(first.position);
-            if separation > 10 {
-                break;
-            }
-            if separation < 3
-                || (palette_distance(first.color, dominant) <= 0.22
-                    && palette_distance(second.color, dominant) <= 0.22)
-                || palette_distance(first.color, second.color) > 0.28
-            {
-                continue;
-            }
-            let overlap_start = first.start.max(second.start);
-            let overlap_end = first.end.min(second.end);
-            if overlap_end.saturating_sub(overlap_start) < 6 {
-                continue;
-            }
-            let mut gap_pixels = 0usize;
-            let mut different_pixels = 0usize;
-            for position in first.position + 1..second.position {
-                for along in overlap_start..overlap_end {
-                    let (x, y) = if vertical {
-                        (position, along)
-                    } else {
-                        (along, position)
-                    };
-                    gap_pixels += 1;
-                    different_pixels += usize::from(
-                        palette_distance(colors[y][x], first.color) > 0.18
-                            && palette_distance(colors[y][x], second.color) > 0.18,
-                    );
-                }
-            }
-            if gap_pixels == 0 || different_pixels * 10 < gap_pixels * 7 {
-                continue;
-            }
-            // Use overlap length rather than a binary pair count. A candidate
-            // that shortens a long visual "=" must receive credit even when
-            // the remaining fragments are still long enough to be detected.
-            pair_count += overlap_end - overlap_start;
-            if vertical {
-                let first_x = first.position / 8;
-                let second_x = second.position / 8;
-                for cell_y in overlap_start / 8..=(overlap_end - 1) / 8 {
-                    if first_x < cell_width as usize && cell_y < cell_height as usize {
-                        targets.insert(cell_y * cell_width as usize + first_x);
-                    }
-                    if second_x < cell_width as usize && cell_y < cell_height as usize {
-                        targets.insert(cell_y * cell_width as usize + second_x);
-                    }
-                }
-            } else {
-                let first_y = first.position / 8;
-                let second_y = second.position / 8;
-                for cell_x in overlap_start / 8..=(overlap_end - 1) / 8 {
-                    if cell_x < cell_width as usize && first_y < cell_height as usize {
-                        targets.insert(first_y * cell_width as usize + cell_x);
-                    }
-                    if cell_x < cell_width as usize && second_y < cell_height as usize {
-                        targets.insert(second_y * cell_width as usize + cell_x);
-                    }
-                }
-            }
-        }
-    }
-    pair_count
-}
-
-fn palette_distance(first: u8, second: u8) -> f64 {
-    ANSI_COLOR_RGB[first as usize]
-        .iter()
-        .zip(ANSI_COLOR_RGB[second as usize].iter())
-        .map(|(a, b)| (*a as f64 - *b as f64).abs())
-        .sum::<f64>()
-        / (255.0 * 3.0)
 }
 
 /// Penalize a tiny foreground stroke or background notch that enters from at
@@ -1049,59 +718,6 @@ fn bitmap_spur_penalty(bitmap: &BlockGrayImage) -> f64 {
     };
 
     minority_penalty.max(thin_branch_penalty(bitmap))
-}
-
-fn bitmap_fragmentation_penalty(bitmap: &BlockGrayImage) -> f64 {
-    let foreground = bitmap
-        .iter()
-        .flatten()
-        .filter(|pixel| **pixel >= 128)
-        .count();
-    let minority_is_foreground = foreground <= (GLYPH_WIDTH * GLYPH_HEIGHT) as usize / 2;
-    let mut visited = vec![vec![false; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
-    let mut components = 0usize;
-    for start_y in 0..GLYPH_HEIGHT as usize {
-        for start_x in 0..GLYPH_WIDTH as usize {
-            let is_minority = (bitmap[start_y][start_x] >= 128) == minority_is_foreground;
-            if !is_minority || visited[start_y][start_x] {
-                continue;
-            }
-            components += 1;
-            let mut stack = vec![(start_x, start_y)];
-            visited[start_y][start_x] = true;
-            while let Some((x, y)) = stack.pop() {
-                for (dx, dy) in [(0i32, -1i32), (1, 0), (0, 1), (-1, 0)] {
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
-                    if nx < 0 || ny < 0 || nx >= GLYPH_WIDTH as i32 || ny >= GLYPH_HEIGHT as i32 {
-                        continue;
-                    }
-                    let nx = nx as usize;
-                    let ny = ny as usize;
-                    let is_minority = (bitmap[ny][nx] >= 128) == minority_is_foreground;
-                    if is_minority && !visited[ny][nx] {
-                        visited[ny][nx] = true;
-                        stack.push((nx, ny));
-                    }
-                }
-            }
-        }
-    }
-
-    let mut transitions = 0usize;
-    for y in 0..GLYPH_HEIGHT as usize {
-        for x in 0..GLYPH_WIDTH as usize {
-            if x + 1 < GLYPH_WIDTH as usize && bitmap[y][x] != bitmap[y][x + 1] {
-                transitions += 1;
-            }
-            if y + 1 < GLYPH_HEIGHT as usize && bitmap[y][x] != bitmap[y + 1][x] {
-                transitions += 1;
-            }
-        }
-    }
-    let component_loss = components.saturating_sub(1).min(3) as f64 / 3.0;
-    let transition_loss = transitions.saturating_sub(20).min(40) as f64 / 40.0;
-    component_loss.max(transition_loss)
 }
 
 fn thin_branch_penalty(bitmap: &BlockGrayImage) -> f64 {
@@ -1209,12 +825,21 @@ fn rendered_border_rgb(
         Border::Bottom => (offset, GLYPH_HEIGHT as usize - 1),
         Border::Left => (0, offset),
     };
-    let color = if charset[candidate.glyph as usize][y][x] >= 128 {
+    let color = rendered_color_index(candidate, &charset[candidate.glyph as usize], x, y);
+    ANSI_COLOR_RGB[color as usize]
+}
+
+fn rendered_color_index(
+    candidate: GlyphCandidate,
+    bitmap: &BlockGrayImage,
+    x: usize,
+    y: usize,
+) -> u8 {
+    if bitmap[y][x] >= 128 {
         candidate.fg
     } else {
         candidate.bg
-    };
-    ANSI_COLOR_RGB[color as usize]
+    }
 }
 
 fn palette_luma(index: u8) -> f32 {
@@ -1330,6 +955,15 @@ mod tests {
     }
 
     #[test]
+    fn mode_two_rejects_noisy_punctuation_in_both_polarities() {
+        for glyph in [33, 37, 38, 161, 165, 166] {
+            assert!(!glyph_allowed(2, glyph));
+        }
+        assert!(glyph_allowed(0, 33));
+        assert!(glyph_allowed(1, 161));
+    }
+
+    #[test]
     fn flat_background_uses_space_and_detected_background_color() {
         let image =
             DynamicImage::ImageRgba8(ImageBuffer::from_pixel(16, 8, Rgba([64, 91, 137, 255])));
@@ -1367,6 +1001,47 @@ mod tests {
         assert_eq!(result.grid.cells[0].glyph, SPACE_GLYPH);
         assert_eq!(result.grid.cells[1].glyph, SPACE_GLYPH);
         assert_eq!(result.grid.cells[2].glyph, SOLID_GLYPH);
+    }
+
+    #[test]
+    fn mode_two_uses_detected_scene_background_when_present() {
+        let sky = Rgba([18, 101, 178, 255]);
+        let reference = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(8, 8, sky));
+        let gray = reference.clone().into_luma8();
+        let background_rgb = ((sky[0] as u32) << 24)
+            | ((sky[1] as u32) << 16)
+            | ((sky[2] as u32) << 8)
+            | sky[3] as u32;
+        let expected = find_best_color_u32(background_rgb) as u8;
+
+        let (bg, _) = select_cell_colors(&reference, &gray, 0, 0, 2, background_rgb);
+
+        assert_eq!(bg, expected);
+        assert_ne!(bg, 0);
+    }
+
+    #[test]
+    fn mode_two_uses_local_dark_background_when_sky_is_absent() {
+        let mut image = ImageBuffer::from_pixel(8, 8, Rgba([24, 24, 24, 255]));
+        for y in 0..8 {
+            for x in 4..8 {
+                image.put_pixel(x, y, Rgba([58, 58, 58, 255]));
+            }
+        }
+        let reference = DynamicImage::ImageRgba8(image);
+        let gray = reference.clone().into_luma8();
+        let sky = Rgba([18, 101, 178, 255]);
+        let background_rgb = ((sky[0] as u32) << 24)
+            | ((sky[1] as u32) << 16)
+            | ((sky[2] as u32) << 8)
+            | sky[3] as u32;
+        let sky_index = find_best_color_u32(background_rgb) as u8;
+
+        let (bg, fg) = select_cell_colors(&reference, &gray, 0, 0, 2, background_rgb);
+
+        assert_ne!(bg, sky_index);
+        assert_ne!(fg, sky_index);
+        assert_ne!(bg, fg);
     }
 
     #[test]
@@ -1438,8 +1113,7 @@ mod tests {
             vec![dangling, continuous],
             vec![blue_space],
         ];
-        let selected =
-            select_continuous_edges(3, 1, &alternatives, &[false, true, false], &charset);
+        let selected = refine_edge_continuity(3, 1, &alternatives, &[false, true, false], &charset);
         assert_eq!(selected[1], 1);
     }
 
@@ -1455,41 +1129,6 @@ mod tests {
         }
         assert!(bitmap_spur_penalty(&dangling) > 0.0);
         assert_eq!(bitmap_spur_penalty(&crossing), 0.0);
-    }
-
-    #[test]
-    fn equals_noise_detects_horizontal_and_vertical_parallel_pairs() {
-        let mut horizontal = vec![vec![0u8; 24]; 24];
-        horizontal[9][6..18].fill(3);
-        horizontal[14][6..18].fill(3);
-        assert!(equals_noise_penalty(&horizontal) > 0.0);
-        let (count, targets) = global_equals_targets(&horizontal, 3, 3);
-        assert!(count > 0);
-        assert!(!targets.is_empty());
-
-        let mut vertical = vec![vec![0u8; 24]; 24];
-        for row in vertical.iter_mut().take(18).skip(6) {
-            row[9] = 3;
-            row[14] = 3;
-        }
-        assert!(equals_noise_penalty(&vertical) > 0.0);
-    }
-
-    #[test]
-    fn equals_noise_does_not_mistake_a_filled_band_for_parallel_lines() {
-        let mut filled = vec![vec![0u8; 24]; 24];
-        for row in filled.iter_mut().take(15).skip(9) {
-            row[6..18].fill(3);
-        }
-        assert_eq!(equals_noise_penalty(&filled), 0.0);
-        assert_eq!(global_equals_targets(&filled, 3, 3).0, 0);
-    }
-
-    #[test]
-    fn fragmented_checker_is_costlier_than_a_continuous_rule() {
-        let charset = gen_charset_images(false, 8, 8, &C64LOW, &C64UP);
-        assert!(bitmap_fragmentation_penalty(&charset[104]) > 0.0);
-        assert_eq!(bitmap_fragmentation_penalty(&charset[68]), 0.0);
     }
 
     #[test]

@@ -26,7 +26,27 @@ Modes are:
   one foreground color per cell;
 - `1`: extract an image that is already exact PETSCII art, including each
   cell's foreground and background colors;
-- `2`: use mode `0` but exclude letters and digits.
+- `2`: use mode `0` with local foreground/background colors while excluding
+  letters, digits, and a small set of text-like punctuation glyphs.
+
+### Deterministic conversion pipeline
+
+The image-to-grid path has four stages:
+
+1. **Normalize once**: apply the requested contrast, resize to exactly 8×8
+   source pixels per output cell, detect the dominant scene background, and
+   build a cleaned whole-image Sobel map.
+2. **Generate cell candidates**: send uniform scene-background cells directly
+   to space, other uniform cells to a solid block, and rank only internally
+   varying cells against the fixed PETSCII charset. Mode 2 uses local two-color
+   quantization so dark objects do not inherit the scene background color.
+3. **Refine edge continuity**: for strong-edge cells only, re-rank a bounded
+   top-K set using source reconstruction, neighboring border continuity, and
+   generic dangling-spur penalties. There are no scene-specific or
+   shape-specific repair passes.
+4. **Materialize the grid**: place the selected candidate first, truncate saved
+   alternatives to the requested top-K bound, validate the typed grid, and emit
+   `.pix`/PNG artifacts.
 
 ## Experimental AI loop
 
@@ -76,16 +96,12 @@ offline optimization default to mode `2`, keeping the same nearest-glyph
 algorithm while restricting the candidate vocabulary to graphic symbols. Mode
 `1` is reserved for extracting sources that are already exact PETSCII art.
 Mode `2` removes forbidden glyph IDs from matching rather than replacing their
-templates, and flat cells near the detected scene background become true space
-glyphs rendered with that background color. Other flat cells become solid-block
-glyphs in their locally quantized color; structural matching is reserved for
-internally varying cells. Strong-edge cells use a whole-image Sobel map, local
-foreground/background fill masks, and glyph-edge overlap to prefer PETSCII
-half-block, diagonal, and line-like contours. Weak edge components disconnected
-from a strong contour are removed before cells are classified. Edge cells keep
-a bounded candidate set and select glyphs with penalties for mismatched neighbor
-borders, single-sided short spurs, and thin branches that terminate inside a
-3×3-cell neighborhood.
+templates. Flat cells near the detected scene background become true space
+glyphs rendered with that background color, while other flat cells become
+solid-block glyphs in their locally quantized color. Internally varying cells
+use local foreground/background colors: the dominant scene background is used
+only when it is present in that cell. Strong-edge cells use the generic
+continuity refinement described above.
 
 Provider configuration is read only from the environment:
 

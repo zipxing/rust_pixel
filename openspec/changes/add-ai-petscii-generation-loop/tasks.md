@@ -18,6 +18,7 @@
 - [x] 2.9 Filter Mode 2 candidates by glyph ID, map flat background cells to space, and map flat foreground cells to a solid glyph.
 - [x] 2.10 Detect strong Sobel edges and match Mode 2 glyphs by fill-side mask and edge overlap.
 - [x] 2.11 Clean weak edge components and select edge glyphs using cross-cell border continuity and dangling-spur penalties.
+- [x] 2.12 Use local two-color quantization for Mode 2 cells, filter approved text-like noise glyphs, and remove superseded shape-specific cleanup passes.
 
 ## 3. AI Schemas and Replay
 

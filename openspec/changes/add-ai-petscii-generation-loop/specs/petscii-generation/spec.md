@@ -59,8 +59,10 @@ The system SHALL generate multiple bounded PETSCII candidates and render each ca
 - **WHEN** a non-flat Mode 2 cell contains a strong Sobel edge
 - **THEN** the system derives foreground and background fill sides for that cell
 - **AND** ranks allowed graphic glyphs by fill-mask error and edge overlap
+- **AND** derives colors locally so cells without the dominant scene background do not inherit it
 - **AND** removes weak edge components that are not connected to a meaningful strong contour
 - **AND** selects among bounded top candidates using neighboring border continuity and dangling-spur penalties
+- **AND** does not require scene-specific or shape-specific repair passes
 - **AND** keeps flat background and foreground cells on their space or solid-block paths
 
 ### Requirement: Aspect-Preserving Grid Dimensions
