@@ -22,7 +22,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let width = parse_value(args, "--width", 40_u32)?;
-    let explicit_height = parse_optional_value(args, "--height")?;
+    let explicit_height: Option<u32> = parse_optional_value(args, "--height")?;
     let explicit_mode = parse_optional_value(args, "--mode")?;
     let top_k = parse_value(args, "--top-k", 6_usize)?;
     let max_iterations = parse_value(args, "--iterations", 4_usize)?;
@@ -34,6 +34,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let slopes = !has_flag(args, "--no-slopes");
     let mode = resolve_mode(explicit_mode, direct);
     let input = value_after(args, "--input");
+    // Grid height is always derived from the reference's true aspect ratio so the output is never
+    // stretched. A square reference (e.g. a generated 1024x1024 image) becomes a square grid.
+    if explicit_height.is_some() {
+        eprintln!(
+            "Note: --height is ignored; rows are derived from the reference aspect to avoid distortion."
+        );
+    }
     if offline && input.is_none() {
         return Err(
             "--offline requires --input because it cannot generate a reference".to_string(),
@@ -51,8 +58,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (plan, reference, config, result) = if offline || (direct && input.is_some()) {
         let reference = open_input(input.as_deref().unwrap())?;
         let plan = input_plan(prompt);
-        let config =
-            aspect_preserving_config(&reference, width, explicit_height, effective_top_k, mode)?;
+        let config = aspect_preserving_config(&reference, width, None, effective_top_k, mode)?;
         let result = if direct {
             run_direct(&reference, &config, dither, slopes)?
         } else {
@@ -63,10 +69,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let provider = OpenAiCompatibleProvider::from_env()?;
         let (plan, reference) = match input {
             Some(path) => (input_plan(prompt), open_input(&path)?),
-            None => provider.generate_reference(prompt, width, explicit_height.unwrap_or(width))?,
+            // Generated references are square (1024x1024), so hint a square target grid.
+            None => provider.generate_reference(prompt, width, width)?,
         };
-        let config =
-            aspect_preserving_config(&reference, width, explicit_height, effective_top_k, mode)?;
+        let config = aspect_preserving_config(&reference, width, None, effective_top_k, mode)?;
         let result = if direct {
             run_direct(&reference, &config, dither, slopes)?
         } else {
@@ -105,13 +111,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
 fn print_usage() {
     println!("EXPERIMENTAL AI MODE:");
     println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--direct]");
-    println!("        [--width 40] [--height ROWS] [--mode 0|1|2] [--top-k 6]");
+    println!("        [--width 40] [--mode 0|1|2] [--top-k 6]");
     println!("        [--iterations 4] [--candidates 4] [--seed 0]");
     println!("        [--no-slopes] [--no-dither] [--output-dir DIRECTORY]");
     println!();
     println!("Live mode reads PETII_AI_API_KEY and optional PETII_AI_API_BASE,");
     println!("PETII_AI_IMAGE_MODEL, and PETII_AI_VISION_MODEL.");
-    println!("Without --height, rows are derived from the reference-image aspect ratio.");
+    println!("Rows are always derived from the reference aspect ratio (never stretched); a");
+    println!("square reference yields a square grid. --height is ignored.");
     println!("Offline mode requires --input and runs only the deterministic pipeline.");
     println!("Direct mode: generate the reference, then a single enhanced conversion (slope +");
     println!("dither), no optimizer or AI critic. This is the best single-command full-chain path.");
