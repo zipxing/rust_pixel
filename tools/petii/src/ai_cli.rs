@@ -5,7 +5,7 @@ use petii::{
         CandidateArtifact, Critique, CritiqueScores, MultimodalCritic, OpenAiCompatibleProvider,
         ReferenceGenerator, RunManifest,
     },
-    convert_image_top1, render_edge_debug, render_grid, score_grid, ConversionConfig,
+    convert_image_styled, render_edge_debug, render_grid, score_grid, ConversionConfig,
     OptimizationWeights,
 };
 use serde_json::json;
@@ -30,6 +30,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let seed = parse_value(args, "--seed", 0_u64)?;
     let offline = has_flag(args, "--offline");
     let direct = has_flag(args, "--direct");
+    let dither = !has_flag(args, "--no-dither");
+    let slopes = !has_flag(args, "--no-slopes");
     let mode = resolve_mode(explicit_mode, direct);
     let input = value_after(args, "--input");
     if offline && input.is_none() {
@@ -52,7 +54,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let config =
             aspect_preserving_config(&reference, width, explicit_height, effective_top_k, mode)?;
         let result = if direct {
-            run_direct(&reference, &config)?
+            run_direct(&reference, &config, dither, slopes)?
         } else {
             run_with_reference(prompt, &reference, &config, &OfflineCritic, &budget)?
         };
@@ -66,7 +68,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let config =
             aspect_preserving_config(&reference, width, explicit_height, effective_top_k, mode)?;
         let result = if direct {
-            run_direct(&reference, &config)?
+            run_direct(&reference, &config, dither, slopes)?
         } else {
             run_with_reference(prompt, &reference, &config, &provider, &budget)?
         };
@@ -105,14 +107,15 @@ fn print_usage() {
     println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--direct]");
     println!("        [--width 40] [--height ROWS] [--mode 0|1|2] [--top-k 6]");
     println!("        [--iterations 4] [--candidates 4] [--seed 0]");
-    println!("        [--output-dir DIRECTORY]");
+    println!("        [--no-slopes] [--no-dither] [--output-dir DIRECTORY]");
     println!();
     println!("Live mode reads PETII_AI_API_KEY and optional PETII_AI_API_BASE,");
     println!("PETII_AI_IMAGE_MODEL, and PETII_AI_VISION_MODEL.");
     println!("Without --height, rows are derived from the reference-image aspect ratio.");
     println!("Offline mode requires --input and runs only the deterministic pipeline.");
-    println!("Direct mode performs one legacy top-1 conversion without optimization or critique.");
-    println!("Direct defaults to mode 0; iterative/offline optimization defaults to mode 2.");
+    println!("Direct mode: generate the reference, then a single enhanced conversion (slope +");
+    println!("dither), no optimizer or AI critic. This is the best single-command full-chain path.");
+    println!("Both modes default to mode 2; --no-slopes/--no-dither turn off the enhancements.");
     println!("Mode 1 is for extracting artwork that is already exact PETSCII.");
 }
 
@@ -153,8 +156,9 @@ fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-fn resolve_mode(explicit_mode: Option<u8>, direct: bool) -> u8 {
-    explicit_mode.unwrap_or(if direct { 0 } else { 2 })
+fn resolve_mode(explicit_mode: Option<u8>, _direct: bool) -> u8 {
+    // Both direct and iterative default to mode 2, the graphic-vocabulary art path.
+    explicit_mode.unwrap_or(2)
 }
 
 fn open_input(path: &str) -> Result<DynamicImage, String> {
@@ -187,8 +191,13 @@ fn aspect_preserving_config(
     Ok(config)
 }
 
-fn run_direct(reference: &DynamicImage, config: &ConversionConfig) -> Result<AiLoopResult, String> {
-    let conversion = convert_image_top1(reference, config)?;
+fn run_direct(
+    reference: &DynamicImage,
+    config: &ConversionConfig,
+    dither: bool,
+    slopes: bool,
+) -> Result<AiLoopResult, String> {
+    let conversion = convert_image_styled(reference, config, dither, slopes)?;
     let edge_grammar = conversion.edge_grammar.clone();
     let edge_debug = conversion.edge_debug.clone();
     let score = score_grid(
@@ -202,7 +211,7 @@ fn run_direct(reference: &DynamicImage, config: &ConversionConfig) -> Result<AiL
         grid: grid.clone(),
         deterministic_score: score,
         critic: offline_critique(
-            "Direct legacy top-1 conversion; no optimizer or AI critic was called.",
+            "Direct single-pass conversion (slope + dither enhancements, no AI critic).",
         ),
         iterations: 0,
         submitted_candidates: 1,
@@ -419,10 +428,10 @@ mod tests {
     }
 
     #[test]
-    fn direct_mode_is_single_top_one_conversion() {
+    fn direct_mode_is_a_single_enhanced_conversion() {
         let reference = DynamicImage::new_rgba8(16, 16);
-        let config = aspect_preserving_config(&reference, 2, None, 1, 0).unwrap();
-        let result = run_direct(&reference, &config).unwrap();
+        let config = aspect_preserving_config(&reference, 2, None, 1, 2).unwrap();
+        let result = run_direct(&reference, &config, true, true).unwrap();
         assert_eq!(result.iterations, 0);
         assert_eq!(result.submitted_candidates, 1);
         assert_eq!(result.candidates.len(), 1);
@@ -430,8 +439,8 @@ mod tests {
     }
 
     #[test]
-    fn mode_defaults_separate_direct_and_iterative_workflows() {
-        assert_eq!(resolve_mode(None, true), 0);
+    fn mode_defaults_to_graphic_vocabulary() {
+        assert_eq!(resolve_mode(None, true), 2);
         assert_eq!(resolve_mode(None, false), 2);
         assert_eq!(resolve_mode(Some(1), true), 1);
         assert_eq!(resolve_mode(Some(0), false), 0);

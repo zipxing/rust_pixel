@@ -73,15 +73,17 @@ cargo run -p petii -- ai "a readable moon witch silhouette" \
   --input reference.png --output-dir tmp/moon-witch
 ```
 
-Generate the reference image but run only the original top-1 PETSCII matcher,
-without top-K optimization or multimodal critique:
+Generate the reference image and run a single enhanced conversion (slope and
+dither, no optimizer or multimodal critique). This is the best full-chain
+prompt-to-art path in one command:
 
 ```sh
 cargo run -p petii -- ai "a moonlit lion guarding ruins" \
-  --direct --output-dir tmp/lion-direct
+  --direct --width 60 --output-dir tmp/lion-direct
 ```
 
-With both `--direct` and `--input`, no provider or API key is required.
+Add `--no-slopes` or `--no-dither` to turn off either enhancement. With both
+`--direct` and `--input`, no provider or API key is required.
 
 Use the deterministic pipeline without any provider call:
 
@@ -97,10 +99,10 @@ aspect ratio (a square reference becomes 40×40). Supplying `--height` overrides
 automatic aspect preservation. Other defaults are six glyph alternatives, four
 candidates, and four loop iterations.
 
-Direct mode defaults to mode `0`, the general nearest-glyph converter. AI and
-offline optimization default to mode `2`, keeping the same nearest-glyph
-algorithm while restricting the candidate vocabulary to graphic symbols. Mode
-`1` is reserved for extracting sources that are already exact PETSCII art.
+Direct, AI, and offline modes all default to mode `2`, the graphic-vocabulary
+art path (letters, digits, and text-like punctuation excluded). Direct mode
+additionally applies the slope and dither enhancements by default. Mode `1` is
+reserved for extracting sources that are already exact PETSCII art.
 Mode `2` removes forbidden glyph IDs from matching rather than replacing their
 templates. Flat cells near the detected scene background become true space
 glyphs rendered with that background color, while other flat cells become
@@ -202,6 +204,89 @@ diagonal and curved edges, while avoiding text, gradients, noise, dithering,
 halftone, tiny details, and pixel art. Feeding the converter a clean flat-color
 illustration — not an already-textured image — is the single biggest lever on
 output quality.
+
+#### Benchmark v1 imagegen prompts
+
+The five fixed v1 reference images were generated independently with Codex's
+built-in `imagegen` skill. The exact prompts are retained below so the art
+direction can be reviewed or reused. The checked-in PNG files remain the
+deterministic benchmark inputs; regenerating from these prompts may produce
+different images and must not overwrite v1 in place.
+
+Portrait — `portrait-witch.png`:
+
+```text
+Use case: stylized-concept
+Asset type: versioned PETSCII conversion benchmark reference, portrait category
+Primary request: A solitary young witch in a broad pointed hat, head-and-shoulders portrait, facing three-quarter left.
+Scene/backdrop: plain deep indigo night backdrop with one pale crescent moon, no extra objects.
+Style/medium: clean flat-color retro editorial illustration, not pixel art and not PETSCII.
+Composition/framing: 8:5 landscape canvas; large centered silhouette; generous outer margin; readable at 40x25 cells.
+Lighting/mood: strong moonlit rim light, calm and mysterious.
+Color palette: 6 to 8 solid colors, high contrast but harmonious.
+Constraints: crisp continuous contours; large coherent color regions; a few intentional diagonal and curved edges; no tiny details.
+Avoid: text, watermark, frame, gradients, noise, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII.
+```
+
+Object — `object-airship.png`:
+
+```text
+Use case: stylized-concept
+Asset type: versioned PETSCII conversion benchmark reference, object category
+Primary request: One whimsical retro airship with a large oval balloon and a small gondola, side view.
+Scene/backdrop: clear blue sky with only two broad simple cloud bands.
+Style/medium: clean flat-color retro editorial illustration, not pixel art and not PETSCII.
+Composition/framing: 8:5 landscape canvas; airship spans most of the width; complete silhouette with generous margin; readable at 40x25 cells.
+Lighting/mood: bright daylight, adventurous.
+Color palette: 6 to 8 solid colors, coherent sky blue dominant background.
+Constraints: crisp continuous balloon and hull contours; large color regions; clear ropes and tail as simplified edge features.
+Avoid: text, watermark, frame, gradients, noise, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII.
+```
+
+Scene — `scene-forest.png`:
+
+```text
+Use case: stylized-concept
+Asset type: versioned PETSCII conversion benchmark reference, natural scene category
+Primary request: A quiet forest clearing with three prominent pine trees, a winding stream, and a pale sun behind distant hills.
+Scene/backdrop: layered forest landscape.
+Style/medium: clean flat-color retro editorial illustration, not pixel art and not PETSCII.
+Composition/framing: 8:5 landscape canvas; clear foreground, middle ground, background layers; readable at 40x25 cells.
+Lighting/mood: early morning, serene.
+Color palette: 7 to 9 solid colors, deep green foreground and muted blue distance.
+Constraints: crisp connected tree silhouettes; stream edge forms one continuous S curve; large coherent color regions.
+Avoid: text, watermark, frame, gradients, noise, individual leaves, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII.
+```
+
+Architecture — `architecture-castle.png`:
+
+```text
+Use case: stylized-concept
+Asset type: versioned PETSCII conversion benchmark reference, architecture category
+Primary request: A compact medieval hill castle with two towers, one gate, crenellated walls, and a stone bridge.
+Scene/backdrop: simple dusk sky and a single dark hill.
+Style/medium: clean flat-color retro editorial illustration, not pixel art and not PETSCII.
+Composition/framing: 8:5 landscape canvas; castle centered and fills the middle; strong symmetrical architectural silhouette; readable at 40x25 cells.
+Lighting/mood: quiet dusk with a few warm window lights.
+Color palette: 7 to 9 solid colors, violet-blue sky, cool stone, warm small accents.
+Constraints: crisp straight and stepped contours; continuous rooflines and wall edges; large coherent color regions.
+Avoid: text, watermark, frame, gradients, noise, masonry microtexture, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII.
+```
+
+Action — `action-dragon.png`:
+
+```text
+Use case: stylized-concept
+Asset type: versioned PETSCII conversion benchmark reference, action category
+Primary request: A winged dragon in a sweeping S-shaped flying pose, breathing one bold arc of flame.
+Scene/backdrop: simple dark red sunset sky above one black mountain ridge.
+Style/medium: clean flat-color retro editorial illustration, not pixel art and not PETSCII.
+Composition/framing: 8:5 landscape canvas; dragon and flame form one readable action silhouette across the frame; generous margin; readable at 40x25 cells.
+Lighting/mood: dramatic and energetic.
+Color palette: 7 to 9 solid colors, dark silhouette, red-orange flame, restrained highlights.
+Constraints: crisp continuous wing, neck, tail, and flame contours; large coherent color regions; no isolated speckles.
+Avoid: text, watermark, frame, gradients, noise, scales, tiny anatomy, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII.
+```
 
 Measure it without touching the versioned benchmark using `--dither-eval`, which
 converts each reference three ways (baseline top-1, current pipeline, and the
