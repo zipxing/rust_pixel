@@ -329,3 +329,77 @@ tmp/lion-mode2-edge-v30-ciede2000-repaint-60x60/final.pix
 ```
 
 v30 保持 3600 个 glyph 不变，相对 v26 仅调整 563 格前景色和 344 格背景色；天空恢复为明确蓝色，近黑主体不再被色相模型污染。最终 score 为 `0.007625`，相对 v26 改善约 21.8%。失败的 v28/v29 仅是本地实验产物，不应作为恢复基线。
+
+## 13. 确定性 benchmark runner（同日续）
+
+新增 `petii benchmark` 子命令和 `benchmark` library module。runner 读取现有 `benchmark/v1/prompts.json` 格式，对每张 reference 运行：
+
+- baseline：Mode 2、`top_k=1`；
+- candidate：相同尺寸/模式、默认 `top_k=16` 的当前完整轮廓与重涂管线；
+- 二者都使用最终 CIEDE2000 重涂，避免把颜色后处理差异误算成轮廓收益。
+
+每例输出 `reference.png`、`baseline.pix/png`、`candidate.pix/png` 和 `metrics.json`；根目录 `report.json` 汇总胜/平/负、win-or-tie rate、均值与相对改善。报告不包含耗时和机器绝对路径，保证相同输入与参数下指标确定。
+
+运行方式：
+
+```bash
+cargo run -p petii --release -- benchmark \
+  tools/petii/benchmark/v1/prompts.json \
+  --reference-dir tools/petii/benchmark/v1/references \
+  --output-dir tmp/petii-benchmark-v1
+```
+
+6.2 已完成：`benchmark/v1/references/` 固化了五张 reference-generator
+输出，覆盖 portrait、object、scene、architecture、action；生成约束、文件
+哈希和不可原位覆盖规则记录在同目录 README。`expected-report.json` 保存默认
+参数快照，ignored release test 逐字段校验结构，并允许最多 `1e-12` 的浮点尾差；
+`.github/workflows/petii-benchmark.yml` 在相关路径发生变化时复跑该检查。
+
+v1 五例 release 结果：candidate 3 胜、0 平、2 负，win-or-tie rate 为 60%，
+平均综合分相对 Top-1 退化约 0.08%。两例负向分别是 portrait（-0.89%）和
+airship（-0.27%）；人工预览中 candidate 的轮廓更干净，因此不要用单一综合分
+替代后续 blinded A/B。跨五例轮廓指标均改善：
+
+```text
+mean shared_port_break_rate: 0.5213 -> 0.4156
+mean unexpected_endpoint_rate: 0.4461 -> 0.3429
+mean contour_coverage: 0.6554 -> 0.7282
+total spur_cell_count: 289 -> 226
+total orphan_excursion_count: 1054 -> 929
+```
+
+因此 6.2 的可重复 CI 已完成，但 6.4 的 70% 产品门槛仍未完成。下一阶段应先做
+6.3 blinded human A/B，并针对 portrait/airship 检查“轮廓更连贯但综合指标轻微
+变差”的评分错位，再决定调整优化权重还是评价指标。
+
+## 14. 首轮 blinded human A/B（同日续）
+
+五例以隐藏 baseline/candidate 身份的左右随机顺序交给一名人工审核者，选择结果
+为 `A B B B A`。解盲后 candidate 在 portrait、airship、forest 获胜，baseline
+在 castle、dragon 获胜；candidate win-or-tie rate 为 60%，因此 6.3 已完成并
+记录到 `benchmark/v1/human-evaluation.json`，6.4 仍未达到 70%。
+
+确定性综合分只在 forest 一例与人工偏好一致，agreement rate 为 20%。这说明
+当前评分对“更干净、更连贯的轮廓”和“关键主体细节被简化”之间的权衡刻画不足。
+下一轮应分别诊断 castle 与 dragon 被 candidate 删除或替换的关键结构，同时用
+portrait 与 airship 作为反例，避免简单地把评分权重拟合到现有综合分胜负。
+
+## 15. 强结构保护与第二轮 blinded A/B（次日续）
+
+新增 strong-reference structure gate：参考 cell 同时具备足量弱/强 Sobel 像素时，
+候选 glyph 必须修复实际断边或显著改善目标拓扑；明确的内部结构默认保留 Top-1。
+五例 release 综合分从 3 胜 2 负、平均退化 0.08%，提升到 4 胜 1 负、平均改善
+0.11%。结构回滚分别为 portrait 11、airship 7、forest 9、castle 9、dragon 13 格。
+
+第二轮重新随机 A/B 后人工选择为 `B B B A B`。解盲结果：candidate 赢 portrait、
+forest、castle，baseline 赢 airship、dragon，人工 win-or-tie 仍为 60%。castle 从
+第一轮 baseline 偏好翻转为 candidate，证明结构保护命中部分目标；airship 反向
+翻转且 dragon 未翻转，因此 6.4 仍不得完成。结果记录于
+`benchmark/v1/human-evaluation-v2.json`。
+
+第三版取消“仅局部拓扑改善即可修改强结构格”的豁免，要求强结构 glyph 变更必须
+实际减少跨格断裂。40x25 release 平均综合改善增至 0.29%，第三轮盲测选择为
+`B B A B A`；candidate 赢 airship、forest、castle，baseline 赢 portrait、dragon，
+仍为 60%。dragon 是三轮唯一始终偏好 baseline 的案例。前三轮均使用 petview
+风格的 40x25 benchmark；用户原始目标为宽 60，下一步必须按参考比例测试 60x38，
+避免把低分辨率的信息上限误判成算法问题。

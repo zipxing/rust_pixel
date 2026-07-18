@@ -1,5 +1,6 @@
 use crate::c64::{C64LOW, C64UP};
 use crate::contour::ContourGraph;
+use crate::corpus::CorpusPrior;
 use crate::glyph_topology::{build_topology_catalog, GlyphRole, GlyphTopology, Side};
 use crate::types::{ConversionConfig, GlyphCandidate, PetsciiGrid};
 use image::{DynamicImage, GrayImage, Luma};
@@ -22,6 +23,23 @@ const EDGE_CELL_MEAN_THRESHOLD: u32 = 18;
 const EDGE_WEAK_THRESHOLD: u8 = 32;
 const EDGE_STRONG_THRESHOLD: u8 = 96;
 const EDGE_MIN_COMPONENT_PIXELS: usize = 8;
+const EDGE_STRUCTURE_MIN_ACTIVE_PIXELS: usize = 12;
+const EDGE_STRUCTURE_MIN_STRONG_PIXELS: usize = 4;
+/// Selective-dithering thresholds. Distances are CIEDE2000 units; luma is 0-255.
+/// The pipeline dithers sparingly: only cells whose single nearest palette color leaves visible
+/// banding, and never dark cells, so silhouettes and shadows stay solid the way hand-drawn
+/// PETSCII keeps them.
+const DITHER_MIN_SOLID_ERROR: f64 = 9.0;
+const DITHER_IMPROVEMENT_MARGIN: f64 = 2.5;
+const DITHER_PARTNER_SHORTLIST: usize = 12;
+const DITHER_DISPERSION_WEIGHT: f64 = 0.22;
+const DITHER_MIN_RATIO: f64 = 0.06;
+const DITHER_MAX_RATIO: f64 = 0.94;
+const DITHER_QUADRANT_TOLERANCE: f64 = 0.19;
+const DITHER_DARK_LUMA_FLOOR: f64 = 60.0;
+const DITHER_MAX_COMPONENT: usize = 4;
+/// Default weight of corpus layout cost against perceived-tone gain in the dither regularizer.
+const DITHER_LAMBDA: f64 = 1.0;
 const EDGE_CONTINUITY_CANDIDATES: usize = 16;
 const EDGE_APPEARANCE_CANDIDATES: usize = 6;
 const EDGE_TOPOLOGY_CANDIDATES: usize = 4;
@@ -95,6 +113,8 @@ pub struct EdgeGrammarReport {
     pub open_chains: usize,
     pub closed_loops: usize,
     pub junctions: usize,
+    pub protected_structure_cells: usize,
+    pub structure_rollbacks: usize,
     pub baseline: EdgeGrammarMetrics,
     pub proposed: EdgeGrammarMetrics,
     pub final_metrics: EdgeGrammarMetrics,
@@ -118,6 +138,11 @@ struct CellCandidates {
     ranked: Vec<GlyphCandidate>,
     edge_aware: bool,
     target_topology: Option<GlyphTopology>,
+    structure_protected: bool,
+    dithered: bool,
+    /// Perceived-tone improvement (CIEDE2000) this cell's dither buys over a single solid color.
+    /// Zero for non-dithered cells. Used by the corpus-regularized acceptance pass.
+    dither_gain: f64,
 }
 
 struct CandidateGenerator<'a> {
@@ -127,9 +152,12 @@ struct CandidateGenerator<'a> {
     edge_image: &'a GrayImage,
     charset: &'a [BlockGrayImage],
     topology_catalog: &'a [GlyphTopology],
+    dither_ladder: &'a DitherLadder,
     background_gray: u8,
     background_rgb: u32,
     background_color: u8,
+    edge_grammar_enabled: bool,
+    dither: bool,
 }
 
 impl CandidateGenerator<'_> {
@@ -150,6 +178,7 @@ impl CandidateGenerator<'_> {
             self.background_rgb,
         );
         let edge_target = edge_aware.then(|| EdgeTarget::new(&raw_block, fg, bg));
+        let structure_protected = edge_aware && is_structure_protected(&edge_block);
         let target_topology = (self.config.mode == 2)
             .then(|| edge_target.as_ref())
             .flatten()
@@ -166,6 +195,8 @@ impl CandidateGenerator<'_> {
         } else {
             raw_block
         };
+        let mut dithered = false;
+        let mut dither_gain = 0.0;
         let ranked = match flat_mean {
             Some(mean)
                 if (mean as i16 - self.background_gray as i16).abs()
@@ -177,14 +208,27 @@ impl CandidateGenerator<'_> {
                     self.background_color,
                 )]
             }
-            Some(_) => vec![solid_candidate(SOLID_GLYPH, fg, bg)],
+            Some(_) => self
+                .dither
+                .then(|| self.dither_flat_cell(x, y))
+                .flatten()
+                .map(|(candidates, gain)| {
+                    dithered = true;
+                    dither_gain = gain;
+                    candidates
+                })
+                .unwrap_or_else(|| vec![solid_candidate(SOLID_GLYPH, fg, bg)]),
             None => rank_glyphs(
                 &match_block,
                 self.charset,
                 self.topology_catalog,
                 self.config.mode,
                 if edge_aware {
-                    self.config.top_k.max(EDGE_CONTINUITY_CANDIDATES)
+                    if self.edge_grammar_enabled {
+                        self.config.top_k.max(EDGE_CONTINUITY_CANDIDATES)
+                    } else {
+                        1
+                    }
                 } else {
                     self.config.top_k
                 },
@@ -198,7 +242,63 @@ impl CandidateGenerator<'_> {
             ranked,
             edge_aware,
             target_topology,
+            structure_protected,
+            dithered,
+            dither_gain,
         }
+    }
+
+    /// Choose a two-color dither representation for a flat cell whose average color falls
+    /// between palette entries. Returns the candidate list and the perceived-tone gain over a
+    /// single solid color, or `None` when a solid color is already a good match or no admissible
+    /// dither glyph improves on it. The primary candidate is the dither glyph; a solid fallback is
+    /// retained at index 1 for the optimizer and the corpus-regularized acceptance pass.
+    fn dither_flat_cell(&self, x: u32, y: u32) -> Option<(Vec<GlyphCandidate>, f64)> {
+        let average = get_block_color(self.reference, x, y, GLYPH_WIDTH, GLYPH_HEIGHT);
+        // Keep dark cells solid: shadows and silhouettes read as clean shapes in hand-drawn work.
+        let luma = 0.299 * average.r as f64 + 0.587 * average.g as f64 + 0.114 * average.b as f64;
+        if luma < DITHER_DARK_LUMA_FLOOR {
+            return None;
+        }
+        let shortlist = nearest_palette_shortlist(average, DITHER_PARTNER_SHORTLIST);
+        let base = shortlist[0];
+        let solid_error = palette_distance(average, base);
+        if solid_error < DITHER_MIN_SOLID_ERROR {
+            return None;
+        }
+        let mut best: Option<(f64, u8, u8)> = None;
+        for &partner in shortlist.iter().skip(1) {
+            let ratio = blend_ratio(average, base, partner);
+            if !(DITHER_MIN_RATIO..=DITHER_MAX_RATIO).contains(&ratio) {
+                continue;
+            }
+            let glyph = self.dither_ladder.pick(self.config.mode, ratio);
+            let fill = self.dither_ladder.fill[glyph as usize];
+            if !(DITHER_MIN_RATIO..=DITHER_MAX_RATIO).contains(&fill) {
+                continue;
+            }
+            let blended = blend_palette_rgb(base, partner, fill);
+            let error = color_distance_rgb(&average, &blended) as f64;
+            let key = (error, glyph, partner);
+            if best.is_none_or(|(be, bg, bp)| key < (be, bg, bp)) {
+                best = Some((error, glyph, partner));
+            }
+        }
+        let (error, glyph, partner) = best?;
+        if error + DITHER_IMPROVEMENT_MARGIN >= solid_error {
+            return None;
+        }
+        let candidates = vec![
+            GlyphCandidate {
+                glyph,
+                distance: error,
+                fg: partner,
+                bg: base,
+                texture: 1,
+            },
+            solid_candidate(SOLID_GLYPH, base, base),
+        ];
+        Some((candidates, solid_error - error))
     }
 }
 
@@ -220,6 +320,52 @@ pub fn convert_image(
     image: &DynamicImage,
     config: &ConversionConfig,
 ) -> Result<ConversionResult, String> {
+    convert_image_internal(image, config, true, false, None)
+}
+
+/// Experimental: run the full pipeline with selective two-color dithering enabled.
+/// Flat mid-tone cells that would otherwise collapse into a single solid block are
+/// represented by a dither glyph mixing the two bracketing palette colors, recovering
+/// the perceived intermediate tone the way hand-drawn PETSCII art does. Dithered cells
+/// are exempt from the reference repaint so it cannot merge their two colors back.
+pub fn convert_image_dithered(
+    image: &DynamicImage,
+    config: &ConversionConfig,
+) -> Result<ConversionResult, String> {
+    convert_image_internal(image, config, true, true, None)
+}
+
+/// Selective dithering regularized by a corpus prior. Each proposed dither cell is kept only
+/// when its perceived-tone gain outweighs the corpus cost of turning it from a flat cell into a
+/// textured one in its neighborhood, shrinking large marginal dither fields to their
+/// highest-contrast core while preserving the strongest tonal recoveries.
+pub fn convert_image_dithered_prior(
+    image: &DynamicImage,
+    config: &ConversionConfig,
+    prior: &CorpusPrior,
+) -> Result<ConversionResult, String> {
+    convert_image_internal(image, config, true, true, Some(prior))
+}
+
+/// Run the local single-cell matcher without cross-cell contour candidate expansion.
+/// The final reference-constrained repaint is retained so benchmark comparisons isolate
+/// glyph/contour selection rather than using different color pipelines.
+pub fn convert_image_top1(
+    image: &DynamicImage,
+    config: &ConversionConfig,
+) -> Result<ConversionResult, String> {
+    let mut baseline_config = config.clone();
+    baseline_config.top_k = 1;
+    convert_image_internal(image, &baseline_config, false, false, None)
+}
+
+fn convert_image_internal(
+    image: &DynamicImage,
+    config: &ConversionConfig,
+    edge_grammar_enabled: bool,
+    dither: bool,
+    dither_prior: Option<&CorpusPrior>,
+) -> Result<ConversionResult, String> {
     config.validate()?;
     let mut profile_mark = Instant::now();
 
@@ -233,6 +379,7 @@ pub fn convert_image(
         &C64UP,
     );
     let topology_catalog = build_topology_catalog(&charset);
+    let dither_ladder = DitherLadder::build(&charset);
     profile_stage("reference+catalog", &mut profile_mark);
 
     let (background_gray, background_rgb) =
@@ -247,14 +394,20 @@ pub fn convert_image(
         edge_image: &edge_image,
         charset: &charset,
         topology_catalog: &topology_catalog,
+        dither_ladder: &dither_ladder,
         background_gray,
         background_rgb,
         background_color,
+        edge_grammar_enabled,
+        dither,
     };
     let capacity = (config.width * config.height) as usize;
     let mut alternatives = Vec::with_capacity(capacity);
     let mut edge_cells = Vec::with_capacity(capacity);
     let mut target_topologies = Vec::with_capacity(capacity);
+    let mut strong_structure_cells = Vec::with_capacity(capacity);
+    let mut dither_cells = Vec::with_capacity(capacity);
+    let mut dither_gains = Vec::with_capacity(capacity);
 
     for y in 0..config.height {
         for x in 0..config.width {
@@ -262,12 +415,16 @@ pub fn convert_image(
             alternatives.push(candidates.ranked);
             edge_cells.push(candidates.edge_aware);
             target_topologies.push(candidates.target_topology);
+            strong_structure_cells.push(candidates.structure_protected);
+            dither_cells.push(candidates.dithered);
+            dither_gains.push(candidates.dither_gain);
         }
     }
     profile_stage("candidate-generation", &mut profile_mark);
 
     // 3. Re-rank only edge cells using generic cross-cell coherence losses.
     let contour_graph = ContourGraph::from_targets(config.width, config.height, &target_topologies);
+    let structure_protected = strong_structure_cells;
     let mut chain_selected = optimize_contour_chains(
         &contour_graph,
         &alternatives,
@@ -315,7 +472,7 @@ pub fn convert_image(
         &topology_catalog,
     );
     profile_stage("pair-repair", &mut profile_mark);
-    let proposed = cleanup_orphan_excursions(
+    let cleaned_proposed = cleanup_orphan_excursions(
         config.width,
         config.height,
         &contour_graph,
@@ -327,8 +484,17 @@ pub fn convert_image(
         &topology_catalog,
     );
     profile_stage("orphan-cleanup", &mut profile_mark);
+    let (proposed, structure_rollbacks) = preserve_reference_structure(
+        &contour_graph,
+        &alternatives,
+        &structure_protected,
+        &target_topologies,
+        &cleaned_proposed,
+        &topology_catalog,
+    );
+    profile_stage("structure-protection", &mut profile_mark);
     let edge_enabled = target_topologies.iter().any(Option::is_some);
-    let (selected, edge_grammar, edge_debug) = if edge_enabled {
+    let (mut selected, edge_grammar, edge_debug) = if edge_enabled {
         let baseline_score = edge_grammar_objective(
             config.width,
             config.height,
@@ -393,6 +559,11 @@ pub fn convert_image(
             open_chains: contour_graph.open_chains().len(),
             closed_loops: contour_graph.closed_loops().len(),
             junctions: contour_graph.junction_cells().len(),
+            protected_structure_cells: structure_protected
+                .iter()
+                .filter(|protected| **protected)
+                .count(),
+            structure_rollbacks,
             baseline: baseline_metrics,
             proposed: proposed_metrics,
             final_metrics,
@@ -455,6 +626,8 @@ pub fn convert_image(
                 open_chains: 0,
                 closed_loops: 0,
                 junctions: 0,
+                protected_structure_cells: 0,
+                structure_rollbacks: 0,
                 baseline: EdgeGrammarMetrics::default(),
                 proposed: EdgeGrammarMetrics::default(),
                 final_metrics: EdgeGrammarMetrics::default(),
@@ -464,6 +637,19 @@ pub fn convert_image(
     };
     profile_stage("metrics+gate", &mut profile_mark);
 
+    if let Some(prior) = dither_prior {
+        regularize_dither(
+            prior,
+            config.width,
+            config.height,
+            &alternatives,
+            &mut selected,
+            &mut dither_cells,
+            &dither_gains,
+        );
+        profile_stage("dither-regularization", &mut profile_mark);
+    }
+
     if config.mode == 2 {
         repaint_selected_colors(
             &reference,
@@ -472,6 +658,7 @@ pub fn convert_image(
             &selected,
             &mut alternatives,
             &charset,
+            &dither_cells,
         );
         profile_stage("reference-repaint", &mut profile_mark);
     }
@@ -553,6 +740,7 @@ fn repaint_selected_colors(
     selected: &[usize],
     alternatives: &mut [Vec<GlyphCandidate>],
     charset: &[BlockGrayImage],
+    protected: &[bool],
 ) {
     let reference = reference.to_rgb8();
     let mut stats = Vec::with_capacity(selected.len());
@@ -581,10 +769,13 @@ fn repaint_selected_colors(
         }
         let foreground_candidates = repaint_palette_candidates(foreground, candidate.fg);
         let background_candidates = repaint_palette_candidates(background, candidate.bg);
-        if foreground.count > 0 {
+        // Dithered cells intentionally hold two bracketing palette colors whose per-region
+        // averages coincide; refitting from those averages would merge them back into a solid.
+        let exempt = protected.get(index).copied().unwrap_or(false);
+        if !exempt && foreground.count > 0 {
             candidate.fg = foreground_candidates[0];
         }
-        if background.count > 0 {
+        if !exempt && background.count > 0 {
             candidate.bg = background_candidates[0];
         }
         stats.push(RepaintCellStats {
@@ -603,6 +794,9 @@ fn repaint_selected_colors(
             } else {
                 painted.len() - 1 - step
             };
+            if protected.get(index).copied().unwrap_or(false) {
+                continue;
+            }
             let mut foreground_candidates = stats[index].foreground_candidates.clone();
             let mut background_candidates = stats[index].background_candidates.clone();
             for neighbor in grid_neighbors(index, width, height) {
@@ -889,6 +1083,10 @@ fn rank_glyphs(
             .then_with(|| a.glyph.cmp(&b.glyph))
     });
     let baseline_count = top_k.min(ranked.len());
+    if baseline_count == 1 {
+        ranked.truncate(1);
+        return ranked;
+    }
     let Some(edge_target) = edge_target else {
         ranked.truncate(baseline_count);
         return ranked;
@@ -1147,6 +1345,253 @@ fn is_edge_cell(edge_block: &BlockGrayImage) -> bool {
     count > 0 && sum / count >= EDGE_CELL_MEAN_THRESHOLD
 }
 
+fn is_structure_protected(edge_block: &BlockGrayImage) -> bool {
+    let (active, strong) =
+        edge_block
+            .iter()
+            .flatten()
+            .fold((0usize, 0usize), |(active, strong), pixel| {
+                (
+                    active + (*pixel >= EDGE_WEAK_THRESHOLD) as usize,
+                    strong + (*pixel >= EDGE_STRONG_THRESHOLD) as usize,
+                )
+            });
+    active >= EDGE_STRUCTURE_MIN_ACTIVE_PIXELS && strong >= EDGE_STRUCTURE_MIN_STRONG_PIXELS
+}
+
+/// Per-glyph area-fill fraction and spatial dispersion, used to pick a dither glyph whose
+/// coverage approximates a target blend ratio. Higher dispersion means the foreground pixels
+/// are finely interleaved (a true hatch/checker) rather than one contiguous half-block, so
+/// the eye averages the two colors into an intermediate tone.
+struct DitherLadder {
+    fill: Vec<f64>,
+    dispersion: Vec<f64>,
+    admissible: Vec<bool>,
+}
+
+impl DitherLadder {
+    fn build(charset: &[BlockGrayImage]) -> Self {
+        let pixels = (GLYPH_WIDTH * GLYPH_HEIGHT) as f64;
+        let mut fill = vec![0.0; charset.len()];
+        let mut transitions = vec![0u32; charset.len()];
+        // Admit a glyph as a dither only when its lit pixels are spread evenly across the cell,
+        // so the eye reads it as a uniform intermediate tone. Even spread rejects letters,
+        // strokes, corners, and half-blocks (all of which cluster their pixels) while admitting
+        // true checkers and hatches regardless of their catalog role. Blank and solid endpoints
+        // are always admissible.
+        let admissible: Vec<bool> = charset.iter().map(|bitmap| is_even_stipple(bitmap)).collect();
+        for (glyph, bitmap) in charset.iter().enumerate() {
+            let mut on = 0u32;
+            let mut edges = 0u32;
+            for y in 0..GLYPH_HEIGHT as usize {
+                for x in 0..GLYPH_WIDTH as usize {
+                    let lit = bitmap[y][x] >= 128;
+                    on += lit as u32;
+                    if x + 1 < GLYPH_WIDTH as usize {
+                        edges += (lit != (bitmap[y][x + 1] >= 128)) as u32;
+                    }
+                    if y + 1 < GLYPH_HEIGHT as usize {
+                        edges += (lit != (bitmap[y + 1][x] >= 128)) as u32;
+                    }
+                }
+            }
+            fill[glyph] = on as f64 / pixels;
+            transitions[glyph] = edges;
+        }
+        let max_transitions = transitions.iter().copied().max().unwrap_or(1).max(1) as f64;
+        let dispersion: Vec<f64> = transitions
+            .iter()
+            .map(|count| *count as f64 / max_transitions)
+            .collect();
+        if std::env::var_os("PETII_DITHER_DEBUG").is_some() {
+            let mut rows: Vec<_> = (0..charset.len())
+                .filter(|glyph| admissible[*glyph] && fill[*glyph] > 0.0 && fill[*glyph] < 1.0)
+                .collect();
+            rows.sort_by(|a, b| {
+                fill[*a]
+                    .total_cmp(&fill[*b])
+                    .then_with(|| transitions[*b].cmp(&transitions[*a]))
+            });
+            for glyph in rows {
+                eprintln!(
+                    "dither-glyph id={:3} fill={:.3} transitions={:3} dispersion={:.3}",
+                    glyph, fill[glyph], transitions[glyph], dispersion[glyph]
+                );
+            }
+        }
+        Self {
+            fill,
+            dispersion,
+            admissible,
+        }
+    }
+
+    #[cfg(test)]
+    fn admissible_glyphs(&self) -> Vec<u8> {
+        (0..self.admissible.len())
+            .filter(|glyph| self.admissible[*glyph])
+            .map(|glyph| glyph as u8)
+            .collect()
+    }
+
+    /// Pick the admissible glyph whose fill best matches `target`, rewarding fine dispersion so
+    /// mid-tones resolve to a hatch rather than a hard half-block. Deterministic on ties.
+    fn pick(&self, mode: u8, target: f64) -> u8 {
+        let mut best = SPACE_GLYPH;
+        let mut best_key = f64::INFINITY;
+        for glyph in 0..self.fill.len() {
+            let id = glyph as u8;
+            if !self.admissible[glyph] || !glyph_allowed(mode, id) {
+                continue;
+            }
+            let key =
+                (self.fill[glyph] - target).abs() - DITHER_DISPERSION_WEIGHT * self.dispersion[glyph];
+            if key < best_key || (key == best_key && id < best) {
+                best_key = key;
+                best = id;
+            }
+        }
+        best
+    }
+}
+
+/// A glyph reads as a uniform tone only when its lit pixels are both spread evenly across the
+/// cell and broken into small pieces. Blank and fully solid glyphs qualify trivially. Partial
+/// glyphs must (a) carry close to the whole-cell fill in every 4x4 quadrant and (b) contain no
+/// connected foreground blob larger than a few pixels. Together these reject letters, arrows,
+/// strokes, corners, stripes, and half-blocks while admitting checkers, hatches, and stipples.
+fn is_even_stipple(bitmap: &BlockGrayImage) -> bool {
+    const QUADRANT: usize = 4;
+    let width = GLYPH_WIDTH as usize;
+    let height = GLYPH_HEIGHT as usize;
+    let mut total = 0usize;
+    for row in bitmap.iter().take(height) {
+        for pixel in row.iter().take(width) {
+            total += (*pixel >= 128) as usize;
+        }
+    }
+    let cell_pixels = width * height;
+    if total == 0 || total == cell_pixels {
+        return true;
+    }
+    let global_fill = total as f64 / cell_pixels as f64;
+    let quadrant_pixels = QUADRANT * QUADRANT;
+    for quad_y in (0..height).step_by(QUADRANT) {
+        for quad_x in (0..width).step_by(QUADRANT) {
+            let mut lit = 0usize;
+            for y in quad_y..quad_y + QUADRANT {
+                for x in quad_x..quad_x + QUADRANT {
+                    lit += (bitmap[y][x] >= 128) as usize;
+                }
+            }
+            let quadrant_fill = lit as f64 / quadrant_pixels as f64;
+            if (quadrant_fill - global_fill).abs() > DITHER_QUADRANT_TOLERANCE {
+                return false;
+            }
+        }
+    }
+    largest_foreground_component(bitmap) <= DITHER_MAX_COMPONENT
+}
+
+/// Size in pixels of the largest 4-connected foreground blob in the cell.
+fn largest_foreground_component(bitmap: &BlockGrayImage) -> usize {
+    let width = GLYPH_WIDTH as usize;
+    let height = GLYPH_HEIGHT as usize;
+    let mut visited = vec![vec![false; width]; height];
+    let mut largest = 0usize;
+    let mut stack = Vec::new();
+    for start_y in 0..height {
+        for start_x in 0..width {
+            if visited[start_y][start_x] || bitmap[start_y][start_x] < 128 {
+                continue;
+            }
+            let mut size = 0usize;
+            stack.push((start_x, start_y));
+            visited[start_y][start_x] = true;
+            while let Some((x, y)) = stack.pop() {
+                size += 1;
+                let neighbors = [
+                    (x.wrapping_sub(1), y),
+                    (x + 1, y),
+                    (x, y.wrapping_sub(1)),
+                    (x, y + 1),
+                ];
+                for (nx, ny) in neighbors {
+                    if nx < width && ny < height && !visited[ny][nx] && bitmap[ny][nx] >= 128 {
+                        visited[ny][nx] = true;
+                        stack.push((nx, ny));
+                    }
+                }
+            }
+            largest = largest.max(size);
+        }
+    }
+    largest
+}
+
+fn palette_rgb(index: u8) -> RGB {
+    let color = ANSI_COLOR_RGB[index as usize];
+    RGB {
+        r: color[0],
+        g: color[1],
+        b: color[2],
+    }
+}
+
+fn palette_distance(color: RGB, index: u8) -> f64 {
+    color_distance_rgb(&color, &palette_rgb(index)) as f64
+}
+
+/// Return the `count` palette indices nearest to `color` in CIEDE2000 order, nearest first.
+fn nearest_palette_shortlist(color: RGB, count: usize) -> Vec<u8> {
+    let mut ranked: Vec<_> = (0..ANSI_COLOR_RGB.len() as u16)
+        .map(|index| (palette_distance(color, index as u8), index as u8))
+        .collect();
+    ranked.sort_by(|first, second| {
+        first
+            .0
+            .total_cmp(&second.0)
+            .then_with(|| first.1.cmp(&second.1))
+    });
+    ranked
+        .into_iter()
+        .take(count.max(1))
+        .map(|(_, index)| index)
+        .collect()
+}
+
+/// Fraction of the way from `base` toward `partner` that best explains `color`, projecting in
+/// linear RGB and clamping to `[0, 1]`.
+fn blend_ratio(color: RGB, base: u8, partner: u8) -> f64 {
+    let base = ANSI_COLOR_RGB[base as usize];
+    let partner = ANSI_COLOR_RGB[partner as usize];
+    let mut numerator = 0.0f64;
+    let mut denominator = 0.0f64;
+    for channel in 0..3 {
+        let axis = partner[channel] as f64 - base[channel] as f64;
+        let offset = [color.r, color.g, color.b][channel] as f64 - base[channel] as f64;
+        numerator += offset * axis;
+        denominator += axis * axis;
+    }
+    if denominator <= f64::EPSILON {
+        0.0
+    } else {
+        (numerator / denominator).clamp(0.0, 1.0)
+    }
+}
+
+/// Perceived color of a dither glyph that lights `fill` of its pixels with `partner` over `base`.
+fn blend_palette_rgb(base: u8, partner: u8, fill: f64) -> RGB {
+    let base = ANSI_COLOR_RGB[base as usize];
+    let partner = ANSI_COLOR_RGB[partner as usize];
+    let mix = |a: u8, b: u8| ((a as f64 * (1.0 - fill)) + (b as f64 * fill)).round().clamp(0.0, 255.0) as u8;
+    RGB {
+        r: mix(base[0], partner[0]),
+        g: mix(base[1], partner[1]),
+        b: mix(base[2], partner[2]),
+    }
+}
+
 struct EdgeTarget {
     mask: BlockGrayImage,
     edges: BlockGrayImage,
@@ -1206,6 +1651,126 @@ impl EdgeTarget {
         };
         0.7 * mask_loss + 0.3 * edge_loss
     }
+}
+
+/// Revert dither cells to their solid fallback where the perceived-tone gain does not justify the
+/// corpus cost of making the cell textured amid its neighbors. Reverting an edge cell lowers the
+/// cost for interior cells, so the pass repeats until stable and a large marginal dither field
+/// erodes down to its highest-contrast core. `lambda` (env `PETII_DITHER_LAMBDA`) trades tone
+/// accuracy against corpus layout fidelity. Returns the number of reverted cells.
+fn regularize_dither(
+    prior: &CorpusPrior,
+    width: u32,
+    height: u32,
+    alternatives: &[Vec<GlyphCandidate>],
+    selected: &mut [usize],
+    dither_cells: &mut [bool],
+    dither_gains: &[f64],
+) -> usize {
+    let lambda = std::env::var("PETII_DITHER_LAMBDA")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .unwrap_or(DITHER_LAMBDA);
+    let width = width as usize;
+    let height = height as usize;
+    let visible = |selected: &[usize], index: usize| -> u8 {
+        let candidate = alternatives[index][selected[index]];
+        if candidate.fg == candidate.bg {
+            SPACE_GLYPH
+        } else {
+            candidate.glyph
+        }
+    };
+    let mut reverted = 0usize;
+    loop {
+        let mut changed = false;
+        for index in 0..selected.len() {
+            if !dither_cells[index] || selected[index] != 0 {
+                continue;
+            }
+            let dither_token = alternatives[index][0].glyph;
+            let x = index % width;
+            let y = index / width;
+            // Cost = extra negative-log-likelihood of the textured token over the flat token,
+            // summed across the cell's present neighbors in the corpus adjacency model.
+            let mut cost = 0.0;
+            let mut edge = |neighbor: usize, first_is_center: bool, vertical: bool| {
+                let neighbor_token = visible(selected, neighbor);
+                let (dither_pair, flat_pair) = if first_is_center {
+                    (
+                        prior.bigram_logp(dither_token, neighbor_token, vertical),
+                        prior.bigram_logp(SPACE_GLYPH, neighbor_token, vertical),
+                    )
+                } else {
+                    (
+                        prior.bigram_logp(neighbor_token, dither_token, vertical),
+                        prior.bigram_logp(neighbor_token, SPACE_GLYPH, vertical),
+                    )
+                };
+                cost += flat_pair - dither_pair;
+            };
+            if x + 1 < width {
+                edge(index + 1, true, false);
+            }
+            if x > 0 {
+                edge(index - 1, false, false);
+            }
+            if y + 1 < height {
+                edge(index + width, true, true);
+            }
+            if y > 0 {
+                edge(index - width, false, true);
+            }
+            if dither_gains[index] < lambda * cost {
+                selected[index] = 1;
+                dither_cells[index] = false;
+                reverted += 1;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    reverted
+}
+
+fn preserve_reference_structure(
+    graph: &ContourGraph,
+    alternatives: &[Vec<GlyphCandidate>],
+    structure_protected: &[bool],
+    target_topologies: &[Option<GlyphTopology>],
+    proposed: &[usize],
+    topology_catalog: &[GlyphTopology],
+) -> (Vec<usize>, usize) {
+    let mut selected = proposed.to_vec();
+    let mut rollbacks = 0usize;
+    for index in 0..selected.len() {
+        if !structure_protected[index] || proposed[index] == 0 {
+            continue;
+        }
+        let Some(target) = target_topologies[index] else {
+            continue;
+        };
+        let target_is_internal = Side::ALL.iter().all(|side| target.edge_ports(*side) == 0);
+        let baseline_breaks =
+            incident_break_count(index, 0, graph, alternatives, proposed, topology_catalog);
+        let candidate_breaks = incident_break_count(
+            index,
+            proposed[index],
+            graph,
+            alternatives,
+            proposed,
+            topology_catalog,
+        );
+        let fixes_break = candidate_breaks < baseline_breaks;
+        if target_is_internal || !fixes_break {
+            selected[index] = 0;
+            rollbacks += 1;
+        }
+    }
+    (selected, rollbacks)
 }
 
 #[derive(Clone, Copy)]
@@ -2774,6 +3339,99 @@ mod tests {
     use crate::{render_grid, PetsciiCell, PetsciiGrid};
     use image::{ImageBuffer, Rgba};
 
+    fn built_dither_ladder() -> DitherLadder {
+        let charset = gen_charset_images(
+            false,
+            GLYPH_WIDTH as usize,
+            GLYPH_HEIGHT as usize,
+            &C64LOW,
+            &C64UP,
+        );
+        DitherLadder::build(&charset)
+    }
+
+    #[test]
+    fn dither_vocabulary_admits_the_fine_checker_and_rejects_shapes() {
+        let ladder = built_dither_ladder();
+        let admissible = ladder.admissible_glyphs();
+        // The classic 50% checkerboard is the canonical mid-tone dither.
+        assert!(admissible.contains(&102));
+        // Space and solid endpoints anchor the extremes.
+        assert!(admissible.contains(&SPACE_GLYPH));
+        assert!(admissible.contains(&SOLID_GLYPH));
+        // A clustered shape (a solid half-block) never reads as a tone.
+        let mut half_block = vec![vec![0u8; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+        for row in half_block.iter_mut().take(GLYPH_HEIGHT as usize / 2) {
+            for pixel in row.iter_mut() {
+                *pixel = 255;
+            }
+        }
+        assert!(!is_even_stipple(&half_block));
+    }
+
+    #[test]
+    fn dither_regularizer_reverts_low_gain_cells_next_to_flat() {
+        // A corpus where flat-next-to-flat dominates, so texturing a cell beside a flat neighbor
+        // carries a real layout cost.
+        let mut report = crate::corpus::empty_corpus_report();
+        report.visible_glyph_counts[32] = 10_000;
+        report.horizontal_bigram_counts.insert("32:32".into(), 10_000);
+        report.vertical_bigram_counts.insert("32:32".into(), 10_000);
+        let prior = CorpusPrior::from_report(&report);
+
+        let dither = GlyphCandidate {
+            glyph: 102,
+            distance: 0.0,
+            fg: 1,
+            bg: 0,
+            texture: 1,
+        };
+        // Cell 0 is a dither cell (fallback solid at index 1); cell 1 is already flat.
+        let alternatives = vec![
+            vec![dither, solid_candidate(SOLID_GLYPH, 0, 0)],
+            vec![solid_candidate(SOLID_GLYPH, 0, 0)],
+        ];
+
+        let mut selected = vec![0, 0];
+        let mut dither_cells = vec![true, false];
+        let reverted = regularize_dither(
+            &prior,
+            2,
+            1,
+            &alternatives,
+            &mut selected,
+            &mut dither_cells,
+            &[0.01, 0.0],
+        );
+        assert_eq!(reverted, 1);
+        assert_eq!(selected, vec![1, 0]);
+        assert!(!dither_cells[0]);
+
+        // A large perceived-tone gain keeps the dither despite the layout cost.
+        let mut selected = vec![0, 0];
+        let mut dither_cells = vec![true, false];
+        let kept = regularize_dither(
+            &prior,
+            2,
+            1,
+            &alternatives,
+            &mut selected,
+            &mut dither_cells,
+            &[1000.0, 0.0],
+        );
+        assert_eq!(kept, 0);
+        assert_eq!(selected, vec![0, 0]);
+    }
+
+    #[test]
+    fn dither_ladder_prefers_the_finest_glyph_at_fifty_percent() {
+        let ladder = built_dither_ladder();
+        let glyph = ladder.pick(2, 0.5);
+        assert!((ladder.fill[glyph as usize] - 0.5).abs() < f64::EPSILON);
+        // Among 50%-fill glyphs the finest hatch has the highest dispersion.
+        assert!(ladder.dispersion[glyph as usize] >= 0.99);
+    }
+
     #[test]
     fn top_k_is_sorted_and_deterministic() {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(8, 8, Rgba([0, 0, 0, 255])));
@@ -2959,6 +3617,50 @@ mod tests {
             .collect();
         assert_eq!(target.distance(&matching), 0.0);
         assert!(target.distance(&matching) < target.distance(&inverted));
+    }
+
+    #[test]
+    fn structure_protection_restores_a_supported_internal_edge() {
+        let mut internal = vec![vec![0u8; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+        for row in internal.iter_mut().take(5).skip(3) {
+            for pixel in row.iter_mut().take(5).skip(3) {
+                *pixel = 255;
+            }
+        }
+        let blank = vec![vec![0u8; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+        let topology_catalog = vec![
+            GlyphTopology::from_bitmap(&internal),
+            GlyphTopology::from_bitmap(&blank),
+        ];
+        let targets = vec![Some(GlyphTopology::from_bitmap(&internal))];
+        let graph = ContourGraph::from_targets(1, 1, &targets);
+        let alternatives = vec![vec![
+            GlyphCandidate {
+                glyph: 0,
+                distance: 0.0,
+                fg: 15,
+                bg: 0,
+                texture: 1,
+            },
+            GlyphCandidate {
+                glyph: 1,
+                distance: 0.01,
+                fg: 15,
+                bg: 0,
+                texture: 1,
+            },
+        ]];
+        let (selected, rollbacks) = preserve_reference_structure(
+            &graph,
+            &alternatives,
+            &[true],
+            &targets,
+            &[1],
+            &topology_catalog,
+        );
+
+        assert_eq!(selected, vec![0]);
+        assert_eq!(rollbacks, 1);
     }
 
     #[test]
@@ -3518,7 +4220,7 @@ mod tests {
             texture: 1,
         }]];
 
-        repaint_selected_colors(&reference, 1, 1, &[0], &mut alternatives, &charset);
+        repaint_selected_colors(&reference, 1, 1, &[0], &mut alternatives, &charset, &[false]);
 
         assert_eq!(ANSI_COLOR_RGB[alternatives[0][0].bg as usize], target_rgb);
     }
@@ -3544,7 +4246,7 @@ mod tests {
         };
         let mut alternatives = vec![vec![candidate], vec![candidate]];
 
-        repaint_selected_colors(&reference, 2, 1, &[0, 0], &mut alternatives, &charset);
+        repaint_selected_colors(&reference, 2, 1, &[0, 0], &mut alternatives, &charset, &[false, false]);
 
         assert_eq!(ANSI_COLOR_RGB[alternatives[0][0].bg as usize], left_rgb);
         assert_eq!(ANSI_COLOR_RGB[alternatives[1][0].bg as usize], right_rgb);
@@ -3564,7 +4266,7 @@ mod tests {
             texture: 1,
         }]];
 
-        repaint_selected_colors(&reference, 1, 1, &[0], &mut alternatives, &charset);
+        repaint_selected_colors(&reference, 1, 1, &[0], &mut alternatives, &charset, &[false]);
 
         let selected = ANSI_COLOR_RGB[alternatives[0][0].bg as usize];
         let reference = RGB {
@@ -3587,6 +4289,39 @@ mod tests {
                 < color_distance_rgb(&reference, &gray_purple)
         );
         assert_ne!(alternatives[0][0].bg, 60);
+    }
+
+    #[test]
+    fn top_one_conversion_bypasses_cross_cell_candidate_expansion() {
+        let mut image = image::RgbImage::new(16, 8);
+        for y in 0..8 {
+            for x in 0..16 {
+                image.put_pixel(
+                    x,
+                    y,
+                    image::Rgb(if x % 8 < 4 {
+                        [20, 40, 80]
+                    } else {
+                        [220, 230, 240]
+                    }),
+                );
+            }
+        }
+        let config = ConversionConfig {
+            width: 2,
+            height: 1,
+            mode: 2,
+            top_k: 16,
+            contrast: 0.0,
+        };
+
+        let result = convert_image_top1(&DynamicImage::ImageRgb8(image), &config).unwrap();
+
+        assert!(result
+            .alternatives
+            .iter()
+            .all(|candidates| candidates.len() == 1));
+        assert_eq!(result.edge_grammar.final_metrics.edited_cells, 0);
     }
 
     #[test]

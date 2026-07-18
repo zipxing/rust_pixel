@@ -9,10 +9,35 @@
     "metrics": "metrics.json"
   },
   "prompts": [
-    {"id": "portrait-witch", "category": "portrait", "prompt": "A moon witch in a pointed hat, strong silhouette, dark background"},
-    {"id": "object-airship", "category": "object", "prompt": "A compact fantasy airship viewed from the side"},
-    {"id": "scene-forest", "category": "scene", "prompt": "A moonlit forest clearing with a small cabin"},
-    {"id": "architecture-castle", "category": "architecture", "prompt": "A tall ruined castle above a cliff"},
-    {"id": "action-dragon", "category": "action", "prompt": "A tiny knight facing a large fire-breathing dragon"}
+    {
+      "id": "portrait-witch",
+      "category": "portrait",
+      "prompt": "A moonlit witch in a broad pointed hat, three-quarter portrait, strong silhouette on a dark indigo background",
+      "reference": "references/portrait-witch.png"
+    },
+    {
+      "id": "object-airship",
+      "category": "object",
+      "prompt": "A whimsical retro airship with a large oval balloon and a small gondola, viewed from the side in a clear blue sky",
+      "reference": "references/object-airship.png"
+    },
+    {
+      "id": "scene-forest",
+      "category": "scene",
+      "prompt": "A quiet forest clearing with prominent pine trees, distant hills, a pale sun, and a winding stream",
+      "reference": "references/scene-forest.png"
+    },
+    {
+      "id": "architecture-castle",
+      "category": "architecture",
+      "prompt": "A compact medieval hill castle with two towers, crenellated walls, a central gate, and a stone bridge at dusk",
+      "reference": "references/architecture-castle.png"
+    },
+    {
+      "id": "action-dragon",
+      "category": "action",
+      "prompt": "A winged dragon in a sweeping flying pose, breathing one bold arc of flame above a mountain ridge",
+      "reference": "references/action-dragon.png"
+    }
   ]
 }

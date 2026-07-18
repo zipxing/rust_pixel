@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "date": "2026-07-17",
+  "method": "blinded_side_by_side_ab",
+  "reviewers": 1,
+  "allowed_choices": ["a", "b", "tie"],
+  "cases": [
+    {
+      "id": "portrait-witch",
+      "choice": "a",
+      "a": "candidate",
+      "b": "baseline",
+      "preference": "candidate",
+      "deterministic_score_winner": "baseline"
+    },
+    {
+      "id": "object-airship",
+      "choice": "b",
+      "a": "baseline",
+      "b": "candidate",
+      "preference": "candidate",
+      "deterministic_score_winner": "baseline"
+    },
+    {
+      "id": "scene-forest",
+      "choice": "b",
+      "a": "baseline",
+      "b": "candidate",
+      "preference": "candidate",
+      "deterministic_score_winner": "candidate"
+    },
+    {
+      "id": "architecture-castle",
+      "choice": "b",
+      "a": "candidate",
+      "b": "baseline",
+      "preference": "baseline",
+      "deterministic_score_winner": "candidate"
+    },
+    {
+      "id": "action-dragon",
+      "choice": "a",
+      "a": "baseline",
+      "b": "candidate",
+      "preference": "baseline",
+      "deterministic_score_winner": "candidate"
+    }
+  ],
+  "summary": {
+    "candidate_wins": 3,
+    "ties": 0,
+    "baseline_wins": 2,
+    "candidate_win_or_tie_rate": 0.6,
+    "deterministic_score_agreements": 1,
+    "deterministic_score_agreement_rate": 0.2,
+    "mvp_70_percent_gate_passed": false
+  }
+}

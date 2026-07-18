@@ -1,6 +1,7 @@
 use crate::preview::{render_grid, GLYPH_SIZE};
 use crate::types::{GlyphCandidate, PetsciiGrid};
 use image::{DynamicImage, GenericImageView, Pixel, RgbaImage};
+use rust_pixel::render::symbols::{color_distance_rgb, RGB};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -52,6 +53,70 @@ pub fn score_grid(
     }
     let target = reference.to_rgba8();
     Ok(score_images(grid, &rendered, &target, weights))
+}
+
+/// Eye-averaged tone distance between the rendered grid and the reference. Unlike per-pixel
+/// reconstruction, this averages color over `block`x`block` regions before comparing in
+/// CIEDE2000, so a dithered cell that resolves to the correct perceived tone scores well even
+/// though no individual pixel matches. Lower is better. A `block` around half a glyph (4) keeps
+/// cell-scale structure while rewarding sub-cell eye blending.
+pub fn perceptual_tone_score(
+    grid: &PetsciiGrid,
+    reference: &DynamicImage,
+    block: u32,
+) -> Result<f64, String> {
+    let rendered = render_grid(grid, 1)?;
+    if rendered.dimensions() != reference.dimensions() {
+        return Err(format!(
+            "reference size {:?} does not match rendered size {:?}",
+            reference.dimensions(),
+            rendered.dimensions()
+        ));
+    }
+    let target = reference.to_rgba8();
+    Ok(perceptual_tone_distance(&rendered, &target, block))
+}
+
+/// Mean CIEDE2000 distance between block-averaged colors of two equally sized images.
+pub fn perceptual_tone_distance(rendered: &RgbaImage, target: &RgbaImage, block: u32) -> f64 {
+    let block = block.max(1);
+    let width = rendered.width();
+    let height = rendered.height();
+    let mut total = 0.0f64;
+    let mut samples = 0u32;
+    let mut block_y = 0;
+    while block_y < height {
+        let mut block_x = 0;
+        while block_x < width {
+            let rendered_mean = block_mean_rgb(rendered, block_x, block_y, block);
+            let target_mean = block_mean_rgb(target, block_x, block_y, block);
+            total += color_distance_rgb(&rendered_mean, &target_mean) as f64;
+            samples += 1;
+            block_x += block;
+        }
+        block_y += block;
+    }
+    total / samples.max(1) as f64
+}
+
+fn block_mean_rgb(image: &RgbaImage, x0: u32, y0: u32, block: u32) -> RGB {
+    let mut sum = [0u32; 3];
+    let mut count = 0u32;
+    for y in y0..(y0 + block).min(image.height()) {
+        for x in x0..(x0 + block).min(image.width()) {
+            let pixel = image.get_pixel(x, y).0;
+            sum[0] += pixel[0] as u32;
+            sum[1] += pixel[1] as u32;
+            sum[2] += pixel[2] as u32;
+            count += 1;
+        }
+    }
+    let count = count.max(1);
+    RGB {
+        r: (sum[0] / count) as u8,
+        g: (sum[1] / count) as u8,
+        b: (sum[2] / count) as u8,
+    }
 }
 
 /// Bounded deterministic optimizer. It proposes one locally improved grid from the
@@ -222,6 +287,27 @@ mod tests {
     use super::*;
     use crate::{convert_image, ConversionConfig};
     use image::{ImageBuffer, Rgba};
+
+    #[test]
+    fn perceptual_tone_rewards_matching_average_over_pixel_exactness() {
+        // A mid-gray target. A checkerboard of black and white matches its perceived tone but
+        // no pixel matches; a flat mid-gray-rounded-to-black block matches half the pixels.
+        let target = RgbaImage::from_pixel(4, 4, Rgba([128, 128, 128, 255]));
+        let mut checker = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
+        for y in 0..4 {
+            for x in 0..4 {
+                if (x + y) % 2 == 0 {
+                    checker.put_pixel(x, y, Rgba([255, 255, 255, 255]));
+                }
+            }
+        }
+        let flat_black = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
+        // Averaged over the whole 4x4 block, the checker's mean is exactly mid-gray.
+        let checker_distance = perceptual_tone_distance(&checker, &target, 4);
+        let flat_distance = perceptual_tone_distance(&flat_black, &target, 4);
+        assert!(checker_distance < 1.0);
+        assert!(checker_distance < flat_distance);
+    }
 
     #[test]
     fn optimizer_is_deterministic_and_monotonic() {

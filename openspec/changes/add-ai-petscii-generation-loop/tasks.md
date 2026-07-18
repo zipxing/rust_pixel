@@ -49,7 +49,7 @@
 
 ## 6. Evaluation
 
-- [ ] 6.1 Implement a benchmark runner comparing the baseline and loop result.
-- [ ] 6.2 Run the benchmark with recorded provider responses for repeatable CI checks.
-- [ ] 6.3 Conduct a blinded human A/B evaluation and record preferences.
+- [x] 6.1 Implement a benchmark runner comparing the baseline and loop result.
+- [x] 6.2 Run the benchmark with recorded provider responses for repeatable CI checks.
+- [x] 6.3 Conduct a blinded human A/B evaluation and record preferences.
 - [ ] 6.4 Confirm at least 70% of loop outputs win or tie the baseline before declaring the MVP complete.

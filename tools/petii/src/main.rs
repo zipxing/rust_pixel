@@ -1,10 +1,11 @@
 //! PETSCII converter CLI. Historical positional arguments remain compatible.
 
 mod ai_cli;
+mod benchmark_cli;
 
 use petii::{
-    analyze_pix_corpus, convert_image, optimize_grid, render_grid, ConversionConfig,
-    OptimizationWeights,
+    analyze_pix_corpus, convert_image, convert_image_dithered, optimize_grid, render_grid,
+    ConversionConfig, OptimizationWeights,
 };
 use std::{env, fs, path::Path};
 
@@ -24,6 +25,9 @@ fn print_usage() {
     println!();
     println!("EXPERIMENTAL:");
     println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--output-dir DIRECTORY]");
+    println!(
+        "  petii benchmark MANIFEST.json [--reference-dir DIRECTORY] [--output-dir DIRECTORY]"
+    );
     println!("  petii corpus DIRECTORY [--output report.json]");
 }
 
@@ -68,6 +72,13 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.get(1).is_some_and(|argument| argument == "ai") {
         if let Err(error) = ai_cli::run(&args[2..]) {
+            eprintln!("Error: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if args.get(1).is_some_and(|argument| argument == "benchmark") {
+        if let Err(error) = benchmark_cli::run(&args[2..]) {
             eprintln!("Error: {error}");
             std::process::exit(1);
         }
@@ -147,7 +158,13 @@ fn main() {
         top_k,
         contrast: 0.0,
     };
-    let result = convert_image(&image, &config).unwrap_or_else(|error| {
+    let dither = args.iter().any(|arg| arg == "--dither");
+    let convert = if dither {
+        convert_image_dithered
+    } else {
+        convert_image
+    };
+    let result = convert(&image, &config).unwrap_or_else(|error| {
         eprintln!("Error: {}", error);
         std::process::exit(1);
     });

@@ -5,7 +5,7 @@ use petii::{
         CandidateArtifact, Critique, CritiqueScores, MultimodalCritic, OpenAiCompatibleProvider,
         ReferenceGenerator, RunManifest,
     },
-    convert_image, render_edge_debug, render_grid, score_grid, ConversionConfig,
+    convert_image_top1, render_edge_debug, render_grid, score_grid, ConversionConfig,
     OptimizationWeights,
 };
 use serde_json::json;
@@ -188,7 +188,7 @@ fn aspect_preserving_config(
 }
 
 fn run_direct(reference: &DynamicImage, config: &ConversionConfig) -> Result<AiLoopResult, String> {
-    let conversion = convert_image(reference, config)?;
+    let conversion = convert_image_top1(reference, config)?;
     let edge_grammar = conversion.edge_grammar.clone();
     let edge_debug = conversion.edge_debug.clone();
     let score = score_grid(

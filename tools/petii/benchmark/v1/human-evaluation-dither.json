@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "date": "2026-07-18",
+  "method": "blinded_side_by_side_ab",
+  "comparison": "plain_pipeline_vs_corpus_regularized_dither",
+  "grid": [60, 38],
+  "dither_lambda": 1.0,
+  "reviewers": 1,
+  "allowed_choices": ["left", "right", "tie"],
+  "note": "Only the two cases whose output changes under dithering at 60x38 are evaluated; portrait-witch, object-airship, and action-dragon produce zero dither cells and are byte-identical. Hidden left/right assignment recorded before review.",
+  "cases": [
+    {
+      "id": "architecture-castle",
+      "left": "dither",
+      "right": "plain",
+      "choice": "left",
+      "preference": "dither",
+      "prior_round1_preference": "baseline",
+      "flipped": true
+    },
+    {
+      "id": "scene-forest",
+      "left": "plain",
+      "right": "dither",
+      "choice": "right",
+      "preference": "dither",
+      "prior_round1_preference": "candidate",
+      "flipped": false
+    }
+  ],
+  "summary": {
+    "differing_cases": 2,
+    "dither_preferred": 2,
+    "plain_preferred": 0,
+    "ties": 0,
+    "dither_win_or_tie_rate": 1.0,
+    "castle_flipped_baseline_to_dither": true
+  }
+}

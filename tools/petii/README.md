@@ -31,7 +31,7 @@ Modes are:
 
 ### Deterministic conversion pipeline
 
-The image-to-grid path has four stages:
+The image-to-grid path has five stages:
 
 1. **Normalize once**: apply the requested contrast, resize to exactly 8×8
    source pixels per output cell, detect the dominant scene background, and
@@ -46,7 +46,11 @@ The image-to-grid path has four stages:
    A deterministic Pareto rollback uses intermediate candidates to keep every
    accepted result within 5% of its own Top-1 reference loss. There are no
    scene-specific or shape-specific repair passes.
-4. **Materialize the grid**: place the selected candidate first, truncate saved
+4. **Reference-constrained repaint**: keep the final glyphs fixed, refit their
+   actual foreground/background bitmap regions with RustPixel's Lab-based
+   CIEDE2000 palette distance, and reduce only boundary color jumps not present
+   in the reference.
+5. **Materialize the grid**: place the selected candidate first, truncate saved
    alternatives to the requested top-K bound, validate the typed grid, and emit
    `.pix`/PNG artifacts.
 
@@ -131,6 +135,105 @@ Given the same input image and conversion settings, the Rust
 candidate/optimizer path and edge diagnostics are deterministic. Live
 reference generation and critic behavior can still vary by provider;
 recorded-response replay is not implemented yet.
+
+## Deterministic benchmark
+
+Compare local Top-1 Mode 2 conversion against the current bounded candidate,
+contour, cleanup, and repaint pipeline without making provider calls:
+
+```sh
+cargo run -p petii --release -- benchmark \
+  tools/petii/benchmark/v1/prompts.json \
+  --reference-dir tools/petii/benchmark/v1/references \
+  --output-dir tmp/petii-benchmark-v1
+```
+
+The manifest supplies case IDs, categories, prompts, and a default grid. A case
+may include a `reference` path; otherwise the runner looks for
+`<reference-dir>/<case-id>.png|jpg|jpeg|webp`. Options include `--width`,
+`--height`, `--mode`, `--baseline-top-k`, `--candidate-top-k`, and
+`--preview-scale`.
+
+Each case directory contains `reference.png`, `baseline.pix/png`,
+`candidate.pix/png`, and `metrics.json`. The root `report.json` records
+candidate wins, ties, baseline wins, win-or-tie rate, mean scores, and mean
+relative improvement. Reports omit timing and machine-specific absolute paths
+so identical inputs and settings produce deterministic metrics.
+
+The report also records a second, perception-aligned winner. Alongside the
+per-pixel reconstruction score, each case is scored with an eye-averaged tone
+distance (mean CIEDE2000 over half-glyph blocks). On the recorded blinded human
+A/B this perceptual score tracks human preference roughly three times better
+than reconstruction (60% vs 20% agreement), so `report.json` reports both
+`win_or_tie_rate` and `perceptual_win_or_tie_rate`.
+
+## Experimental dithering and its evaluation
+
+`--dither` (and the `convert_image_dithered` entry point) enables selective
+two-color dithering. Flat mid-tone cells that would otherwise collapse into a
+single solid block instead pick two bracketing palette colors and a fine
+checker/hatch glyph whose fill approximates the blend, recovering the perceived
+intermediate tone the way hand-drawn PETSCII shades skies and gradients. It is
+deliberately restrained: dark cells stay solid so silhouettes read, and only
+cells whose single nearest palette color leaves visible banding are dithered.
+Default conversion is unchanged.
+
+Measure it without touching the versioned benchmark using `--dither-eval`, which
+converts each reference three ways (baseline top-1, current pipeline, and the
+pipeline with dithering) and reports reconstruction and perceptual tone for
+each. Add `--corpus-prior <report.json>` to also score how human-like each
+result's glyph layout is, using a `petii corpus` report as a bigram prior:
+
+```sh
+cargo run -p petii --release -- corpus apps/petview/assets --output tmp/petview-prior.json
+cargo run -p petii --release -- benchmark \
+  tools/petii/benchmark/v1/prompts.json \
+  --reference-dir tools/petii/benchmark/v1/references \
+  --output-dir tmp/petii-dither-eval --width 60 --height 38 \
+  --dither-eval --corpus-prior tmp/petview-prior.json
+```
+
+Dithering improves perceptual tone on gradient-heavy scenes (a dusk-sky castle
+fell 27%) while slightly raising the corpus bigram cost, so the corpus prior
+doubles as a guard against over-dithering. Human preference remains the product
+gate; both scores are diagnostic.
+
+When a corpus prior is supplied, the dither arm is regularized: each proposed
+dither cell is kept only when its perceived-tone gain outweighs the corpus cost
+of texturing it beside its neighbors, so marginal dithering at the fringe of a
+region reverts to solid while the high-contrast core survives. The trade weight
+is `PETII_DITHER_LAMBDA` (default 1.0); higher values favor corpus layout
+fidelity over tone accuracy. `convert_image_dithered_prior` exposes the same
+regularized path programmatically.
+
+The versioned v1 suite includes five recorded reference-generator outputs and
+an `expected-report.json` snapshot. CI compares structure exactly while allowing
+only `1e-12` relative/absolute floating-point noise. Reproduce it locally with:
+
+```bash
+cargo test -p petii --release \
+  benchmark::tests::recorded_benchmark_v1_matches_snapshot \
+  -- --ignored --exact
+```
+
+If an intentional algorithm change alters the report, inspect all five rendered
+pairs before replacing the snapshot. A changed reference image requires a new
+versioned suite rather than an in-place overwrite.
+
+`benchmark/v1/human-evaluation.json` records the first blinded side-by-side A/B
+review, including the hidden assignment, preference per case, and comparison
+with the deterministic score winner. Human preference remains the product gate;
+the scalar score is diagnostic and does not override it.
+
+`benchmark/v1/human-evaluation-v2.json` records the second blinded review after
+adding strong-reference structure protection. Castle changed from a baseline
+preference to a candidate preference, but airship moved in the opposite
+direction and dragon still preferred the baseline; the human gate remains 60%.
+
+`benchmark/v1/human-evaluation-v3.json` records a stricter structure gate where
+strong-edge glyph edits must repair an actual cross-cell break. At 40x25 the
+human gate remains 60%; dragon is the only case that preferred the baseline in
+all three rounds. The product's width-60 target must be evaluated separately.
 
 ## Current limitations
 
