@@ -200,7 +200,8 @@ impl MultimodalCritic for OpenAiCompatibleProvider {
         let text = response["choices"][0]["message"]["content"]
             .as_str()
             .ok_or_else(|| "critic response does not contain message content".to_string())?;
-        let critique = Critique::from_json(text, grid_width, grid_height, allowed_colors)?;
+        let critique = Critique::from_json(text, grid_width, grid_height, allowed_colors)
+            .map_err(|error| format!("{error}; raw critic reply: {}", truncate(text, 400)))?;
         critique.validate_candidate_count(candidates.len())?;
         Ok(critique)
     }
@@ -240,15 +241,29 @@ fn image_content(label: &str, image: &DynamicImage) -> Result<Value, String> {
 
 fn critique_prompt(prompt: &str, width: u32, height: u32, colors: &[u8]) -> String {
     format!(
-        "Evaluate the PETSCII candidate against the reference and intent: {prompt}\n\
+        "Evaluate the PETSCII candidate images against the reference and intent: {prompt}\n\
          Grid: {width}x{height}; allowed palette indices: {colors:?}.\n\
-         Return JSON only with keys: selected_candidate, scores, regions, repairs, explanation.\n\
-         selected_candidate must be the zero-based index of the strongest candidate.\n\
-         scores must contain semantic_fidelity, subject_readability, composition, \
-         palette_coherence, contour_continuity, petscii_authenticity (0..100).\n\
-         Regions use normalized x,y,width,height. Prefer bounded repairs: simplify_region, \
-         protect_silhouette, reduce_density, increase_contrast. Do not request custom images \
-         or characters outside the fixed PETSCII set."
+         Return ONLY one JSON object with EXACTLY this shape (no prose, no markdown):\n\
+         {{\n\
+         \x20 \"selected_candidate\": 0,\n\
+         \x20 \"scores\": {{\"semantic_fidelity\": 0, \"subject_readability\": 0, \"composition\": 0, \
+         \"palette_coherence\": 0, \"contour_continuity\": 0, \"petscii_authenticity\": 0}},\n\
+         \x20 \"regions\": [{{\"region\": {{\"x\": 0.0, \"y\": 0.0, \"width\": 1.0, \"height\": 1.0}}, \
+         \"problem\": \"text\", \"severity\": 0.5}}],\n\
+         \x20 \"repairs\": [{{\"type\": \"simplify_region\", \"region\": {{\"x\": 0.0, \"y\": 0.0, \
+         \"width\": 1.0, \"height\": 1.0}}, \"strength\": 0.5}}],\n\
+         \x20 \"explanation\": \"text\"\n\
+         }}\n\
+         Rules: selected_candidate is the zero-based index of the strongest candidate. \
+         Every score is a number 0..100. Every entry in \"regions\" MUST have a nested \"region\" \
+         object with x,y,width,height as fractions 0..1. \"severity\" is 0..1. \
+         Each entry in \"repairs\" MUST have a \"type\" and a nested \"region\" object, using ONLY:\n\
+         {{\"type\":\"simplify_region\",\"region\":{{...}},\"strength\":0..1}}, \
+         {{\"type\":\"protect_silhouette\",\"region\":{{...}}}}, \
+         {{\"type\":\"reduce_density\",\"region\":{{...}},\"target\":0..1}}, \
+         {{\"type\":\"increase_contrast\",\"region\":{{...}},\"amount\":0..1}}.\n\
+         Use empty arrays [] for regions/repairs when none apply. Do not invent other fields, \
+         repair types, custom images, or characters outside the fixed PETSCII set."
     )
 }
 
