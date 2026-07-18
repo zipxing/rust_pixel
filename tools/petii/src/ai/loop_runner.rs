@@ -1,11 +1,14 @@
 use crate::{
     ai::{schema::NormalizedRegion, Critique, MultimodalCritic, RepairDirective},
-    convert_image, generate_config_variants, optimize_grid, render_grid, score_grid,
+    convert_image_styled, generate_config_variants, perceptual_tone_score, render_grid, score_grid,
     ConversionConfig, ConversionResult, EdgeDebugData, EdgeGrammarReport, OptimizationWeights,
     PetsciiGrid, ScoreBreakdown,
 };
 use image::DynamicImage;
 use rust_pixel::render::style::ANSI_COLOR_RGB;
+
+/// Half-glyph block size for the eye-averaged tone metric that drives loop selection.
+const PERCEPTUAL_BLOCK: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AiLoopBudget {
@@ -69,6 +72,8 @@ struct CandidateState {
     conversion: ConversionResult,
     grid: PetsciiGrid,
     score: ScoreBreakdown,
+    /// Eye-averaged tone distance (lower is better); the loop's selection objective.
+    perceptual: f64,
     preview: DynamicImage,
 }
 
@@ -81,6 +86,8 @@ pub fn run_with_reference(
     base_config: &ConversionConfig,
     critic: &dyn MultimodalCritic,
     budget: &AiLoopBudget,
+    dither: bool,
+    slopes: bool,
 ) -> Result<AiLoopResult, String> {
     budget.validate()?;
     if prompt.trim().is_empty() || prompt.len() > 4096 {
@@ -93,22 +100,24 @@ pub fn run_with_reference(
         .into_iter()
         .take(budget.max_candidates)
     {
-        let conversion = convert_image(reference, &config)?;
-        let (grid, score) = optimize_grid(
-            &conversion.grid,
-            &conversion.alternatives,
-            &conversion.reference,
-            weights,
-        )?;
+        // The styled conversion already makes the slope/dither/contour/repaint decisions; the loop
+        // no longer runs the reconstruction-based Top-K optimizer (it would undo dithering). The
+        // eye-averaged perceptual score, which tracks human preference far better than per-pixel
+        // reconstruction, is the selection and repair-acceptance objective.
+        let conversion = convert_image_styled(reference, &config, dither, slopes)?;
+        let grid = conversion.grid.clone();
+        let score = score_grid(&grid, &conversion.reference, weights)?;
+        let perceptual = perceptual_tone_score(&grid, &conversion.reference, PERCEPTUAL_BLOCK)?;
         let preview = DynamicImage::ImageRgba8(render_grid(&grid, budget.preview_scale)?);
         states.push(CandidateState {
             conversion,
             grid,
             score,
+            perceptual,
             preview,
         });
     }
-    states.sort_by(|left, right| left.score.total.total_cmp(&right.score.total));
+    states.sort_by(|left, right| left.perceptual.total_cmp(&right.perceptual));
 
     let previews: Vec<_> = states.iter().map(|state| state.preview.clone()).collect();
     let mut warnings = Vec::new();
@@ -142,6 +151,7 @@ pub fn run_with_reference(
     let edge_debug = states[selected].conversion.edge_debug.clone();
     let mut best_grid = states[selected].grid.clone();
     let mut best_score = states[selected].score;
+    let mut best_perceptual = states[selected].perceptual;
     let mut best_critique = initial;
     let mut iterations = 1;
 
@@ -153,8 +163,10 @@ pub fn run_with_reference(
             &best_critique.repairs,
             &budget.allowed_colors,
         );
-        let repaired_score =
-            score_grid(&repaired, &states[selected].conversion.reference, weights)?;
+        let repaired_reference = &states[selected].conversion.reference;
+        let repaired_score = score_grid(&repaired, repaired_reference, weights)?;
+        let repaired_perceptual =
+            perceptual_tone_score(&repaired, repaired_reference, PERCEPTUAL_BLOCK)?;
         let best_preview = DynamicImage::ImageRgba8(render_grid(&best_grid, budget.preview_scale)?);
         let repaired_preview =
             DynamicImage::ImageRgba8(render_grid(&repaired, budget.preview_scale)?);
@@ -184,13 +196,14 @@ pub fn run_with_reference(
 
         // Candidate zero is the previous best. A repair can only replace it when
         // the critic explicitly selects candidate one, its semantic score is not
-        // lower, and the deterministic whole-image objective does not regress.
+        // lower, and the perceptual (eye-averaged tone) objective does not regress.
         if critique.selected_candidate == 1
             && critique.scores.mean() >= best_critique.scores.mean()
-            && repaired_score.total <= best_score.total
+            && repaired_perceptual <= best_perceptual
         {
             best_grid = repaired;
             best_score = repaired_score;
+            best_perceptual = repaired_perceptual;
             best_critique = critique;
         } else {
             // Preserve monotonic best-so-far, but use an empty repair list to stop
@@ -491,7 +504,7 @@ mod tests {
             allowed_colors: (0..16).collect(),
         };
         let result =
-            run_with_reference("a purple object", &reference, &config, &critic, &budget).unwrap();
+            run_with_reference("a purple object", &reference, &config, &critic, &budget, true, true).unwrap();
         assert_eq!(result.iterations, 2);
         assert_eq!(critic.calls.get(), 2);
         assert!(result.critic.scores.mean() >= 70.0);
@@ -519,7 +532,9 @@ mod tests {
                 preview_scale: 1,
                 allowed_colors: (0..16).collect(),
             },
-        )
+        true,
+        true,
+    )
         .unwrap();
         assert_eq!(result.iterations, 1);
         assert_eq!(result.grid.cells.len(), 1);

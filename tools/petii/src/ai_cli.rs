@@ -56,7 +56,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let result = if direct {
             run_direct(&reference, &config, dither, slopes)?
         } else {
-            run_with_reference(prompt, &reference, &config, &OfflineCritic, &budget)?
+            run_with_reference(prompt, &reference, &config, &OfflineCritic, &budget, dither, slopes)?
         };
         (plan, reference, config, result)
     } else {
@@ -70,7 +70,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         let result = if direct {
             run_direct(&reference, &config, dither, slopes)?
         } else {
-            run_with_reference(prompt, &reference, &config, &provider, &budget)?
+            run_with_reference(prompt, &reference, &config, &provider, &budget, dither, slopes)?
         };
         (plan, reference, config, result)
     };
