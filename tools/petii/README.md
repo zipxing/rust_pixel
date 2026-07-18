@@ -167,16 +167,41 @@ A/B this perceptual score tracks human preference roughly three times better
 than reconstruction (60% vs 20% agreement), so `report.json` reports both
 `win_or_tie_rate` and `perceptual_win_or_tie_rate`.
 
-## Experimental dithering and its evaluation
+## Slope and dither enhancements
 
-`--dither` (and the `convert_image_dithered` entry point) enables selective
-two-color dithering. Flat mid-tone cells that would otherwise collapse into a
-single solid block instead pick two bracketing palette colors and a fine
-checker/hatch glyph whose fill approximates the blend, recovering the perceived
-intermediate tone the way hand-drawn PETSCII shades skies and gradients. It is
-deliberately restrained: dark cells stay solid so silhouettes read, and only
+The `petii <image>` command applies two quality enhancements by default; the
+`convert_image_styled(image, config, dither, slopes)` entry point toggles them
+programmatically.
+
+**Slopes** (`--no-slopes` to disable) draw diagonal silhouette boundaries with a
+fill-boundary glyph family instead of stair-stepped solid blocks. A curated
+catalog of horizontal fills (fill the bottom or top *k* rows), vertical fills
+(left or right *k* columns), and the four 45-degree triangles is searched for
+the glyph that best reproduces each silhouette cell. Shallow slopes resolve to a
+stepped run of horizontal fills, steep ones to vertical fills, and 45-degree ones
+to triangles, so a hill or a tower roof reads as a continuous edge. Only clean
+bilevel boundaries qualify; thin lines and textured cells fall through to the
+general matcher.
+
+**Dithering** (`--no-dither` to disable) recovers intermediate tones. Flat
+mid-tone cells that would otherwise collapse into a single solid block instead
+pick two bracketing palette colors and a fine checker/hatch glyph whose fill
+approximates the blend, the way hand-drawn PETSCII shades skies and gradients. It
+is deliberately restrained: dark cells stay solid so silhouettes read, and only
 cells whose single nearest palette color leaves visible banding are dithered.
-Default conversion is unchanged.
+
+The two enhancements act on disjoint cell types (silhouette boundaries versus
+flat interiors), so they compose without conflict.
+
+### Generating conversion-friendly references
+
+AI reference generation asks for exactly the properties the converter renders
+well and forbids what it cannot. The art direction requests crisp continuous
+contours, large coherent color regions, 6-8 solid colors, and a few intentional
+diagonal and curved edges, while avoiding text, gradients, noise, dithering,
+halftone, tiny details, and pixel art. Feeding the converter a clean flat-color
+illustration — not an already-textured image — is the single biggest lever on
+output quality.
 
 Measure it without touching the versioned benchmark using `--dither-eval`, which
 converts each reference three ways (baseline top-1, current pipeline, and the

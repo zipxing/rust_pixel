@@ -4,8 +4,8 @@ mod ai_cli;
 mod benchmark_cli;
 
 use petii::{
-    analyze_pix_corpus, convert_image, convert_image_dithered, optimize_grid, render_grid,
-    ConversionConfig, OptimizationWeights,
+    analyze_pix_corpus, convert_image_styled, optimize_grid, render_grid, ConversionConfig,
+    OptimizationWeights,
 };
 use std::{env, fs, path::Path};
 
@@ -15,7 +15,7 @@ fn print_usage() {
     println!();
     println!("USAGE:");
     println!("  petii <IMAGE_FILE> [WIDTH] [HEIGHT] [MODE] [CROP_X CROP_Y CROP_W CROP_H]");
-    println!("        [--optimize] [--top-k N] [--preview FILE.png]");
+    println!("        [--optimize] [--top-k N] [--preview FILE.png] [--no-dither] [--no-slopes]");
     println!();
     println!("MODE:");
     println!("  0=nearest PETSCII glyph for general images (single foreground color)");
@@ -158,13 +158,9 @@ fn main() {
         top_k,
         contrast: 0.0,
     };
-    let dither = args.iter().any(|arg| arg == "--dither");
-    let convert = if dither {
-        convert_image_dithered
-    } else {
-        convert_image
-    };
-    let result = convert(&image, &config).unwrap_or_else(|error| {
+    let dither = !args.iter().any(|arg| arg == "--no-dither");
+    let slopes = !args.iter().any(|arg| arg == "--no-slopes");
+    let result = convert_image_styled(&image, &config, dither, slopes).unwrap_or_else(|error| {
         eprintln!("Error: {}", error);
         std::process::exit(1);
     });

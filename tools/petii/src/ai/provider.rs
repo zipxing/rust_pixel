@@ -118,11 +118,7 @@ impl ReferenceGenerator for OpenAiCompatibleProvider {
         if prompt.trim().is_empty() || prompt.len() > 4096 {
             return Err("prompt must contain 1..=4096 bytes".to_string());
         }
-        let reference_prompt = format!(
-            "Create a low-detail, high-contrast composition reference for PETSCII conversion. \
-             Strong silhouette, large readable shapes, flat lighting, no text, no fine texture. \
-             Target character-grid aspect ratio {width}:{height}. Subject: {prompt}"
-        );
+        let reference_prompt = reference_art_direction(prompt, width, height);
         let body = image_generation_request(&self.image_model, &reference_prompt);
         let response = self.post_json("images/generations", &body)?;
         let encoded = response["data"][0]["b64_json"]
@@ -145,6 +141,27 @@ impl ReferenceGenerator for OpenAiCompatibleProvider {
         plan.validate()?;
         Ok((plan, image))
     }
+}
+
+/// Structured art direction for a conversion-friendly reference. The template asks for the exact
+/// properties the deterministic converter renders well — crisp continuous contours, large coherent
+/// color regions, and a few intentional diagonal/curved edges — while forbidding the high-frequency
+/// content (gradients, noise, dithering, tiny details) it cannot represent. The subject is the only
+/// per-request field; every other line is a fixed constraint.
+fn reference_art_direction(prompt: &str, width: u32, height: u32) -> String {
+    let subject = prompt.trim();
+    format!(
+        "Use case: stylized-concept\n\
+         Asset type: reference image for PETSCII conversion\n\
+         Primary request: {subject}\n\
+         Scene/backdrop: one clear subject on a plain, uncluttered backdrop; no extra objects.\n\
+         Style/medium: clean flat-color retro editorial illustration, not pixel art and not PETSCII.\n\
+         Composition/framing: {width}:{height} canvas; large centered subject; generous outer margin; readable at {width}x{height} cells.\n\
+         Lighting/mood: strong directional rim light with clear separation between subject and background.\n\
+         Color palette: 6 to 8 solid colors, high contrast but harmonious.\n\
+         Constraints: crisp continuous contours; large coherent color regions; a few intentional diagonal and curved edges; no tiny details.\n\
+         Avoid: text, watermark, frame, gradients, noise, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII."
+    )
 }
 
 fn image_generation_request(model: &str, prompt: &str) -> Value {
@@ -270,6 +287,17 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("data:image/png;base64,"));
+    }
+
+    #[test]
+    fn reference_art_direction_embeds_subject_and_conversion_constraints() {
+        let prompt = reference_art_direction("  a moonlit witch  ", 40, 25);
+        assert!(prompt.contains("Primary request: a moonlit witch"));
+        assert!(prompt.contains("readable at 40x25 cells"));
+        assert!(prompt.contains("crisp continuous contours"));
+        assert!(prompt.contains("intentional diagonal and curved edges"));
+        assert!(prompt.contains("Avoid:") && prompt.contains("gradients"));
+        assert!(prompt.contains("not pixel art and not PETSCII"));
     }
 
     #[test]

@@ -17,9 +17,9 @@ pub use benchmark::{
     BenchmarkReport, BenchmarkSuite, BenchmarkSummary, BenchmarkWinner, DitherEvalRow,
 };
 pub use converter::{
-    convert_image, convert_image_dithered, convert_image_dithered_prior, convert_image_top1,
-    generate_config_variants, ConversionResult, EdgeDebugData, EdgeGateDecision, EdgeGrammarMetrics,
-    EdgeGrammarReport,
+    convert_image, convert_image_dithered, convert_image_dithered_prior, convert_image_styled,
+    convert_image_top1, generate_config_variants, ConversionResult, EdgeDebugData, EdgeGateDecision,
+    EdgeGrammarMetrics, EdgeGrammarReport,
 };
 pub use corpus::{analyze_pix_corpus, CorpusPrior, CorpusReport, NaturalnessScore};
 pub use edge_debug::render_edge_debug;

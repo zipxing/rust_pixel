@@ -40,6 +40,16 @@ const DITHER_DARK_LUMA_FLOOR: f64 = 60.0;
 const DITHER_MAX_COMPONENT: usize = 4;
 /// Default weight of corpus layout cost against perceived-tone gain in the dither regularizer.
 const DITHER_LAMBDA: f64 = 1.0;
+/// Diagonal silhouette (slope) detection: a cell whose fill occupies a triangular region with a
+/// diagonal hypotenuse renders as one of four triangle glyphs, so a slope becomes a consistent
+/// run of diagonals instead of a stair-step of solid blocks. Thresholds operate on the 8x8 block.
+const SLOPE_MIN_CONTRAST: u8 = 28;
+const SLOPE_MIN_FILL: f64 = 0.14;
+const SLOPE_MAX_FILL: f64 = 0.86;
+/// Minimum fraction of the 64 pixels a fill-boundary glyph must reproduce for a silhouette cell to
+/// be drawn with it rather than left to the general matcher. High enough that only clean bilevel
+/// boundaries qualify; thin lines and textured cells fall through.
+const SLOPE_MATCH_MIN: f64 = 0.86;
 const EDGE_CONTINUITY_CANDIDATES: usize = 16;
 const EDGE_APPEARANCE_CANDIDATES: usize = 6;
 const EDGE_TOPOLOGY_CANDIDATES: usize = 4;
@@ -153,11 +163,13 @@ struct CandidateGenerator<'a> {
     charset: &'a [BlockGrayImage],
     topology_catalog: &'a [GlyphTopology],
     dither_ladder: &'a DitherLadder,
+    fill_boundary: &'a FillBoundaryCatalog,
     background_gray: u8,
     background_rgb: u32,
     background_color: u8,
     edge_grammar_enabled: bool,
     dither: bool,
+    slopes: bool,
 }
 
 impl CandidateGenerator<'_> {
@@ -167,6 +179,20 @@ impl CandidateGenerator<'_> {
         let flat_mean = (self.config.mode != 1)
             .then(|| uniform_block_mean(&raw_block))
             .flatten();
+        // A clean diagonal silhouette boundary is drawn with a single triangle glyph, overriding
+        // both the flat and thin-line contour paths so slopes read as continuous diagonals.
+        if self.slopes && self.config.mode != 1 && flat_mean.is_none() {
+            if let Some(candidate) = self.detect_slope_fill(x, y, &raw_block) {
+                return CellCandidates {
+                    ranked: vec![candidate],
+                    edge_aware: false,
+                    target_topology: None,
+                    structure_protected: false,
+                    dithered: false,
+                    dither_gain: 0.0,
+                };
+            }
+        }
         let edge_aware = self.config.mode != 1 && flat_mean.is_none() && is_edge_cell(&edge_block);
         let color_mode = if edge_aware { 1 } else { self.config.mode };
         let (bg, fg) = select_cell_colors(
@@ -272,7 +298,7 @@ impl CandidateGenerator<'_> {
             if !(DITHER_MIN_RATIO..=DITHER_MAX_RATIO).contains(&ratio) {
                 continue;
             }
-            let glyph = self.dither_ladder.pick(self.config.mode, ratio);
+            let glyph = self.dither_ladder.pick(ratio);
             let fill = self.dither_ladder.fill[glyph as usize];
             if !(DITHER_MIN_RATIO..=DITHER_MAX_RATIO).contains(&fill) {
                 continue;
@@ -300,6 +326,94 @@ impl CandidateGenerator<'_> {
         ];
         Some((candidates, solid_error - error))
     }
+
+    /// Draw a clean silhouette boundary with the fill-boundary glyph that best reproduces it.
+    /// The block is split into a darker foreground region and a lighter background region; the
+    /// catalog of horizontal, vertical, and diagonal fill glyphs is searched for the closest
+    /// match. Shallow slopes resolve to a stepped run of horizontal fills, steep ones to vertical
+    /// fills, and 45-degree ones to triangles, so a slope reads as a continuous edge. Returns
+    /// `None` for low-contrast, thin-line, or textured cells that no clean split reproduces.
+    fn detect_slope_fill(&self, x: u32, y: u32, block: &BlockGrayImage) -> Option<GlyphCandidate> {
+        let mut minimum = 255u8;
+        let mut maximum = 0u8;
+        for row in block.iter() {
+            for &pixel in row.iter() {
+                minimum = minimum.min(pixel);
+                maximum = maximum.max(pixel);
+            }
+        }
+        if maximum.saturating_sub(minimum) < SLOPE_MIN_CONTRAST {
+            return None;
+        }
+        let threshold = ((minimum as u16 + maximum as u16) / 2) as u8;
+        let mut foreground_mask = [[false; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+        let mut total = 0u32;
+        for (py, row) in block.iter().enumerate().take(GLYPH_HEIGHT as usize) {
+            for (px, &pixel) in row.iter().enumerate().take(GLYPH_WIDTH as usize) {
+                if pixel <= threshold {
+                    foreground_mask[py][px] = true;
+                    total += 1;
+                }
+            }
+        }
+        let fill = total as f64 / (GLYPH_WIDTH * GLYPH_HEIGHT) as f64;
+        if !(SLOPE_MIN_FILL..=SLOPE_MAX_FILL).contains(&fill) {
+            return None;
+        }
+        let (glyph, agreement) = self.fill_boundary.best_match(&foreground_mask)?;
+        if agreement < SLOPE_MATCH_MIN {
+            return None;
+        }
+        let (foreground, background) = self.slope_colors(x, y, block, threshold);
+        Some(GlyphCandidate {
+            glyph,
+            distance: 0.0,
+            fg: foreground,
+            bg: background,
+            texture: 1,
+        })
+    }
+
+    /// Nearest palette colors for the darker (foreground) and lighter (background) regions of a
+    /// slope cell, split at the same threshold used for detection.
+    fn slope_colors(&self, x: u32, y: u32, block: &BlockGrayImage, threshold: u8) -> (u8, u8) {
+        let reference = self.reference.to_rgb8();
+        let mut on = [0u32; 3];
+        let mut off = [0u32; 3];
+        let mut on_count = 0u32;
+        let mut off_count = 0u32;
+        for (py, row) in block.iter().enumerate().take(GLYPH_HEIGHT as usize) {
+            for (px, &pixel) in row.iter().enumerate().take(GLYPH_WIDTH as usize) {
+                let rgb = reference
+                    .get_pixel(x * GLYPH_WIDTH + px as u32, y * GLYPH_HEIGHT + py as u32)
+                    .0;
+                let target = if pixel <= threshold {
+                    on_count += 1;
+                    &mut on
+                } else {
+                    off_count += 1;
+                    &mut off
+                };
+                for channel in 0..3 {
+                    target[channel] += rgb[channel] as u32;
+                }
+            }
+        }
+        let nearest = |sum: [u32; 3], count: u32, fallback: u8| {
+            if count == 0 {
+                fallback
+            } else {
+                find_best_color(RGB {
+                    r: (sum[0] / count) as u8,
+                    g: (sum[1] / count) as u8,
+                    b: (sum[2] / count) as u8,
+                }) as u8
+            }
+        };
+        let foreground = nearest(on, on_count, self.background_color);
+        let background = nearest(off, off_count, self.background_color);
+        (foreground, background)
+    }
 }
 
 /// Generate bounded deterministic preprocessing variants. The first item is always the
@@ -320,7 +434,20 @@ pub fn convert_image(
     image: &DynamicImage,
     config: &ConversionConfig,
 ) -> Result<ConversionResult, String> {
-    convert_image_internal(image, config, true, false, None)
+    convert_image_internal(image, config, true, false, None, false)
+}
+
+/// Run the full pipeline with the product enhancements toggled individually. `dither` recovers
+/// intermediate tones with selective two-color dithering; `slopes` draws diagonal silhouette
+/// boundaries with the fill-boundary glyph family so slopes read as continuous edges instead of
+/// stair-stepped solids. Both default off in the plain [`convert_image`] entry point.
+pub fn convert_image_styled(
+    image: &DynamicImage,
+    config: &ConversionConfig,
+    dither: bool,
+    slopes: bool,
+) -> Result<ConversionResult, String> {
+    convert_image_internal(image, config, true, dither, None, slopes)
 }
 
 /// Experimental: run the full pipeline with selective two-color dithering enabled.
@@ -332,7 +459,7 @@ pub fn convert_image_dithered(
     image: &DynamicImage,
     config: &ConversionConfig,
 ) -> Result<ConversionResult, String> {
-    convert_image_internal(image, config, true, true, None)
+    convert_image_internal(image, config, true, true, None, false)
 }
 
 /// Selective dithering regularized by a corpus prior. Each proposed dither cell is kept only
@@ -344,7 +471,7 @@ pub fn convert_image_dithered_prior(
     config: &ConversionConfig,
     prior: &CorpusPrior,
 ) -> Result<ConversionResult, String> {
-    convert_image_internal(image, config, true, true, Some(prior))
+    convert_image_internal(image, config, true, true, Some(prior), false)
 }
 
 /// Run the local single-cell matcher without cross-cell contour candidate expansion.
@@ -356,7 +483,7 @@ pub fn convert_image_top1(
 ) -> Result<ConversionResult, String> {
     let mut baseline_config = config.clone();
     baseline_config.top_k = 1;
-    convert_image_internal(image, &baseline_config, false, false, None)
+    convert_image_internal(image, &baseline_config, false, false, None, false)
 }
 
 fn convert_image_internal(
@@ -365,6 +492,7 @@ fn convert_image_internal(
     edge_grammar_enabled: bool,
     dither: bool,
     dither_prior: Option<&CorpusPrior>,
+    slopes: bool,
 ) -> Result<ConversionResult, String> {
     config.validate()?;
     let mut profile_mark = Instant::now();
@@ -380,6 +508,7 @@ fn convert_image_internal(
     );
     let topology_catalog = build_topology_catalog(&charset);
     let dither_ladder = DitherLadder::build(&charset);
+    let fill_boundary = FillBoundaryCatalog::build(&charset);
     profile_stage("reference+catalog", &mut profile_mark);
 
     let (background_gray, background_rgb) =
@@ -395,11 +524,13 @@ fn convert_image_internal(
         charset: &charset,
         topology_catalog: &topology_catalog,
         dither_ladder: &dither_ladder,
+        fill_boundary: &fill_boundary,
         background_gray,
         background_rgb,
         background_color,
         edge_grammar_enabled,
         dither,
+        slopes,
     };
     let capacity = (config.width * config.height) as usize;
     let mut alternatives = Vec::with_capacity(capacity);
@@ -1435,13 +1566,15 @@ impl DitherLadder {
     }
 
     /// Pick the admissible glyph whose fill best matches `target`, rewarding fine dispersion so
-    /// mid-tones resolve to a hatch rather than a hard half-block. Deterministic on ties.
-    fn pick(&self, mode: u8, target: f64) -> u8 {
+    /// mid-tones resolve to a hatch rather than a hard half-block. Deterministic on ties. The
+    /// dither vocabulary is always the graphic set (mode 2's filter), so dithering never emits
+    /// letters or digits even in the letter-permitting modes 0 and 1.
+    fn pick(&self, target: f64) -> u8 {
         let mut best = SPACE_GLYPH;
         let mut best_key = f64::INFINITY;
         for glyph in 0..self.fill.len() {
             let id = glyph as u8;
-            if !self.admissible[glyph] || !glyph_allowed(mode, id) {
+            if !self.admissible[glyph] || !glyph_allowed(2, id) {
                 continue;
             }
             let key =
@@ -1460,6 +1593,133 @@ impl DitherLadder {
 /// glyphs must (a) carry close to the whole-cell fill in every 4x4 quadrant and (b) contain no
 /// connected foreground blob larger than a few pixels. Together these reject letters, arrows,
 /// strokes, corners, stripes, and half-blocks while admitting checkers, hatches, and stipples.
+/// A curated catalog of "fill-boundary" glyphs: horizontal fills at every row split, vertical
+/// fills at every column split, and the four 45-degree triangles. A silhouette cell picks the
+/// member that best reproduces its foreground region, so consecutive cells step a slope smoothly.
+struct FillBoundaryCatalog {
+    glyphs: Vec<(u8, [[bool; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize])>,
+}
+
+impl FillBoundaryCatalog {
+    fn build(charset: &[BlockGrayImage]) -> Self {
+        let width = GLYPH_WIDTH as usize;
+        let height = GLYPH_HEIGHT as usize;
+        let glyph_mask = |glyph: usize| {
+            let mut mask = [[false; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+            for (y, row) in mask.iter_mut().enumerate() {
+                for (x, pixel) in row.iter_mut().enumerate() {
+                    *pixel = charset[glyph][y][x] >= 128;
+                }
+            }
+            mask
+        };
+        let agreement = |a: &[[bool; 8]; 8], b: &[[bool; 8]; 8]| {
+            (0..height)
+                .map(|y| (0..width).filter(|x| a[y][*x] == b[y][*x]).count())
+                .sum::<usize>()
+        };
+        // Ideal half-plane fills: bottom/top k rows and left/right k columns.
+        let mut ideals: Vec<[[bool; 8]; 8]> = Vec::new();
+        for k in 1..height {
+            let mut bottom = [[false; 8]; 8];
+            let mut top = [[false; 8]; 8];
+            for y in 0..height {
+                for x in 0..width {
+                    bottom[y][x] = y >= height - k;
+                    top[y][x] = y < k;
+                }
+            }
+            ideals.push(bottom);
+            ideals.push(top);
+        }
+        for k in 1..width {
+            let mut left = [[false; 8]; 8];
+            let mut right = [[false; 8]; 8];
+            for y in 0..height {
+                for x in 0..width {
+                    left[y][x] = x < k;
+                    right[y][x] = x >= width - k;
+                }
+            }
+            ideals.push(left);
+            ideals.push(right);
+        }
+        let mut selected: Vec<u8> = Vec::new();
+        let push = |glyph: u8, selected: &mut Vec<u8>| {
+            if !selected.contains(&glyph) {
+                selected.push(glyph);
+            }
+        };
+        for ideal in &ideals {
+            if let Some(glyph) = (0..charset.len())
+                .filter(|glyph| glyph_allowed(2, *glyph as u8))
+                .max_by_key(|glyph| agreement(&glyph_mask(*glyph), ideal))
+            {
+                if agreement(&glyph_mask(glyph), ideal) >= 60 {
+                    push(glyph as u8, &mut selected);
+                }
+            }
+        }
+        // The four 45-degree triangles, detected by their filled-corner signature.
+        for glyph in 0..charset.len() {
+            if glyph_allowed(2, glyph as u8) && is_triangle_glyph(&glyph_mask(glyph)) {
+                push(glyph as u8, &mut selected);
+            }
+        }
+        let glyphs = selected
+            .into_iter()
+            .map(|glyph| (glyph, glyph_mask(glyph as usize)))
+            .collect();
+        Self { glyphs }
+    }
+
+    /// Glyph whose lit pixels best agree with `foreground`, and that agreement as a 0..1 fraction.
+    fn best_match(
+        &self,
+        foreground: &[[bool; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize],
+    ) -> Option<(u8, f64)> {
+        let width = GLYPH_WIDTH as usize;
+        let height = GLYPH_HEIGHT as usize;
+        self.glyphs
+            .iter()
+            .map(|(glyph, mask)| {
+                let matches: usize = (0..height)
+                    .map(|y| (0..width).filter(|x| mask[y][*x] == foreground[y][*x]).count())
+                    .sum();
+                (*glyph, matches)
+            })
+            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
+            .map(|(glyph, matches)| (glyph, matches as f64 / (width * height) as f64))
+    }
+}
+
+/// A glyph is a 45-degree triangle when its lit pixels fill one quadrant, leave the opposite
+/// quadrant empty, and half-fill the two off-diagonal quadrants.
+fn is_triangle_glyph(mask: &[[bool; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize]) -> bool {
+    let mut quadrant = [0u32; 4];
+    for (y, row) in mask.iter().enumerate() {
+        for (x, &on) in row.iter().enumerate() {
+            if on {
+                quadrant[usize::from(y >= 4) * 2 + usize::from(x >= 4)] += 1;
+            }
+        }
+    }
+    let fractions = quadrant.map(|count| count as f64 / 16.0);
+    let full = (0..4)
+        .max_by(|a, b| fractions[*a].total_cmp(&fractions[*b]))
+        .unwrap();
+    let empty = (0..4)
+        .min_by(|a, b| fractions[*a].total_cmp(&fractions[*b]))
+        .unwrap();
+    const OPPOSITE: [usize; 4] = [3, 2, 1, 0];
+    if OPPOSITE[full] != empty || fractions[full] - fractions[empty] < 0.7 {
+        return false;
+    }
+    (0..4).all(|corner| {
+        corner == full || corner == empty || (0.25..=0.75).contains(&fractions[corner])
+    })
+}
+
 fn is_even_stipple(bitmap: &BlockGrayImage) -> bool {
     const QUADRANT: usize = 4;
     let width = GLYPH_WIDTH as usize;
@@ -3369,6 +3629,102 @@ mod tests {
         assert!(!is_even_stipple(&half_block));
     }
 
+    fn built_charset() -> Vec<BlockGrayImage> {
+        gen_charset_images(
+            false,
+            GLYPH_WIDTH as usize,
+            GLYPH_HEIGHT as usize,
+            &C64LOW,
+            &C64UP,
+        )
+    }
+
+    #[test]
+    fn fill_boundary_catalog_has_triangles_and_axis_fills() {
+        let catalog = FillBoundaryCatalog::build(&built_charset());
+        let members: Vec<u8> = catalog.glyphs.iter().map(|(glyph, _)| *glyph).collect();
+        // The four 45-degree triangles.
+        for triangle in [95, 105, 223, 233] {
+            assert!(members.contains(&triangle), "missing triangle {triangle}");
+        }
+        // A horizontal bottom-half fill (glyph 98) and a vertical fill are axis-aligned members.
+        assert!(members.contains(&98), "missing bottom-half fill");
+        assert!(members.len() >= 12, "catalog too small: {}", members.len());
+    }
+
+    #[test]
+    fn is_triangle_glyph_accepts_triangles_and_rejects_blocks() {
+        let charset = built_charset();
+        let mask_of = |glyph: usize| {
+            let mut mask = [[false; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+            for (y, row) in mask.iter_mut().enumerate() {
+                for (x, pixel) in row.iter_mut().enumerate() {
+                    *pixel = charset[glyph][y][x] >= 128;
+                }
+            }
+            mask
+        };
+        assert!(is_triangle_glyph(&mask_of(223)));
+        assert!(is_triangle_glyph(&mask_of(95)));
+        // A solid bottom-half block is a clean axis fill, not a diagonal triangle.
+        assert!(!is_triangle_glyph(&mask_of(98)));
+        // Solid and blank are not triangles.
+        assert!(!is_triangle_glyph(&mask_of(SOLID_GLYPH as usize)));
+        assert!(!is_triangle_glyph(&mask_of(SPACE_GLYPH as usize)));
+    }
+
+    #[test]
+    fn best_match_selects_a_horizontal_fill_for_a_shallow_boundary() {
+        let catalog = FillBoundaryCatalog::build(&built_charset());
+        // Foreground occupies the bottom three rows: a shallow, near-horizontal boundary.
+        let mut foreground = [[false; GLYPH_WIDTH as usize]; GLYPH_HEIGHT as usize];
+        for row in foreground.iter_mut().skip(5) {
+            for pixel in row.iter_mut() {
+                *pixel = true;
+            }
+        }
+        let (glyph, agreement) = catalog.best_match(&foreground).unwrap();
+        assert!(agreement > 0.95, "weak match: {agreement}");
+        // Glyph 121 is the bottom-three-rows fill.
+        assert_eq!(glyph, 121);
+    }
+
+    #[test]
+    fn slope_conversion_draws_a_fill_boundary_glyph_on_a_clean_diagonal() {
+        let charset = built_charset();
+        let catalog_members: Vec<u8> = FillBoundaryCatalog::build(&charset)
+            .glyphs
+            .iter()
+            .map(|(glyph, _)| *glyph)
+            .collect();
+        // Paint an 8x8 cell as the lower-left triangle glyph: dark where lit, light elsewhere.
+        let mut image = ImageBuffer::from_pixel(8, 8, Rgba([255, 255, 255, 255]));
+        for y in 0..8u32 {
+            for x in 0..8u32 {
+                if charset[223][y as usize][x as usize] >= 128 {
+                    image.put_pixel(x, y, Rgba([0, 0, 0, 255]));
+                }
+            }
+        }
+        let image = DynamicImage::ImageRgba8(image);
+        let config = ConversionConfig {
+            width: 1,
+            height: 1,
+            mode: 2,
+            top_k: 1,
+            contrast: 0.0,
+        };
+        let with_slopes = convert_image_styled(&image, &config, false, true).unwrap();
+        let glyph = with_slopes.grid.cells[0].glyph;
+        assert!(
+            catalog_members.contains(&glyph),
+            "slope path did not pick a fill-boundary glyph, got {glyph}"
+        );
+        // Deterministic.
+        let again = convert_image_styled(&image, &config, false, true).unwrap();
+        assert_eq!(with_slopes.grid, again.grid);
+    }
+
     #[test]
     fn dither_regularizer_reverts_low_gain_cells_next_to_flat() {
         // A corpus where flat-next-to-flat dominates, so texturing a cell beside a flat neighbor
@@ -3426,7 +3782,7 @@ mod tests {
     #[test]
     fn dither_ladder_prefers_the_finest_glyph_at_fifty_percent() {
         let ladder = built_dither_ladder();
-        let glyph = ladder.pick(2, 0.5);
+        let glyph = ladder.pick(0.5);
         assert!((ladder.fill[glyph as usize] - 0.5).abs() < f64::EPSILON);
         // Among 50%-fill glyphs the finest hatch has the highest dispersion.
         assert!(ladder.dispersion[glyph as usize] >= 0.99);
