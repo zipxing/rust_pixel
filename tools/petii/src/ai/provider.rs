@@ -160,6 +160,7 @@ fn reference_art_direction(prompt: &str, width: u32, height: u32) -> String {
          Detail level: MINIMAL. Use only a few large, simple, well-separated shapes. Every meaningful feature must be at least ~3 blocks wide; merge small parts into single bold shapes and drop anything smaller.\n\
          Lighting/mood: strong directional rim light with clear separation between subject and background.\n\
          Color palette: 6 to 8 solid colors, high contrast but harmonious.\n\
+         Outlines: give the subject and each major shape a clean, even, dark outline like a storybook or cel illustration — clear and continuous so the shape reads at a glance, but thin and restrained: never thick, heavy, sketchy, doubled, or exaggerated.\n\
          Constraints: crisp continuous contours; large coherent color regions; a few intentional diagonal and curved edges.\n\
          Avoid: fine detail and small repeated elements (individual leaves, petals, flowers, bricks, cobblestones, blades of grass, hair strands, distant or background objects, small ornaments); busy or cluttered scenes; text, watermark, frame, gradients, noise, dithering, halftone, photorealism, pixel art, ASCII art, PETSCII."
     )
@@ -311,6 +312,7 @@ mod tests {
         assert!(prompt.contains("Primary request: a moonlit witch"));
         assert!(prompt.contains("40x25 coarse blocks"));
         assert!(prompt.contains("Detail level: MINIMAL"));
+        assert!(prompt.contains("Outlines:") && prompt.contains("never thick, heavy, sketchy"));
         assert!(prompt.contains("crisp continuous contours"));
         assert!(prompt.contains("intentional diagonal and curved edges"));
         assert!(prompt.contains("Avoid:") && prompt.contains("gradients"));
