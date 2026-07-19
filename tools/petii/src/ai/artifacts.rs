@@ -8,16 +8,7 @@ pub struct CandidateArtifact {
     pub pix_path: String,
     pub preview_path: String,
     pub deterministic_score: f64,
-    pub critic_score: Option<f32>,
     pub selected: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RecordedResponse {
-    pub kind: String,
-    pub model: String,
-    pub request_hash: String,
-    pub body: Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -29,10 +20,8 @@ pub struct RunManifest {
     pub height: u32,
     pub palette: Vec<u8>,
     pub conversion: crate::ConversionConfig,
-    pub max_iterations: usize,
     pub max_candidates: usize,
     pub candidates: Vec<CandidateArtifact>,
-    pub responses: Vec<RecordedResponse>,
 }
 
 impl RunManifest {
@@ -84,7 +73,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn manifest_round_trip_redacts_secrets() {
+    fn manifest_round_trips() {
         let path = std::env::temp_dir().join(format!("petii-manifest-{}.json", std::process::id()));
         let manifest = RunManifest {
             version: 1,
@@ -94,21 +83,21 @@ mod tests {
             height: 25,
             palette: (0..16).collect(),
             conversion: crate::ConversionConfig::default(),
-            max_iterations: 4,
             max_candidates: 4,
             candidates: vec![],
-            responses: vec![RecordedResponse {
-                kind: "critic".to_string(),
-                model: "test".to_string(),
-                request_hash: "abc".to_string(),
-                body: serde_json::json!({"authorization": "Bearer secret", "ok": true}),
-            }],
         };
         manifest.save_redacted(&path).unwrap();
-        let saved = std::fs::read_to_string(&path).unwrap();
-        assert!(!saved.contains("Bearer secret"));
         let loaded = RunManifest::load(&path).unwrap();
-        assert_eq!(loaded.responses[0].body["authorization"], "[REDACTED]");
+        assert_eq!(loaded, manifest);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn redaction_masks_credential_keys() {
+        let mut value = serde_json::json!({"authorization": "Bearer secret", "nested": {"api_key": "k"}, "ok": true});
+        redact_value(&mut value);
+        assert_eq!(value["authorization"], "[REDACTED]");
+        assert_eq!(value["nested"]["api_key"], "[REDACTED]");
+        assert_eq!(value["ok"], true);
     }
 }

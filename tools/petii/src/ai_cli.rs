@@ -2,8 +2,7 @@ use image::{DynamicImage, RgbaImage};
 use petii::{
     ai::{
         run_with_reference, AiLoopBudget, AiLoopCandidate, AiLoopResult, ArtPlan,
-        CandidateArtifact, Critique, CritiqueScores, MultimodalCritic, OpenAiCompatibleProvider,
-        ReferenceGenerator, RunManifest,
+        CandidateArtifact, OpenAiCompatibleProvider, ReferenceGenerator, RunManifest,
     },
     convert_image_styled, render_edge_debug, render_grid, score_grid, ConversionConfig,
     OptimizationWeights,
@@ -25,7 +24,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let explicit_height: Option<u32> = parse_optional_value(args, "--height")?;
     let explicit_mode = parse_optional_value(args, "--mode")?;
     let top_k = parse_value(args, "--top-k", 6_usize)?;
-    let max_iterations = parse_value(args, "--iterations", 4_usize)?;
     let max_candidates = parse_value(args, "--candidates", 4_usize)?;
     let seed = parse_value(args, "--seed", 0_u64)?;
     let offline = has_flag(args, "--offline");
@@ -48,37 +46,23 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let budget = AiLoopBudget {
-        max_iterations,
         max_candidates,
         preview_scale: 2,
-        allowed_colors: (0..16).collect(),
     };
 
     let effective_top_k = if direct { 1 } else { top_k };
-    let (plan, reference, config, result) = if offline || (direct && input.is_some()) {
-        let reference = open_input(input.as_deref().unwrap())?;
-        let plan = input_plan(prompt);
-        let config = aspect_preserving_config(&reference, width, None, effective_top_k, mode)?;
-        let result = if direct {
-            run_direct(&reference, &config, dither, slopes)?
-        } else {
-            run_with_reference(prompt, &reference, &config, &OfflineCritic, &budget, dither, slopes)?
-        };
-        (plan, reference, config, result)
+    // The single optional model call is reference generation. With --input (or --offline) there is
+    // no reference to generate, so the whole run is deterministic and never touches the network.
+    let (plan, reference) = match &input {
+        Some(path) => (input_plan(prompt), open_input(path)?),
+        // Generated references are square (1024x1024), so hint a square target grid.
+        None => OpenAiCompatibleProvider::from_env()?.generate_reference(prompt, width, width)?,
+    };
+    let config = aspect_preserving_config(&reference, width, None, effective_top_k, mode)?;
+    let result = if direct {
+        run_direct(&reference, &config, dither, slopes)?
     } else {
-        let provider = OpenAiCompatibleProvider::from_env()?;
-        let (plan, reference) = match input {
-            Some(path) => (input_plan(prompt), open_input(&path)?),
-            // Generated references are square (1024x1024), so hint a square target grid.
-            None => provider.generate_reference(prompt, width, width)?,
-        };
-        let config = aspect_preserving_config(&reference, width, None, effective_top_k, mode)?;
-        let result = if direct {
-            run_direct(&reference, &config, dither, slopes)?
-        } else {
-            run_with_reference(prompt, &reference, &config, &provider, &budget, dither, slopes)?
-        };
-        (plan, reference, config, result)
+        run_with_reference(&reference, &config, &budget, dither, slopes)?
     };
 
     let output_dir = value_after(args, "--output-dir")
@@ -95,12 +79,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         &budget,
     )?;
     eprintln!(
-        "PETSCII AI run complete: {} (grid={}x{}, score={:.6}, iterations={})",
+        "PETSCII AI run complete: {} (grid={}x{}, score={:.6})",
         output_dir.display(),
         config.width,
         config.height,
         result.deterministic_score.total,
-        result.iterations
     );
     for warning in &result.warnings {
         eprintln!("Warning: {warning}");
@@ -111,17 +94,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
 fn print_usage() {
     println!("EXPERIMENTAL AI MODE:");
     println!("  petii ai \"PROMPT\" [--input IMAGE] [--offline] [--direct]");
-    println!("        [--width 40] [--mode 0|1|2] [--top-k 6]");
-    println!("        [--iterations 4] [--candidates 4] [--seed 0]");
+    println!("        [--width 40] [--mode 0|1|2] [--top-k 6] [--candidates 4] [--seed 0]");
     println!("        [--no-slopes] [--no-dither] [--output-dir DIRECTORY]");
     println!();
-    println!("Live mode reads PETII_AI_API_KEY and optional PETII_AI_API_BASE,");
-    println!("PETII_AI_IMAGE_MODEL, and PETII_AI_VISION_MODEL.");
+    println!("Reference generation (no --input) reads PETII_AI_API_KEY and optional");
+    println!("PETII_AI_API_BASE, PETII_AI_IMAGE_MODEL. Conversion itself never calls a model:");
+    println!("candidate selection is a deterministic perceptual pick, so runs are reproducible.");
     println!("Rows are always derived from the reference aspect ratio (never stretched); a");
     println!("square reference yields a square grid. --height is ignored.");
-    println!("Offline mode requires --input and runs only the deterministic pipeline.");
-    println!("Direct mode: generate the reference, then a single enhanced conversion (slope +");
-    println!("dither), no optimizer or AI critic. This is the best single-command full-chain path.");
+    println!("With --input (or --offline) nothing touches the network.");
+    println!("Default: render several contrast variants and keep the perceptual-best (recommended).");
+    println!("Direct mode: a single enhanced conversion (slope + dither) at base contrast, no");
+    println!("variant selection — faster, but may over-dither smooth gradients.");
     println!("Both modes default to mode 2; --no-slopes/--no-dither turn off the enhancements.");
     println!("Mode 1 is for extracting artwork that is already exact PETSCII.");
 }
@@ -217,10 +201,6 @@ fn run_direct(
     Ok(AiLoopResult {
         grid: grid.clone(),
         deterministic_score: score,
-        critic: offline_critique(
-            "Direct single-pass conversion (slope + dither enhancements, no AI critic).",
-        ),
-        iterations: 0,
         submitted_candidates: 1,
         candidates: vec![AiLoopCandidate {
             grid,
@@ -239,7 +219,6 @@ fn input_plan(prompt: &str) -> ArtPlan {
         summary: prompt.to_string(),
         reference_prompt: "User-supplied reference image".to_string(),
         palette: (0..16).collect(),
-        protected_regions: Vec::new(),
     }
 }
 
@@ -297,24 +276,30 @@ fn save_run(
             pix_path: pix_name,
             preview_path: preview_name,
             deterministic_score: candidate.deterministic_score.total,
-            critic_score: candidate.selected.then(|| result.critic.scores.mean()),
             selected: candidate.selected,
         });
     }
     save_gallery(output_dir, result)?;
 
+    // Records how the deterministic selection resolved. There is no critic, so this is the whole
+    // provenance: the winning candidate id, its scores, and any warnings.
+    let selected_id = artifacts
+        .iter()
+        .find(|artifact| artifact.selected)
+        .map(|artifact| artifact.id.clone());
     let summary = json!({
         "art_plan": plan,
-        "critique": result.critic,
+        "selection": "deterministic perceptual-best contrast variant; no AI critic",
+        "selected_candidate": selected_id,
+        "submitted_candidates": result.submitted_candidates,
         "deterministic_score": result.deterministic_score,
-        "iterations": result.iterations,
         "warnings": result.warnings,
     });
     fs::write(
-        output_dir.join("critique.json"),
+        output_dir.join("selection.json"),
         serde_json::to_vec_pretty(&summary).map_err(|error| error.to_string())?,
     )
-    .map_err(|error| format!("failed to save critique.json: {error}"))?;
+    .map_err(|error| format!("failed to save selection.json: {error}"))?;
     fs::write(
         output_dir.join("edge-metrics.json"),
         serde_json::to_vec_pretty(&result.edge_grammar).map_err(|error| error.to_string())?,
@@ -334,10 +319,8 @@ fn save_run(
         height: config.height,
         palette: (0..16).collect(),
         conversion: config.clone(),
-        max_iterations: budget.max_iterations,
         max_candidates: budget.max_candidates,
         candidates: artifacts,
-        responses: Vec::new(),
     }
     .save_redacted(&output_dir.join("manifest.json"))
 }
@@ -361,41 +344,6 @@ fn save_gallery(output_dir: &PathBuf, result: &petii::ai::AiLoopResult) -> Resul
     gallery
         .save(output_dir.join("gallery.png"))
         .map_err(|error| format!("failed to save gallery.png: {error}"))
-}
-
-struct OfflineCritic;
-
-impl MultimodalCritic for OfflineCritic {
-    fn critique(
-        &self,
-        _prompt: &str,
-        _reference: &DynamicImage,
-        _candidates: &[DynamicImage],
-        _grid_width: u32,
-        _grid_height: u32,
-        _allowed_colors: &[u8],
-    ) -> Result<Critique, String> {
-        Ok(offline_critique(
-            "Offline deterministic selection; no AI critic was called.",
-        ))
-    }
-}
-
-fn offline_critique(explanation: &str) -> Critique {
-    Critique {
-        selected_candidate: 0,
-        scores: CritiqueScores {
-            semantic_fidelity: 0.0,
-            subject_readability: 0.0,
-            composition: 0.0,
-            palette_coherence: 0.0,
-            contour_continuity: 0.0,
-            petscii_authenticity: 0.0,
-        },
-        regions: Vec::new(),
-        repairs: Vec::new(),
-        explanation: explanation.to_string(),
-    }
 }
 
 #[cfg(test)]
@@ -439,7 +387,6 @@ mod tests {
         let reference = DynamicImage::new_rgba8(16, 16);
         let config = aspect_preserving_config(&reference, 2, None, 1, 2).unwrap();
         let result = run_direct(&reference, &config, true, true).unwrap();
-        assert_eq!(result.iterations, 0);
         assert_eq!(result.submitted_candidates, 1);
         assert_eq!(result.candidates.len(), 1);
         assert!(result.candidates[0].selected);

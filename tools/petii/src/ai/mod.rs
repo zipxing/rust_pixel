@@ -6,9 +6,7 @@ pub mod loop_runner;
 pub mod provider;
 pub mod schema;
 
-pub use artifacts::{CandidateArtifact, RecordedResponse, RunManifest};
+pub use artifacts::{CandidateArtifact, RunManifest};
 pub use loop_runner::{run_with_reference, AiLoopBudget, AiLoopCandidate, AiLoopResult};
-pub use provider::{MultimodalCritic, OpenAiCompatibleProvider, ReferenceGenerator};
-pub use schema::{
-    ArtPlan, Critique, CritiqueScores, NormalizedRegion, RegionCritique, RepairDirective,
-};
+pub use provider::{OpenAiCompatibleProvider, ReferenceGenerator};
+pub use schema::ArtPlan;

@@ -1,4 +1,4 @@
-use crate::ai::schema::{ArtPlan, Critique};
+use crate::ai::schema::ArtPlan;
 use base64::Engine;
 use image::DynamicImage;
 use serde_json::{json, Value};
@@ -16,26 +16,13 @@ pub trait ReferenceGenerator {
     ) -> Result<(ArtPlan, DynamicImage), String>;
 }
 
-/// Provider-neutral boundary for multimodal candidate critique.
-pub trait MultimodalCritic {
-    fn critique(
-        &self,
-        prompt: &str,
-        reference: &DynamicImage,
-        candidates: &[DynamicImage],
-        grid_width: u32,
-        grid_height: u32,
-        allowed_colors: &[u8],
-    ) -> Result<Critique, String>;
-}
-
-/// Minimal OpenAI-compatible adapter. It intentionally targets only the image
-/// generation and chat-completions shapes needed by this experimental tool.
+/// Minimal OpenAI-compatible adapter. Its only job is prompt-to-reference image
+/// generation; the PETSCII conversion that follows is fully deterministic and
+/// never calls a model, so no chat/vision endpoint is used.
 pub struct OpenAiCompatibleProvider {
     api_base: String,
     api_key: String,
     image_model: String,
-    vision_model: String,
     agent: ureq::Agent,
     max_retries: u8,
 }
@@ -45,7 +32,6 @@ impl OpenAiCompatibleProvider {
         api_base: impl Into<String>,
         api_key: impl Into<String>,
         image_model: impl Into<String>,
-        vision_model: impl Into<String>,
     ) -> Result<Self, String> {
         let api_base = api_base.into().trim_end_matches('/').to_string();
         let api_key = api_key.into();
@@ -61,7 +47,6 @@ impl OpenAiCompatibleProvider {
             api_base,
             api_key,
             image_model: image_model.into(),
-            vision_model: vision_model.into(),
             agent,
             max_retries: 1,
         })
@@ -74,9 +59,7 @@ impl OpenAiCompatibleProvider {
             .map_err(|_| "PETII_AI_API_KEY is not configured".to_string())?;
         let image_model =
             std::env::var("PETII_AI_IMAGE_MODEL").unwrap_or_else(|_| "gpt-image-2".to_string());
-        let vision_model =
-            std::env::var("PETII_AI_VISION_MODEL").unwrap_or_else(|_| "gpt-4.1-mini".to_string());
-        Self::new(api_base, api_key, image_model, vision_model)
+        Self::new(api_base, api_key, image_model)
     }
 
     fn post_json(&self, endpoint: &str, body: &Value) -> Result<Value, String> {
@@ -136,7 +119,6 @@ impl ReferenceGenerator for OpenAiCompatibleProvider {
             summary: prompt.trim().to_string(),
             reference_prompt,
             palette: (0..16).collect(),
-            protected_regions: Vec::new(),
         };
         plan.validate()?;
         Ok((plan, image))
@@ -176,104 +158,6 @@ fn image_generation_request(model: &str, prompt: &str) -> Value {
     })
 }
 
-impl MultimodalCritic for OpenAiCompatibleProvider {
-    fn critique(
-        &self,
-        prompt: &str,
-        reference: &DynamicImage,
-        candidates: &[DynamicImage],
-        grid_width: u32,
-        grid_height: u32,
-        allowed_colors: &[u8],
-    ) -> Result<Critique, String> {
-        if candidates.is_empty() || candidates.len() > 8 {
-            return Err("critic requires 1..=8 candidates".to_string());
-        }
-        let mut content = vec![json!({
-            "type": "text",
-            "text": critique_prompt(prompt, grid_width, grid_height, allowed_colors)
-        })];
-        content.push(image_content("Reference image", reference)?);
-        for (index, candidate) in candidates.iter().enumerate() {
-            content.push(image_content(&format!("Candidate {index}"), candidate)?);
-        }
-        let body = critic_request(&self.vision_model, content);
-        let response = self.post_json("chat/completions", &body)?;
-        let text = response["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| "critic response does not contain message content".to_string())?;
-        let mut critique = Critique::from_json(text, grid_width, grid_height, allowed_colors)
-            .map_err(|error| format!("{error}; raw critic reply: {}", truncate(text, 400)))?;
-        // Vision models sometimes return a one-past-the-end index (1-based miscount); clamp it into
-        // range rather than discarding an otherwise valid critique.
-        if !candidates.is_empty() && critique.selected_candidate >= candidates.len() {
-            critique.selected_candidate = candidates.len() - 1;
-        }
-        critique.validate_candidate_count(candidates.len())?;
-        Ok(critique)
-    }
-}
-
-fn critic_request(model: &str, content: Vec<Value>) -> Value {
-    let mut body = json!({
-        "model": model,
-        "response_format": {"type": "json_object"},
-        "messages": [{"role": "user", "content": content}]
-    });
-    // GPT-5-family Chat Completions currently accepts only the default
-    // temperature. Older multimodal models still benefit from deterministic 0.
-    if !model.starts_with("gpt-5") {
-        body["temperature"] = json!(0);
-    }
-    body
-}
-
-fn image_content(label: &str, image: &DynamicImage) -> Result<Value, String> {
-    let mut bytes = Vec::new();
-    image
-        .write_to(
-            &mut std::io::Cursor::new(&mut bytes),
-            image::ImageFormat::Png,
-        )
-        .map_err(|error| format!("failed to encode {label}: {error}"))?;
-    if bytes.len() as u64 > MAX_RESPONSE_BYTES {
-        return Err(format!("{label} exceeds the image-size bound"));
-    }
-    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
-    Ok(json!({
-        "type": "image_url",
-        "image_url": {"url": format!("data:image/png;base64,{encoded}")}
-    }))
-}
-
-fn critique_prompt(prompt: &str, width: u32, height: u32, colors: &[u8]) -> String {
-    format!(
-        "Evaluate the PETSCII candidate images against the reference and intent: {prompt}\n\
-         Grid: {width}x{height}; allowed palette indices: {colors:?}.\n\
-         Return ONLY one JSON object with EXACTLY this shape (no prose, no markdown):\n\
-         {{\n\
-         \x20 \"selected_candidate\": 0,\n\
-         \x20 \"scores\": {{\"semantic_fidelity\": 0, \"subject_readability\": 0, \"composition\": 0, \
-         \"palette_coherence\": 0, \"contour_continuity\": 0, \"petscii_authenticity\": 0}},\n\
-         \x20 \"regions\": [{{\"region\": {{\"x\": 0.0, \"y\": 0.0, \"width\": 1.0, \"height\": 1.0}}, \
-         \"problem\": \"text\", \"severity\": 0.5}}],\n\
-         \x20 \"repairs\": [{{\"type\": \"simplify_region\", \"region\": {{\"x\": 0.0, \"y\": 0.0, \
-         \"width\": 1.0, \"height\": 1.0}}, \"strength\": 0.5}}],\n\
-         \x20 \"explanation\": \"text\"\n\
-         }}\n\
-         Rules: selected_candidate is the zero-based index of the strongest candidate. \
-         Every score is a number 0..100. Every entry in \"regions\" MUST have a nested \"region\" \
-         object with x,y,width,height as fractions 0..1. \"severity\" is 0..1. \
-         Each entry in \"repairs\" MUST have a \"type\" and a nested \"region\" object, using ONLY:\n\
-         {{\"type\":\"simplify_region\",\"region\":{{...}},\"strength\":0..1}}, \
-         {{\"type\":\"protect_silhouette\",\"region\":{{...}}}}, \
-         {{\"type\":\"reduce_density\",\"region\":{{...}},\"target\":0..1}}, \
-         {{\"type\":\"increase_contrast\",\"region\":{{...}},\"amount\":0..1}}.\n\
-         Use empty arrays [] for regions/repairs when none apply. Do not invent other fields, \
-         repair types, custom images, or characters outside the fixed PETSCII set."
-    )
-}
-
 fn read_bounded_json(response: ureq::Response) -> Result<Value, String> {
     let text = read_bounded_text(response)?;
     serde_json::from_str(&text).map_err(|error| format!("invalid provider JSON: {error}"))
@@ -299,17 +183,6 @@ fn truncate(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{ImageBuffer, Rgba};
-
-    #[test]
-    fn image_content_is_bounded_data_url() {
-        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(1, 1, Rgba([1, 2, 3, 255])));
-        let value = image_content("test", &image).unwrap();
-        assert!(value["image_url"]["url"]
-            .as_str()
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
-    }
 
     #[test]
     fn reference_art_direction_embeds_subject_and_conversion_constraints() {
@@ -334,24 +207,8 @@ mod tests {
     }
 
     #[test]
-    fn gpt_5_critic_request_uses_default_temperature() {
-        let body = critic_request("gpt-5.6-sol", vec![json!({"type": "text"})]);
-        assert!(body.get("temperature").is_none());
-        assert_eq!(body["response_format"]["type"], "json_object");
-    }
-
-    #[test]
-    fn legacy_critic_request_keeps_zero_temperature() {
-        let body = critic_request("gpt-4.1-mini", vec![json!({"type": "text"})]);
-        assert_eq!(body["temperature"], 0);
-    }
-
-    #[test]
     fn empty_credentials_are_rejected() {
-        assert!(OpenAiCompatibleProvider::new("", "key", "image", "vision").is_err());
-        assert!(
-            OpenAiCompatibleProvider::new("https://example.test/v1", "", "image", "vision")
-                .is_err()
-        );
+        assert!(OpenAiCompatibleProvider::new("", "key", "image").is_err());
+        assert!(OpenAiCompatibleProvider::new("https://example.test/v1", "", "image").is_err());
     }
 }
