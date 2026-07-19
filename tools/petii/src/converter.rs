@@ -822,37 +822,60 @@ fn profile_stage(name: &str, mark: &mut Instant) {
     *mark = Instant::now();
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 struct RepaintRegionStats {
     count: u64,
-    sum: [u64; 3],
+    channels: [Vec<u8>; 3],
+    /// Robust central color cached by [`RepaintRegionStats::finalize`]; `None` until finalized or
+    /// when the region is empty.
+    center: Option<RGB>,
 }
 
 impl RepaintRegionStats {
     fn add(&mut self, rgb: [u8; 3]) {
         self.count += 1;
         for channel in 0..3 {
-            let value = rgb[channel] as u64;
-            self.sum[channel] += value;
+            self.channels[channel].push(rgb[channel]);
         }
     }
 
-    fn error(self, color_index: u8) -> f64 {
+    /// Compute and cache the region's representative color as the per-channel median rather than
+    /// the mean. A minority of contrast pixels — the anti-aliased dark outline bleeding into a
+    /// bright flat field, say — cannot drag the median toward a muddy tone the way it drags the
+    /// mean. On a moon-edge cell the bright moon pixels are the majority, so the median stays
+    /// bright where the mean would darken it into an olive yellow. Must be called once after all
+    /// pixels are added; the per-channel scratch is released afterward.
+    fn finalize(&mut self) {
         if self.count == 0 {
-            return 0.0;
+            self.center = None;
+            return;
         }
-        let color = ANSI_COLOR_RGB[color_index as usize];
-        let mean = RGB {
-            r: (self.sum[0] / self.count) as u8,
-            g: (self.sum[1] / self.count) as u8,
-            b: (self.sum[2] / self.count) as u8,
+        let median = |values: &mut Vec<u8>| -> u8 {
+            values.sort_unstable();
+            values[values.len() / 2]
         };
+        self.center = Some(RGB {
+            r: median(&mut self.channels[0]),
+            g: median(&mut self.channels[1]),
+            b: median(&mut self.channels[2]),
+        });
+        for channel in &mut self.channels {
+            channel.clear();
+            channel.shrink_to_fit();
+        }
+    }
+
+    fn error(&self, color_index: u8) -> f64 {
+        let Some(center) = self.center else {
+            return 0.0;
+        };
+        let color = ANSI_COLOR_RGB[color_index as usize];
         let candidate = RGB {
             r: color[0],
             g: color[1],
             b: color[2],
         };
-        color_distance_rgb(&mean, &candidate) as f64 / 100.0
+        color_distance_rgb(&center, &candidate) as f64 / 100.0
     }
 }
 
@@ -898,8 +921,10 @@ fn repaint_selected_colors(
                 }
             }
         }
-        let foreground_candidates = repaint_palette_candidates(foreground, candidate.fg);
-        let background_candidates = repaint_palette_candidates(background, candidate.bg);
+        foreground.finalize();
+        background.finalize();
+        let foreground_candidates = repaint_palette_candidates(&foreground, candidate.fg);
+        let background_candidates = repaint_palette_candidates(&background, candidate.bg);
         // Dithered cells intentionally hold two bracketing palette colors whose per-region
         // averages coincide; refitting from those averages would merge them back into a solid.
         let exempt = protected.get(index).copied().unwrap_or(false);
@@ -976,7 +1001,7 @@ fn repaint_selected_colors(
     }
 }
 
-fn repaint_palette_candidates(stats: RepaintRegionStats, fallback: u8) -> Vec<u8> {
+fn repaint_palette_candidates(stats: &RepaintRegionStats, fallback: u8) -> Vec<u8> {
     if stats.count == 0 {
         return vec![fallback];
     }

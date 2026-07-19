@@ -146,7 +146,10 @@ pub fn run_with_reference(
             fallback_critique()
         }
     };
-    let selected = initial.selected_candidate;
+    // Keep the perceptual-best candidate (states are sorted by perceptual, so index 0). The critic's
+    // own variant pick was empirically worse than the perceptual choice, so the critic is advisory:
+    // it guides repairs, not selection.
+    let selected = 0;
     let edge_grammar = states[selected].conversion.edge_grammar.clone();
     let edge_debug = states[selected].conversion.edge_debug.clone();
     let mut best_grid = states[selected].grid.clone();

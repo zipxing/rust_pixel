@@ -202,8 +202,13 @@ impl MultimodalCritic for OpenAiCompatibleProvider {
         let text = response["choices"][0]["message"]["content"]
             .as_str()
             .ok_or_else(|| "critic response does not contain message content".to_string())?;
-        let critique = Critique::from_json(text, grid_width, grid_height, allowed_colors)
+        let mut critique = Critique::from_json(text, grid_width, grid_height, allowed_colors)
             .map_err(|error| format!("{error}; raw critic reply: {}", truncate(text, 400)))?;
+        // Vision models sometimes return a one-past-the-end index (1-based miscount); clamp it into
+        // range rather than discarding an otherwise valid critique.
+        if !candidates.is_empty() && critique.selected_candidate >= candidates.len() {
+            critique.selected_candidate = candidates.len() - 1;
+        }
         critique.validate_candidate_count(candidates.len())?;
         Ok(critique)
     }
