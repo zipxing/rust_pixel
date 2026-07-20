@@ -24,8 +24,8 @@ pub use converter::{
 pub use corpus::{analyze_pix_corpus, CorpusPrior, CorpusReport, NaturalnessScore};
 pub use edge_debug::render_edge_debug;
 pub use optimizer::{
-    optimize_grid, perceptual_tone_distance, perceptual_tone_score, score_grid,
-    OptimizationWeights, ScoreBreakdown,
+    optimize_grid, perceptual_tone_components, perceptual_tone_distance, perceptual_tone_score,
+    score_grid, OptimizationWeights, ScoreBreakdown,
 };
 pub use preview::render_grid;
 pub use types::{ConversionConfig, GlyphCandidate, PetsciiCell, PetsciiGrid};

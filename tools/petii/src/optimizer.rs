@@ -1,9 +1,19 @@
 use crate::preview::{render_grid, GLYPH_SIZE};
 use crate::types::{GlyphCandidate, PetsciiGrid};
 use image::{DynamicImage, GenericImageView, Pixel, RgbaImage};
+use lab::Lab;
 use rust_pixel::render::symbols::{color_distance_rgb, RGB};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+
+/// Weight on the global chroma-gap term of the perceptual objective. Per-block averaging washes out
+/// chroma in both images symmetrically, so a block-level color metric cannot see the desaturation the
+/// eye perceives and the mean-tone objective regresses to grey on muted palettes. This term instead
+/// compares *global* mean LAB chroma (colorfulness averaged over every pixel), which directly tracks
+/// "is the whole image as colorful as the reference". It is two-sided — a too-grey render and a
+/// too-vivid render are both penalized for the same absolute gap — so it pulls selection toward the
+/// reference's overall saturation without rewarding oversaturation.
+const CHROMA_GAP_WEIGHT: f64 = 1.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct OptimizationWeights {
@@ -77,12 +87,26 @@ pub fn perceptual_tone_score(
     Ok(perceptual_tone_distance(&rendered, &target, block))
 }
 
-/// Mean CIEDE2000 distance between block-averaged colors of two equally sized images.
+/// Mean per-block perceptual cost between two equally sized images. Each block contributes its
+/// CIEDE2000 tone distance plus a one-sided chroma-deficit penalty (see [`CHROMA_DEFICIT_WEIGHT`])
+/// that discourages the metric's regression to grey on muted palettes. Lower is better.
 pub fn perceptual_tone_distance(rendered: &RgbaImage, target: &RgbaImage, block: u32) -> f64 {
+    let (tone, chroma_gap) = perceptual_tone_components(rendered, target, block);
+    tone + CHROMA_GAP_WEIGHT * chroma_gap
+}
+
+/// The two competing objectives, split out so each can be inspected and the chroma weight calibrated
+/// independently: `.0` is the mean per-block CIEDE2000 tone distance (rewards sub-cell eye blending),
+/// `.1` is the absolute gap in global mean LAB chroma (rewards matching overall colorfulness).
+pub fn perceptual_tone_components(
+    rendered: &RgbaImage,
+    target: &RgbaImage,
+    block: u32,
+) -> (f64, f64) {
     let block = block.max(1);
     let width = rendered.width();
     let height = rendered.height();
-    let mut total = 0.0f64;
+    let mut tone_total = 0.0f64;
     let mut samples = 0u32;
     let mut block_y = 0;
     while block_y < height {
@@ -90,13 +114,35 @@ pub fn perceptual_tone_distance(rendered: &RgbaImage, target: &RgbaImage, block:
         while block_x < width {
             let rendered_mean = block_mean_rgb(rendered, block_x, block_y, block);
             let target_mean = block_mean_rgb(target, block_x, block_y, block);
-            total += color_distance_rgb(&rendered_mean, &target_mean) as f64;
+            tone_total += color_distance_rgb(&rendered_mean, &target_mean) as f64;
             samples += 1;
             block_x += block;
         }
         block_y += block;
     }
-    total / samples.max(1) as f64
+    let tone = tone_total / samples.max(1) as f64;
+    let chroma_gap = (mean_chroma(rendered) - mean_chroma(target)).abs();
+    (tone, chroma_gap)
+}
+
+/// Mean LAB chroma (colorfulness) over every pixel of an image. Near zero for a greyscale image,
+/// larger the more saturated the image is overall.
+fn mean_chroma(image: &RgbaImage) -> f64 {
+    let mut total = 0.0f64;
+    let mut count = 0u64;
+    for pixel in image.pixels() {
+        let [r, g, b, _] = pixel.0;
+        total += lab_chroma(RGB { r, g, b });
+        count += 1;
+    }
+    total / count.max(1) as f64
+}
+
+/// LAB chroma (colorfulness) of a color: the radius in the a*/b* plane, matching the color space
+/// CIEDE2000 already scores in. Near zero for greys, larger for saturated colors.
+fn lab_chroma(color: RGB) -> f64 {
+    let lab = Lab::from_rgb(&[color.r, color.g, color.b]);
+    ((lab.a as f64).powi(2) + (lab.b as f64).powi(2)).sqrt()
 }
 
 fn block_mean_rgb(image: &RgbaImage, x0: u32, y0: u32, block: u32) -> RGB {
@@ -307,6 +353,34 @@ mod tests {
         let flat_distance = perceptual_tone_distance(&flat_black, &target, 4);
         assert!(checker_distance < 1.0);
         assert!(checker_distance < flat_distance);
+    }
+
+    #[test]
+    fn perceptual_tone_penalizes_desaturation_and_oversaturation() {
+        // A warm, saturated target. The block-tone term alone regresses to grey on muted palettes
+        // because block-averaging hides desaturation; the global chroma-gap term restores a match on
+        // overall colorfulness. It is two-sided: both a greyed-out and an over-vivid render are
+        // charged for departing from the target's chroma, so neither is rewarded over a faithful one.
+        let target = RgbaImage::from_pixel(8, 8, Rgba([190, 110, 70, 255]));
+        let faithful = RgbaImage::from_pixel(8, 8, Rgba([190, 110, 70, 255]));
+        let greyed = RgbaImage::from_pixel(8, 8, Rgba([120, 120, 120, 255]));
+        let oversaturated = RgbaImage::from_pixel(8, 8, Rgba([255, 40, 0, 255]));
+
+        // The chroma-gap component is ~0 for a faithful match but clearly positive when the render
+        // is too grey or too vivid.
+        let (_, faithful_gap) = perceptual_tone_components(&faithful, &target, 4);
+        let (_, greyed_gap) = perceptual_tone_components(&greyed, &target, 4);
+        let (_, oversaturated_gap) = perceptual_tone_components(&oversaturated, &target, 4);
+        assert!(faithful_gap < 1.0);
+        assert!(greyed_gap > 5.0);
+        assert!(oversaturated_gap > 5.0);
+
+        // And the combined objective ranks the faithful render strictly best of the three.
+        let faithful_distance = perceptual_tone_distance(&faithful, &target, 4);
+        let greyed_distance = perceptual_tone_distance(&greyed, &target, 4);
+        let oversaturated_distance = perceptual_tone_distance(&oversaturated, &target, 4);
+        assert!(faithful_distance < greyed_distance);
+        assert!(faithful_distance < oversaturated_distance);
     }
 
     #[test]
