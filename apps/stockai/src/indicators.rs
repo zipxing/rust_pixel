@@ -119,51 +119,13 @@ pub fn calc_ma(closes: &[f64]) -> MAData {
 /// DEA = EMA9(DIF)
 /// MACD柱 = (DIF - DEA) * 2
 pub fn calc_macd(closes: &[f64]) -> MACDData {
-    if closes.len() < 26 {
-        return MACDData::default();
-    }
-    
-    // 计算 EMA12 和 EMA26 序列
-    let mut ema12_values = Vec::new();
-    let mut ema26_values = Vec::new();
-    
-    // 初始化
-    let ema12_init = calc_sma(&closes[..12], 12);
-    let ema26_init = calc_sma(&closes[..26], 26);
-    
-    let mut ema12 = ema12_init;
-    let mut ema26 = ema26_init;
-    
-    let mult12 = 2.0 / 13.0;
-    let mult26 = 2.0 / 27.0;
-    
-    for (i, &price) in closes.iter().enumerate() {
-        if i < 12 {
-            ema12_values.push(calc_sma(&closes[..=i], i + 1));
-        } else {
-            ema12 = (price - ema12) * mult12 + ema12;
-            ema12_values.push(ema12);
-        }
-        
-        if i < 26 {
-            ema26_values.push(calc_sma(&closes[..=i], i + 1));
-        } else {
-            ema26 = (price - ema26) * mult26 + ema26;
-            ema26_values.push(ema26);
-        }
-    }
-    
-    // 计算 DIF 序列
-    let dif_values: Vec<f64> = ema12_values.iter()
-        .zip(ema26_values.iter())
-        .map(|(&e12, &e26)| e12 - e26)
-        .collect();
-    
-    // 计算 DEA (DIF 的 EMA9)
-    let dea = calc_ema(&dif_values, 9);
-    let dif = *dif_values.last().unwrap_or(&0.0);
+    let (dif, dea, _) = fin_primitives::signals::batch_f64::macd(closes, 12, 26, 9);
+    let (dif, dea) = match (dif.last(), dea.last()) {
+        (Some(&dif), Some(&dea)) if dea.is_finite() => (dif, dea),
+        _ => return MACDData::default(),
+    };
     let histogram = (dif - dea) * 2.0;
-    
+
     MACDData {
         dif,
         dea,
@@ -210,28 +172,10 @@ pub fn calc_kdj(klines: &[KLine]) -> KDJData {
 /// RSI = 100 * RS / (1 + RS)
 /// RS = 平均涨幅 / 平均跌幅
 pub fn calc_rsi(closes: &[f64], period: usize) -> f64 {
-    if closes.len() < period + 1 {
-        return 50.0;
+    match fin_primitives::signals::batch_f64::rsi(closes, period).last() {
+        Some(&rsi) if rsi.is_finite() && closes.len() > period => rsi,
+        _ => 50.0,
     }
-    
-    let mut gains = 0.0;
-    let mut losses = 0.0;
-    
-    for i in (closes.len() - period)..closes.len() {
-        let change = closes[i] - closes[i - 1];
-        if change > 0.0 {
-            gains += change;
-        } else {
-            losses -= change;
-        }
-    }
-    
-    if losses < 0.0001 {
-        return 100.0;
-    }
-    
-    let rs = gains / losses;
-    100.0 * rs / (1.0 + rs)
 }
 
 /// 计算 RSI 组合
@@ -462,5 +406,35 @@ pub fn analyze(klines: &[KLine]) -> AnalysisResult {
         signals,
         total_score,
         recommendation,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rsi_uses_wilder_smoothing() {
+        // Last 6 changes are all +1, so the summed-window RSI6 read 100.
+        // Wilder smoothing still carries the -10 drop from 12 bars ago.
+        let mut closes = vec![100.0, 90.0];
+        closes.extend((1..=12).map(|i| 90.0 + i as f64));
+        let rsi6 = calc_rsi(&closes, 6);
+        assert!(
+            rsi6 < 100.0,
+            "drop 12 bars ago still counts under Wilder: {rsi6}"
+        );
+        assert_eq!(calc_rsi(&closes[..5], 6), 50.0);
+    }
+
+    #[test]
+    fn macd_dea_starts_after_dif_is_seeded() {
+        let closes: Vec<f64> = (0..60)
+            .map(|i| 100.0 + (i as f64 * 0.3).sin() * 5.0)
+            .collect();
+        let m = calc_macd(&closes);
+        assert!(m.dif.is_finite() && m.dea.is_finite());
+        assert!((m.histogram - (m.dif - m.dea) * 2.0).abs() < 1e-12);
+        assert_eq!(calc_macd(&closes[..30]).dea, 0.0);
     }
 }

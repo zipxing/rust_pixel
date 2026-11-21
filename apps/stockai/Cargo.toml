@@ -22,6 +22,7 @@ wasm-logger = "0.2.0"
 chrono = "0.4"
 ureq = "2.12"
 encoding_rs = "0.8"
+fin-primitives = { version = "4.0.1", default-features = false, features = ["indicators"] }
 rust_pixel = { path = "../..", default-features = false }
 
 [features]
